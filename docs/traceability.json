@@ -1,0 +1,3383 @@
+{
+  "document_version": "review-ledger-r1",
+  "created_at": "2026-09-16",
+  "source_commit": "10a8ef71713fe491633cf2b5649c76007cfd4767",
+  "scope_note": "Design agreements and draft implementation mapping; not a current-code audit or product test report.",
+  "github_writes_performed": false,
+  "requirements": [
+    {
+      "id": "BOUND-001",
+      "group": "BOUND",
+      "title": "別製品・一方向依存",
+      "rule": "gua-playtestをGuaと別リポジトリにし、GuaはPlaytestを参照しない。観測・入力・汎用Replay・TraceはGua、目的・探索・実行判定はPlaytestが持つ。",
+      "owner": "P-02",
+      "collaborators": [
+        "G-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BOUND-001",
+        "description": "依存グラフにGua→Playtestがなく、Gua側CIがPlaytestの完成を前提にしない。"
+      }
+    },
+    {
+      "id": "BOUND-002",
+      "group": "BOUND",
+      "title": "v0.1の範囲",
+      "rule": "承認済みのlist/set、時間契約、Trace/Replay/Planner/CLI/配布等をv0.1で実装する。開発順序を分けても未対応機能を黙って削らない。",
+      "owner": "P-16",
+      "collaborators": [
+        "P-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BOUND-002",
+        "description": "要件IDごとに実装・検証を確認し、Fakeのみやskipでリリース条件を満たしたことにしない。"
+      }
+    },
+    {
+      "id": "BOUND-003",
+      "group": "BOUND",
+      "title": "プレイ経路を守る",
+      "rule": "Runningでは公開されたUI操作・Semantic Game Input・必要なRaw Inputを使う。内部ロジック直接呼出し、teleport、所持品の追加などで達成を飛び越えない。",
+      "owner": "P-07",
+      "collaborators": [
+        "P-10"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BOUND-003",
+        "description": "同じゲーム内状態に内部APIで到達できても、そのAPIがPlannerの操作一覧・通路に存在しない。"
+      }
+    },
+    {
+      "id": "BOUND-004",
+      "group": "BOUND",
+      "title": "非AI実行",
+      "rule": "Replay・静的検証・保存結果のreportにPlannerを必須としない。AIは経路の提案者であり採点者ではない。",
+      "owner": "P-13",
+      "collaborators": [
+        "P-09",
+        "P-12"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BOUND-004",
+        "description": "Codex未導入・未認証環境でvalidate/replay/reportの必要範囲が動く。"
+      }
+    },
+    {
+      "id": "BOUND-005",
+      "group": "BOUND",
+      "title": "変更・起票は後で実施",
+      "rule": "この成果物は起票前の台帳であり、GitHubへ書込まない。移管は10月1日に行うというユーザー方針を維持し、審査期間のルールや新たな実装完了日は推測しない。",
+      "owner": "P-01",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BOUND-005",
+        "description": "実際のIssue作成・既存本文変更・移管は別の明示依頼で行う。"
+      }
+    },
+    {
+      "id": "VALUE-001",
+      "group": "VALUE",
+      "title": "型集合",
+      "rule": "bool/integer/number/string/enum/list/setを最初から扱い、wireはtypeとvalueを持つ共通表現を使う。",
+      "owner": "G-01",
+      "collaborators": [
+        "P-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-VALUE-001",
+        "description": "全型の正常例と空collectionが往復でき、numberとintegerの区別が残る。"
+      }
+    },
+    {
+      "id": "VALUE-002",
+      "group": "VALUE",
+      "title": "禁止値と範囲",
+      "rule": "追加観測Valueにはnull、任意object、object参照、入れ子collection、BigIntを許さない。integerは±9007199254740991以内、numberは有限のみとする。",
+      "owner": "G-01",
+      "collaborators": [
+        "G-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-VALUE-002",
+        "description": "境界整数、NaN/Infinity、null、object、nested list/setを拒否し、理由を識別する。"
+      }
+    },
+    {
+      "id": "VALUE-003",
+      "group": "VALUE",
+      "title": "enum表現",
+      "rule": "enumTypeと名前文字列をwireの意味とし、内部numeric valueを送らない。enum型の候補一覧をschema側で取得可能にする。名前の違うenumTypeは同じ文字列でも同じ型としない。",
+      "owner": "G-01",
+      "collaborators": [
+        "G-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-VALUE-003",
+        "description": "BossPhase.Secondと別enumのSecondを混同せず、候補型情報が取得できる。"
+      }
+    },
+    {
+      "id": "VALUE-004",
+      "group": "VALUE",
+      "title": "list/set",
+      "rule": "要素は同種scalar/enum。elementTypeとenumTypeを明示し空でも型を残す。listは順序あり、setは順序なし・重複禁止。",
+      "owner": "G-01",
+      "collaborators": [
+        "P-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-VALUE-004",
+        "description": "並べ替えたsetの等価とlistの非等価、重複setの拒否を確認する。"
+      }
+    },
+    {
+      "id": "VALUE-005",
+      "group": "VALUE",
+      "title": "共通Valueの適用範囲",
+      "rule": "Observe/Property、関連Snapshot/Change、Assertionと注釈で共通Valueを再利用する。既存Gua InputのVector2 objectや既存のnullable fieldまで、この新規制限で書き換えない。",
+      "owner": "G-01",
+      "collaborators": [
+        "P-01",
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-VALUE-005",
+        "description": "新規Valueのnull拒否と、既存形式の互換読取が両立する。"
+      }
+    },
+    {
+      "id": "OBS-001",
+      "group": "OBS",
+      "title": "登録API",
+      "rule": "[object/ui].Observeは各ノード、world.PropertyはWorld全体へ読み取り専用の値を公開する。enemy1.phase等をグローバル文字列で管理しない。",
+      "owner": "G-02",
+      "collaborators": [
+        "G-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-OBS-001",
+        "description": "同じphase名を別の敵に登録でき、Ownerの寿命に従って消える。"
+      }
+    },
+    {
+      "id": "OBS-002",
+      "group": "OBS",
+      "title": "既存情報の再利用",
+      "rule": "UI TreeとWorld Object Treeを第一の観測源にし、位置などを二重登録しない。未公開のゲーム固有状態だけを追加観測値で補う。",
+      "owner": "G-03",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-OBS-002",
+        "description": "実ObjectのworldPositionと追加phaseを同じ観測へ関連付ける。"
+      }
+    },
+    {
+      "id": "OBS-003",
+      "group": "OBS",
+      "title": "Snapshot/Change",
+      "rule": "Snapshotは現在状態、Changeはbefore/after。追加はafter、削除はbeforeのみとし、観測不在や取得エラーのためにnullを捏造しない。",
+      "owner": "G-02",
+      "collaborators": [
+        "T-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-OBS-003",
+        "description": "added/changed/removedと取得不能を別に保存・取得する。"
+      }
+    },
+    {
+      "id": "OBS-004",
+      "group": "OBS",
+      "title": "通知と連続性",
+      "rule": "公開された値の変化を通知し、中間変化・購読開始・revision/epochの連続性を扱う。具体的な変更検知境界はOPEN-03で固定し、getter登録だけで任意の内部変化を検知できると保証しない。",
+      "owner": "G-02",
+      "collaborators": [
+        "G-03",
+        "T-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-OBS-004",
+        "description": "Snapshot取得と購読の隙間、欠損、遅い購読者で誤った継続保証をしない。"
+      }
+    },
+    {
+      "id": "OBS-005",
+      "group": "OBS",
+      "title": "参照方法",
+      "rule": "観測sourceはworld/ui/object。ScenarioはSemantic Selector＋observe/propertyを使い、内部でRuntime ID＋名称へ解決する。session/source/epochも含めて別実行と混ぜない。",
+      "owner": "P-07",
+      "collaborators": [
+        "P-03",
+        "T-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-OBS-005",
+        "description": "再生成された対象を再解決し、古いepochのIDを現状態に使わない。"
+      }
+    },
+    {
+      "id": "OBS-006",
+      "group": "OBS",
+      "title": "公開範囲・完全性",
+      "rule": "AIへ渡す範囲とRunnerの判定用範囲を分ける。検索scope/profile、truncated、省略、取得失敗、古い値を保持し、0件や空状態へ変換しない。",
+      "owner": "P-07",
+      "collaborators": [
+        "P-10",
+        "T-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-OBS-006",
+        "description": "非公開対象の存在をエラーや待機応答で漏らさず、打切りを完全検索と見なさない。"
+      }
+    },
+    {
+      "id": "GOAL-001",
+      "group": "GOAL",
+      "title": "単一Goal",
+      "rule": "1 Scenario = 1 Goal。自然言語objectiveと機械判定successを分け、failureは任意。Goalの中に操作手順・外部Goal参照・複数Goal workflowを持たせない。",
+      "owner": "P-01",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-GOAL-001",
+        "description": "同じScenarioをExploreとReplayで使用し、Plannerの主張だけでPassedにならない。"
+      }
+    },
+    {
+      "id": "GOAL-002",
+      "group": "GOAL",
+      "title": "未検証探索",
+      "rule": "successを持たない自然言語のみの探索は許すが、終了してもUnverifiedでありCIのPassedにしない。successがあるのに未確認という理由でUnverifiedへ逃がさない。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-11",
+        "P-13"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-GOAL-002",
+        "description": "success有無ごとの終了statusと終了コードを検証する。"
+      }
+    },
+    {
+      "id": "GOAL-003",
+      "group": "GOAL",
+      "title": "開始状態と制約",
+      "rule": "setupは望む開始状態、実現方法はEnvironmentの承認済みfixtureへ委譲。時間・操作数・権限制限は構造化し、objective内のお願いだけで代用しない。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-10",
+        "P-13"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-GOAL-003",
+        "description": "禁止操作を自然言語に関係なくRunnerが止め、setup処理成功と開始前提成立を区別する。"
+      }
+    },
+    {
+      "id": "ASSERT-001",
+      "group": "ASSERT",
+      "title": "比較構造",
+      "rule": "Target/Operator/期待Valueを分離。Scalarのequals/notEquals、数値大小、numberのapproximatelyEqualsと許容差を扱う。型不一致はfalseでなく設定不正とする。",
+      "owner": "P-03",
+      "collaborators": [
+        "P-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-001",
+        "description": "型の不正、数値境界、近似値を独立期待値で検証する。"
+      }
+    },
+    {
+      "id": "ASSERT-002",
+      "group": "ASSERT",
+      "title": "文字列・collection演算",
+      "rule": "stringのcontains/startsWith/endsWith/matches、list/setのcontains/notContains/containsAll/containsAny/isEmpty/isNotEmpty/count系、listのsequence系を実装する。containsSequenceは連続部分列。",
+      "owner": "P-03",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-002",
+        "description": "演算子×型表の有効・無効組合せを網羅し、regexはRunnerで評価する。細部はOPEN-02。"
+      }
+    },
+    {
+      "id": "ASSERT-003",
+      "group": "ASSERT",
+      "title": "等価・要素型",
+      "rule": "enumTypeを含む型一致を要求する。list/setのequalsで相互変換せず、containsの期待値は要素型、containsAll/Anyはcollectionとする。",
+      "owner": "P-03",
+      "collaborators": [
+        "G-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-003",
+        "description": "`list<string>`対`set<string>`のequalsを拒否し、enum collectionの型を保持する。"
+      }
+    },
+    {
+      "id": "ASSERT-004",
+      "group": "ASSERT",
+      "title": "存在・対象数",
+      "rule": "exists/notExists/count系はSelector結果を評価。quantifierはone/any/all/noneでcountは含めない。複数を先頭一件へ暗黙縮約しない。",
+      "owner": "P-04",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-004",
+        "description": "複数一致のoneで未送信停止し、件数演算が要素比較と混ざらない。"
+      }
+    },
+    {
+      "id": "ASSERT-005",
+      "group": "ASSERT",
+      "title": "0件・打切り",
+      "rule": "完全検索0件でexists/any/allはfalse、notExists/noneはtrue。oneは比較成立させない。全件を必要とするall/none/件数判定では完全性を要求する。",
+      "owner": "P-04",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-005",
+        "description": "空allが成功せず、部分結果だけで全体を確認済みにしない。"
+      }
+    },
+    {
+      "id": "ASSERT-006",
+      "group": "ASSERT",
+      "title": "三値評価",
+      "rule": "True/False/Unknownを値と別に扱う。取得不能なnotEqualsをtrueにしない。all(True,Unknown)=Unknown、all(False,Unknown)=False、any(True,Unknown)=True、any(False,Unknown)=Unknown。",
+      "owner": "P-03",
+      "collaborators": [
+        "P-04"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-006",
+        "description": "条件不成立・観測不能・不正設定・観測契約違反を分離する。"
+      }
+    },
+    {
+      "id": "ASSERT-007",
+      "group": "ASSERT",
+      "title": "通常allの評価時点",
+      "rule": "時間指定のないallは同じ評価に使用した観測の組合せで成立する。個々の通常条件を一度trueになっただけで永久成立にしない。",
+      "owner": "P-04",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-007",
+        "description": "A=true/B=falseの後A=false/B=trueとなっても通常allは成功しない。"
+      }
+    },
+    {
+      "id": "ASSERT-008",
+      "group": "ASSERT",
+      "title": "時間成立履歴",
+      "rule": "within/forを満たした条件の成立事実は保持する。条件ごとにwithinを置けば別時点成立を許す。group全体に時間指定を置けばgroupの成立・維持を検証する。",
+      "owner": "P-04",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-008",
+        "description": "別々の時間条件とgroupに掛けた時間条件を区別する。"
+      }
+    },
+    {
+      "id": "ASSERT-009",
+      "group": "ASSERT",
+      "title": "ツリー全体の期限",
+      "rule": "個別withinの期限切れをScenario失敗へ直結しない。success.anyの他分岐は継続、必要allの不可能は全体へ伝播。failure条件が期限内に成立しないこと自体を失敗にしない。",
+      "owner": "P-04",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-009",
+        "description": "any一枝期限切れ、failure期限切れ、Goal確認済み後の未使用分岐を検証する。"
+      }
+    },
+    {
+      "id": "ASSERT-010",
+      "group": "ASSERT",
+      "title": "評価の公開と必須情報",
+      "rule": "anyの別分岐がtrueでも不正設定を無視しない。必須failure監視の破損をPassedで隠さない。評価結果の公開もprofileを守る。",
+      "owner": "P-04",
+      "collaborators": [
+        "P-10"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ASSERT-010",
+        "description": "無効な未評価枝と非公開条件のフィードバックを検査する。"
+      }
+    },
+    {
+      "id": "TIME-001",
+      "group": "TIME",
+      "title": "within/for",
+      "rule": "withinは監視開始から成立し始める期限、forは連続維持時間。within=5s/for=2sで4.5s開始→6.5s維持は成立、5sを過ぎた新しい維持開始は採用しない。",
+      "owner": "P-04",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TIME-001",
+        "description": "期限前開始・期限後維持完了・途中false・期限後再開始のケースを通す。"
+      }
+    },
+    {
+      "id": "TIME-002",
+      "group": "TIME",
+      "title": "評価契機",
+      "rule": "初回評価・変更通知・期限タイマーで進行する。for中のfalseは計測リセット。必要な観測連続性が失われた区間を維持成功と認めない。",
+      "owner": "P-04",
+      "collaborators": [
+        "G-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TIME-002",
+        "description": "変更通知がなくてもfor期限で評価し、欠損をtrue維持へ変換しない。"
+      }
+    },
+    {
+      "id": "TIME-003",
+      "group": "TIME",
+      "title": "時間起点",
+      "rule": "Scenario success/failureはRunningから、Replay途中waitはその点到達から。検証点到達前の未監視時間をforへ加算しない。",
+      "owner": "P-04",
+      "collaborators": [
+        "P-09"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TIME-003",
+        "description": "同じ条件を異なる配置で実行し起点が明示される。"
+      }
+    },
+    {
+      "id": "TIME-004",
+      "group": "TIME",
+      "title": "全体期限との関係",
+      "rule": "withinの成立開始は期限以下を認める。Scenario maxDurationはRunningからの実時間の到達で終了し、同一評価単位ではsuccessより優先。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-04"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TIME-004",
+        "description": "within=5sと全体5sの境界で、条件事実とScenarioのTimedOutを分ける。"
+      }
+    },
+    {
+      "id": "RUN-001",
+      "group": "RUN",
+      "title": "状態機械",
+      "rule": "ExecutionStateはCreated/Preparing/Running/Completing/Finished、ResultStatusはPassed/Failed/TimedOut/Aborted/Invalid/Unverified。phase・origin・reason・messageを分離する。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-RUN-001",
+        "description": "各正常異常経路とRun結果の出力が一貫する。"
+      }
+    },
+    {
+      "id": "RUN-002",
+      "group": "RUN",
+      "title": "主結果は一度だけ",
+      "rule": "Goal確認、主結果確定、後処理終了を別概念にする。Completingへの移行後は主結果を書換えず、Cancel/保存失敗/cleanup失敗を別に記録する。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-RUN-002",
+        "description": "report生成中CancelでFailedをAbortedへ書換えず、遅い成功応答も過去へ反映しない。"
+      }
+    },
+    {
+      "id": "RUN-003",
+      "group": "RUN",
+      "title": "競合処理",
+      "rule": "単一の実行制御で同じ評価単位の候補を扱う。優先は不正契約、確定failure/継続不能エラー、中断、全体期限、達成不能/終端予算、Passed。未採用原因も記録する。",
+      "owner": "P-05",
+      "collaborators": [
+        "T-04"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-RUN-003",
+        "description": "failure/success/中断/期限の競合を再現し、callbackの書込競合で結果が変わらない。OPEN-06の終端述語を固定する。"
+      }
+    },
+    {
+      "id": "RUN-004",
+      "group": "RUN",
+      "title": "GoalとPlan完了",
+      "rule": "Goal success全体の成立事実は保持する。Explore onGoal、回帰Replay afterPlanを既定案とし、afterPlanはPlanと中間検証・必要解除・完了確認まで実行しfailure監視を継続する。",
+      "owner": "P-09",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-RUN-004",
+        "description": "Goal先行時の未実行後半を区別し、Plan内解除失敗は確定前の実行失敗になる。"
+      }
+    },
+    {
+      "id": "RUN-005",
+      "group": "RUN",
+      "title": "後処理不完全",
+      "rule": "主結果Passedでも必須artifact/入力/資源の解放要件が未達なら通常成功終了にしない。CLI 11と後処理理由を返す。元がFailed等なら元のcode/statusを維持する。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-13",
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-RUN-005",
+        "description": "Passed＋InputReleaseUnconfirmedとFailed＋保存失敗を区別する。"
+      }
+    },
+    {
+      "id": "RUN-006",
+      "group": "RUN",
+      "title": "取消と証拠",
+      "rule": "結果確定前は各段階で取消を扱い、確定後は有限の後処理中断として扱う。可能な診断を資源解放前に取り、元例外type/stackを維持する。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-RUN-006",
+        "description": "Setup途中CancelとCompleting中Cancelで必要な所有資源だけを解放する。"
+      }
+    },
+    {
+      "id": "ACTION-001",
+      "group": "ACTION",
+      "title": "操作単位・ID",
+      "rule": "一つのGua要求を一操作試行とし、runId、actionExecutionId、入力名actionId、Gua requestIdを区別する。Selectorと今回の解決IDを記録する。",
+      "owner": "P-07",
+      "collaborators": [
+        "T-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ACTION-001",
+        "description": "同じmoveを繰り返しても履歴が一つに潰れず、別RunのrequestIdと混ざらない。"
+      }
+    },
+    {
+      "id": "ACTION-002",
+      "group": "ACTION",
+      "title": "三つの事実",
+      "rule": "入力要求の処理結果、観測変化、Scenarioの検証結果を分離する。前後変化だけから操作との因果を断定しない。",
+      "owner": "P-07",
+      "collaborators": [
+        "P-03",
+        "T-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ACTION-002",
+        "description": "攻撃入力成功でも空振りならHP変化・Goal成功を捏造しない。"
+      }
+    },
+    {
+      "id": "ACTION-003",
+      "group": "ACTION",
+      "title": "Action分類",
+      "rule": "Succeeded/Failed/Rejected/TimedOut/AbortedはPlaytestの整理用。元Gua結果と確認済み段階を残す。Timeout/Abortedは未実行や巻戻しを意味しない。",
+      "owner": "P-07",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ACTION-003",
+        "description": "処理済み購入の応答だけ欠落させ、未確認と未実行を区別する。"
+      }
+    },
+    {
+      "id": "ACTION-004",
+      "group": "ACTION",
+      "title": "拒否と再判断",
+      "rule": "Exploreの未送信拒否は予算内で再判断可能。Replayは規定wait/再解決以外でPlan修復しない。ホスト失敗・送信後未確認は既定で停止/安全整理へ進む。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-09",
+        "P-11"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ACTION-004",
+        "description": "無効Decisionの再判断と、送信済み購入の再送禁止を別に検証する。"
+      }
+    },
+    {
+      "id": "ACTION-005",
+      "group": "ACTION",
+      "title": "保持と後処理",
+      "rule": "開始要求成功と保持終了は別。通常解除は明示的な要求、leaseは保護期限。解除未確認を期限だけで解除済みにしない。cleanupは所有入力に限定する。",
+      "owner": "G-05",
+      "collaborators": [
+        "P-07",
+        "P-05",
+        "T-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ACTION-005",
+        "description": "別ownerの保持を残し、自ownerの解除結果と未確認状態を照合する。"
+      }
+    },
+    {
+      "id": "ACTION-006",
+      "group": "ACTION",
+      "title": "既存commandを限定利用",
+      "rule": "ui/semantic/rawの操作定義と値はGuaを利用する。Plannerへ全Guaコマンドを透過せず、reset/clock変更等はRunnerが管理する。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-ACTION-006",
+        "description": "未許可type、自己申告confirmed、任意内部コマンドを送信前に拒否する。"
+      }
+    },
+    {
+      "id": "BUDGET-001",
+      "group": "BUDGET",
+      "title": "カウンター分離",
+      "rule": "maxActionsは送信する各プレイ要求、判断回数はPlanner要求、停滞用は行動Decision、回復用は回復中判断を数える。回復判断は通常予算にも算入する。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-11"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BUDGET-001",
+        "description": "3操作Timed Segmentが操作3・行動1となり、回復予算を二重に無料化しない。"
+      }
+    },
+    {
+      "id": "BUDGET-002",
+      "group": "BUDGET",
+      "title": "区間予算の予約",
+      "rule": "Timed Segment全体分を開始前に確保する。途中未送信と送信済みを分ける。送信した要求は結果が失敗でも試行数に含める。",
+      "owner": "P-05",
+      "collaborators": [
+        "G-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BUDGET-002",
+        "description": "残り2操作で開始/jump/解除の3操作を一部だけ始めない。"
+      }
+    },
+    {
+      "id": "BUDGET-003",
+      "group": "BUDGET",
+      "title": "最後の操作の結果",
+      "rule": "予算到達で新しい操作を止めても、送信済み結果と承認済みwait/判定は各期限内で継続する。cleanupを予算で省略せず、全体実時間は延長しない。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-04"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-BUDGET-003",
+        "description": "最後の購入応答とsuccessを確認できる。無限の新規waitで延命しない。"
+      }
+    },
+    {
+      "id": "TRACE-001",
+      "group": "TRACE",
+      "title": "記録と判断の分離",
+      "rule": "操作・Assertion・観測・lifecycleは共通Gua Traceへ集約する。Playtest独自Timeline/Viewerは作らず、Goal/判断/進捗は名前空間付き注釈・attachmentで結び付ける。",
+      "owner": "T-04",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-001",
+        "description": "Playtestを参照しない汎用writer/ViewerでPlaytest注釈を読める。"
+      }
+    },
+    {
+      "id": "TRACE-002",
+      "group": "TRACE",
+      "title": "モデルと相関",
+      "rule": "Session/Step/Eventを分け、kindはaction/assertion/mark/lifecycle。source/epoch/request/step相関でnativeとclientを二重操作にせず、rawでsource locationがない場合も許す。",
+      "owner": "T-02",
+      "collaborators": [
+        "T-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-002",
+        "description": "並列接続と自動/明示記録の併用で混同・二重計上しない。"
+      }
+    },
+    {
+      "id": "TRACE-003",
+      "group": "TRACE",
+      "title": "時刻の区別",
+      "rule": "収集の単調時計・記録順と、ホストの発生時刻/frame/revisionを分離する。時計対応が不明なら未保証とする。",
+      "owner": "T-01",
+      "collaborators": [
+        "T-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-003",
+        "description": "古い時刻の遅延結果を受信順と混ぜ、確定済み結果を書き換えない。"
+      }
+    },
+    {
+      "id": "TRACE-004",
+      "group": "TRACE",
+      "title": "Snapshotの二層",
+      "rule": "redaction後の状態Blobをhashで重複排除し、別時点のObservation recordを残す。UI/Worldが別取得なら原子的同時Snapshotと称さない。",
+      "owner": "T-03",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-004",
+        "description": "同じ内容の複数時点が失われず、mask前の秘密値hashを出力しない。"
+      }
+    },
+    {
+      "id": "TRACE-005",
+      "group": "TRACE",
+      "title": "Traceとbaseline",
+      "rule": "Traceは公開された位置/frame等の調査情報を保存する。#108のbaseline用既定除外をそのまま適用せず、比較結果は別添付とする。",
+      "owner": "T-03",
+      "collaborators": [
+        "T-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-005",
+        "description": "位置だけ変わる入力でもTraceで変化を確認できる。"
+      }
+    },
+    {
+      "id": "TRACE-006",
+      "group": "TRACE",
+      "title": "観測区間と中間変化",
+      "rule": "before/afterの取得契機、結果決定時とcleanup後を区別し、中間Changeを受信範囲で保存する。不在/欠損/古い値/取得失敗を区別する。",
+      "owner": "T-03",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-006",
+        "description": "Secondを経由する記録と欠損時の未保証がViewerに残る。"
+      }
+    },
+    {
+      "id": "TRACE-007",
+      "group": "TRACE",
+      "title": "保存方針",
+      "rule": "captureMode recent/streaming、savePolicy onFailure/alwaysを独立実装。既定recent・100 step・onFailure、成功探索保存にはstreaming/alwaysを利用できる。",
+      "owner": "T-01",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-007",
+        "description": "全組合せ、非成功/結果不明の異常終了、100step超を検証する。"
+      }
+    },
+    {
+      "id": "TRACE-008",
+      "group": "TRACE",
+      "title": "容量・中断耐性",
+      "rule": "メモリ・キュー・全artifact・個別添付に有限上限を設け、上限・切詰めを明示する。末尾不完全レコードと未flush消失を完全保存と称さず、参照切れも隠さない。",
+      "owner": "T-01",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-008",
+        "description": "途中停止、ディスク失敗、上限到達を独立fixtureで読取る。"
+      }
+    },
+    {
+      "id": "TRACE-009",
+      "group": "TRACE",
+      "title": "公開・安全性",
+      "rule": "保存用buffer/queue/hash前にredaction、profile維持、Screenshot別方針。文字列/添付をコードとして実行せず、外部URL自動取得やパストラバーサルを防ぐ。",
+      "owner": "T-01",
+      "collaborators": [
+        "T-03",
+        "T-05",
+        "T-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-009",
+        "description": "秘密markerと悪意ある添付/HTMLをJSON・Snapshot・HTML・例外で検査する。"
+      }
+    },
+    {
+      "id": "TRACE-010",
+      "group": "TRACE",
+      "title": "記録が動作を変えない",
+      "rule": "Traceは結果キューを横取りせず、clock/入力を操作せず、ゲームスレッドで保存I/Oを待たない。保存/Viewer失敗は主結果と別。",
+      "owner": "T-02",
+      "collaborators": [
+        "T-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-010",
+        "description": "Trace有無で相関結果の受信を妨げず、元失敗type/stackが残る。"
+      }
+    },
+    {
+      "id": "TRACE-011",
+      "group": "TRACE",
+      "title": "表示と既存連携",
+      "rule": "Inspector/静的HTMLで同schema/componentを利用。成功/失敗/欠損、未知注釈を表示し、lint/comparison/Recordingへの参照を持つ。",
+      "owner": "T-05",
+      "collaborators": [
+        "T-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-TRACE-011",
+        "description": "未知namespaceでも閲覧でき、記録がない場合に空Traceを成功と表示しない。"
+      }
+    },
+    {
+      "id": "REPLAY-001",
+      "group": "REPLAY",
+      "title": "三つの成果物",
+      "rule": "Traceは証拠、Gua Recordingは操作列、Replay PlanはScenario/Recording・時間方針・検証点の関連。Goalへ手順を追加しない。",
+      "owner": "P-09",
+      "collaborators": [
+        "P-01",
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-REPLAY-001",
+        "description": "同じScenarioのExploreとReplayで成功条件の意味を維持する。"
+      }
+    },
+    {
+      "id": "REPLAY-002",
+      "group": "REPLAY",
+      "title": "二つの再生方針",
+      "rule": "記録タイミング重視と条件同期重視をv0.1から扱う。条件同期は待ち方と同一Selector再解決までで、別対象・別経路へ修復しない。",
+      "owner": "P-09",
+      "collaborators": [
+        "G-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-REPLAY-002",
+        "description": "見つからないUIを類似対象へ置換せず、Replay失敗をExploreで上書きしない。"
+      }
+    },
+    {
+      "id": "REPLAY-003",
+      "group": "REPLAY",
+      "title": "開始と中間検証",
+      "rule": "Scenario setup、操作定義・権限・秘密入力・時計の適合を確認し、開始/途中/Goalの検証を既存DSLで行う。Trace Snapshotをゲームへ書戻して復元しない。",
+      "owner": "P-09",
+      "collaborators": [
+        "P-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-REPLAY-003",
+        "description": "初期から所持済みケースと中間の経路破損を検証する。"
+      }
+    },
+    {
+      "id": "REPLAY-004",
+      "group": "REPLAY",
+      "title": "完走と成功の分離",
+      "rule": "操作列の完走だけでPassedにしない。列が尽きても承認済み条件を期限内で待てる。onGoalは省略後半を明示、afterPlanはPlan完了を要求する。",
+      "owner": "P-09",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-REPLAY-004",
+        "description": "操作全部SucceededでもGoal未達はPassedにならない。"
+      }
+    },
+    {
+      "id": "REPLAY-005",
+      "group": "REPLAY",
+      "title": "候補と採用",
+      "rule": "探索記録から候補作成、条件確認、AIなし試験、明示採用の順。観測したバグを期待値へ自動昇格しない。正式PlanのRecordingは一時Run領域に依存し続けない。",
+      "owner": "P-14",
+      "collaborators": [
+        "P-09"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-REPLAY-005",
+        "description": "観測の一致だけで回帰テストを合格させず、削除可能Runから管理先へ参照固定する。"
+      }
+    },
+    {
+      "id": "REPLAY-006",
+      "group": "REPLAY",
+      "title": "内容固定と証拠",
+      "rule": "Scenario/Recording/Planの内容変更を検知し、採用対象hashと試験Runを結び付ける。候補実行許可は安全制限解除ではない。hash範囲はOPEN-08で固定する。",
+      "owner": "P-14",
+      "collaborators": [
+        "P-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-REPLAY-006",
+        "description": "採用後の条件や時間変更へ古い合格証拠を流用しない。"
+      }
+    },
+    {
+      "id": "CLOCK-001",
+      "group": "CLOCK",
+      "title": "時計の明示",
+      "rule": "realtimeを既定とし、simulationは制御対象が明示された対応環境だけで使う。未対応を実時間へ自動降格しない。AI判断待ちを実時間予算から勝手に除外しない。",
+      "owner": "G-05",
+      "collaborators": [
+        "P-09",
+        "P-12"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-001",
+        "description": "clockの存在だけでエンジン全体の決定論を保証しない。"
+      }
+    },
+    {
+      "id": "CLOCK-002",
+      "group": "CLOCK",
+      "title": "時間予算の領域",
+      "rule": "segment時刻は指定時計、条件は実行方針で固定した時計、maxDuration/通信/準備/cleanupの安全期限は実時間で動く。",
+      "owner": "P-05",
+      "collaborators": [
+        "P-04",
+        "G-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-002",
+        "description": "simulation停止中でも接続・cleanupの期限が動く。"
+      }
+    },
+    {
+      "id": "CLOCK-003",
+      "group": "CLOCK",
+      "title": "共通起点",
+      "rule": "準備が整った区間の開始＋offsetで入力を予定する。前のAction結果待ち時間を次のoffsetへ加算しない。",
+      "owner": "G-05",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-003",
+        "description": "結果応答を遅らせても開始・jump・解除の送信予定が後ろへずれない。"
+      }
+    },
+    {
+      "id": "CLOCK-004",
+      "group": "CLOCK",
+      "title": "順序と適用",
+      "rule": "同offsetは記録順。必要な順序保証がない経路は拒否する。送信時刻/ホスト適用時刻/結果受信を区別し、同tick同時適用は別の能力要件とする。",
+      "owner": "G-05",
+      "collaborators": [
+        "T-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-004",
+        "description": "送信順と実適用を照合し、取得不能な厳密適用時間を未確認とする。"
+      }
+    },
+    {
+      "id": "CLOCK-005",
+      "group": "CLOCK",
+      "title": "区間の境界",
+      "rule": "保持入力はTimed Segment内で開始・解除まで閉じる。条件waitは外側、境界で自owner入力の中立を確認。複合入力は同一区間で重ねられる。",
+      "owner": "G-05",
+      "collaborators": [
+        "P-10"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-005",
+        "description": "保持したままAIへ返るsingleやsegment内条件分岐を拒否する。"
+      }
+    },
+    {
+      "id": "CLOCK-006",
+      "group": "CLOCK",
+      "title": "解除とlease",
+      "rule": "開始応答の遅延を埋めるため解除を遅らせない。leaseは保護期限で通常終了は明示解除。時計が異なるleaseの余裕を検証し、勝手に延長/再入力しない。",
+      "owner": "G-05",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-006",
+        "description": "早いlease切れを正常時間再現とせず、解除未確認を記録する。"
+      }
+    },
+    {
+      "id": "CLOCK-007",
+      "group": "CLOCK",
+      "title": "許容遅延",
+      "rule": "有限maxLatenessを設定・記録し、超過時は遅れた操作をまとめ打ちせず未送信プレイを止め、必要な解除を試みる。20msは説明用例で共通固定値ではない。",
+      "owner": "G-05",
+      "collaborators": [
+        "P-09"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLOCK-007",
+        "description": "遅延復帰でjump/attackをまとめずReplayTimingViolation等の原因を残す。"
+      }
+    },
+    {
+      "id": "PLANNER-001",
+      "group": "PLANNER",
+      "title": "責務",
+      "rule": "AIは提案者。実行・制限・時間・成功判定はRunner、観測入力はGua。独自Capability定義やMCP経由の無制限操作を復活させない。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-001",
+        "description": "AIがゲームを書き換えて採点を通す経路を持たない。"
+      }
+    },
+    {
+      "id": "PLANNER-002",
+      "group": "PLANNER",
+      "title": "判断単位",
+      "rule": "Run内で有効な判断要求は原則一つ、一要求一Decision。runId/decisionRequestId/basedOnObservationIdを検証し、取消・終了・重複・stale応答を実行しない。",
+      "owner": "P-10",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-002",
+        "description": "同じ応答を複数投入しても操作を二重送信しない。"
+      }
+    },
+    {
+      "id": "PLANNER-003",
+      "group": "PLANNER",
+      "title": "PlannerInput",
+      "rule": "目的、実制限、残量、取得範囲と時点を伴う観測、既存Gua操作定義、構造化feedbackを渡す。Scenario全文や接続秘密を丸渡ししない。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-003",
+        "description": "差分基準が消えたら再同期し、取得不能/省略/0件を区別する。"
+      }
+    },
+    {
+      "id": "PLANNER-004",
+      "group": "PLANNER",
+      "title": "Decision分岐",
+      "rule": "execute/observe/wait/finishの一つ。executeはsingle/timed、observeは許可readのみ、waitは有限時間/既存条件、finishはgoalClaimed/stuck/cannotProceedの報告。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-004",
+        "description": "複数kind、未知制御field、無制限区間、任意shell/URL/ファイル要求を拒否する。"
+      }
+    },
+    {
+      "id": "PLANNER-005",
+      "group": "PLANNER",
+      "title": "二段階検証",
+      "rule": "完了した構造化応答だけを検証し採用。schema適合と現在の権限/予算/Action定義/context/対象・時間能力の適合を別に検査する。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-005",
+        "description": "部分JSONを実行せず、revision変化だけで永久却下せず関連前提を再確認する。"
+      }
+    },
+    {
+      "id": "PLANNER-006",
+      "group": "PLANNER",
+      "title": "AIが決めない項目",
+      "rule": "confirmed、owner、request ID、時計、制限、Goalの採点、任意profile昇格をAIへ与えない。提案waitを成功条件へ昇格しない。",
+      "owner": "P-10",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-006",
+        "description": "自己申告承認や非公開値waitを未送信で拒否する。"
+      }
+    },
+    {
+      "id": "PLANNER-007",
+      "group": "PLANNER",
+      "title": "並行監視と中断",
+      "rule": "AI思考中もfailure/期限/停止監視を続ける。操作ゲートを閉じて必要解除を先に試し、その後Planner中断を要求する。通常の次判断は保持入力中立で行う。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-05",
+        "P-12"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-007",
+        "description": "AI無応答でも既定終了と解除ができ、遅延応答が実行されない。"
+      }
+    },
+    {
+      "id": "PLANNER-008",
+      "group": "PLANNER",
+      "title": "Codex backend",
+      "rule": "ローカルApp Serverとのstdio通信を専用moduleに置き、Runごと新session/thread、判断ごとturnを基本とする。対応版検証、取得可能な利用量、中断、認証参照を扱う。",
+      "owner": "P-12",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-008",
+        "description": "Runner schemaにthread IDを必須化せず、Codex未導入Replayを阻害しない。"
+      }
+    },
+    {
+      "id": "PLANNER-009",
+      "group": "PLANNER",
+      "title": "隔離・秘密・診断",
+      "rule": "標準開発権限を丸渡しせず、ソース/セーブの変更や非公開答えの読取、直接Gua操作を迂回できない実行制限を検証する。思考全文は必須ログにせず短い理由と根拠参照を残す。",
+      "owner": "P-12",
+      "collaborators": [
+        "P-10",
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-009",
+        "description": "ゲーム内文言をシステム指示へ昇格せず、送信前と保存前の両方でredactionする。"
+      }
+    },
+    {
+      "id": "PLANNER-010",
+      "group": "PLANNER",
+      "title": "Planner由来の失敗",
+      "rule": "無効提案は未送信で回数制限付き再判断、継続不能はPlannerOutputInvalid/PlannerTimeout等でoriginを分ける。AI障害をScenarioの形式不正にしない。",
+      "owner": "P-10",
+      "collaborators": [
+        "P-12",
+        "P-11"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PLANNER-010",
+        "description": "無効応答・利用上限・接続障害とゲームのfailure条件を区別する。"
+      }
+    },
+    {
+      "id": "STALL-001",
+      "group": "STALL",
+      "title": "進捗は任意",
+      "rule": "状態変化・新情報・進捗・成功は別。進捗定義がない場合は不明であり進捗ゼロとしない。任意Milestone/MetricはGoal成功を代替しない。",
+      "owner": "P-11",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-STALL-001",
+        "description": "アニメーション変化だけで進捗扱いせず、指標なしでも予算で終了を保証する。"
+      }
+    },
+    {
+      "id": "STALL-002",
+      "group": "STALL",
+      "title": "Milestone/Metric",
+      "rule": "Milestoneは実行中の初到達のみ。初期成立を前進として数えない。Metricは認定済み最良値からminImprovement以上の改善、反復回復やRuntime ID差替えで履歴を復活させない。",
+      "owner": "P-11",
+      "collaborators": [
+        "P-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-STALL-002",
+        "description": "HP100→90→100→90を二度の改善とせず、小改善の累積を正しく扱う。"
+      }
+    },
+    {
+      "id": "STALL-003",
+      "group": "STALL",
+      "title": "停滞の兆候",
+      "rule": "定義済み進捗の未更新、比較可能な同状況＋同操作列反復、Planner申告を入口にする。操作名のみ/更新revisionのみで断定せず、欠損は判定不能。",
+      "owner": "P-11",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-STALL-003",
+        "description": "正常な攻撃とHP改善を停滞にせず、位置往復と比較不可能を区別する。"
+      }
+    },
+    {
+      "id": "STALL-004",
+      "group": "STALL",
+      "title": "回復境界",
+      "rule": "区間/要求/解除/正当なwaitの途中へ停滞回復を割込ませない。Running内部のExploring/SuspectedStall/Recoveringで既存Decisionを使う。",
+      "owner": "P-11",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-STALL-004",
+        "description": "進行中waitを勝手に短縮せず、別経路の試行と再送を混同しない。"
+      }
+    },
+    {
+      "id": "STALL-005",
+      "group": "STALL",
+      "title": "有限回復",
+      "rule": "Run全体の回復判断予算は回復成功でも復活せず、通常予算も消費する。内部API/自動reset/再起動/条件改変を使わない。Replayでは回復しない。",
+      "owner": "P-11",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-STALL-005",
+        "description": "再起動は別Run、Replay失敗は保存され、回復の無限延命ができない。"
+      }
+    },
+    {
+      "id": "STALL-006",
+      "group": "STALL",
+      "title": "終了と情報公開",
+      "rule": "stalledは今回の探索の限界でありゲーム攻略不能・バグの証明ではない。非公開Metricの詳細をPlannerのfeedbackへ漏らさない。8行動/3反復/3回復は調整可能な初期値案として扱う。",
+      "owner": "P-11",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-STALL-006",
+        "description": "結果originと終了理由、非公開進捗の漏えい、初期値の設定出所を確認する。"
+      }
+    },
+    {
+      "id": "START-001",
+      "group": "START",
+      "title": "実行設定の分離",
+      "rule": "Scenarioの意味とEnvironmentの起動/接続/fixture/profile/Planner/準備・終了上限を分離し、既存Guaホストを再利用する。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-13"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-001",
+        "description": "同じScenarioをlaunch/attachへ組合せられ、未指定の別portや実行ファイルを探して実行しない。"
+      }
+    },
+    {
+      "id": "START-002",
+      "group": "START",
+      "title": "launch/attach",
+      "rule": "launchはRunner作成資源を管理、attachは既存プロセスを無断終了/resetしない。原則一つの能動Runで専有し、owner分離をゲーム状態分離と称さない。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-002",
+        "description": "並行操作と外部手動入力の保証限界を記録し、別owner/既存プロセスを巻き込まない。"
+      }
+    },
+    {
+      "id": "START-003",
+      "group": "START",
+      "title": "Setupとreset",
+      "rule": "望むcheckpoint/save/scene等を承認済み方法に対応付け、Setup経路をPlannerへ公開しない。Gua resetでゲーム状態を復元したと称さない。current開始は復元可能性を別に示す。",
+      "owner": "P-06",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-003",
+        "description": "Strict開始で残要求を消して隠さず、currentの記録だけで同じ状態へReplay可能と称さない。"
+      }
+    },
+    {
+      "id": "START-004",
+      "group": "START",
+      "title": "準備確認",
+      "rule": "接続先/buildの確認可能な識別、必要protocol/機能/profile/時計、開始前提を検証する。未来のBossやattackが開始画面にないだけで拒否しない。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-004",
+        "description": "port一致だけで期待buildと断定せず、厳密識別が必要な設定では不足を拒否する。"
+      }
+    },
+    {
+      "id": "START-005",
+      "group": "START",
+      "title": "初期境界",
+      "rule": "Setup後の観測と購読境界を同期し、同じ評価用観測で前提確認、Running境界、初回success/failureを処理してからAIへ渡す。全Tree静止を開始条件にしない。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-04",
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-005",
+        "description": "古いepoch・開始直後死亡・初期success・空UIの正常開始を検証する。"
+      }
+    },
+    {
+      "id": "START-006",
+      "group": "START",
+      "title": "準備期限と失敗",
+      "rule": "Preparingと各処理/cleanupに有限実時間上限。再接続で全体期限をリセットせず、結果不明の副作用Setupを無条件に再試行しない。Preparingの期限はFailed/PreparationTimeout。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-006",
+        "description": "起動/接続/Setup/前提不成立をphase/reasonで区別し、再起動を新Runへする。"
+      }
+    },
+    {
+      "id": "START-007",
+      "group": "START",
+      "title": "準備中のPlannerとTrace",
+      "rule": "Exploreは権限付きPlanner環境をPreparingで確認するが判断はRunningから。ReplayはPlannerを要求しない。接続前の起動失敗も共通Traceに記録する。",
+      "owner": "P-06",
+      "collaborators": [
+        "P-08",
+        "P-12"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-START-007",
+        "description": "CodexなしReplayと起動前失敗Trace、途中取得済み資源の解放を確認する。"
+      }
+    },
+    {
+      "id": "FILE-001",
+      "group": "FILE",
+      "title": "三種類",
+      "rule": "Scenario/Environment/Replay Planに分離し、kind/schemaVersionを持つ。PlanはScenarioとRecordingを参照し、CLIで別Goalへ無断差替えしない。",
+      "owner": "P-01",
+      "collaborators": [
+        "P-13",
+        "P-14"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-001",
+        "description": "同じPlanのEnvironment変更と、Scenario変更の拒否を区別する。"
+      }
+    },
+    {
+      "id": "FILE-002",
+      "group": "FILE",
+      "title": "形式と参照",
+      "rule": "YAML/JSONは同一データモデル。重複キー/未知制御field/コードタグ/循環を拒否し、未対応版を実行しない。Gua schemaは版固定同梱しオンライン最新へ追従しない。",
+      "owner": "P-01",
+      "collaborators": [
+        "G-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-002",
+        "description": "validateがネットワーク・外部コード・native起動なしで静的に処理できる。"
+      }
+    },
+    {
+      "id": "FILE-003",
+      "group": "FILE",
+      "title": "パス",
+      "rule": "ファイル内相対パスはそのファイルの場所、CLI引数はcwdを基準。暗黙探索や親設定の自動mergeをしない。許可領域は正規化/解決後のパスで確認する。",
+      "owner": "P-01",
+      "collaborators": [
+        "P-13"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-003",
+        "description": "cwd変更でPlanの参照先が変わらず、許可外参照を拒否する。"
+      }
+    },
+    {
+      "id": "FILE-004",
+      "group": "FILE",
+      "title": "固定hash",
+      "rule": "Scenario/Recording参照はファイルbytesのSHA-256で固定し、実行前に読込んだ内容を保持する。書式/コメント変更でも一致しない。hashは安全性や発行者承認の証明ではない。",
+      "owner": "P-14",
+      "collaborators": [
+        "P-01"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-004",
+        "description": "実行途中差替え・採用後変更・自己参照hashの境界をOPEN-08に従い検査する。"
+      }
+    },
+    {
+      "id": "FILE-005",
+      "group": "FILE",
+      "title": "設定の解決",
+      "rule": "テストの意味はScenario/Plan、安全上限は厳しい方、許可は共通部分・禁止優先。CLIが変更できるのは承認した運用項目・より厳しい上限。実効値と出所を保存する。",
+      "owner": "P-13",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-005",
+        "description": "100/50/1000操作指定から50となり、simulationをrealtimeへ自動変換しない。"
+      }
+    },
+    {
+      "id": "FILE-006",
+      "group": "FILE",
+      "title": "秘密値",
+      "rule": "設定は秘密値の参照を持ち、必要分だけ実行時に解決する。全環境変数や平文をAI/Run/例外へ渡さない。保存入力は秘密値処理後の固定コピーとする。",
+      "owner": "P-13",
+      "collaborators": [
+        "P-08",
+        "P-12"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-006",
+        "description": "secretKeyと供給可否を保存し、request/inputコピーに秘密markerが残らない。"
+      }
+    },
+    {
+      "id": "FILE-007",
+      "group": "FILE",
+      "title": "Run成果物",
+      "rule": "Runごとに一意のdirと最小run/resultサマリーを保存し、任意Trace/Recordingと関連付ける。成功時Trace省略と未実行/保存失敗を分離する。",
+      "owner": "P-08",
+      "collaborators": [
+        "P-13"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FILE-007",
+        "description": "上書きなし、result不在の中断を最後の観測からPassedと補わない。"
+      }
+    },
+    {
+      "id": "CLI-001",
+      "group": "CLI",
+      "title": "入口",
+      "rule": "validate/explore/replay/plan create/plan accept/reportを一つのgua-playtestコマンドにする。実行Environmentは明示し、再生失敗から探索へ自動切替しない。",
+      "owner": "P-13",
+      "collaborators": [
+        "P-14"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLI-001",
+        "description": "明示した入力ファイル/Environmentのみに従って処理する。"
+      }
+    },
+    {
+      "id": "CLI-002",
+      "group": "CLI",
+      "title": "副作用の分離",
+      "rule": "validateは静的検証のみ、replayはCodex不要、reportは既存Trace読取表示だけ。通常CLIは非対話、承認不足を自動承認せず、対話は明示する。",
+      "owner": "P-13",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLI-002",
+        "description": "validate成功がScenarioPassedにならず、reportでゲームを再操作しない。"
+      }
+    },
+    {
+      "id": "CLI-003",
+      "group": "CLI",
+      "title": "候補採用手順",
+      "rule": "plan createは候補のみ。allow-candidateは候補試験を許すだけ。plan acceptは内容一致・同内容のPlan完走成功証拠・明示承認を検証し、変更後に旧採用を流用しない。",
+      "owner": "P-14",
+      "collaborators": [
+        "P-13"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLI-003",
+        "description": "古いhash、欠損Recording、推定期待値、未完走のonGoal証拠を正式採用へ流用しない。"
+      }
+    },
+    {
+      "id": "CLI-004",
+      "group": "CLI",
+      "title": "出力",
+      "rule": "通常表示と--jsonを分け、JSON stdoutは一つの最終結果、進捗・診断はstderr。詳細時系列はGua Trace、プロセス出力をJSONへ混ぜない。",
+      "owner": "P-13",
+      "collaborators": [
+        "P-08"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLI-004",
+        "description": "ゲーム/Plannerがstdoutへ大量出力してもCLI結果JSONが壊れない。"
+      }
+    },
+    {
+      "id": "CLI-005",
+      "group": "CLI",
+      "title": "終了コード",
+      "rule": "実行commandの0 Passed/1 Failed/2 Invalid/3 TimedOut/4 Aborted/5 Unverified/10 Runner異常/11 Passedだが必須後処理未達。非実行commandの0はcommand成功でありテスト成功ではない。",
+      "owner": "P-13",
+      "collaborators": [
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-CLI-005",
+        "description": "最新のexit 11定義と、元結果非Passed時の後処理追加エラーを検証する。"
+      }
+    },
+    {
+      "id": "PACK-001",
+      "group": "PACK",
+      "title": "C#単一実装",
+      "rule": "C#/.NET 10でCore/Runner/GuaIntegration/Planners.Codex/Cliを構成し、ゲーム外で実行する。TypeScript版RunnerとC#版Runnerの二系統は作らない。",
+      "owner": "P-02",
+      "collaborators": [
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PACK-001",
+        "description": "CLIとライブラリが同じRunner規則を使い、ゲーム内へPlanner認証を配置しない。"
+      }
+    },
+    {
+      "id": "PACK-002",
+      "group": "PACK",
+      "title": "依存境界",
+      "rule": "Coreは純粋な契約・意味規則、Runnerは抽象窓口、具体連携はmodule、CLIは組立/表示。Gua実装/schemaは公開packageを利用し、別実装へコピーしない。",
+      "owner": "P-02",
+      "collaborators": [
+        "G-06",
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PACK-002",
+        "description": "正式buildが../guaに依存せず、native無しvalidateとGua-onlyのTrace利用が成立する。"
+      }
+    },
+    {
+      "id": "PACK-003",
+      "group": "PACK",
+      "title": "配布経路",
+      "rule": "同じCLIをself-contained archiveと.NET Toolにする。通常利用は一入口、ライブラリ利用はNuGet。npm版Runnerや必須のGUIビルドを追加しない。",
+      "owner": "P-16",
+      "collaborators": [
+        "G-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PACK-003",
+        "description": "clean環境でarchive/toolの同機能を実行し、schema/native/Viewerの不足を検出する。"
+      }
+    },
+    {
+      "id": "PACK-004",
+      "group": "PACK",
+      "title": "版と外部依存",
+      "rule": "Playtest内は同じ製品版、Guaは独立版を対応表で固定。Codex本体・認証は同梱せず自動更新しない。実際の版をRunへ記録する。",
+      "owner": "P-16",
+      "collaborators": [
+        "P-12"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PACK-004",
+        "description": "対応外の機能を黙って降格せず、必要なら実行前に理由を返す。"
+      }
+    },
+    {
+      "id": "PACK-005",
+      "group": "PACK",
+      "title": "対応範囲",
+      "rule": "初期配布案はwin-x64/linux-x64/osx-x64/osx-arm64。CLI・native・engine launch/attach・render/headless・Planner制限を別軸で検証し、起動だけで全対応と称さない。",
+      "owner": "P-16",
+      "collaborators": [
+        "P-17"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PACK-005",
+        "description": "各表明経路を配布物で確認し、skipを合格証拠にしない。"
+      }
+    },
+    {
+      "id": "PACK-006",
+      "group": "PACK",
+      "title": "利用者責任と文書",
+      "rule": "ゲームがGua対応していることが前提。起動/認証/profile/秘密値/保存/採用/失敗理由を文書化し、checksum/依存物/ライセンスを配布する。単一exeやAOTは必須要件にしない。",
+      "owner": "P-17",
+      "collaborators": [
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-PACK-006",
+        "description": "サンプル手順を配布物のみで実行し、未検証の宣伝をしない。"
+      }
+    },
+    {
+      "id": "FIX-001",
+      "group": "FIX",
+      "title": "検証の三層",
+      "rule": "契約/RunnerのFake、実Gua接続、Godot/Unity実ゲームを分ける。既存Gua低層テストは再利用し、Fakeの成功で全統合済みとはしない。",
+      "owner": "P-15",
+      "collaborators": [
+        "P-02",
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-001",
+        "description": "同じ要件に型・実通信・実入力それぞれの必要証拠が付く。"
+      }
+    },
+    {
+      "id": "FIX-002",
+      "group": "FIX",
+      "title": "三つの小場面",
+      "rule": "ショップ、移動コース（2D/3D変種）、複数敵の小部屋を用意する。プレイ経路を使い、内部ロジックAPIで近道しない。",
+      "owner": "P-15",
+      "collaborators": [
+        "P-07"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-002",
+        "description": "正常購入、複合入力・壁、phase変更・Object差替え・複数一致を確認する。"
+      }
+    },
+    {
+      "id": "FIX-003",
+      "group": "FIX",
+      "title": "故障の配置",
+      "rule": "ゲーム処理、Adapter/結果、観測、Planner、保存/終了へ責務別に故障を置き、開始前の承認済み設定で境界発火させる。",
+      "owner": "P-15",
+      "collaborators": [],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-003",
+        "description": "故障が実発火したことを確認し、Plannerへfault設定や解除操作を公開しない。"
+      }
+    },
+    {
+      "id": "FIX-004",
+      "group": "FIX",
+      "title": "独立oracle",
+      "rule": "fixture事実、Playtest結果、Trace、外側期待値を照合する。最小の専用カウンター等はテスト用のみ。検証対象の判定コード自身から期待結果を生成しない。",
+      "owner": "P-15",
+      "collaborators": [
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-004",
+        "description": "Replay afterPlanの購入後応答欠落で、一度だけの要求・取引・未確認Timeout・非再送を照合する。"
+      }
+    },
+    {
+      "id": "FIX-005",
+      "group": "FIX",
+      "title": "決定性と許容差",
+      "rule": "純粋規則は厳密、固定tickはtick、実時間は事前許容遅延、位置は明示許容差、実AIは制約/Goalで検証する。seedだけで全実行を固定したとしない。",
+      "owner": "P-15",
+      "collaborators": [
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-005",
+        "description": "失敗後の閾値緩和を行わず、fixture版/build/seed/clock/fault/許容差を保存する。"
+      }
+    },
+    {
+      "id": "FIX-006",
+      "group": "FIX",
+      "title": "公開・所有の異常",
+      "rule": "テスト秘密marker、非公開情報wait、別owner/attachプロセス、capture失敗を検証する。Screenshotの安全性を文字のsensitive指定だけで保証しない。",
+      "owner": "P-15",
+      "collaborators": [
+        "P-12",
+        "T-06"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-006",
+        "description": "漏えいと他owner解除を外側から独立に検出する。"
+      }
+    },
+    {
+      "id": "FIX-007",
+      "group": "FIX",
+      "title": "仕様横断の競合",
+      "rule": "allの同時性、時間分岐、三値、空all、打切り、same-cycle failure、全体期限、Completing Cancel、予算区間予約をfixture/契約データへ追加する。",
+      "owner": "P-15",
+      "collaborators": [
+        "P-03",
+        "P-04",
+        "P-05"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-FIX-007",
+        "description": "直近の整合性レビューの期待結果を固定してから実装で照合する。"
+      }
+    },
+    {
+      "id": "DELIVERY-001",
+      "group": "DELIVERY",
+      "title": "依存と段階",
+      "rule": "仕様・データ→Fake Runner→実Guaと小ゲーム→Replay→探索→実Codex→全体配布確認を基本とする。契約済み領域は並行可能、完成証拠は実接続を要求する。",
+      "owner": "P-16",
+      "collaborators": [
+        "P-01",
+        "P-02"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DELIVERY-001",
+        "description": "着手/統合/リリース依存を分け、根拠なく全工程を直列停止しない。"
+      }
+    },
+    {
+      "id": "DELIVERY-002",
+      "group": "DELIVERY",
+      "title": "早期配布検証",
+      "rule": "CLI骨格・validate・配布物smokeは初期から作る。security/秘密値/cleanupテストを最後のIssueだけへ先送りしない。",
+      "owner": "P-02",
+      "collaborators": [
+        "P-13",
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DELIVERY-002",
+        "description": "各PRで担当境界の異常テストがあり、最後の梱包時だけnative不足を発見する進め方にしない。"
+      }
+    },
+    {
+      "id": "DELIVERY-003",
+      "group": "DELIVERY",
+      "title": "リリース証拠",
+      "rule": "要件→Issue→実装→受け入れテスト→実行証拠を対応付ける。探索→Trace/Recording→候補→AIなし試験→明示採用→別Run再生を同じ成果物で一巡する。",
+      "owner": "P-16",
+      "collaborators": [
+        "P-14",
+        "P-15"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DELIVERY-003",
+        "description": "閉じたIssue数でなく、採用要件の網羅・接続・配布・失敗時の正しさでv0.1を判定する。"
+      }
+    },
+    {
+      "id": "INPUT-001",
+      "group": "INPUT",
+      "title": "既存定義の再利用",
+      "rule": "InputActionのdescriptionは既存の必須フィールドを利用する。valueTypeのbutton/axis1d/vector2/text、range、holdable、active、risk、requiresConfirmation等の意味を再定義しない。",
+      "owner": "G-04",
+      "collaborators": [
+        "P-07",
+        "P-10"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-INPUT-001",
+        "description": "既存記述を二重に登録させず、Action discoveryで元の定義と同じ情報を返す。"
+      }
+    },
+    {
+      "id": "INPUT-002",
+      "group": "INPUT",
+      "title": "追加metadata",
+      "rule": "valueSchemaで入力構造・範囲・各値の意味を機械可読にし、examplesを任意の典型入力例として提供する。説明はプレイヤー視点の動作と入力軸の意味を記述する。",
+      "owner": "G-04",
+      "collaborators": [
+        "G-03"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-INPUT-002",
+        "description": "vector2の入力例がschemaを満たし、公開・登録・検索・利用側で一致する。"
+      }
+    },
+    {
+      "id": "INPUT-003",
+      "group": "INPUT",
+      "title": "互換性と権限",
+      "rule": "新metadataの導入時は既存schema/ABI/clientの互換性を確認し、未知の拡張を無条件に追加しない。Action説明の存在を実行承認と解釈せず、現時点の公開定義を使う。",
+      "owner": "G-04",
+      "collaborators": [
+        "P-10",
+        "P-09"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-INPUT-003",
+        "description": "旧clientの扱いと入力型の不正を検証し、古いconfirmedを再生の承認に流用しない。"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "id": "G-01",
+      "repository": "gua",
+      "title": "共通Value schemaと型・比較用データを定義する",
+      "integration_dependencies": [],
+      "contract_prerequisites": "既存wire契約との差分、OPEN-01/02を先に解決する。",
+      "scope": "bool/integer/number/string/enum/list/set、型情報、enum型定義、禁止値、言語間の正常・異常データを定義する。",
+      "out_of_scope": "PlaytestのGoal、ゲーム固有の固定状態モデル。",
+      "completion_gate": "schema・生成データ・各実装の読み取りを照合し、既存Gua値を無断で破壊しない。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "VALUE-001",
+        "VALUE-002",
+        "VALUE-003",
+        "VALUE-004",
+        "VALUE-005"
+      ],
+      "collaborating_requirements": [
+        "ASSERT-003"
+      ],
+      "blocking_decisions": [
+        "OPEN-01",
+        "OPEN-02"
+      ]
+    },
+    {
+      "id": "G-02",
+      "repository": "gua",
+      "title": "Object/UI ObserveとWorld Propertyの登録・寿命・通知を実装する",
+      "integration_dependencies": [
+        "G-01"
+      ],
+      "contract_prerequisites": "OPEN-03の検知境界・寿命・失敗契約を固定する。",
+      "scope": "読み取り専用の登録、重複名、追加・変更・削除、Objectの寿命、購読境界、取得不能を扱う。",
+      "out_of_scope": "状態書換え、GuaからのGoal評価、ゲーム内部全状態の同期。",
+      "completion_gate": "同種の敵を複数登録し、破棄・再生成・取得例外・中間変化を契約どおり検証する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "OBS-001",
+        "OBS-003",
+        "OBS-004"
+      ],
+      "collaborating_requirements": [
+        "VALUE-002",
+        "TIME-002"
+      ],
+      "blocking_decisions": [
+        "OPEN-03",
+        "OPEN-04"
+      ]
+    },
+    {
+      "id": "G-03",
+      "repository": "gua",
+      "title": "追加観測値をbinding・adapter・bridge・既存クライアントへ接続する",
+      "integration_dependencies": [
+        "G-02"
+      ],
+      "contract_prerequisites": "G-01/G-02の契約と公開profile、対象クライアントの対応表。",
+      "scope": "C ABI、C++/.NET、Godot/Unity、wire、Inspector等の公開・取得経路を接続する。既存のWorld stateとの重複を解消する。",
+      "out_of_scope": "新しいPlaytest専用Game Stateレジストリ。",
+      "completion_gate": "対応表で宣言した経路ごとに、実際の生成・通知・読取・秘密値非混入を確認する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "OBS-002"
+      ],
+      "collaborating_requirements": [
+        "VALUE-003",
+        "OBS-001",
+        "OBS-004",
+        "INPUT-002"
+      ],
+      "blocking_decisions": [
+        "OPEN-01",
+        "OPEN-03"
+      ]
+    },
+    {
+      "id": "G-04",
+      "repository": "gua",
+      "title": "InputActionの値説明schema・入力例と互換性を追加する",
+      "integration_dependencies": [],
+      "contract_prerequisites": "既存description/valueType/rangeの再利用、OPEN-01の互換性とschema方言。",
+      "scope": "valueSchema・examplesの定義、登録、検索結果、Inspector/MCP等への伝達と入力検証を整える。",
+      "out_of_scope": "descriptionの重複新設、任意ゲーム内部コマンド、Playtest独自Capability。",
+      "completion_gate": "既存button/axis1d/vector2/textを壊さず、入力例とschemaが一致し、旧クライアントとの扱いが明示される。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "INPUT-001",
+        "INPUT-002",
+        "INPUT-003"
+      ],
+      "collaborating_requirements": [],
+      "blocking_decisions": [
+        "OPEN-01"
+      ]
+    },
+    {
+      "id": "G-05",
+      "repository": "gua",
+      "title": "ReplayのTimed Segment・複合入力・時間契約を実装する",
+      "integration_dependencies": [
+        "GH-107"
+      ],
+      "contract_prerequisites": "CLOCK要件、OPEN-07、既存Recordingの時刻の意味を固定する。",
+      "scope": "区間開始＋offsetによる予定、結果待ちとの分離、順序、保持解除、遅延停止、clock能力、記録参照を扱う。",
+      "out_of_scope": "AIによる経路修復、エンジン全体の決定論の無条件保証。",
+      "completion_gate": "遅い応答で解除予定を延ばさず、許容外遅延でまとめ打ちせず、未対応の時間保証を拒否する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "ACTION-005",
+        "CLOCK-001",
+        "CLOCK-003",
+        "CLOCK-004",
+        "CLOCK-005",
+        "CLOCK-006",
+        "CLOCK-007"
+      ],
+      "collaborating_requirements": [
+        "BUDGET-002",
+        "REPLAY-002",
+        "CLOCK-002"
+      ],
+      "blocking_decisions": [
+        "OPEN-07"
+      ]
+    },
+    {
+      "id": "G-06",
+      "repository": "gua",
+      "title": "Playtestから再利用できるGua配布契約を整える",
+      "integration_dependencies": [
+        "G-03",
+        "G-04",
+        "G-05",
+        "T-06"
+      ],
+      "contract_prerequisites": "利用するGuaパッケージ、schema、native、Viewerの配布方式と版の契約。",
+      "scope": "既存パッケージの不足分だけを整備し、schema/native/生成済みViewerを版固定して再利用可能にする。",
+      "out_of_scope": "PlaytestへGuaのソースやViewer実装を複製すること。",
+      "completion_gate": "Guaソースcheckoutなしの利用側テストで、各対応RIDと表示資産を検証する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [],
+      "collaborating_requirements": [
+        "BOUND-001",
+        "FILE-002",
+        "PACK-002",
+        "PACK-003"
+      ],
+      "blocking_decisions": [
+        "OPEN-11"
+      ]
+    },
+    {
+      "id": "T-01",
+      "repository": "gua",
+      "title": "#109子作業：Trace schema・writer/reader・保存方針を実装する",
+      "integration_dependencies": [
+        "G-01"
+      ],
+      "contract_prerequisites": "承認済み#109改訂案、OPEN-01/10。",
+      "scope": "Session/Step/Event、recent/streaming、onFailure/always、有限容量、追記保存、部分読取、manifestを実装する。",
+      "out_of_scope": "Goal採点、全frameの無制限保存、秘密値保護の後回し。",
+      "completion_gate": "保持範囲・欠損・中断を区別し、容量上限と不完全な末尾を正常な完全記録と偽らない。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "TRACE-003",
+        "TRACE-007",
+        "TRACE-008",
+        "TRACE-009"
+      ],
+      "collaborating_requirements": [
+        "TRACE-002"
+      ],
+      "blocking_decisions": [
+        "OPEN-01",
+        "OPEN-10"
+      ]
+    },
+    {
+      "id": "T-02",
+      "repository": "gua",
+      "title": "#109子作業：操作・Assertion・native lifecycleを相関する",
+      "integration_dependencies": [
+        "T-01",
+        "GH-107"
+      ],
+      "contract_prerequisites": "request/source/epoch識別とホスト事実の取得範囲。",
+      "scope": "client stepとnative処理段階、UI/Game Input/Raw Input、保持開始解除、source locationを関連付ける。",
+      "out_of_scope": "同じ要求の二重計上、結果キューの先取り、未観測の適用時刻の推定。",
+      "completion_gate": "同一requestIdが別接続・epochにあっても混ざらず、結果待ちクライアントを妨げない。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "TRACE-002",
+        "TRACE-010"
+      ],
+      "collaborating_requirements": [
+        "OBS-005",
+        "ACTION-001",
+        "ACTION-005",
+        "TRACE-003",
+        "CLOCK-004"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "T-03",
+      "repository": "gua",
+      "title": "#109子作業：Snapshot・Change・観測区間と欠損を保存する",
+      "integration_dependencies": [
+        "T-01",
+        "G-03"
+      ],
+      "contract_prerequisites": "G-02の購読境界、OPEN-03/04。",
+      "scope": "redaction後のcontent hash、観測時点分離、前後と中間Change、欠損・不在・古い値を保存する。",
+      "out_of_scope": "baseline正規化の無条件適用、因果関係の自動断定。",
+      "completion_gate": "同じ内容の別時点観測とFirst→Second→Thirdを保持し、欠損後のSnapshotで履歴を捏造しない。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "TRACE-004",
+        "TRACE-005",
+        "TRACE-006"
+      ],
+      "collaborating_requirements": [
+        "OBS-003",
+        "OBS-004",
+        "OBS-006",
+        "ACTION-002",
+        "TRACE-009"
+      ],
+      "blocking_decisions": [
+        "OPEN-03"
+      ]
+    },
+    {
+      "id": "T-04",
+      "repository": "gua",
+      "title": "#109子作業：外部Runner向けTrace記録APIを提供する",
+      "integration_dependencies": [
+        "T-01",
+        "T-02",
+        "T-03"
+      ],
+      "contract_prerequisites": "汎用注釈・attachment・相関APIの契約。",
+      "scope": "framework非依存のStep/mark/評価経過/添付/flush、名前空間付きmetadataと型付き値を提供する。",
+      "out_of_scope": "GuaがPlaytestを参照すること、Goal/Planner型の導入。",
+      "completion_gate": "Guaだけに依存する小さな外部writerで、未知の注釈を含むTraceを保存・読取できる。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "TRACE-001"
+      ],
+      "collaborating_requirements": [
+        "RUN-003"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "T-05",
+      "repository": "gua",
+      "title": "#109子作業：共通Trace Viewerと静的reportを提供する",
+      "integration_dependencies": [
+        "T-02",
+        "T-03",
+        "T-04"
+      ],
+      "contract_prerequisites": "Trace readerと未知の注釈・添付の安全な表示契約。",
+      "scope": "Inspector部品の共有、Timeline、保持解除、差分、欠損、成功Run、静的HTMLと配布アセットを整える。",
+      "out_of_scope": "Viewerからゲーム操作・Replay実行、Playtest専用Viewer。",
+      "completion_gate": "悪意ある文字列や添付パスが実行・外部取得されず、未知metadataも汎用表示される。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "TRACE-011"
+      ],
+      "collaborating_requirements": [
+        "TRACE-009"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "T-06",
+      "repository": "gua",
+      "title": "#109子作業：lint・baseline・既存diagnosticsと全体を統合する",
+      "integration_dependencies": [
+        "T-05",
+        "GH-106",
+        "GH-108"
+      ],
+      "contract_prerequisites": "各機能の独立した公開契約とartifact参照。",
+      "scope": "既存診断、lint、snapshot comparison、Recording参照、並列分離、保存失敗と元例外の分離を通す。",
+      "out_of_scope": "lint自動実行、baseline自動更新、Traceによるテスト成否決定。",
+      "completion_gate": "成功・失敗・中断fixtureと静的reportで改訂#109の受け入れ条件を通す。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [],
+      "collaborating_requirements": [
+        "TRACE-005",
+        "TRACE-009",
+        "TRACE-010",
+        "TRACE-011",
+        "FIX-006"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "P-01",
+      "repository": "gua-playtest",
+      "title": "仕様台帳・設定schema・Planner契約と静的validatorを整える",
+      "integration_dependencies": [],
+      "contract_prerequisites": "本台帳とOPEN一覧。Gua共通型はG-01等の契約に合わせる。",
+      "scope": "Scenario/Environment/Plan/Input/Decision/Run/Result、型とschemaの対応、静的解析、正常異常データを管理する。",
+      "out_of_scope": "ゲーム起動、外部コードの実行、暗黙の最新schema取得。",
+      "completion_gate": "形式検証と実行時確認項目を区別し、秘密値や任意設定上書きの入口を作らない。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "BOUND-005",
+        "GOAL-001",
+        "FILE-001",
+        "FILE-002",
+        "FILE-003"
+      ],
+      "collaborating_requirements": [
+        "BOUND-002",
+        "VALUE-005",
+        "ASSERT-001",
+        "RUN-001",
+        "REPLAY-001",
+        "REPLAY-006",
+        "PLANNER-004",
+        "FILE-004",
+        "DELIVERY-001"
+      ],
+      "blocking_decisions": [
+        "OPEN-01",
+        "OPEN-04",
+        "OPEN-08",
+        "OPEN-10",
+        "OPEN-12"
+      ]
+    },
+    {
+      "id": "P-02",
+      "repository": "gua-playtest",
+      "title": "五つのプロジェクト・依存境界・Fake/テスト基盤を作る",
+      "integration_dependencies": [],
+      "contract_prerequisites": "C#/.NET 10、Core/Runner/GuaIntegration/Planners.Codex/Cliの合意。",
+      "scope": "一方向の依存、clock/observation/planner/hostの窓口、Fake、ビルド、配布物の早期起動試験を整える。",
+      "out_of_scope": "二系統のRunner、Fakeの製品代替、動的な未承認pluginロード。",
+      "completion_gate": "Coreにエンジン・Codex依存がなく、CLIへ成否規則を埋め込まずテストできる。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "BOUND-001",
+        "PACK-001",
+        "PACK-002",
+        "DELIVERY-002"
+      ],
+      "collaborating_requirements": [
+        "FIX-001",
+        "DELIVERY-001"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "P-03",
+      "repository": "gua-playtest",
+      "title": "型付きAssertion・Operator・三値論理を実装する",
+      "integration_dependencies": [
+        "P-01",
+        "P-02",
+        "G-01"
+      ],
+      "contract_prerequisites": "VALUE/ASSERT要件、OPEN-02/04/05。",
+      "scope": "Target/Value/Operator、scalar/collection演算、enumType、True/False/Unknown、不正と取得不能を区別する。",
+      "out_of_scope": "独自Selector言語、未知をfalseに変換すること。",
+      "completion_gate": "正常・不正・不明を独立した期待値で検証し、別のany分岐で不正条件を隠さない。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "ASSERT-001",
+        "ASSERT-002",
+        "ASSERT-003",
+        "ASSERT-006"
+      ],
+      "collaborating_requirements": [
+        "VALUE-001",
+        "VALUE-004",
+        "OBS-005",
+        "ACTION-002",
+        "STALL-002",
+        "FIX-007"
+      ],
+      "blocking_decisions": [
+        "OPEN-02",
+        "OPEN-04",
+        "OPEN-05"
+      ]
+    },
+    {
+      "id": "P-04",
+      "repository": "gua-playtest",
+      "title": "時間条件・論理group・対象数・観測連続性を実装する",
+      "integration_dependencies": [
+        "P-03"
+      ],
+      "contract_prerequisites": "直近の整合性レビューとOPEN-05の詳細真理値表。",
+      "scope": "within/for、通常allと時間成立履歴、quantifier、0件・打切り、各分岐の期限、評価タイマーを実装する。",
+      "out_of_scope": "pollingで消えた中間状態の復元、全分岐一律Timeout失敗。",
+      "completion_gate": "別時点A/B、any片方期限切れ、failure期限切れ、空all、for欠損を検証する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "ASSERT-004",
+        "ASSERT-005",
+        "ASSERT-007",
+        "ASSERT-008",
+        "ASSERT-009",
+        "ASSERT-010",
+        "TIME-001",
+        "TIME-002",
+        "TIME-003"
+      ],
+      "collaborating_requirements": [
+        "ASSERT-006",
+        "TIME-004",
+        "BUDGET-003",
+        "CLOCK-002",
+        "START-005",
+        "FIX-007"
+      ],
+      "blocking_decisions": [
+        "OPEN-05"
+      ]
+    },
+    {
+      "id": "P-05",
+      "repository": "gua-playtest",
+      "title": "Run状態機械・予算・結果確定・cleanupを実装する",
+      "integration_dependencies": [
+        "P-04"
+      ],
+      "contract_prerequisites": "RUN/ACTION/BUDGET要件、OPEN-05/06。",
+      "scope": "CreatedからFinished、一度だけの主結果確定、同一評価単位の優先、予算予約、後処理を扱う。",
+      "out_of_scope": "CompletingのCancelによる主結果上書き、送信不明操作の自動再送。",
+      "completion_gate": "競合結果、最後の操作、区間予算不足、必須cleanup失敗とexit 11を確認する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "GOAL-002",
+        "TIME-004",
+        "RUN-001",
+        "RUN-002",
+        "RUN-003",
+        "RUN-005",
+        "RUN-006",
+        "BUDGET-001",
+        "BUDGET-002",
+        "BUDGET-003",
+        "CLOCK-002"
+      ],
+      "collaborating_requirements": [
+        "GOAL-001",
+        "ASSERT-009",
+        "RUN-004",
+        "ACTION-003",
+        "ACTION-005",
+        "REPLAY-004",
+        "CLOCK-006",
+        "PLANNER-007",
+        "STALL-004",
+        "START-002",
+        "START-006",
+        "FILE-005",
+        "CLI-005",
+        "FIX-007"
+      ],
+      "blocking_decisions": [
+        "OPEN-05",
+        "OPEN-06",
+        "OPEN-10"
+      ]
+    },
+    {
+      "id": "P-06",
+      "repository": "gua-playtest",
+      "title": "launch/attach・Setup・開始前提・Running境界を実装する",
+      "integration_dependencies": [
+        "P-05",
+        "P-07"
+      ],
+      "contract_prerequisites": "START要件とGuaホストの既存機能・不足確認。",
+      "scope": "承認済みEnvironment、専有・所有、Setupとreset分離、準備期限、初期観測と監視開始を整える。",
+      "out_of_scope": "任意shell、PlannerへのSetup公開、attach先の無断reset/kill。",
+      "completion_gate": "接続だけでは開始せず、初期success/failureと古いepoch・Setup失敗を正しく扱う。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "GOAL-003",
+        "START-001",
+        "START-002",
+        "START-003",
+        "START-004",
+        "START-005",
+        "START-006",
+        "START-007"
+      ],
+      "collaborating_requirements": [
+        "REPLAY-003"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "P-07",
+      "repository": "gua-playtest",
+      "title": "Gua観測・操作の統合と公開範囲の境界を実装する",
+      "integration_dependencies": [
+        "P-02",
+        "G-03",
+        "G-04",
+        "GH-107"
+      ],
+      "contract_prerequisites": "Guaの既存clientとsource/ui/object/world、OPEN-01/03/04。",
+      "scope": "観測集約、Selector再解決、既存操作の送信と相関、保持owner、公開profile、未確認状態を扱う。",
+      "out_of_scope": "別のGua機能再実装、Worldへの内部コマンド、万能command tunnel。",
+      "completion_gate": "実bridgeで取得/操作/公開制限と要求非二重化を確認する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "BOUND-003",
+        "OBS-005",
+        "OBS-006",
+        "ACTION-001",
+        "ACTION-002",
+        "ACTION-003"
+      ],
+      "collaborating_requirements": [
+        "VALUE-005",
+        "OBS-002",
+        "ASSERT-004",
+        "ACTION-005",
+        "ACTION-006",
+        "PLANNER-001",
+        "PLANNER-003",
+        "PLANNER-005",
+        "START-004",
+        "START-005",
+        "PACK-002",
+        "FIX-002",
+        "INPUT-001"
+      ],
+      "blocking_decisions": [
+        "OPEN-04"
+      ]
+    },
+    {
+      "id": "P-08",
+      "repository": "gua-playtest",
+      "title": "Run成果物とGua Trace・Recordingの関連付けを実装する",
+      "integration_dependencies": [
+        "P-05",
+        "P-07",
+        "T-04"
+      ],
+      "contract_prerequisites": "TRACE/FILE要件、Guaが所有する保存形式。",
+      "scope": "Preparingからの記録、run/result、設定・入力hash、観測/操作/判断参照、保存状態分離を実装する。",
+      "out_of_scope": "独自Trace writer/Viewer、秘密値入り設定の丸ごと複製。",
+      "completion_gate": "成功Trace省略と未実行を区別し、中断・記録失敗でも元の結果を維持する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "FILE-007"
+      ],
+      "collaborating_requirements": [
+        "RUN-002",
+        "RUN-005",
+        "RUN-006",
+        "TRACE-001",
+        "TRACE-006",
+        "TRACE-007",
+        "REPLAY-001",
+        "PLANNER-009",
+        "STALL-006",
+        "START-007",
+        "FILE-006",
+        "CLI-004"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "P-09",
+      "repository": "gua-playtest",
+      "title": "Replay Planの解決・Gua再生・中間検証を実装する",
+      "integration_dependencies": [
+        "P-06",
+        "P-08",
+        "G-05"
+      ],
+      "contract_prerequisites": "REPLAY/CLOCK要件、OPEN-07/08。",
+      "scope": "参照固定、区間、条件同期/記録時刻、初期/中間/Goal、onGoal/afterPlanを接続する。",
+      "out_of_scope": "AI修復、Trace Snapshot書戻し、操作完走だけでPASS。",
+      "completion_gate": "遅延、部分実行、hash変更、Goal先行、Plan未完了をAIなしで検証する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "RUN-004",
+        "REPLAY-001",
+        "REPLAY-002",
+        "REPLAY-003",
+        "REPLAY-004"
+      ],
+      "collaborating_requirements": [
+        "BOUND-004",
+        "TIME-003",
+        "ACTION-004",
+        "REPLAY-005",
+        "CLOCK-001",
+        "CLOCK-007",
+        "INPUT-003"
+      ],
+      "blocking_decisions": [
+        "OPEN-07",
+        "OPEN-08"
+      ]
+    },
+    {
+      "id": "P-10",
+      "repository": "gua-playtest",
+      "title": "PlannerInput/Decision・採用ゲート・feedbackを実装する",
+      "integration_dependencies": [
+        "P-01",
+        "P-02",
+        "P-05"
+      ],
+      "contract_prerequisites": "PLANNER要件と公開方針、OPEN-09。",
+      "scope": "一要求一Decision、execute/observe/wait/finish、stale/重複排除、時計・権限・予算再検証を実装する。",
+      "out_of_scope": "AIへの採点権、confirmed/ownerの自己申告、区間外保持、任意ファイル問い合わせ。",
+      "completion_gate": "台本型Plannerで未送信拒否/送信不明/部分実行のfeedbackが分離される。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "ACTION-004",
+        "ACTION-006",
+        "PLANNER-001",
+        "PLANNER-002",
+        "PLANNER-003",
+        "PLANNER-004",
+        "PLANNER-005",
+        "PLANNER-006",
+        "PLANNER-007",
+        "PLANNER-010"
+      ],
+      "collaborating_requirements": [
+        "BOUND-003",
+        "OBS-006",
+        "GOAL-003",
+        "ASSERT-010",
+        "CLOCK-005",
+        "PLANNER-009",
+        "INPUT-001",
+        "INPUT-003"
+      ],
+      "blocking_decisions": [
+        "OPEN-09"
+      ]
+    },
+    {
+      "id": "P-11",
+      "repository": "gua-playtest",
+      "title": "Explore・進捗・停滞検知と有限の回復を実装する",
+      "integration_dependencies": [
+        "P-06",
+        "P-07",
+        "P-10"
+      ],
+      "contract_prerequisites": "STALL要件、初期値案とOPEN-10。",
+      "scope": "Milestone/Metric、最良値、比較可能な反復、回復判断予算、終了理由のoriginを実装する。",
+      "out_of_scope": "ゲーム攻略不能の断定、Replay中の回復、自動再起動・内部状態書換え。",
+      "completion_gate": "正常な攻撃反復/往復、観測不明、回復予算非復活、秘密進捗の非漏えいを検証する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "STALL-001",
+        "STALL-002",
+        "STALL-003",
+        "STALL-004",
+        "STALL-005",
+        "STALL-006"
+      ],
+      "collaborating_requirements": [
+        "GOAL-002",
+        "ACTION-004",
+        "BUDGET-001",
+        "PLANNER-010"
+      ],
+      "blocking_decisions": [
+        "OPEN-10"
+      ]
+    },
+    {
+      "id": "P-12",
+      "repository": "gua-playtest",
+      "title": "Codex App Server接続と権限制限を実装する",
+      "integration_dependencies": [
+        "P-10"
+      ],
+      "contract_prerequisites": "対応版の公式契約とOPEN-09/11を実装時に確認する。",
+      "scope": "stdio、thread/turn、構造化完了応答、中断、利用量、隔離、認証参照を専用moduleへ実装する。",
+      "out_of_scope": "Codexの自動更新・認証同梱、開発権限の丸渡し、隠れた思考全文の必須保存。",
+      "completion_gate": "遅延/切断/無効応答と実接続で、Runner迂回や元データ・非公開値へのアクセスを防ぐ。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "PLANNER-008",
+        "PLANNER-009"
+      ],
+      "collaborating_requirements": [
+        "BOUND-004",
+        "CLOCK-001",
+        "PLANNER-007",
+        "PLANNER-010",
+        "START-007",
+        "FILE-006",
+        "PACK-004",
+        "FIX-006"
+      ],
+      "blocking_decisions": [
+        "OPEN-09",
+        "OPEN-11"
+      ]
+    },
+    {
+      "id": "P-13",
+      "repository": "gua-playtest",
+      "title": "CLI・Environment解決・終了コード・report入口を実装する",
+      "integration_dependencies": [
+        "P-01",
+        "P-06",
+        "P-08",
+        "P-09",
+        "P-11",
+        "P-12",
+        "P-14",
+        "T-05"
+      ],
+      "contract_prerequisites": "FILE/CLIと最新exit 11契約。CLI骨組みはP-02から着手可能。",
+      "scope": "validate/explore/replay/plan/report、設定優先、非対話、JSON出力、Gua Viewer呼出しを実装する。",
+      "out_of_scope": "CLIへの成否実装重複、任意--set、ReplayからExploreへの自動切替。",
+      "completion_gate": "各コマンドと終了コード、静的validate無起動、AIなしReplayを実配布に近い形で検証する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "BOUND-004",
+        "FILE-005",
+        "FILE-006",
+        "CLI-001",
+        "CLI-002",
+        "CLI-004",
+        "CLI-005"
+      ],
+      "collaborating_requirements": [
+        "GOAL-002",
+        "GOAL-003",
+        "RUN-005",
+        "START-001",
+        "FILE-001",
+        "FILE-003",
+        "FILE-007",
+        "CLI-003",
+        "DELIVERY-002"
+      ],
+      "blocking_decisions": [
+        "OPEN-06",
+        "OPEN-12"
+      ]
+    },
+    {
+      "id": "P-14",
+      "repository": "gua-playtest",
+      "title": "RecordingからPlan候補を生成し、内容固定・試験・採用を管理する",
+      "integration_dependencies": [
+        "P-01",
+        "P-08",
+        "P-09"
+      ],
+      "contract_prerequisites": "OPEN-08のhash対象・採用証拠・範囲参照。",
+      "scope": "plan create/acceptの処理、管理先コピー、推定条件の区別、試験Runとの照合を実装する。",
+      "out_of_scope": "バグ状態を自動期待値化、無断上書き、候補実行による安全制限解除。",
+      "completion_gate": "変更済みPlanの古い採用を拒否し、同じ内容の完走試験と明示採用を関連付ける。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "REPLAY-005",
+        "REPLAY-006",
+        "FILE-004",
+        "CLI-003"
+      ],
+      "collaborating_requirements": [
+        "FILE-001",
+        "CLI-001",
+        "DELIVERY-003"
+      ],
+      "blocking_decisions": [
+        "OPEN-08"
+      ]
+    },
+    {
+      "id": "P-15",
+      "repository": "gua-playtest",
+      "title": "共通fixture・故障注入・独立oracleを用意する",
+      "integration_dependencies": [
+        "P-02",
+        "G-03",
+        "G-04"
+      ],
+      "contract_prerequisites": "FIX要件と故障発火・事実確認の独立契約。",
+      "scope": "ショップ・移動・敵の小場面、Godot/Unity変種、台本Planner、故障ハーネスとケース定義を用意する。",
+      "out_of_scope": "第二の製品Trace、Plannerに故障解除APIを公開、既存Gua低層テストの丸写し。",
+      "completion_gate": "故障なしの正常性と故障の実発火を独立に確認する。全製品E2E完了はP-16で統合判定する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "FIX-001",
+        "FIX-002",
+        "FIX-003",
+        "FIX-004",
+        "FIX-005",
+        "FIX-006",
+        "FIX-007"
+      ],
+      "collaborating_requirements": [
+        "DELIVERY-003"
+      ],
+      "blocking_decisions": []
+    },
+    {
+      "id": "P-16",
+      "repository": "gua-playtest",
+      "title": "配布物・互換性・v0.1全体E2Eを検証する",
+      "integration_dependencies": [
+        "P-13",
+        "P-14",
+        "P-15",
+        "P-17",
+        "G-06"
+      ],
+      "contract_prerequisites": "全実装と対応表。パッケージ起動smokeはP-02から継続する。",
+      "scope": "self-contained/.NET Tool/NuGet、native/schema/Viewer、RID、AIあり探索→候補→採用→AIなし再生を検証する。",
+      "out_of_scope": "skipを成功と扱うこと、全AI結果を決定的テストへ混ぜること。",
+      "completion_gate": "全要件に実行証拠があり、clean環境の配布物のみで一連の利用が成立する。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "BOUND-002",
+        "PACK-003",
+        "PACK-004",
+        "PACK-005",
+        "DELIVERY-001",
+        "DELIVERY-003"
+      ],
+      "collaborating_requirements": [
+        "PACK-001",
+        "PACK-006",
+        "FIX-001",
+        "FIX-004",
+        "FIX-005",
+        "DELIVERY-002"
+      ],
+      "blocking_decisions": [
+        "OPEN-11"
+      ]
+    },
+    {
+      "id": "P-17",
+      "repository": "gua-playtest",
+      "title": "利用文書・正常サンプル・互換性表と責務説明を整える",
+      "integration_dependencies": [
+        "P-13"
+      ],
+      "contract_prerequisites": "採用したAPI/CLIとOPEN-11/12の名称・版。",
+      "scope": "導入、profile、Setup、失敗理由、採用、秘密値、保存、対応範囲とGuaとの境界を文書化する。",
+      "out_of_scope": "未検証経路の対応済み表記、fault注入経路の通常サンプル公開。",
+      "completion_gate": "正常サンプルの操作手順を実行し、動作前提と制限を配布物に添える。",
+      "issue_status": "draft-not-created",
+      "verification_status": "not-executed",
+      "owned_requirements": [
+        "PACK-006"
+      ],
+      "collaborating_requirements": [
+        "PACK-005"
+      ],
+      "blocking_decisions": [
+        "OPEN-11",
+        "OPEN-12"
+      ]
+    }
+  ],
+  "external_issue_dependencies": {
+    "GH-106": {
+      "title": "既存Gua #106 Semantic Lint",
+      "url": "https://github.com/link1345/gua/issues/106"
+    },
+    "GH-107": {
+      "title": "既存Gua #107 Locator auto-wait",
+      "url": "https://github.com/link1345/gua/issues/107"
+    },
+    "GH-108": {
+      "title": "既存Gua #108 Semantic baseline比較",
+      "url": "https://github.com/link1345/gua/issues/108"
+    }
+  },
+  "parent_issue_proposals": [
+    {
+      "repository": "gua",
+      "existing_issue": 109,
+      "action": "revise-later",
+      "children": [
+        "T-01",
+        "T-02",
+        "T-03",
+        "T-04",
+        "T-05",
+        "T-06"
+      ]
+    },
+    {
+      "repository": "gua-playtest",
+      "action": "create-tracking-parent-later",
+      "children": [
+        "P-01",
+        "P-02",
+        "P-03",
+        "P-04",
+        "P-05",
+        "P-06",
+        "P-07",
+        "P-08",
+        "P-09",
+        "P-10",
+        "P-11",
+        "P-12",
+        "P-13",
+        "P-14",
+        "P-15",
+        "P-16",
+        "P-17"
+      ]
+    }
+  ],
+  "open_decisions": [
+    {
+      "id": "OPEN-01",
+      "title": "wire/ABIの互換性とschema改版",
+      "owners": [
+        "G-01",
+        "G-03",
+        "G-04",
+        "T-01",
+        "P-01"
+      ],
+      "details": "追加観測値とInputAction metadataを既存schemaへどう載せるか、旧clientのadditionalProperties制約、version negotiation、公開package/ABIの改版単位。既存descriptionは新設しない。",
+      "resolve_before": "破壊的なprotocol変更・型生成・全client実装に入る前。契約済みのFake/プロジェクト作業は継続可能。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-02",
+      "title": "Value・演算子の細部とenum境界",
+      "owners": [
+        "G-01",
+        "P-03"
+      ],
+      "details": "enumTypeの名前衝突・定義更新、flags/alias/未定義数値の扱い、stringの比較/Unicode、setの等価・正規化と-0、collection containsAllの重複と空の意味、integer/number境界、regex方言と実行上限。型・許可集合は再議論せず具体例へ固定する。",
+      "resolve_before": "正規化・serializer・比較エンジンの互換契約を公開する前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-03",
+      "title": "Observeの変更検知・寿命・購読境界",
+      "owners": [
+        "G-02",
+        "G-03",
+        "T-03"
+      ],
+      "details": "getter型登録の変化をいつ検出するか、公開frame/tickか明示通知か、登録解除/同名再登録/collectionのin-place変更、getter例外、購読とSnapshotの連続性、欠損通知。任意の内部変数代入が自動で観測できるとは仮定しない。",
+      "resolve_before": "G-02のnative/binding API実装前。最初に閉じる契約課題。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-04",
+      "title": "既存標準stateとカスタムObserveの参照",
+      "owners": [
+        "G-02",
+        "P-01",
+        "P-03",
+        "P-07"
+      ],
+      "details": "visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、UI/world selectorの正式対応、取得不能なproperty/複数一致/対象差替え、同一性とschemaキャッシュの境界。",
+      "resolve_before": "正式Target schemaとselector変換を固定する前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-05",
+      "title": "条件評価の完全な状態表",
+      "owners": [
+        "P-03",
+        "P-04",
+        "P-05"
+      ],
+      "details": "承認済みの三値・通常all・時間成立履歴・within/forを維持しつつ、任意のネスト、Unknown中の期限切れ、対象数変化とforの継続、観測errorとPending/Expired、同時観測境界を真理値表・状態機械へ落とす。",
+      "resolve_before": "P-04の公開意味規則とgolden fixture確定前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-06",
+      "title": "終端述語・理由コード・予算最終操作",
+      "owners": [
+        "P-05",
+        "P-13"
+      ],
+      "details": "主結果優先順位は承認済み。ただし予算枯渇を終端候補にする時点、最後の承認済み操作の成功、完了未確認をいつ継続不能と判定するか、phase/origin/reasonの正式列挙とtie-breakを固定する。最後の操作の成功を直ちに予算切れで打消さない既存合意を守る。",
+      "resolve_before": "実行制御とCLI result schema公開前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-07",
+      "title": "元Recordingの時刻・host順序保証・simulation能力",
+      "owners": [
+        "G-05",
+        "P-09"
+      ],
+      "details": "記録時刻が送信/適用/結果受信のどれか、旧記録の変換可否、同offset順序、ホスト適用時刻の計測、leaseとsimulation時計の関係、原子的適用を要求する場合の能力検査。保証不能な厳密モードは拒否する。",
+      "resolve_before": "Timed Segment executorとRecording互換変換の実装前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-08",
+      "title": "Replay Planの参照範囲・hash・採用証拠",
+      "owners": [
+        "P-01",
+        "P-09",
+        "P-14"
+      ],
+      "details": "固定bytes SHA-256は承認済み。Plan本体と採用証拠の格納場所/hash対象、自己参照hashの回避、Recording範囲の完全カバレッジ・飛ばす操作、既存waitとの競合、候補試験の完走条件を固定する。",
+      "resolve_before": "plan create/acceptのファイル形式を公開する前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-09",
+      "title": "Planner実行隔離と接続契約",
+      "owners": [
+        "P-10",
+        "P-12"
+      ],
+      "details": "対応するCodex/App Server版、利用できる出力schema制約、sandbox/承認/ネットワーク/直接Gua接続の防止をOSごとに検証する。プロンプトやアセンブリ分離だけで技術的境界と称さない。",
+      "resolve_before": "実Plannerを実ゲームへ接続する前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-10",
+      "title": "資源制限・既定値・設定場所",
+      "owners": [
+        "T-01",
+        "P-01",
+        "P-05",
+        "P-11"
+      ],
+      "details": "Trace byte/event/queue/attachment上限、準備/cleanup/Planner/waitの既定期限、区間時間とmaxLateness、観測打切り、regex上限、停滞初期値の格納場所。100stepは確定、8行動/3反復/3回復や20msは提案値/説明用値として区別する。",
+      "resolve_before": "無制限動作を残さず、その機能の公開・本番fixture実行前に有限値を固定する。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-11",
+      "title": "配布と互換性の実測値",
+      "owners": [
+        "G-06",
+        "P-12",
+        "P-16",
+        "P-17"
+      ],
+      "details": "利用するGua正式版、native/engine/OS実行経路、Viewer配布API、Codex対応範囲を実測する。v0.1の配布方針は確定だが、実測していない版・OSを対応済みにしない。",
+      "resolve_before": "配布公開と対応表の確定前。",
+      "status": "open"
+    },
+    {
+      "id": "OPEN-12",
+      "title": "正式名称とIssue対応の確定",
+      "owners": [
+        "P-01",
+        "P-13",
+        "P-17"
+      ],
+      "details": "仮のフィールド/インターフェース/Package ID/Reason名と、既存APIの命名の対応。今回のG-/T-/P-IDは起票用仮IDであり実GitHub番号ではない。移管後のURLは実際の移管結果で更新する。",
+      "resolve_before": "公開API・NuGet登録・GitHub起票前。",
+      "status": "open"
+    }
+  ],
+  "corrections": [
+    {
+      "superseded": "グローバルGua.Observe(\"enemy1.phase\")の採用",
+      "current": "各UI/ObjectのObserveとWorld.Propertyへ置換。"
+    },
+    {
+      "superseded": "Playtest専用のGame Stateレジストリを必須化",
+      "current": "GuaのTreeと追加観測値を再利用する。"
+    },
+    {
+      "superseded": "任意metadataはGuaの責務外なので入れない",
+      "current": "汎用のread-only観測値としてGuaへ採用。ゲーム固有のGoal解釈は入れない。"
+    },
+    {
+      "superseded": "descriptionがないため新設する",
+      "current": "応答schemaに既存の必須descriptionあり。追加対象はvalueSchema/examples等。"
+    },
+    {
+      "superseded": "useItem(id)/attack(enemyId)/moveTo等を標準操作にする",
+      "current": "入力量・方向・現在の照準とUI選択を利用し、内部ロジックの直接指定で飛び越えない。"
+    },
+    {
+      "superseded": "Playtest独自Capability registry/Trace/Viewerを作る",
+      "current": "Guaの操作、改訂#109、Gua Recordingへ一本化する。"
+    },
+    {
+      "superseded": "v0.1ではcollectionはlistだけ",
+      "current": "list/setをv0.1から両方実装する。"
+    },
+    {
+      "superseded": "各success項目は一度成立すれば常にall成立へ使える",
+      "current": "通常allは同じ評価状態。独立した時間条件とGoal全体の成立記録は別。"
+    },
+    {
+      "superseded": "個別within失敗で常にScenario失敗",
+      "current": "論理ツリーの達成可能性で判定。failure期限切れを失敗へ反転しない。"
+    },
+    {
+      "superseded": "Completing中Cancelで主結果をAbortedへ上書き",
+      "current": "主結果は一度だけ。後処理中断/失敗を別記録する。"
+    },
+    {
+      "superseded": "exit 11は必須artifactの失敗だけ",
+      "current": "主結果Passedだが入力/資源/保存など必須後処理未達の意味へ拡張する。"
+    },
+    {
+      "superseded": "どのAction拒否でも即Scenario失敗",
+      "current": "未送信のExplore提案拒否は有限再判断、送信後失敗/不明は原則停止・安全整理。"
+    },
+    {
+      "superseded": "leaseMsを正確な押下時間や実解除の証拠とする",
+      "current": "明示解除予定と保護lease、送信/適用/結果受信を分離する。"
+    },
+    {
+      "superseded": "成功した探索の観測値をそのまま正式な期待値にする",
+      "current": "候補→条件確認→AIなし試験→明示採用を経る。"
+    }
+  ],
+  "sources": [
+    {
+      "id": "S-109",
+      "title": "Gua #109 現行本文",
+      "url": "https://github.com/link1345/gua/issues/109",
+      "observed": "open。旧本文で、100step・失敗時保存と#106/#107/#108連携が記載されている。改訂案の反映は未実施。"
+    },
+    {
+      "id": "S-106",
+      "title": "Gua #106 Semantic Lint",
+      "url": "https://github.com/link1345/gua/issues/106",
+      "observed": "明示的Lint、runtimeの通常公開を自動拒否しない、profile境界。"
+    },
+    {
+      "id": "S-107",
+      "title": "Gua #107 Locator auto-wait",
+      "url": "https://github.com/link1345/gua/issues/107",
+      "observed": "直前再解決、strict複数一致、enqueueとcompletion、総時間予算。"
+    },
+    {
+      "id": "S-108",
+      "title": "Gua #108 Semantic baseline比較",
+      "url": "https://github.com/link1345/gua/issues/108",
+      "observed": "baselineの既定除外と明示更新。Traceとは役割が違う。"
+    },
+    {
+      "id": "S-INPUT",
+      "title": "InputAction応答schema（固定commit）",
+      "url": "https://github.com/link1345/gua/blob/10a8ef71713fe491633cf2b5649c76007cfd4767/protocol/schema/game-input-actions.schema.json",
+      "observed": "descriptionは既に必須。valueTypeはbutton/axis1d/vector2/text。valueSchema/examplesの新設範囲とは区別する。"
+    },
+    {
+      "id": "S-REC",
+      "title": "Recording schema（固定commit）",
+      "url": "https://github.com/link1345/gua/blob/10a8ef71713fe491633cf2b5649c76007cfd4767/protocol/schema/recording.schema.json",
+      "observed": "schemaVersion 1/2、game_input/operation/arguments、requestId、pre/postRevision、secretKey等。定義だけで全Replay経路実装済みとは判断しない。"
+    }
+  ],
+  "topological_order_for_integration": [
+    "G-01",
+    "G-02",
+    "G-03",
+    "G-04",
+    "G-05",
+    "T-01",
+    "T-02",
+    "T-03",
+    "T-04",
+    "T-05",
+    "T-06",
+    "G-06",
+    "P-01",
+    "P-02",
+    "P-03",
+    "P-04",
+    "P-05",
+    "P-07",
+    "P-06",
+    "P-08",
+    "P-09",
+    "P-10",
+    "P-11",
+    "P-12",
+    "P-14",
+    "P-13",
+    "P-15",
+    "P-17",
+    "P-16"
+  ]
+}

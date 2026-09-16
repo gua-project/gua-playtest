@@ -1,0 +1,17 @@
+{
+  "requirement_count": 126,
+  "draft_work_item_count": 29,
+  "gua_work_items": 12,
+  "playtest_work_items": 17,
+  "open_decision_count": 12,
+  "unique_requirement_ids": true,
+  "unique_issue_ids": true,
+  "all_requirement_owners_resolve": true,
+  "all_dependency_references_resolve": true,
+  "integration_dependency_graph_acyclic": true,
+  "every_requirement_has_planned_acceptance_test": true,
+  "actual_product_tests_executed": false,
+  "current_code_completeness_audited": false,
+  "github_writes_performed": false,
+  "note": "Only the consistency of this planning document was checked. This is not evidence that Gua Playtest passes any test."
+}
