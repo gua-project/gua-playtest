@@ -20,6 +20,7 @@ public sealed class RunSession
     private TimeSpan lastReal, lastCondition, preparationOrigin;
     private bool goalVerified;
     private bool approvalsClosing;
+    private RunReason? closingExhaustion;
     private bool startCaptureArmed;
     public RunLimits Limits { get; }
     public RunBudget Budget { get; }
@@ -109,7 +110,7 @@ public sealed class RunSession
         if (ActionsClosing || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
         var operation = new ApprovedOperation(this, Min(now + Limits.PlannerTimeout, RunningOrigin.Value + Limits.MaxDuration), null, planner: true);
         operations.Add(operation);
-        if (Budget.Exhaustion.HasValue) approvalsClosing = true;
+        if (Budget.Exhaustion is { } exhausted) { approvalsClosing = true; closingExhaustion ??= exhausted; }
         return new PlannerPermit(this, operation);
     }
     /// <summary>Replay/approved non-Planner work. The complete segment reserves before any transport.</summary>
@@ -129,7 +130,7 @@ public sealed class RunSession
         var operation = new ApprovedOperation(this, Min(now + window, RunningOrigin.Value + Limits.MaxDuration), reservation,
             count > 0 ? Min(now + Limits.ActionTimeout, RunningOrigin.Value + Limits.MaxDuration) : null);
         operations.Add(operation);
-        if (Budget.Exhaustion.HasValue) approvalsClosing = true;
+        if (Budget.Exhaustion is { } exhausted) { approvalsClosing = true; closingExhaustion ??= exhausted; }
         return operation;
     }
     public sealed class PlannerPermit
@@ -143,6 +144,7 @@ public sealed class RunSession
         {
             if (consumed || !request.IsOpen || owner.ReadReal() >= Deadline || owner.State != ExecutionState.Running) return null;
             consumed = true; request.Complete();
+            if (owner.lastReal >= Deadline) return null;
             return owner.Approve(actionCount, observationWindow, true);
         }
         public void CompleteWithoutOperation() { consumed = true; request.Complete(); }
@@ -247,7 +249,7 @@ public sealed class RunSession
                 operation.CompleteAt(now);
             }
             var pending = operations.Any(x => x.IsOpen);
-            if (Budget.Exhaustion is { } exhausted && !pending) cycle.Add(new(exhausted, Phase, RunOrigin.Budget));
+            if ((closingExhaustion ?? Budget.Exhaustion) is { } exhausted && !pending) cycle.Add(new(exhausted, Phase, RunOrigin.Budget));
             if (executionComplete && !pending && !goalVerified)
                 cycle.Add(new(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, Phase, RunOrigin.Runner));
             if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete) && !pending)
