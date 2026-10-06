@@ -66,7 +66,7 @@ P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](a
 
 **固定する時点:** 実行制御とCLI result schema公開前。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** コントローラの終端述語・列挙・tie-break・最終承認操作の有限観測機会を [execution.md](execution.md) で確定。実host/Planner/Replay/CLIとFIX-007統合受け入れは後続Issueで未完了。
 
 ## OPEN-07 元Recordingの時刻・host順序保証・simulation能力
 
@@ -106,7 +106,7 @@ Trace byte/event/queue/attachment上限、準備/cleanup/Planner/waitの既定�
 
 **固定する時点:** 無制限動作を残さず、その機能の公開・本番fixture実行前に有限値を固定する。
 
-**状態:** 公開形式は明示有限Environment limitsで確定。100step以外に提案既定値を導入しない。runtime制御/実効解決は#6/#12/#15。
+**状態:** 公開形式は明示有限Environment limitsで確定。100step以外に提案既定値を導入しない。Runの明示有限上限・cleanup配分はexecution.mdで確定。実効設定解決とTrace/回復/CLI統合は#9/#12/#15。
 
 ## OPEN-11 配布と互換性の実測値
 
