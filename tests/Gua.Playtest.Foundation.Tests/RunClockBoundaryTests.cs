@@ -1,12 +1,74 @@
 using Gua.Playtest.Core;
 using Gua.Playtest.Core.Contracts;
 using Gua.Playtest.Runner.Execution;
+using Gua.Playtest.Runner.Conditions;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    private sealed class CountingClockFeed(Func<TimeSpan> current, bool hold) : IRunObservationFeed
+    {
+        public int Captures;
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
+        {
+            Captures++;
+            var unit = hold ? new ConditionObservationUnit([KeyValuePair.Create("$/condition", new ConditionLeafObservation("scope", true,
+                [new ConditionTargetObservation("target", "{\"type\":\"bool\",\"value\":true}")], continuousFromPrevious: Captures > 1))]) : Unit("false");
+            return ValueTask.FromResult(new RunObservation(current(), unit, Unit("false")));
+        }
+        public ValueTask WaitForChangeAsync(CancellationToken token) => new(new TaskCompletionSource().Task.WaitAsync(token));
+    }
+    private static PreparedCondition ShortHold()
+        => PreparedCondition.Create(JsonNode.Parse("""{"kind":"time","forMilliseconds":50,"condition":{"kind":"targets","target":{"source":"world"},"operator":"exists"}}""")!.AsObject(), new(10, 1000));
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task MonitorEarlyRealOrConditionWakeDoesNotSpinCaptures(bool conditionFailure)
+    {
+        var stalled = new EarlyWakeClock(); var advancing = new Gua.Playtest.Runner.MonotonicClock();
+        IClock real = conditionFailure ? advancing : stalled; IClock condition = conditionFailure ? stalled : advancing;
+        var defaults = Limits(); var limits = new RunLimits(TimeSpan.FromMilliseconds(conditionFailure ? 500 : 100), defaults.PreparationTimeout,
+            defaults.CleanupTimeout, defaults.PlannerTimeout, defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = new RunSession(limits, real, condition, conditionFailure ? ShortHold() : Condition()); run.BeginPreparation(); run.BeginRunning();
+        var feed = new CountingClockFeed(() => condition.Elapsed, conditionFailure); var pending = new TaskCompletionSource<int>();
+        var result = await RunMonitor.AwaitAsync(run, real, condition, feed, _ => new ValueTask<int>(pending.Task), _ => []).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(result.Completed); Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Clock), run.Primary!.Cause);
+        Assert.Equal(1, feed.Captures); pending.SetResult(1);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task MonitorReschedulesEarlyAdvancingConditionWakeWithoutFalseFailure(bool sharedTimer)
+    {
+        var condition = new AdvancingEarlyWakeClock(); IClock real = sharedTimer ? condition : new Gua.Playtest.Runner.MonotonicClock();
+        var run = new RunSession(Limits(), real, condition, ShortHold()); run.BeginPreparation(); run.BeginRunning();
+        var feed = new CountingClockFeed(() => condition.Elapsed, true); var pending = new TaskCompletionSource<int>();
+        var result = await RunMonitor.AwaitAsync(run, real, condition, feed, _ => new ValueTask<int>(pending.Task), _ => []).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(result.Completed); Assert.Equal(RunReason.GoalSatisfied, run.Primary!.Cause.Reason);
+        Assert.DoesNotContain(run.Events, x => x.Origin == RunOrigin.Clock && x.Reason == RunReason.InvalidContract);
+        Assert.Equal(2, feed.Captures); pending.SetResult(1);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task PromptSynchronousCleanupCallbacksShareIndependentTotalBudget(bool failedPrimary)
+    {
+        var clock = new Clock(); var defaults = Limits();
+        var limits = new RunLimits(defaults.MaxDuration, defaults.PreparationTimeout, TimeSpan.FromMilliseconds(40), defaults.PlannerTimeout,
+            defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = Running(clock, limits: limits);
+        var primary = failedPrimary ? run.Evaluate(candidates: [Event(RunReason.ActionFailed)])! : run.Evaluate(Unit(), TimeSpan.Zero)!;
+        var cleanup = new OwnedCleanup(); int attempts = 0; bool released = false;
+        for (var i = 0; i < 20; i++) cleanup.Register(CleanupStage.Diagnostics, _ =>
+        {
+            attempts++; var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            while (elapsed.Elapsed < TimeSpan.FromMilliseconds(5)) Thread.SpinWait(100);
+            return ValueTask.FromResult(true);
+        });
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.True(attempts < 20); Assert.True(released); Assert.Same(primary, outcome.Primary);
+        Assert.Equal(failedPrimary ? 1 : 11, outcome.ExitCode);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid);
+    }
     [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
     public void DispatchRetryCannotOutrunPendingTerminalClockEvidence(int kind)
     {

@@ -181,12 +181,34 @@ public static class RunMonitor
                 bool wakeCancelled = false;
                 try
                 {
+                    var clockWakes = new List<(Task Task, TimeSpan Target, bool Condition, bool Independent)>();
+                    void AddClockWake(Task task, TimeSpan target, bool condition)
+                    { wakes.Add(task); clockWakes.Add((task, target, condition, false)); }
                     wakes.Add(feed.WaitForChangeAsync(wakeCancellation.Token).AsTask());
-                    wakes.Add(realClock.DelayAsync(Positive(run.NextRealEvaluationAt - run.ReadAuthoritativeReal()), wakeCancellation.Token).AsTask());
+                    var realTarget = run.NextRealEvaluationAt;
+                    AddClockWake(realClock.DelayAsync(Positive(realTarget - run.ReadAuthoritativeReal()), wakeCancellation.Token).AsTask(), realTarget, false);
                     if (run.NextConditionEvaluationAt is { } conditionWake)
-                        wakes.Add(conditionClock.DelayAsync(Positive(conditionWake - run.ReadAuthoritativeCondition()), wakeCancellation.Token).AsTask());
-                    var winner = await Task.WhenAny(wakes.Append(workTask)).ConfigureAwait(false);
-                    if (winner != workTask) await winner.ConfigureAwait(false);
+                        AddClockWake(conditionClock.DelayAsync(Positive(conditionWake - run.ReadAuthoritativeCondition()), wakeCancellation.Token).AsTask(), conditionWake, true);
+                    while (true)
+                    {
+                        var winner = await Task.WhenAny(wakes.Append(workTask)).ConfigureAwait(false);
+                        if (winner == workTask) break;
+                        await winner.ConfigureAwait(false);
+                        var selected = clockWakes.Where(x => x.Task == winner).ToArray();
+                        if (selected.Length == 0) break;
+                        bool readyWake = false;
+                        foreach (var clockWake in selected)
+                        {
+                            var now = clockWake.Condition ? run.ReadAuthoritativeCondition() : run.ReadAuthoritativeReal();
+                            if (now >= clockWake.Target) { readyWake = true; continue; }
+                            if (clockWake.Independent) throw new ClockProviderException();
+                            var replacement = FiniteOperation.DelayIndependentAsync(clockWake.Target - now, wakeCancellation.Token);
+                            clockWakes.Remove(clockWake);
+                            wakes.Add(replacement); clockWakes.Add((replacement, clockWake.Target, clockWake.Condition, true));
+                        }
+                        wakes.RemoveAll(x => x == winner);
+                        if (readyWake) break;
+                    }
                 }
                 catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested &&
                     (exception.CancellationToken == wakeCancellation.Token || exception.CancellationToken == cancellationToken))

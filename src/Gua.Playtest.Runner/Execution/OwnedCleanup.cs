@@ -17,6 +17,7 @@ public sealed class OwnedCleanup
         private readonly Action<Exception> reject;
         private readonly Stopwatch safety = Stopwatch.StartNew();
         private TimeSpan last, lastSafety;
+        private readonly TimeSpan initial;
         private long fallbackOffset;
         private bool fallback;
         private long hardWakeAt;
@@ -25,9 +26,13 @@ public sealed class OwnedCleanup
         public CleanupClock(RunSession run, Action<Exception> reject)
         {
             this.run = run; this.reject = reject;
-            last = run.LastValidatedReal;
+            initial = last = run.LastValidatedReal;
+            try { initial = last = run.ReadAuthoritativeReal(); }
+            catch (Exception exception) { Reject(exception); }
+            fallbackOffset = initial.Ticks;
             _ = Elapsed;
         }
+        public TimeSpan Origin => initial;
         public TimeSpan Elapsed
         {
             get
@@ -37,9 +42,17 @@ public sealed class OwnedCleanup
                     try
                     {
                         var now = run.ReadAuthoritativeReal();
+                        var elapsed = safety.Elapsed;
+                        var independent = initial + elapsed;
                         var due = Interlocked.Exchange(ref hardWakeAt, 0);
-                        if (due == 0 || now.Ticks >= due) { lastSafety = safety.Elapsed; return last = now; }
-                        Reject(new InvalidOperationException("CleanupClockDidNotAdvance"));
+                        if (due != 0 && now.Ticks < due || elapsed >= run.Limits.CleanupTimeout && now < independent)
+                            Reject(new InvalidOperationException("CleanupClockDidNotAdvance"));
+                        else
+                        {
+                            lastSafety = elapsed;
+                            // Count physical elapsed even between immediately completed callbacks.
+                            return last = new TimeSpan(Math.Max(last.Ticks, Math.Max(now.Ticks, independent.Ticks)));
+                        }
                     }
                     catch (Exception exception) { Reject(exception); }
                 // The independent safety clock began at cleanup entry. A rejected epoch cannot
@@ -50,7 +63,7 @@ public sealed class OwnedCleanup
         private void Reject(Exception exception)
         {
             fallback = true;
-            fallbackOffset = last.Ticks - lastSafety.Ticks;
+            fallbackOffset = Math.Max(initial.Ticks, last.Ticks - lastSafety.Ticks);
             reject(exception is ClockProviderException { InnerException: { } original } ? original : exception);
         }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
@@ -154,7 +167,7 @@ public sealed class OwnedCleanup
         var cleanupClock = new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
             new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
         realClock = cleanupClock;
-        var origin = realClock.Elapsed;
+        var origin = cleanupClock.Origin;
         var deadline = origin + run.Limits.CleanupTimeout;
         if (cancellationToken.IsCancellationRequested) AddIssue(new(PostProcessingReason.Cancelled));
         for (var i = 0; i < ordered.Length; i++)
@@ -322,7 +335,7 @@ public static class FiniteOperation
                 while (callbackFaults.TryDequeue(out var fault)) recordException(fault);
         }
     }
-    private static async Task DelayIndependentAsync(TimeSpan duration, CancellationToken token)
+    internal static async Task DelayIndependentAsync(TimeSpan duration, CancellationToken token)
     {
         var elapsed = Stopwatch.StartNew();
         while (duration - elapsed.Elapsed is var remaining && remaining > TimeSpan.Zero)
