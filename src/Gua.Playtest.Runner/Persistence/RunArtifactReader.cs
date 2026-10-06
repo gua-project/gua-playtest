@@ -16,7 +16,6 @@ public static class RunArtifactReader
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
             RunArtifactStore.CheckPath(root);
             var file = Path.Combine(root, "result.json");
-            if (!File.Exists(file)) return new(ResultReadState.Missing);
             RunArtifactStore.CheckPath(file);
             var opened = FileIdentity.OpenRegular(file);
             using (var stream = opened.Stream)
@@ -27,6 +26,7 @@ public static class RunArtifactReader
                 return new(ResultReadState.Invalid);
             return new(ResultReadState.Verified, result);
         }
+        catch (FileNotFoundException) { return new(ResultReadState.Missing); }
         catch (InvalidDataException) { return new(ResultReadState.Invalid); }
         catch (IOException) { return new(ResultReadState.Unreadable); }
         catch (UnauthorizedAccessException) { return new(ResultReadState.Unreadable); }

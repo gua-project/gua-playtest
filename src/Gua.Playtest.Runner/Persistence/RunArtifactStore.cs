@@ -196,7 +196,12 @@ public sealed class RunArtifactStore
             if (element.ValueKind == JsonValueKind.Object)
             {
                 var obj = new JsonObject();
-                foreach (var property in element.EnumerateObject()) Add(obj, property.Name, property.Value, ref count, depth);
+                foreach (var property in element.EnumerateObject())
+                {
+                    var name = System.Runtime.InteropServices.JsonMarshal.GetRawUtf8PropertyName(property);
+                    if (name.Length > Math.Min(limits.MaxFileBytes, 6L * limits.MaxStringChars)) throw new ArtifactLimitException();
+                    Add(obj, property.Name, property.Value, ref count, depth);
+                }
                 return obj;
             }
             if (element.ValueKind == JsonValueKind.Array)
@@ -205,14 +210,29 @@ public sealed class RunArtifactStore
                 foreach (var item in element.EnumerateArray()) array.Add(SafeNode(item, ref count, depth + 1));
                 return array;
             }
-            if (element.ValueKind == JsonValueKind.String) return SafeNode(element.GetString(), ref count, depth + 1);
-            return JsonNode.Parse(element.GetRawText());
+            var raw = System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(element);
+            if (raw.Length > limits.MaxFileBytes) throw new ArtifactLimitException();
+            if (element.ValueKind == JsonValueKind.String)
+            {
+                // A UTF-16 character occupies at most six JSON bytes (an escaped code unit).
+                // Inspect the existing source span before any proportional string allocation.
+                if (raw.Length > 6L * limits.MaxStringChars + 2) throw new ArtifactLimitException();
+                return SafeNode(element.GetString(), ref count, depth + 1);
+            }
+            ChargeChars(raw.Length);
+            return JsonNode.Parse(raw);
         }
         if (value is string text)
         {
             if (text.Length > limits.MaxStringChars) throw new ArtifactLimitException();
             ChargeChars(text.Length);
             return JsonValue.Create(redactor.Redact(text));
+        }
+        if (value is IReadOnlyDictionary<string, string> versions)
+        {
+            var obj = new JsonObject();
+            foreach (var entry in versions) Add(obj, entry.Key, entry.Value, ref count, depth);
+            return obj;
         }
         if (value is System.Collections.IDictionary dictionary)
         {

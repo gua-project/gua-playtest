@@ -317,12 +317,54 @@ public sealed class ArtifactTests : IDisposable
         Fifo(Path.Combine(store.DirectoryPath, "trace.gua"));
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
         Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(),
-            [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", 0, Convert.ToHexStringLower(SHA256.HashData([]))),
+            [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", 1, Convert.ToHexStringLower(SHA256.HashData([1]))),
              new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Failure);
         Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1));
         Fifo(Path.Combine(store.DirectoryPath, "result.json")); elapsed.Restart();
         Assert.Equal(ResultReadState.Invalid, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
         Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1));
+    }
+    [Fact]
+    public void Readonly_versions_preserve_object_wire_shape_and_scalars_are_bounded_before_copy()
+    {
+        var store = Store();
+        var versions = System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new Dictionary<string, string> { ["gua"] = "1.1.1" });
+        Assert.True(store.BeginPreparation(Metadata with { Versions = versions }).Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(JsonValueKind.Object, saved.RootElement.GetProperty("versions").ValueKind);
+        Assert.Equal("1.1.1", saved.RootElement.GetProperty("versions").GetProperty("gua").GetString());
+        foreach (var text in new[] { "\"" + new string('x', 100000) + "\"", "1" + new string('0', 100000), "{\"" + new string('x', 100000) + "\":true}" })
+        {
+            using var source = JsonDocument.Parse(text);
+            var bounded = Store(new(4096, 65536, 1000, 32));
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            Assert.Equal(PersistenceFailure.LimitExceeded, bounded.BeginPreparation(Metadata with
+                { Inputs = [new("oversize", source.RootElement)] }).Failure);
+            Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 32768);
+            Assert.False(File.Exists(Path.Combine(bounded.DirectoryPath, "run.json")));
+        }
+    }
+    [Fact]
+    public async Task Result_access_failure_is_unreadable_and_dangling_link_is_invalid()
+    {
+        var store = Store(); Confirm(store); Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        var file = Path.Combine(store.DirectoryPath, "result.json");
+        if (OperatingSystem.IsWindows())
+        {
+            using var blocked = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+            Assert.Equal(ResultReadState.Unreadable, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
+            return; // Creating a Windows file symlink needs privileges; real dangling links run on Unix CI.
+        }
+        var permissions = File.GetUnixFileMode(store.DirectoryPath);
+        try
+        {
+            File.SetUnixFileMode(store.DirectoryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            Assert.Equal(ResultReadState.Unreadable, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
+        }
+        finally { File.SetUnixFileMode(store.DirectoryPath, permissions); }
+        File.Delete(file); File.CreateSymbolicLink(file, Path.Combine(store.DirectoryPath, "missing-target"));
+        Assert.Equal(ResultReadState.Invalid, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
+        File.Delete(file);
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }
