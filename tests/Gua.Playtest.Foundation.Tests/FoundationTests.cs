@@ -150,7 +150,8 @@ public sealed class FoundationTests
     [Fact]
     public async Task GuaTraceIsPackageOnlyAndRedactsBeforeSaving()
     {
-        var root = Path.Combine(Path.GetTempPath(), "playtest-trace-" + Guid.NewGuid().ToString("N"));
+        // macOS temp roots traverse /var -> /private/var. Gua intentionally rejects linked Trace paths.
+        var root = Path.Combine(Directory.GetCurrentDirectory(), "TestResults", "playtest-trace-" + Guid.NewGuid().ToString("N"));
         try
         {
             using var trace = new GuaTraceSession(new GuaTraceOptions
@@ -158,7 +159,7 @@ public sealed class FoundationTests
             var step = trace.BeginStep(GuaTraceStepKind.Mark, "fixture secret-token");
             Assert.True(trace.Record(step, "fixture", JsonSerializer.SerializeToElement(new { token = "secret-token" }), sensitive: true));
             trace.EndStep(step, GuaTraceOutcome.Passed);
-            Assert.True(await trace.CompleteAsync(GuaTraceOutcome.Passed));
+            Assert.True(await trace.CompleteAsync(GuaTraceOutcome.Passed), string.Join(",", trace.Status.Issues));
             var read = GuaTraceReader.Read(trace.ArtifactPath);
             Assert.True(read.Manifest.Finalized);
             Assert.Empty(read.Issues);

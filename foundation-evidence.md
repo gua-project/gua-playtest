@@ -30,4 +30,3 @@ Scenario validator・実 game Run・bridge・Replay・Codex・browser QA・ラ�
 local: Windows x64 / .NET SDK 10.0.401、公開 Gua 1.1.1。`dotnet test --no-restore -c Release --logger 'trx;LogFileName=foundation.trx' --results-directory artifacts/tests` は 14 passed / 0 failed / 0 skipped。`scripts/check-boundaries.ps1` は五 project の固定依存を検査する。PR の最終 HEAD と real CI/review の結果は PR 本文で保持する。
 
 CI: 四 RID の job を PR/push で実行し、各 job が build/tests、archive extraction、Tool install、正常/不正 schema、native 実 load/identity、不足の実発火を必須にする。`artifacts/tests/*.trx`、`artifacts/smoke-*/evidence.json`（head/SDK/package commit/archive SHA256/実 exit）、zip/nupkg/locks を upload する。CI 未完了・review 無応答は merge 成功ではない。
-
