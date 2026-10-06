@@ -32,7 +32,7 @@ public static class ContractSchemas
     {
         var kind = document["kind"]?.GetValueKind() == System.Text.Json.JsonValueKind.String ? document["kind"]!.GetValue<string>() : "";
         if (!KindNames.TryGetValue(kind, out var name)) throw new ContractException("SchemaInvalid");
-        Validate(name + ".schema.json", document);
+        Validate(name + ".schema.json", Assertions.ValueReader.SchemaDocument(document));
     }
 
     internal static void Validate(string schemaName, JsonNode document)
@@ -41,6 +41,15 @@ public static class ContractSchemas
         options.SchemaRegistry.Fetch = _ => throw new ContractException("SchemaReferenceMissing");
         foreach (var schema in Schemas.Values) options.SchemaRegistry.Register(schema);
         if (!Schemas[schemaName].Evaluate(document, options).IsValid) throw new ContractException("SchemaInvalid");
+    }
+
+    internal static void ValidateCondition(JsonObject condition)
+    {
+        var options = new EvaluationOptions { RequireFormatValidation = true };
+        options.SchemaRegistry.Fetch = _ => throw new ContractException("SchemaReferenceMissing");
+        foreach (var schema in Schemas.Values) options.SchemaRegistry.Register(schema);
+        var conditionSchema = JsonSchema.FromText("{\"$ref\":\"https://gua-playtest.dev/schema/common.schema.json#/$defs/condition\"}");
+        if (!conditionSchema.Evaluate(condition, options).IsValid) throw new ContractException("SchemaInvalid");
     }
 
     private static IReadOnlyDictionary<string, JsonSchema> Load()

@@ -38,6 +38,8 @@ The runtime resolves semantic selectors into sourceId/sessionEpoch/runtime ID an
 
 ## Fixed references and adoption evidence
 
+Comparison operators, eager preparation, numeric/enum semantics and ordinary three-valued results are defined in [assertions.md](assertions.md). Temporal and selector quantifier semantics remain #5.
+
 Fixed references contain `path` and lowercase SHA-256 of the exact UTF-8 file bytes, including BOM, whitespace, comments and newlines. Plan pins Scenario and Recording, but not Environment: another Environment may run the same Goal under its own compatible conditions. A CLI Goal override must be refused. Loaded bytes are retained; runtime must not reread mutable paths after validation.
 
 Plan covers every Recording step once in original order, with no slice, deletion, insertion or route repair. Checkpoints use `beforeStep` in 0..stepCount inclusive; stepCount is the final boundary. Repeated boundaries run in file order. The recorded policy preserves existing Recording waits and forbids added checkpoints with waits; conditionSynchronized permits checkpoints as additional gates without silently deleting Recording waits. Timing capability, source provenance, permissions and completed actions remain runtime checks in #10. No second scheduler is created.
