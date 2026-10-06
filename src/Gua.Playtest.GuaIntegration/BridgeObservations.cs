@@ -24,6 +24,8 @@ public sealed class BridgeObservations : IDisposable
     private readonly GuaObservationProfile profile;
     private readonly int maxNodes, maxBytes;
     private GuaRemoteObserveSubscription? subscription;
+    private string? cursorSourceId;
+    private ulong cursorEpoch;
     private bool disposed;
     private readonly object gate = new();
 
@@ -47,7 +49,13 @@ public sealed class BridgeObservations : IDisposable
             subscription?.Dispose(); subscription = null;
             context.GetVersion().EnsureCompatible("2", 1, ["observe_v1"]);
             var next = context.SubscribeObservations();
-            try { ParseTransport(next.SnapshotJson); subscription = next; }
+            try
+            {
+                var document = ParseTransport(next.SnapshotJson).GetProperty("document");
+                cursorSourceId = document.GetProperty("sourceId").GetString();
+                cursorEpoch = document.GetProperty("sessionEpoch").GetUInt64();
+                subscription = next;
+            }
             catch { next.Dispose(); throw; }
         }
     }
@@ -65,9 +73,15 @@ public sealed class BridgeObservations : IDisposable
                 var changes = ParseTransport(subscription!.PollJson()).GetProperty("document");
                 if (changes.GetProperty("status").GetString() is "gap") return Failure(ReadAvailability.Gap, "observation-gap");
                 if (changes.GetProperty("status").GetString() is "stale_session") return Failure(ReadAvailability.Stale, "stale-session");
+                if (changes.GetProperty("sourceId").GetString() != cursorSourceId ||
+                    changes.GetProperty("sessionEpoch").GetUInt64() != cursorEpoch)
+                    return Failure(ReadAvailability.Stale, "stale-source");
                 var before = context.GetContextStatus();
                 var transport = ParseTransport(context.GetObserveSnapshotJson());
                 var snapshot = transport.GetProperty("document");
+                if (snapshot.GetProperty("sourceId").GetString() != cursorSourceId ||
+                    snapshot.GetProperty("sessionEpoch").GetUInt64() != cursorEpoch)
+                    return Failure(ReadAvailability.Stale, "stale-source");
                 if (snapshot.GetProperty("sessionEpoch").GetUInt64() != before.SessionEpoch)
                     return Failure(ReadAvailability.Stale, "stale-session");
                 string source = read["target"]!["source"]!.GetValue<string>();

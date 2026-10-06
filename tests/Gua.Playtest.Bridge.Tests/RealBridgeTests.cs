@@ -129,7 +129,7 @@ public sealed class RealBridgeTests
     }
 
     [Fact]
-    public void ObservationNodeLimitIsTruncatedAndSpatialLimitNeverClaimsComplete()
+    public void ObservationNodeLimitIsTruncatedRatherThanEmptySuccess()
     {
         using var runtime = new GuaRuntime(); Ui(runtime, "one", "two");
         using var bounded = Reader(Start(runtime), nodes: 1);
@@ -270,5 +270,25 @@ public sealed class RealBridgeTests
         var result = bridge.Send("a", new(), new(GuaActionType.Click), 1, () => true);
         Assert.Equal(ActionAttemptStatus.Rejected, result.Status); Assert.Equal(ConfirmedActionStage.NotSent, result.Stage);
         Assert.Equal("atomic-dispatch-unavailable", result.Reason);
+    }
+
+    [Fact]
+    public void ResetAndResubscribeReResolveNewEpochAndKeepNewRegistrationIdentity()
+    {
+        using var runtime = new GuaRuntime(); World(runtime);
+        using var owner = runtime.CreateObserveOwner(GuaObserveSource.Object, "enemy-1");
+        using var item = owner.Observe("hp", () => GuaValue.Integer(9)); World(runtime);
+        string endpoint = Start(runtime); using var reader = Reader(endpoint);
+        var read = Read("object", "observe", "hp", id: "enemy-1");
+        var original = Assert.Single(reader.Read(read).Reads);
+        using var control = new GuaWebSocketContext(endpoint); control.Reset(); World(runtime);
+        using var replacement = runtime.CreateObserveOwner(GuaObserveSource.Object, "enemy-1");
+        using var second = replacement.Observe("hp", () => GuaValue.Integer(3)); World(runtime);
+        Assert.Equal(ReadAvailability.Stale, reader.Read(read).Availability);
+        reader.Resubscribe(); var current = Assert.Single(reader.Read(read).Reads);
+        Assert.Equal(ReadAvailability.Available, current.Availability);
+        Assert.NotEqual(original.Identity!.SessionEpoch, current.Identity!.SessionEpoch);
+        Assert.NotEqual(original.Identity.RegistrationId, current.Identity.RegistrationId);
+        Assert.Equal(3, current.Value!.Value.GetProperty("value").GetInt32());
     }
 }
