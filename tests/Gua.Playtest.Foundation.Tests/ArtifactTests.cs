@@ -389,6 +389,34 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(alternate, Limits)).State);
     }
     [Fact]
+    public async Task Result_identity_uses_actual_volume_case_lookup_and_rejects_distinct_directories_with_hardlinked_results()
+    {
+        RunArtifactStore? store = null;
+        for (var attempt = 0; attempt < 16; attempt++)
+        {
+            var candidate = Store();
+            if (candidate.RunId != candidate.RunId.ToUpperInvariant()) { store = candidate; break; }
+        }
+        Assert.NotNull(store); Confirm(store); Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        var alternate = Path.Combine(Path.GetDirectoryName(store.DirectoryPath)!, store.RunId.ToUpperInvariant());
+        Assert.NotEqual(store.DirectoryPath, alternate);
+        if (Directory.Exists(alternate))
+        {
+            // Real case-insensitive volume, including default macOS volumes: no OS-name assumption.
+            Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(alternate, Limits)).State);
+        }
+        else
+        {
+            Directory.CreateDirectory(alternate);
+            CreateHardLink(Path.Combine(alternate, "result.json"), Path.Combine(store.DirectoryPath, "result.json"));
+            // Prove real directory metadata admission succeeds; a generic type rejection must not
+            // make this identity regression vacuously pass on Unix.
+            Assert.NotEqual(FileIdentity.ReadDirectory(store.DirectoryPath), FileIdentity.ReadDirectory(alternate));
+            Assert.Equal(ResultReadState.Invalid, (await RunArtifactReader.ReadResultAsync(alternate, Limits)).State);
+        }
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
+    }
+    [Fact]
     public void Oversized_receipt_names_fail_before_proportional_split_allocations()
     {
         foreach (var name in new[] { new string('x', 100000), new string('/', 100000), "a/a/a/a/a/a/a/a/a", "trace.gua" })
