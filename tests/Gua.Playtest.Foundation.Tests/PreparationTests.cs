@@ -984,6 +984,9 @@ public sealed class PreparationTests
     public async Task SuccessfulProcessExitWatchCannotBeLostToFaultedOrCancelledCapture(bool cancel)
     {
         var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var trace = new Trace();
+        // The case promises the exact watch is already successful, not merely
+        // that an asynchronously forwarded fake exit signal will become ready.
+        launcher.Process.DirectExitWatch = true;
         using var cancellation = new CancellationTokenSource();
         connection.OnCapture = token =>
         { launcher.Process.Exit(); if (cancel) cancellation.Cancel(); connection.CaptureFailure = cancel ? new OperationCanceledException(token) : new IOException(); };
@@ -1025,6 +1028,9 @@ public sealed class PreparationTests
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var capabilities = new CapabilitySet(() => { entered.TrySetResult(); try { release.Wait(); } finally { returned.TrySetResult(); } });
         var clock = new Clock(); var connection = new Connection(); var run = Run(clock); var trace = new Trace();
+        var diagnosticRecorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        trace.OnRecord = item =>
+        { if (item == new PreparationEvent(PreparationStage.Identity, cancel ? PreparationCode.Cancelled : PreparationCode.Timeout)) diagnosticRecorded.TrySetResult(); };
         if (captured) connection.CapturedCapabilities = capabilities;
         else connection.Identity = connection.Identity with { Capabilities = capabilities };
         try
@@ -1037,6 +1043,9 @@ public sealed class PreparationTests
             var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(cancel ? RunReason.Cancelled : RunReason.PreparationTimeout, result.Primary.Cause.Reason);
             Assert.Null(run.RunningOrigin); Assert.Equal(captured ? 1 : 0, connection.Synchronizations);
+            // Global cancellation can confirm before the abandoned preparation
+            // task queues its independent diagnostic; wait for the actual sink.
+            await diagnosticRecorded.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Contains(new(PreparationStage.Identity, cancel ? PreparationCode.Cancelled : PreparationCode.Timeout), trace.Events);
             Assert.False(result.PostProcessingComplete); Assert.Equal(1, connection.Releases);
         }
