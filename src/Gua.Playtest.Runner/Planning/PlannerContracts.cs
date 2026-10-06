@@ -8,7 +8,7 @@ public enum PlannerFeedbackCode
     Approved, OutputInvalid, CorrelationMismatch, ResponseClosed, InputsNotNeutral,
     PermissionDenied, DefinitionChanged, ContextChanged, TargetInvalid, ClockUnsupported, InputBoundaryInvalid,
     BudgetDenied, ResynchronizationRequired, NotSent, SentUnconfirmed, PartialExecution,
-    Confirmed, PlannerTimeout, PlannerUsageLimit, PlannerConnectionFailure
+    Confirmed, PlannerTimeout, PlannerUsageLimit, PlannerConnectionFailure, HostFailure
 }
 
 public sealed record PlannerDecisionReference(string RunId, string DecisionRequestId,

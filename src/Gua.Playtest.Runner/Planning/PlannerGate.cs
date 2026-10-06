@@ -1,4 +1,5 @@
 using System.Text;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Gua.Playtest.Core;
 using Gua.Playtest.Core.Contracts;
@@ -14,11 +15,16 @@ public sealed class PlannerGate
     private readonly IPlannerAuthority authority;
     private readonly string runId, objective;
     private readonly ResourceLimits limits;
-    private PlannerRequest? active;
-    private long sequence;
-    private bool unsafeToContinue;
-    private bool recoveryRetry;
-    private readonly Queue<PlannerDecisionReference> feedback = new();
+    private sealed class RunPlannerState
+    {
+        public readonly string RequestNamespace = Guid.NewGuid().ToString("N");
+        public long Sequence;
+        public PlannerRequest? Active;
+        public bool UnsafeToContinue, RecoveryRetry;
+        public readonly Queue<PlannerDecisionReference> Feedback = new();
+    }
+    private static readonly ConditionalWeakTable<RunSession, RunPlannerState> States = new();
+    private readonly RunPlannerState shared;
 
     public PlannerGate(RunSession run, IClock realClock, IPlannerAuthority authority,
         string runId, string publicObjective, ResourceLimits effectiveLimits)
@@ -34,20 +40,22 @@ public sealed class PlannerGate
             limits.CleanupTimeoutMilliseconds != run.Limits.CleanupTimeout.TotalMilliseconds ||
             limits.RecoveryDecisionLimit != run.Limits.RecoveryDecisions)
             throw new ArgumentException("EffectiveLimitsMismatch");
+        shared = States.GetValue(run, static _ => new());
     }
 
     public PlannerRequest? Begin(ProjectedPlannerState state, bool recovering = false)
     {
-        if (unsafeToContinue || active is { Closed: false } || run.State != ExecutionState.Running ||
-            !authority.InputsNeutral || authority.RequiresResynchronization) return null;
+        if (shared.UnsafeToContinue || shared.Active is { Closed: false } || run.State != ExecutionState.Running) return null;
+        try { if (!authority.InputsNeutral || authority.RequiresResynchronization) return null; }
+        catch (Exception exception) { FailHost(exception); return null; }
         var basis = Copy(state);
         // Public observation reads must be a subset of the independently approved projection scope.
         if (basis.Observation["reads"] is not JsonArray reads || reads.Any(x => x?["read"] is not JsonObject read ||
             !basis.PublicReads.Any(allowed => JsonNode.DeepEquals(allowed, read))))
             throw new ArgumentException("ObservationOutsidePublicScope");
-        var requestId = "decision-" + checked(++sequence).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var requestId = "decision-" + shared.RequestNamespace + "-" + checked(++shared.Sequence).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var budget = run.Budget.Snapshot;
-        recovering |= recoveryRetry;
+        recovering |= shared.RecoveryRetry;
         var decisionsRemaining = Math.Max(0, run.Limits.MaxDecisions - budget.Decisions - 1);
         if (recovering) decisionsRemaining = Math.Min(decisionsRemaining,
             Math.Max(0, run.Limits.RecoveryDecisions - budget.RecoveryDecisions - 1));
@@ -58,20 +66,20 @@ public sealed class PlannerGate
             ["durationMilliseconds"] = Math.Max(0, (long)(run.RunningOrigin!.Value + run.Limits.MaxDuration - clock.Elapsed).TotalMilliseconds)
         };
         var input = new PlannerInputDocument(runId, requestId, basis.ObservationId, objective, limits,
-            remaining, basis.Observation, basis.ActionDefinitions, feedback.Select(x => new JsonObject
+            remaining, basis.Observation, basis.ActionDefinitions, shared.Feedback.Select(x => new JsonObject
             { ["code"] = x.Code.ToString(), ["relatedDecisionRequestId"] = x.DecisionRequestId }).ToArray());
         if (!PlannerExchange.Validate(Encoding.UTF8.GetBytes(ContractJson.Serialize(input)), "plannerInput").IsValid)
             throw new ArgumentException("ProjectedPlannerInputInvalid");
         var permit = run.RequestPlanner(recovering);
         if (permit is null) return null;
-        recoveryRetry = recovering;
-        active = new(this, permit, input, basis, recovering);
-        return active;
+        shared.RecoveryRetry = recovering;
+        shared.Active = new(this, permit, input, basis, recovering);
+        return shared.Active;
     }
 
-    public PlannerAdoption Adopt(PlannerRequest request, byte[] completedJson)
+    public PlannerAdoption Adopt(PlannerRequest request, byte[] completedJson, CancellationToken cancellationToken = default)
     {
-        if (!ReferenceEquals(request.Owner, this) || !ReferenceEquals(active, request) || request.Closed ||
+        if (!ReferenceEquals(request.Owner, this) || !ReferenceEquals(shared.Active, request) || request.Closed ||
             run.State != ExecutionState.Running)
             return new(PlannerFeedbackCode.ResponseClosed);
         if (clock.Elapsed >= request.Deadline) return Reject(request, PlannerFeedbackCode.ResponseClosed);
@@ -97,11 +105,11 @@ public sealed class PlannerGate
             ? PlannerFeedbackCode.PlannerTimeout : PlannerFeedbackCode.BudgetDenied);
         request.Closed = true;
         var reference = Record(request, PlannerFeedbackCode.Approved);
-        return new(PlannerFeedbackCode.Approved, new(this, operation, decision, request.Basis, reference));
+        return new(PlannerFeedbackCode.Approved, new(this, operation, decision, request.Basis, reference, cancellationToken));
     }
 
     internal bool Owns(RunSession session, PlannerRequest request) => ReferenceEquals(run, session)
-        && ReferenceEquals(request.Owner, this) && ReferenceEquals(active, request) && !request.Closed;
+        && ReferenceEquals(request.Owner, this) && ReferenceEquals(shared.Active, request) && !request.Closed;
 
     // A completed backend response is evidence before the fresh observation join. It grants no
     // action authority; adoption and current checks still happen after machine arbitration.
@@ -118,18 +126,19 @@ public sealed class PlannerGate
 
     public void Cancel(PlannerRequest request)
     {
-        if (ReferenceEquals(active, request) && !request.Closed)
+        if (ReferenceEquals(request.Owner, this) && ReferenceEquals(shared.Active, request) && !request.Closed)
         { request.Closed = true; request.Permit.CompleteWithoutOperation(); }
     }
 
     private PlannerAdoption Reject(PlannerRequest request, PlannerFeedbackCode code)
     {
-        var expired = clock.Elapsed >= request.Deadline;
+        var expired = run.State == ExecutionState.Running && clock.Elapsed >= request.Deadline;
         if (expired) code = request.ResponseConfirmed ? PlannerFeedbackCode.ResponseClosed : PlannerFeedbackCode.PlannerTimeout;
         Cancel(request); Record(request, code);
-        if (expired || code == PlannerFeedbackCode.PlannerTimeout) unsafeToContinue = true;
-        var retry = !unsafeToContinue && run.State == ExecutionState.Running && !run.ActionsClosing;
-        return new(code, RetryAllowed: retry, TerminalEvent: retry ? null :
+        if (expired || code is PlannerFeedbackCode.PlannerTimeout or PlannerFeedbackCode.HostFailure) shared.UnsafeToContinue = true;
+        var retry = !shared.UnsafeToContinue && run.State == ExecutionState.Running && !run.ActionsClosing;
+        return new(code, RetryAllowed: retry, TerminalEvent: retry ? null : code == PlannerFeedbackCode.HostFailure
+            ? run.Primary!.Cause :
             new(expired && request.ResponseConfirmed ? RunReason.WaitExpired :
                 code == PlannerFeedbackCode.PlannerTimeout ? RunReason.PlannerTimeout : RunReason.PlannerOutputInvalid,
                 RunPhase.Execution, expired && request.ResponseConfirmed ? RunOrigin.Host : RunOrigin.Planner));
@@ -162,7 +171,16 @@ public sealed class PlannerGate
                 return PlannerFeedbackCode.BudgetDenied;
             return PlannerFeedbackCode.Approved;
         }
-        catch { return PlannerFeedbackCode.ContextChanged; }
+        catch (Exception exception)
+        {
+            return FailHost(exception);
+        }
+    }
+    internal PlannerFeedbackCode FailHost(Exception exception)
+    {
+        run.RecordException(exception); shared.UnsafeToContinue = true;
+        run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host)]);
+        return PlannerFeedbackCode.HostFailure;
     }
 
     private TimeSpan Window(JsonObject decision) => decision["kind"]!.GetValue<string>() == "wait"
@@ -173,12 +191,13 @@ public sealed class PlannerGate
         => Record(new(runId, request.DecisionRequestId, request.Basis.ObservationId, code));
     internal PlannerDecisionReference Record(PlannerDecisionReference item)
     {
-        feedback.Enqueue(item);
-        while (feedback.Count > Math.Min(1000, run.Limits.MaxEvidenceItems)) feedback.Dequeue();
+        shared.Feedback.Enqueue(item);
+        while (shared.Feedback.Count > Math.Min(1000, run.Limits.MaxEvidenceItems)) shared.Feedback.Dequeue();
         return item;
     }
-    internal void StopAfterUnconfirmedDispatch() => unsafeToContinue = true;
-    internal void EndRecoveryAfterConfirmation() => recoveryRetry = false;
+    internal void StopAfterUnconfirmedDispatch() => shared.UnsafeToContinue = true;
+    internal void EndRecoveryAfterConfirmation() => shared.RecoveryRetry = false;
+    internal void ArbitrateCancellation() => run.Evaluate(cancelled: true);
     private static JsonObject Clone(JsonObject json) => (JsonObject)json.DeepClone();
     private static ProjectedPlannerState Copy(ProjectedPlannerState state) => state with
     {
@@ -196,9 +215,24 @@ public sealed class ApprovedDecision
     private readonly ProjectedPlannerState basis;
     private PlannerFeedbackCode? completion;
     private int nextDispatchIndex;
+    private readonly CancellationToken dispatchCancellation;
+    private readonly CancellationTokenRegistration cancellationRegistration;
+    // 0 = available, 1 = revoked, 2 = dispatch commit in progress.
+    private int dispatchState;
     internal ApprovedDecision(PlannerGate gate, RunSession.ApprovedOperation operation, JsonObject decision,
-        ProjectedPlannerState basis, PlannerDecisionReference reference)
-    { this.gate = gate; this.operation = operation; this.decision = decision; this.basis = basis; Reference = reference; }
+        ProjectedPlannerState basis, PlannerDecisionReference reference, CancellationToken cancellationToken)
+    {
+        this.gate = gate; this.operation = operation; this.decision = decision; this.basis = basis; Reference = reference;
+        dispatchCancellation = cancellationToken;
+        // Cancellation revokes only this lease off-thread. Run arbitration remains on the
+        // serialized owner, and never interrupts the backend or releases game inputs here.
+        // A long-lived caller source must not retain a completed Run through this callback.
+        cancellationRegistration = cancellationToken.Register(static state =>
+        {
+            if (((WeakReference<ApprovedDecision>)state!).TryGetTarget(out var lease))
+                Interlocked.Exchange(ref lease.dispatchState, 1);
+        }, new WeakReference<ApprovedDecision>(this));
+    }
     public PlannerDecisionReference Reference { get; }
     public TimeSpan Deadline => operation.Deadline;
     public TimeSpan ResultDeadline => operation.ResultDeadline;
@@ -208,17 +242,34 @@ public sealed class ApprovedDecision
     {
         if (completion.HasValue || index != nextDispatchIndex || index < 0 || index >= Deliveries.Count || Deliveries[index] != DeliveryState.Reserved)
             return PlannerFeedbackCode.ResponseClosed;
+        if (CancellationRefused()) return PlannerFeedbackCode.ResponseClosed;
         // Neutrality is required for a new decision, not between inputs of an already approved segment.
         var code = gate.Validate(decision, basis, requireNeutral: false);
         if (code == PlannerFeedbackCode.Approved)
         {
+            if (CancellationRefused()) return PlannerFeedbackCode.ResponseClosed;
+            // Atomic lease commit linearizes with nonblocking cancellation revocation.
+            // No off-thread callback can mutate RunSession or wait for authority checks.
+            if (Interlocked.CompareExchange(ref dispatchState, 2, 0) != 0)
+            {
+                CancellationRefused();
+                return PlannerFeedbackCode.ResponseClosed;
+            }
             try { operation.BeginDispatch(index); nextDispatchIndex++; return code; }
             catch (InvalidOperationException) { code = PlannerFeedbackCode.ResponseClosed; }
+            catch (Exception exception) { code = gate.FailHost(exception); }
+            finally { Interlocked.CompareExchange(ref dispatchState, 0, 2); }
         }
-        operation.Complete();
+        operation.Complete(); cancellationRegistration.Unregister();
         if (Deliveries.Any(x => x is DeliveryState.Sent or DeliveryState.Uncertain) && !operation.ResultConfirmed)
             gate.StopAfterUnconfirmedDispatch();
         gate.Record(Reference with { Code = code }); return code;
+    }
+    private bool CancellationRefused()
+    {
+        if (Volatile.Read(ref dispatchState) != 1 && !dispatchCancellation.IsCancellationRequested) return false;
+        gate.ArbitrateCancellation(); operation.Complete(); cancellationRegistration.Unregister();
+        gate.Record(Reference with { Code = PlannerFeedbackCode.ResponseClosed }); return true;
     }
     public void ConfirmSent(int index) => operation.Actions!.ConfirmSent(index);
     public bool ConfirmResult() => Deliveries.All(x => x is DeliveryState.Sent or DeliveryState.Uncertain)
@@ -226,13 +277,14 @@ public sealed class ApprovedDecision
     public PlannerFeedbackCode Complete()
     {
         if (completion.HasValue) return completion.Value;
+        if (Volatile.Read(ref dispatchState) == 1 || dispatchCancellation.IsCancellationRequested) gate.ArbitrateCancellation();
         var deliveries = Deliveries;
         var sent = deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain);
         var code = sent == 0 && deliveries.Count != 0 ? PlannerFeedbackCode.NotSent :
             sent != 0 && sent < deliveries.Count ? PlannerFeedbackCode.PartialExecution :
             sent != 0 && !operation.ResultConfirmed ? PlannerFeedbackCode.SentUnconfirmed :
             operation.ResultConfirmed ? PlannerFeedbackCode.Confirmed : PlannerFeedbackCode.NotSent;
-        operation.Complete(); completion = code;
+        operation.Complete(); completion = code; cancellationRegistration.Unregister();
         if (code is PlannerFeedbackCode.SentUnconfirmed or PlannerFeedbackCode.PartialExecution) gate.StopAfterUnconfirmedDispatch();
         if (code == PlannerFeedbackCode.Confirmed) gate.EndRecoveryAfterConfirmation();
         gate.Record(Reference with { Code = code }); return code;

@@ -13,7 +13,11 @@ grant authority. This is the existing exchange format, not a second Decision.
 accepts the objective and resolved secret-free limits only. Its advertised Run
 ceilings must equal the execution owner's limits. `Begin(ProjectedPlannerState,
 recovering)` consumes #6's one active `PlannerPermit`; the request ID is generated
-by the Run owner. `CopyInput()` returns a defensive copy of objective, real limits,
+by the Run owner.
+Request namespace/counter, active request, feedback and recovery/unsafe state are
+attached to the Run lifetime. Reconstructing a gate cannot reuse an ID, reset
+recovery accounting, forget feedback or reopen uncertain dispatch authority.
+`CopyInput()` returns a defensive copy of objective, real limits,
 remaining duration/actions/decisions after this request, bounded structured
 feedback, approved public observation and original Gua action definitions.
 Recovery request/retry decision remainder is clamped to the recovery allowance,
@@ -34,7 +38,7 @@ schemas and C# assembly separation are not a technical sandbox.
 
 ## One completed proposal and current authority
 
-`Adopt(request, completedJson)` consumes the request once, including invalid
+`Adopt(request, completedJson, cancellationToken)` consumes the request once, including invalid
 proposals. It matches run/request/observation IDs and rejects closed, cancelled,
 duplicate and expired responses. Invalid unsent responses carry `RetryAllowed`
 only while #6's real decision/action/recovery budgets allow another request.
@@ -62,15 +66,24 @@ holds, and require timed holds to close within their approved segment. Secrets
 and consent come only from approved host policy. A description is not consent;
 old confirmed evidence is not approval. Relevant prerequisites, not a revision
 counter alone, determine freshness. Ports must return promptly; exceptions fail
-closed. Each check receives copies so it cannot rewrite the approved proposal.
+closed. Exceptions retain diagnostic evidence and arbitrate ExecutionError with
+Host origin, never a Planner invalid-output retry. Each check receives copies so
+it cannot rewrite the approved proposal.
 
 Only after these checks does the permit reserve the entire segment atomically.
 Existing Gua hard ceilings and stricter segment/lateness/execution/cleanup/wait
 limits remain in force. `ApprovedDecision.BeginDispatch(index)` repeats current
 checks for the entire approved proposal before #6 marks that request Uncertain.
-It requires the next ordered input index and refuses duplicates/reordering. It does not require neutral input between requests
-of the same approved segment, allowing the approved release. New decisions always
-require neutral input. `ConfirmSent` changes evidence without charging twice;
+It requires the next ordered input index and refuses duplicates/reordering.
+It does not require neutral input between requests of the same approved segment,
+allowing the approved release. New decisions always require neutral input.
+Approved authority remains bound to the caller cancellation token after the
+Planner turn returns. Cancellation revocation and dispatch commit use an atomic state;
+the callback only revokes the lease, never mutates the Run or interrupts a backend.
+The serialized dispatch owner arbitrates cancellation before invoking transport.
+Callbacks do not block on host checks. References are weak and completion
+unregisters without joining callbacks, so a long-lived caller source cannot retain completed Runs.
+`ConfirmSent` changes evidence without charging twice;
 `ConfirmResult` checks #6's finite result deadline. The operation-level result
 cannot be confirmed until every reserved input has
 crossed dispatch, preserving ActionUnconfirmed when a segment stops partially.
@@ -120,8 +133,10 @@ maps these to #6's canonical PlannerUsageLimit/PlannerConnectionFailure/
 PlannerOutputInvalid with Planner origin, never Scenario invalid. Those canonical
 reasons come from the reviewed #6 merge on main (2668926); this module does not redefine
 their priority. A noncontinuable rejected proposal exposes `TerminalEvent`.
-PlannerTurn recaptures current machine conditions and sends that event through
-RunMonitor before cleanup. Exhausted invalid-output retries terminate as
+PlannerTurn sends that ready terminal event directly to the arbiter after the
+preceding monitor's fresh units. It never opens a new capture/join after closing
+the request permit, which could extend a finite request wait to MaxDuration.
+Exhausted invalid-output retries terminate as
 PlannerOutputInvalid, rather than continuing without a request.
 
 `PlannerDecisionReference(RunId, DecisionRequestId, BasedOnObservationId, Code)`

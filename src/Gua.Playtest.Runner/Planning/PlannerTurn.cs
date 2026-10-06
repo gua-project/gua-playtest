@@ -32,7 +32,7 @@ public static class PlannerTurn
                 if (result.Completed)
                 {
                     var reply = result.Value!;
-                    adoption = gate.Adopt(request, reply.CompletedJson ?? []);
+                    adoption = gate.Adopt(request, reply.CompletedJson ?? [], cancellationToken);
                     if (cancellationToken.IsCancellationRequested)
                     {
                         // Cancellation can arrive after the monitor's final unit or during
@@ -42,10 +42,10 @@ public static class PlannerTurn
                     else
                     {
                         if (adoption.TerminalEvent is not { } terminal) return new(adoption, false, true);
-                        // Recapture current conditions and arbitrate a noncontinuable invalid output with all
-                        // ready machine failure/cancel/deadline evidence, rather than assigning a primary here.
-                        await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
-                            _ => new ValueTask<RunEvent>(terminal), e => [e], cancellationToken).ConfigureAwait(false);
+                        // The preceding monitor already synchronized and arbitrated its units.
+                        // A ready terminal adoption error must not open another capture window
+                        // after its permit has closed or wait until the global Run deadline.
+                        run.Evaluate(candidates: [terminal], cancelled: cancellationToken.IsCancellationRequested);
                     }
                 }
             }

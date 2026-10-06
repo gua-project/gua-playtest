@@ -487,6 +487,93 @@ public sealed class PlannerGateTests
         public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
     }
 
+    private sealed class TwoCaptureFeed : IRunObservationFeed
+    {
+        public int Calls;
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => ++Calls <= 2
+            ? new(new RunObservation(TimeSpan.Zero, new([]), new([])))
+            : new(new TaskCompletionSource<RunObservation>().Task);
+        public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
+    }
+    [Fact]
+    public async Task ReadyTerminalAdoptionDoesNotOpenAnotherUnboundedCapture()
+    {
+        var s = new Setup(decisions: 1); var r = s.Begin(); var feed = new TwoCaptureFeed();
+        var result = await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, feed,
+            new ImmediatePlanner(new(PlannerReplyStatus.Completed, Encoding.UTF8.GetBytes("{}"))), _ => new(true))
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(2, feed.Calls); Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
+        Assert.Equal(RunReason.PlannerOutputInvalid, s.Run.Primary!.Cause.Reason);
+    }
+    [Fact]
+    public async Task ReturnedDecisionCannotDispatchAfterCallerCancellationCompletes()
+    {
+        var s = new Setup(); var r = s.Begin(); using var caller = new CancellationTokenSource();
+        var result = await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(),
+            new ImmediatePlanner(new(PlannerReplyStatus.Completed, Response(r, Single()))), _ => new(true), caller.Token);
+        Assert.False(result.Interrupted); caller.Cancel();
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, result.Adoption!.Approved!.BeginDispatch(0));
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions); Assert.Equal(RunReason.Cancelled, s.Run.Primary!.Cause.Reason);
+    }
+    [Fact]
+    public async Task DispatchAndCancellationRevocationShareAnAtomicBoundary()
+    {
+        var s = new Setup(); var r = s.Begin(); using var caller = new CancellationTokenSource();
+        var approved = s.Gate.Adopt(r, Response(r, Single()), caller.Token).Approved!;
+        using var entered = new ManualResetEventSlim(); using var resume = new ManualResetEventSlim();
+        s.Authority.BeforePermissionCheck = () => { entered.Set(); Assert.True(resume.Wait(TimeSpan.FromSeconds(3))); };
+        var dispatch = Task.Run(() => approved.BeginDispatch(0));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(3)));
+        var cancellation = Task.Run(caller.Cancel);
+        for (var i = 0; !caller.IsCancellationRequested && i < 1000; i++) await Task.Delay(1);
+        Assert.True(caller.IsCancellationRequested); await cancellation.WaitAsync(TimeSpan.FromSeconds(3));
+        resume.Set(); Assert.Equal(PlannerFeedbackCode.ResponseClosed, await dispatch.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions); Assert.Equal(RunReason.Cancelled, s.Run.Primary!.Cause.Reason);
+    }
+    [Theory]
+    [InlineData(false, 1)] [InlineData(false, 5)] [InlineData(true, 1)] [InlineData(true, 5)]
+    public void AuthorityExceptionsAreHostFailuresWithEvidenceAndNoPlannerRetry(bool atDispatch, long decisions)
+    {
+        var s = new Setup(decisions: decisions); var r = s.Begin();
+        var approved = atDispatch ? s.Gate.Adopt(r, Response(r, Single())).Approved : null;
+        s.Authority.BeforePermissionCheck = () => throw new IOException("PRIVATE_HOST_VALIDATION");
+        if (atDispatch) Assert.Equal(PlannerFeedbackCode.HostFailure, approved!.BeginDispatch(0));
+        else
+        {
+            var adoption = s.Gate.Adopt(r, Response(r, Single()));
+            Assert.Equal(PlannerFeedbackCode.HostFailure, adoption.Code); Assert.False(adoption.RetryAllowed);
+            Assert.Equal(new RunEvent(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), adoption.TerminalEvent);
+        }
+        Assert.Equal(new RunEvent(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), s.Run.Primary!.Cause);
+        Assert.DoesNotContain(s.Run.Events, x => x.Reason == RunReason.PlannerOutputInvalid);
+        Assert.Contains(s.Run.Exceptions, x => x.Type == typeof(IOException).FullName);
+        Assert.All(s.Run.Exceptions, x => Assert.DoesNotContain("PRIVATE_HOST_VALIDATION", x.ToString()));
+        Assert.Null(s.Gate.Begin(State())); Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
+    private static PlannerGate Replacement(Setup s, PlannerInputDocument input)
+        => new(s.Run, s.Clock, s.Authority, input.RunId, input.Objective, input.Limits);
+    [Fact]
+    public void ReconstructedGateCannotReuseIdsOrAdoptOldResponseBytes()
+    {
+        var s = new Setup(); var old = s.Begin(); var input = old.CopyInput(); var bytes = Response(old, Single());
+        s.Gate.Cancel(old); var replacement = Replacement(s, input); var current = replacement.Begin(State())!;
+        Assert.NotEqual(old.DecisionRequestId, current.DecisionRequestId);
+        Assert.Equal(PlannerFeedbackCode.CorrelationMismatch, replacement.Adopt(current, bytes).Code);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
+    [Fact]
+    public void ReconstructedGatePreservesRecoveryAndUncertainDispatchStops()
+    {
+        var s = new Setup(); var old = s.Gate.Begin(State(), recovering: true)!; var input = old.CopyInput();
+        s.Gate.Adopt(old, Encoding.UTF8.GetBytes("{}")); var replacement = Replacement(s, input);
+        var retry = replacement.Begin(State())!;
+        Assert.True(retry.Recovering); Assert.Equal(2, s.Run.Budget.Snapshot.RecoveryDecisions);
+        Assert.Contains(retry.CopyInput().Feedback, x => x["relatedDecisionRequestId"]!.GetValue<string>() == old.DecisionRequestId);
+        var approved = replacement.Adopt(retry, Response(retry, Single())).Approved!;
+        approved.BeginDispatch(0); Assert.Equal(PlannerFeedbackCode.SentUnconfirmed, approved.Complete());
+        Assert.Null(Replacement(s, input).Begin(State())); // reconstruction cannot escape the pre-arbiter stop
+    }
+
     [Theory]
     [InlineData(true, 5, RunReason.Cancelled)]
     [InlineData(false, 1, RunReason.PlannerOutputInvalid)]
