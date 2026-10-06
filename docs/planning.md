@@ -97,6 +97,12 @@ Failure conditions, condition timers, real deadlines and cancellation retain
 their machine-owned arbitration. On interruption Run authority closes first,
 then a finite owner-scoped input release is attempted, then cancellation is
 requested from the actual Planner. A noncooperative late result has no authority.
+Trusted drivers may use ConfirmResponse only for actual completed backend evidence,
+before fresh capture; it grants no approval and cannot rebase an existing window.
+Expired active adoption closes the permit and carries PlannerTimeout or confirmed
+WaitExpired to arbitration. Adoption faults also arbitrate pending clock/contract
+evidence before release. Only the release attempt uses a fresh physical monotonic
+cleanup clock, so an invalid execution clock cannot skip or extend cleanup.
 Cancellation callback faults are contained and recorded without replacing the
 primary outcome or owned-input-release evidence.
 The returned release flag must enter the driver's mandatory cleanup/postprocessing

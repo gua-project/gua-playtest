@@ -24,24 +24,38 @@ public static class PlannerTurn
         PlannerAdoption? adoption = null;
         try
         {
-            var result = await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
-                _ => ProposeAsync(planner, request, plannerCancellation.Token), Events, cancellationToken,
-                reply => { if (reply.Status == PlannerReplyStatus.Completed) gate.ConfirmResponse(request); }).ConfigureAwait(false);
-            if (result.Completed)
+            try
             {
-                var reply = result.Value!;
-                adoption = gate.Adopt(request, reply.CompletedJson ?? []);
-                if (adoption.TerminalEvent is not { } terminal) return new(adoption, false, true);
-                // Recapture current conditions and arbitrate a noncontinuable invalid output with all
-                // ready machine failure/cancel/deadline evidence, rather than assigning a primary here.
-                await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
-                    _ => new ValueTask<RunEvent>(terminal), e => [e], cancellationToken).ConfigureAwait(false);
+                var result = await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
+                    _ => ProposeAsync(planner, request, plannerCancellation.Token), Events, cancellationToken,
+                    reply => { if (reply.Status == PlannerReplyStatus.Completed) gate.ConfirmResponse(request); }).ConfigureAwait(false);
+                if (result.Completed)
+                {
+                    var reply = result.Value!;
+                    adoption = gate.Adopt(request, reply.CompletedJson ?? []);
+                    if (adoption.TerminalEvent is not { } terminal) return new(adoption, false, true);
+                    // Recapture current conditions and arbitrate a noncontinuable invalid output with all
+                    // ready machine failure/cancel/deadline evidence, rather than assigning a primary here.
+                    await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
+                        _ => new ValueTask<RunEvent>(terminal), e => [e], cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception exception)
+            {
+                // Adoption can fail after the monitor's last clock read. The arbiter must
+                // consume queued clock/contract evidence and close authority before cleanup.
+                run.RecordException(exception);
+                run.Evaluate(candidates: [exception is RunFailureException failure ? failure.Cause :
+                    new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
+                    cancelled: cancellationToken.IsCancellationRequested);
             }
             // RunSession is already closed. Late results cannot pass gate.Adopt, even if cancellation is ignored.
             var released = false;
             try
             {
-                released = await FiniteOperation.RunAsync(realClock, run.Limits.CleanupTimeout,
+                // Only cleanup uses a fresh physical clock: a rejected execution clock must
+                // neither skip the owned-input release attempt nor make it unbounded.
+                released = await FiniteOperation.RunAsync(new MonotonicClock(), run.Limits.CleanupTimeout,
                     releaseOwnedInputs, CancellationToken.None, run.RecordException).ConfigureAwait(false);
             }
             catch (Exception exception) { run.RecordException(exception); /* Driver maps false to postprocessing evidence. */ }

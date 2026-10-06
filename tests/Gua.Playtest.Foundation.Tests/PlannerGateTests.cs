@@ -13,7 +13,9 @@ public sealed class PlannerGateTests
     private sealed class Clock : IClock
     {
         private readonly List<(TimeSpan Due, TaskCompletionSource Completion)> timers = [];
-        public TimeSpan Elapsed { get; set; }
+        private TimeSpan elapsed;
+        public bool ThrowReads;
+        public TimeSpan Elapsed { get => ThrowReads ? throw new IOException("PRIVATE_CLOCK_FAILURE") : elapsed; set => elapsed = value; }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken cancellationToken)
         {
             var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -258,7 +260,7 @@ public sealed class PlannerGateTests
         var s = new Setup(); var request = s.Begin(); s.Gate.Cancel(request);
         Assert.Equal(PlannerFeedbackCode.ResponseClosed, s.Gate.Adopt(request, Response(request, Single())).Code);
         request = s.Begin(); s.Clock.Elapsed = request.Deadline;
-        Assert.Equal(PlannerFeedbackCode.ResponseClosed, s.Gate.Adopt(request, Response(request, Single())).Code);
+        Assert.Equal(PlannerFeedbackCode.PlannerTimeout, s.Gate.Adopt(request, Response(request, Single())).Code);
         Assert.Equal(RunReason.PlannerTimeout, s.Run.Evaluate()!.Cause.Reason);
     }
 
@@ -430,8 +432,50 @@ public sealed class PlannerGateTests
         var r = s.Begin();
         Assert.Equal(5000, r.CopyInput().Remaining["durationMilliseconds"]!.GetValue<long>());
         s.Clock.At(r.Deadline);
-        Assert.Equal(PlannerFeedbackCode.ResponseClosed, s.Gate.Adopt(r, Response(r, Single())).Code);
+        Assert.Equal(PlannerFeedbackCode.PlannerTimeout, s.Gate.Adopt(r, Response(r, Single())).Code);
         Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
+
+    [Fact]
+    public void ExpiredConfirmedResponseClosesPermitAndCarriesWaitExpired()
+    {
+        var s = new Setup(); var r = s.Begin();
+        s.Clock.At(TimeSpan.FromMilliseconds(500)); Assert.True(s.Gate.ConfirmResponse(r));
+        Assert.False(s.Gate.ConfirmResponse(r)); // confirmation cannot rebase its window
+        s.Clock.At(r.Deadline);
+        var adoption = s.Gate.Adopt(r, Response(r, Single()));
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, adoption.Code); Assert.False(adoption.RetryAllowed);
+        Assert.Equal(new RunEvent(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Host), adoption.TerminalEvent);
+        Assert.Equal(TimeSpan.FromSeconds(5), s.Run.NextRealEvaluationAt); // old permit already closed
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, s.Gate.Adopt(r, Response(r, Single())).Code);
+        Assert.Null(s.Gate.Begin(State())); Assert.Equal(RunReason.WaitExpired, s.Run.Evaluate()!.Cause.Reason);
+    }
+
+    private sealed class CompletedRecordingPlanner(byte[] response, List<string> order) : IPlanner<PlannerInputDocument, PlannerReply>
+    {
+        public ValueTask<PlannerReply> DecideAsync(PlannerInputDocument input, CancellationToken token)
+        { token.Register(() => order.Add("cancel-planner")); return new(new PlannerReply(PlannerReplyStatus.Completed, response)); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AdoptionClockFaultArbitratesThenAttemptsFiniteReleaseBeforeInterrupt(bool blockedRelease)
+    {
+        var s = new Setup(); var r = s.Begin(); var order = new List<string>();
+        s.Authority.BeforePermissionCheck = () => s.Clock.ThrowReads = true;
+        var result = await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(),
+            new CompletedRecordingPlanner(Response(r, Single()), order), _ =>
+            {
+                Assert.Equal(ExecutionState.Completing, s.Run.State);
+                Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Clock), s.Run.Primary!.Cause);
+                order.Add("release-inputs");
+                return blockedRelease ? new(new TaskCompletionSource<bool>().Task) : new(true);
+            }).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(result.Interrupted); Assert.Equal(!blockedRelease, result.OwnedInputsReleased);
+        Assert.Equal(new[] { "release-inputs", "cancel-planner" }, order);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+        Assert.NotEmpty(s.Run.Exceptions); Assert.All(s.Run.Exceptions, x => Assert.DoesNotContain("PRIVATE_CLOCK_FAILURE", x.ToString()));
     }
 
     private sealed class JoinedFeed(Clock clock) : IRunObservationFeed

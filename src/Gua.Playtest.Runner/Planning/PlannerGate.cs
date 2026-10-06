@@ -72,8 +72,9 @@ public sealed class PlannerGate
     public PlannerAdoption Adopt(PlannerRequest request, byte[] completedJson)
     {
         if (!ReferenceEquals(request.Owner, this) || !ReferenceEquals(active, request) || request.Closed ||
-            run.State != ExecutionState.Running || clock.Elapsed >= request.Deadline)
+            run.State != ExecutionState.Running)
             return new(PlannerFeedbackCode.ResponseClosed);
+        if (clock.Elapsed >= request.Deadline) return Reject(request, PlannerFeedbackCode.ResponseClosed);
         // Parsing partial fragments is not supported; every completed invalid proposal is consumed once.
         var parsed = PlannerExchange.Validate(completedJson, "plannerDecision");
         if (!parsed.IsValid) return Reject(request, PlannerFeedbackCode.OutputInvalid);
@@ -104,14 +105,15 @@ public sealed class PlannerGate
 
     // A completed backend response is evidence before the fresh observation join. It grants no
     // action authority; adoption and current checks still happen after machine arbitration.
-    internal void ConfirmResponse(PlannerRequest request)
+    public bool ConfirmResponse(PlannerRequest request)
     {
-        if (!Owns(run, request) || request.ResponseConfirmed) return;
+        if (!Owns(run, request) || request.ResponseConfirmed) return false;
         var now = clock.Elapsed;
-        if (!request.Permit.ConfirmResponse()) return;
+        if (!request.Permit.ConfirmResponse()) return false;
         request.ResponseConfirmed = true;
         request.ConfirmedDeadline = now + run.Limits.WaitTimeout < run.RunningOrigin!.Value + run.Limits.MaxDuration
             ? now + run.Limits.WaitTimeout : run.RunningOrigin.Value + run.Limits.MaxDuration;
+        return true;
     }
 
     public void Cancel(PlannerRequest request)
