@@ -2,7 +2,7 @@ using Gua.Playtest.Core.Contracts;
 
 namespace Gua.Playtest.Runner.Artifacts;
 
-public enum ResultReadState { Missing, Verified, Invalid, Unreadable }
+public enum ResultReadState { Missing, Verified, Invalid, Unreadable, Interrupted }
 public sealed record ResultReadback(ResultReadState State, ResultDocument? Result = null);
 /// <summary>Read the existing public result schema independently of the writer. Missing/truncated
 /// results never derive Passed from primary snapshots, observations or temporary files.</summary>
@@ -20,6 +20,7 @@ public static class RunArtifactReader
             RunArtifactStore.CheckPath(file);
             if (new FileInfo(file).Length > limits.MaxFileBytes) return new(ResultReadState.Invalid);
             var report = await new StaticContractValidator([root]).ValidateFileAsync(file, cancellationToken).ConfigureAwait(false);
+            if (report.Code == "Interrupted") return new(ResultReadState.Interrupted);
             if (!report.IsValid || report.Document is not ResultDocument result || result.RunId != Path.GetFileName(root))
                 return new(ResultReadState.Invalid);
             return new(ResultReadState.Verified, result);

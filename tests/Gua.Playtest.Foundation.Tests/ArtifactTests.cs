@@ -228,5 +228,62 @@ public sealed class ArtifactTests : IDisposable
         public TimeSpan Elapsed => TimeSpan.Zero;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken cancellationToken) => new(Task.Delay(Timeout.Infinite, cancellationToken));
     }
+    [Theory]
+    [InlineData("a")]
+    [InlineData("Passed")]
+    [InlineData("runId")]
+    public void Structural_secret_collisions_fail_without_publishing_corrupt_wire_fields(string secret)
+    {
+        var store = RunArtifactStore.Create(root, Limits, new([secret], []));
+        var result = store.ConfirmPrimary(Passed, [], [], []);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        Assert.Empty(Directory.GetFiles(store.DirectoryPath, ".pending-*"));
+    }
+    [Fact]
+    public void Aggregate_input_copies_and_undefined_documents_are_bounded_classified_failures()
+    {
+        var store = Store(new(4096, 65536, 1000, 4000));
+        var document = JsonDocument.Parse("{\"text\":\"" + new string('x', 3000) + "\"}").RootElement;
+        var metadata = new RunArtifactMetadata("public", [], new Dictionary<string, string>(), [new("first", document), new("second", document)]);
+        Assert.Equal(PersistenceFailure.LimitExceeded, store.BeginPreparation(metadata).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+        var invalid = Store();
+        Assert.Equal(PersistenceFailure.InvalidEvidence, invalid.BeginPreparation(metadata with { Inputs = [new("undefined", default)] }).Failure);
+    }
+    [Fact]
+    public async Task Receipt_length_mismatch_and_read_cancellation_have_distinct_categories()
+    {
+        var store = Store(); Confirm(store);
+        var bytes = Encoding.UTF8.GetBytes("fixture"); File.WriteAllBytes(Path.Combine(store.DirectoryPath, "trace.gua"), bytes);
+        var mismatch = store.Complete(Outcome(), [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", bytes.Length - 1,
+            Convert.ToHexStringLower(SHA256.HashData(bytes))), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, mismatch.Failure);
+        var saved = Store(); Confirm(saved); Assert.True(saved.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        Assert.Equal(ResultReadState.Interrupted, (await RunArtifactReader.ReadResultAsync(saved.DirectoryPath, Limits, new CancellationToken(true))).State);
+    }
+    [Fact]
+    public void Physical_hardlink_alias_is_rejected_but_independent_identical_bytes_are_valid()
+    {
+        var bytes = Encoding.UTF8.GetBytes("identical-opaque-fixture"); var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var store = Store(); Confirm(store);
+        var trace = Path.Combine(store.DirectoryPath, "trace.gua"); var recording = Path.Combine(store.DirectoryPath, "recording.gua");
+        File.WriteAllBytes(trace, bytes);
+        CreateHardLink(recording, trace);
+        var receipts = new[] { new ArtifactReceipt(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", bytes.Length, hash),
+            new ArtifactReceipt(ArtifactKind.Recording, ArtifactState.Saved, "recording.gua", bytes.Length, hash) };
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(), receipts, [], DateTimeOffset.UtcNow).Failure);
+        var separate = Store(); Confirm(separate);
+        File.WriteAllBytes(Path.Combine(separate.DirectoryPath, "trace.gua"), bytes); File.WriteAllBytes(Path.Combine(separate.DirectoryPath, "recording.gua"), bytes);
+        Assert.True(separate.Complete(Outcome(), receipts, [], DateTimeOffset.UtcNow).Saved);
+    }
+    private static void CreateHardLink(string link, string target)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/ln")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        var arguments = OperatingSystem.IsWindows() ? new[] { "/c", "mklink", "/H", link, target } : new[] { target, link };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }

@@ -55,9 +55,13 @@ public sealed class RunArtifactStore
             if (File.Exists(Path.Combine(DirectoryPath, "run.json"))) throw new InvalidDataException("RunAlreadyStarted");
             var inputs = new List<object>();
             if (metadata.Inputs.Count > limits.MaxItems) throw new ArtifactLimitException();
+            long inputBytes = 0;
+            var inputNodes = 0;
             foreach (var input in metadata.Inputs)
             {
-                var safe = Encode(input.Document);
+                var safe = Encode(input.Document, out var nodeCount);
+                inputBytes += safe.Length; inputNodes += nodeCount;
+                if (inputBytes > limits.MaxFileBytes || inputNodes > limits.MaxItems) throw new ArtifactLimitException();
                 // Store as embedded fixed sanitized bytes; do not copy source files or original input hashes.
                 inputs.Add(new { name = input.Name, sha256 = Hash(safe), document = JsonSerializer.Deserialize<JsonElement>(safe) });
             }
@@ -99,7 +103,8 @@ public sealed class RunArtifactStore
             ValidateReferences(cleanupObservations, []);
             if (artifacts.Count != 2 || artifacts.Select(x => x.Kind).Distinct().Count() != 2) throw new InvalidDataException("ArtifactKindsInvalid");
             var associated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var receipt in artifacts) ValidateReceipt(receipt, outcome.Primary, associated, cancellationToken);
+            var identities = new HashSet<FileIdentity>();
+            foreach (var receipt in artifacts) ValidateReceipt(receipt, outcome.Primary, associated, identities, cancellationToken);
             var issues = outcome.PostProcessing.ToList();
             if (persistenceIncomplete || artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed))
                 issues.Add(new(PostProcessingReason.ArtifactFailed));
@@ -109,7 +114,7 @@ public sealed class RunArtifactStore
                 outcome.Primary.Cause.Origin.ToString(), outcome.Primary.Cause.Reason.ToString(),
                 new(issues.All(x => x.Reason == PostProcessingReason.Cancelled), issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
             // ResultDocument is the existing public schema. No storage extension changes its wire format.
-            Publish("result.json", Encode(JsonSerializer.Deserialize<JsonElement>(ContractJson.Serialize(document))), cancellationToken);
+            Publish("result.json", Encode(document), cancellationToken);
         });
         return saved with { PostProcessingIncomplete = persistenceIncomplete || !outcome.PostProcessingComplete ||
             artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed) };
@@ -124,7 +129,7 @@ public sealed class RunArtifactStore
                 (decision.ActionId is not null && !Token(decision.ActionId)) || !Token(decision.ReasonCode))
                 throw new InvalidDataException("ReferenceInvalid");
     }
-    private void ValidateReceipt(ArtifactReceipt receipt, PrimaryResult result, HashSet<string> associated, CancellationToken cancellationToken)
+    private void ValidateReceipt(ArtifactReceipt receipt, PrimaryResult result, HashSet<string> associated, HashSet<FileIdentity> identities, CancellationToken cancellationToken)
     {
         if (!Enum.IsDefined(receipt.Kind) || !Enum.IsDefined(receipt.State)) throw new InvalidDataException("ArtifactStateInvalid");
         if (receipt.State != ArtifactState.Saved)
@@ -135,11 +140,11 @@ public sealed class RunArtifactStore
             return;
         }
         if (receipt.FileName is null || receipt.Bytes is null || receipt.Sha256 is null) throw new InvalidDataException("ArtifactReceiptInvalid");
-        ValidateFile(new(receipt.FileName, receipt.Bytes.Value, receipt.Sha256), associated, cancellationToken);
+        ValidateFile(new(receipt.FileName, receipt.Bytes.Value, receipt.Sha256), associated, identities, cancellationToken);
         if (receipt.AdditionalFiles is not null)
-            foreach (var file in receipt.AdditionalFiles) ValidateFile(file, associated, cancellationToken);
+            foreach (var file in receipt.AdditionalFiles) ValidateFile(file, associated, identities, cancellationToken);
     }
-    private void ValidateFile(ArtifactFileReference reference, HashSet<string> associated, CancellationToken cancellationToken)
+    private void ValidateFile(ArtifactFileReference reference, HashSet<string> associated, HashSet<FileIdentity> identities, CancellationToken cancellationToken)
     {
         var segments = reference.FileName.Split('/');
         if (segments.Length > 8 || segments.Any(x => !Regex.IsMatch(x, "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?$", RegexOptions.CultureInvariant)) ||
@@ -151,18 +156,22 @@ public sealed class RunArtifactStore
         var path = Path.Combine(DirectoryPath, Path.Combine(segments));
         CheckPath(path);
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (stream.Length != reference.Bytes || usedBytes + stream.Length > limits.MaxRunBytes) throw new ArtifactLimitException();
+        if (stream.Length != reference.Bytes) throw new InvalidDataException("ArtifactLengthMismatch");
+        if (usedBytes + stream.Length > limits.MaxRunBytes) throw new ArtifactLimitException();
+        if (!identities.Add(FileIdentity.Read(stream.SafeFileHandle))) throw new InvalidDataException("ArtifactFileAlias");
         cancellationToken.ThrowIfCancellationRequested();
         if (Convert.ToHexStringLower(SHA256.HashData(stream)) != reference.Sha256) throw new InvalidDataException("ArtifactHashMismatch");
         usedBytes += stream.Length;
     }
-    private byte[] Encode<T>(T value)
+    private byte[] Encode<T>(T value) => Encode(value, out _);
+    private byte[] Encode<T>(T value, out int nodeCount)
     {
         // Construct a bounded sanitized tree directly from source objects. No unredacted serialized
         // buffer, temporary file or hash is ever created.
         var count = 0;
         sanitizedChars = 0;
         var safe = SafeNode(value, ref count);
+        nodeCount = count;
         using var output = new LimitedBuffer(limits.MaxFileBytes);
         using (var writer = new Utf8JsonWriter(output)) { if (safe is null) writer.WriteNullValue(); else safe.WriteTo(writer, Json); }
         return output.ToArray();
@@ -174,13 +183,14 @@ public sealed class RunArtifactStore
         if (value is EffectiveSetting setting)
         {
             var obj = new JsonObject();
-            Add(obj, "name", setting.Name, ref count, depth);
-            Add(obj, "value", redactor.Sensitive(setting.Name) ? null : setting.Value, ref count, depth);
-            Add(obj, "source", setting.Source, ref count, depth);
+            Add(obj, "name", setting.Name, ref count, depth, structural: true);
+            Add(obj, "value", redactor.Sensitive(setting.Name) ? null : setting.Value, ref count, depth, structural: true);
+            Add(obj, "source", setting.Source, ref count, depth, structural: true);
             return obj;
         }
         if (value is JsonElement element)
         {
+            if (element.ValueKind == JsonValueKind.Undefined) throw new InvalidDataException("InputDocumentUndefined");
             if (element.ValueKind == JsonValueKind.Object)
             {
                 var obj = new JsonObject();
@@ -215,19 +225,27 @@ public sealed class RunArtifactStore
             foreach (var item in enumerable) array.Add(SafeNode(item, ref count, depth + 1));
             return array;
         }
-        if (value.GetType().IsEnum) return SafeNode(value.ToString(), ref count, depth + 1);
+        if (value.GetType().IsEnum)
+        {
+            if (redactor.Redact(value.ToString()!) != value.ToString()) throw new InvalidDataException("StructuralRedactionCollision");
+            return SafeNode(value.ToString(), ref count, depth + 1);
+        }
         if (value is DateTimeOffset || value.GetType().IsPrimitive || value is decimal)
             return JsonSerializer.SerializeToNode(value, value.GetType(), Json);
         var result = new JsonObject();
         foreach (var property in value.GetType().GetProperties())
-            Add(result, JsonNamingPolicy.CamelCase.ConvertName(property.Name), property.GetValue(value), ref count, depth);
+            Add(result, JsonNamingPolicy.CamelCase.ConvertName(property.Name), property.GetValue(value), ref count, depth, structural: true);
         return result;
     }
-    private void Add(JsonObject obj, string key, object? value, ref int count, int depth)
+    private void Add(JsonObject obj, string key, object? value, ref int count, int depth, bool structural = false)
     {
         if (++count > limits.MaxItems || key.Length > limits.MaxStringChars) throw new ArtifactLimitException();
         ChargeChars(key.Length);
         var safeKey = redactor.Redact(key);
+        if (structural && (safeKey != key || redactor.Sensitive(key))) throw new InvalidDataException("StructuralRedactionCollision");
+        if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason") &&
+            value is string structuralText && redactor.Redact(structuralText) != structuralText)
+            throw new InvalidDataException("StructuralRedactionCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
         obj[safeKey] = redactor.Sensitive(key) ? null : SafeNode(value, ref count, depth + 1);
     }
