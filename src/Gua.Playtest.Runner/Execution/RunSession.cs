@@ -454,18 +454,23 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(exception);
         if (exception is ClockProviderException) QueueClockRejection();
         var pending = new Queue<Exception>(); pending.Enqueue(exception);
-        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance) { exception };
         while (pending.TryDequeue(out var current) && exceptions.Count < Limits.MaxEvidenceItems)
         {
-            if (!seen.Add(current)) continue;
             if (current is ClockProviderException) QueueClockRejection();
             exceptions.Add(new(current.GetType().FullName ?? current.GetType().Name, current.StackTrace));
             var capacity = Limits.MaxEvidenceItems - exceptions.Count - pending.Count;
             if (current is AggregateException aggregate)
             {
-                foreach (var inner in aggregate.InnerExceptions.Take(Math.Max(0, capacity))) pending.Enqueue(inner);
+                foreach (var inner in aggregate.InnerExceptions)
+                {
+                    if (capacity <= 0) break;
+                    // Reserve a slot only for a new reference, including ones already pending.
+                    if (!seen.Add(inner)) continue;
+                    pending.Enqueue(inner); capacity--;
+                }
             }
-            else if (current.InnerException is { } inner && capacity > 0) pending.Enqueue(inner);
+            else if (current.InnerException is { } inner && capacity > 0 && seen.Add(inner)) pending.Enqueue(inner);
         }
     }
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)

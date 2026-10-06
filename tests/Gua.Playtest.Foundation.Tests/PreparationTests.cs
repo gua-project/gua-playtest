@@ -765,4 +765,28 @@ public sealed class PreparationTests
         run.Evaluate(candidates: [cause]); var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
         Assert.Equal(32, outcome.Exceptions.Count); Assert.Equal(cause, outcome.Primary.Cause);
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task DuplicateAggregateReferencesCannotHideLaterDistinctDiagnostics(int nesting)
+    {
+        var clock = new Clock(); var limits = new RunLimits(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 5, 5, 2, 32);
+        var run = new RunSession(limits, clock, clock); run.BeginPreparation();
+        var duplicate = new IOException(); var distinct = new FormatException();
+        var aggregate = new AggregateException(Enumerable.Repeat<Exception>(duplicate, 1000).Append(distinct));
+        var cause = new RunEvent(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host);
+        run.RecordException(nesting switch
+        {
+            1 => new RunFailureException(cause, aggregate),
+            2 => new AggregateException(aggregate, duplicate),
+            _ => aggregate
+        });
+        run.Evaluate(candidates: [cause]); var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
+        Assert.Single(outcome.Exceptions, item => item.Type == typeof(IOException).FullName);
+        Assert.Single(outcome.Exceptions, item => item.Type == typeof(FormatException).FullName);
+        Assert.Equal(nesting == 0 ? 3 : 4, outcome.Exceptions.Count);
+    }
 }
