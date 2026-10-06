@@ -8,7 +8,8 @@ public enum RunOrigin { Contract, Condition, Host, Planner, Budget, Clock, User,
 public enum RunReason
 {
     InvalidContract, ObservationContractViolation, FailureCondition, PreparationTimeout,
-    ActionFailed, ActionUnconfirmed, PlannerTimeout, ExecutionError, Cancelled, MaxDuration,
+    ActionFailed, ActionUnconfirmed, PlannerTimeout, ExecutionError,
+    PlannerOutputInvalid, PlannerUsageLimit, PlannerConnectionFailure, Cancelled, MaxDuration,
     GoalImpossible, ActionsExhausted, DecisionsExhausted, RecoveryExhausted,
     WaitExpired, SuccessUnconfirmed, ExplorationFinished, GoalSatisfied
 }
@@ -33,15 +34,16 @@ public sealed record PrimaryResult(ResultStatus Status, RunEvent Cause)
 }
 public enum PostProcessingReason
 {
-    DiagnosticsFailed, ArtifactFailed, InputReleaseUnconfirmed, ResourceReleaseUnconfirmed,
+    PrimarySnapshotFailed, DiagnosticsFailed, ArtifactFailed, InputReleaseUnconfirmed, ResourceReleaseUnconfirmed,
     Cancelled, CleanupTimeout
 }
 public sealed record ExceptionEvidence(string Type, string? StackTrace);
 public sealed record PostProcessingIssue(PostProcessingReason Reason, ExceptionEvidence? Exception = null);
+public sealed record RunSnapshot(PrimaryResult Primary, IReadOnlyList<RunEvent> Events, IReadOnlyList<ExceptionEvidence> Exceptions);
 public sealed record RunOutcome(PrimaryResult Primary, IReadOnlyList<RunEvent> Events,
     IReadOnlyList<PostProcessingIssue> PostProcessing, IReadOnlyList<ExceptionEvidence> Exceptions)
 {
-    public bool PostProcessingComplete => PostProcessing.Count == 0;
+    public bool PostProcessingComplete => PostProcessing.All(x => x.Reason == PostProcessingReason.Cancelled);
     public int ExitCode => Primary.Status == ResultStatus.Passed && !PostProcessingComplete ? 11 : Primary.ExitCode;
 }
 
