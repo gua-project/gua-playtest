@@ -840,4 +840,26 @@ public sealed class PreparationTests
         Assert.Equal(confirmed ? 1 : 0, afterConnector.Calls);
         Assert.Equal(!confirmed, after.Events.Contains(new(PreparationStage.Ownership, PreparationCode.Busy)));
     }
+
+    [Fact]
+    public async Task FullCleanupEvidenceCannotHideReleaseCallbackFaultAndOpenEndpointLease()
+    {
+        var clock = new Clock(); var policy = Policy(); var cleanup = new OwnedCleanup();
+        var limits = new RunLimits(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 5, 5, 2, 32);
+        var outcome = await RunExecutor.ExecuteAsync(new(limits, clock, clock), clock, cleanup, async (session, owned, token) =>
+        { return (await new HostPreparation(policy, clock, new Launcher(), new Connector(new()), new Trace())
+            .PrepareAsync(session, owned, null, null, token)).Boundary; }, (_, _) =>
+        {
+            for (var index = 0; index < 32; index++) cleanup.Register(CleanupStage.Diagnostics, _ => ValueTask.FromResult(false));
+            cleanup.Register(CleanupStage.ResourceRelease, token =>
+            { token.Register(() => throw new IOException()); return ValueTask.FromResult(true); });
+            return ValueTask.FromResult(true);
+        });
+        Assert.Equal(32, outcome.PostProcessing.Count);
+        Assert.Contains(outcome.PostProcessing, item => item.Reason == PostProcessingReason.EvidenceLimitExceeded);
+        var connector = new Connector(new()); var trace = new Trace();
+        await Execute(new(policy, clock, new Launcher(), connector, trace), clock);
+        Assert.Equal(0, connector.Calls); Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), trace.Events);
+    }
 }

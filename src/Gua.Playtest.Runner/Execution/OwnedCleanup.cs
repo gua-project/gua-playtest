@@ -159,6 +159,8 @@ public sealed class OwnedCleanup
         }
         void RecordStageFault(CleanupStage stage, Exception exception)
         {
+            if (stage is CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease)
+                resourcesConfirmed = false;
             if (issues.Count >= run.Limits.MaxEvidenceItems - 1) { AddIssue(new(PostProcessingReason.EvidenceLimitExceeded)); return; }
             var allowance = run.Limits.MaxEvidenceItems - issues.Count;
             var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(allowance) : [exception];
