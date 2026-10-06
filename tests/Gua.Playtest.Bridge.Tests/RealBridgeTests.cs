@@ -16,6 +16,50 @@ public sealed class RealBridgeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task FaultProxyBoundsPendingAcceptAndPreservesAcceptFault(bool failed)
+    {
+        var accepting = new TaskCompletionSource<System.Net.WebSockets.HttpListenerWebSocketContext>();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var original = new InvalidOperationException("Injected accept fault.");
+        var proxy = new BridgeFaultProxy("ws://127.0.0.1:1/", (_, _) => false,
+            accept: _ => { entered.SetResult(); return accepting.Task; });
+        using var peer = new TcpClient(); var address = new Uri(proxy.Endpoint); await peer.ConnectAsync(address.Host, address.Port);
+        await peer.GetStream().WriteAsync(System.Text.Encoding.ASCII.GetBytes($"GET / HTTP/1.1\r\nHost: {address.Host}:{address.Port}\r\n\r\n"));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        if (failed)
+        {
+            accepting.SetException(original);
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.Same(original, exception);
+        }
+        else
+        {
+            await proxy.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+            accepting.SetException(new IOException("Late interrupted accept fault."));
+        }
+    }
+    [Fact]
+    public async Task FaultProxyDisposalJoinsCancelledUnacceptedConnection()
+    {
+        var proxy = new BridgeFaultProxy("ws://127.0.0.1:1/", (_, _) => false);
+        await proxy.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task FaultProxyDisposalPreservesUnexpectedForwardingFault()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy");
+        var expected = new InvalidOperationException("Injected forwarding fault.");
+        var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => throw expected);
+        using var reader = Reader(proxy.Endpoint);
+        reader.Read(Read("ui", "standard", "visible", "bool", "buy"));
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.DisposeAsync().AsTask());
+        Assert.Same(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task SessionResetAfterUiHostCompletionKeepsUnknownCompletionPending(bool cancelled)
     {
         using var runtime = new GuaRuntime(); Ui(runtime, "buy"); string endpoint = Start(runtime); int polls = 0;

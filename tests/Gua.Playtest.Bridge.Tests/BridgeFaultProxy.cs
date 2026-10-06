@@ -17,7 +17,8 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
     public string Endpoint { get; }
     public BridgeFaultProxy(string upstream, Func<JsonElement, JsonElement, bool> dropReply,
         Func<JsonElement, JsonElement, byte[]?>? rewriteReply = null,
-        Func<JsonElement, JsonElement, TimeSpan>? delayReply = null)
+        Func<JsonElement, JsonElement, TimeSpan>? delayReply = null,
+        Func<HttpListenerContext, Task<HttpListenerWebSocketContext>>? accept = null)
     {
         using var port = new TcpListener(IPAddress.Loopback, 0); port.Start();
         int number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
@@ -28,7 +29,28 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
             try
             {
                 var request = await listener.GetContextAsync().WaitAsync(shutdown.Token);
-                using var downstream = (await request.AcceptWebSocketAsync(null)).WebSocket;
+                var accepting = accept is null ? request.AcceptWebSocketAsync(null) : accept(request);
+                HttpListenerWebSocketContext accepted;
+                try { accepted = await accepting.WaitAsync(shutdown.Token); }
+                catch
+                {
+                    if (accepting.IsFaulted) accepting.GetAwaiter().GetResult();
+                    // The tokenless listener accept is interrupted by Close after the server
+                    // exits. A concurrent late success still owns a socket and must release it.
+                    _ = accepting.ContinueWith(task =>
+                    {
+                        if (task.IsCompletedSuccessfully)
+                        {
+                            using var socket = task.Result.WebSocket;
+                            socket.Abort();
+                        }
+                        else _ = task.Exception;
+                    }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)
+                        .ContinueWith(task => _ = task.Exception, CancellationToken.None,
+                            TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                    throw;
+                }
+                using var downstream = accepted.WebSocket;
                 using var native = new ClientWebSocket(); await native.ConnectAsync(new Uri(upstream), shutdown.Token);
                 while (!shutdown.IsCancellationRequested)
                 {
@@ -74,5 +96,17 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
         }
     }
     public async ValueTask DisposeAsync()
-    { shutdown.Cancel(); listener.Close(); await server; shutdown.Dispose(); }
+    {
+        shutdown.Cancel();
+        try { await server; }
+        finally
+        {
+            // Join the forwarding loop before disposing its listener. On Unix a peer
+            // timeout can already have disposed the upgraded connection's stream;
+            // HttpListener.Close then encounters that disposed stream while cleaning up.
+            try { listener.Close(); }
+            catch (ObjectDisposedException) { }
+            finally { shutdown.Dispose(); }
+        }
+    }
 }
