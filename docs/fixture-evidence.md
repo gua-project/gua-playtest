@@ -9,7 +9,11 @@ The five product assemblies do not ship these helpers. They are compiled only in
 
 Trusted setup freezes fixtureVersion, actual game buildId, case ID, seed, clock, fault plan,
 and tolerance before starting. Record the SHA-256 of `tests/fixtures/playtest/cases.json`
-before the run; pass that previously recorded hash to the external oracle. Changed bytes fail.
+before the run; pass that previously recorded hash to the external oracle. Also freeze a test-only
+run-config JSON containing schemaVersion=1, actual buildId, runId, caseId, variant and
+catalogSha256. Save its exact SHA-256 before starting. Changed bytes or mismatched identities fail.
+Allowed evidence variants come from the pinned catalog, not a compiled-in list. This run-config
+is trusted test setup and is never Planner input.
 Position tolerances in movement descriptors are provisional **test specifications** (0.05 game
 units), not measured engine accuracy or a product default. They must be agreed with the
 engine variant before any acceptance run. Purchase cases require exact counts and fixed ticks.
@@ -43,7 +47,7 @@ profile. Do not copy Gua's low-level tests or create a second product Trace.
 
 ## Purchase evidence bundle
 
-Run `node tools/fixture-oracle.mjs <catalog> <pre-run-catalog-sha256> <bundle>`.
+Run `node tools/fixture-oracle.mjs <catalog> <pre-run-catalog-sha256> <run-config> <pre-run-config-sha256> <bundle>`.
 Exit 0 means agreement with this purchase case, 1 means evidence mismatch, 2 means invalid/unpinned
 input. It always reports `productEndToEndAcceptance:false`. Hashes prove exact bytes, not provenance.
 An acceptance report must retain original host facts, product Run/Result and original Gua Trace;
