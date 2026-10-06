@@ -14,6 +14,54 @@ namespace Gua.Playtest.Bridge.Tests;
 public sealed class RealBridgeTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SessionResetAfterUiHostCompletionKeepsUnknownCompletionPending(bool cancelled)
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy"); string endpoint = Start(runtime); int polls = 0;
+        await using var proxy = new BridgeFaultProxy(endpoint, (command, _) =>
+        { if (command.GetProperty("type").GetString() == "poll_events") polls++; return false; });
+        using var bridge = new BridgeUiActions(proxy.Endpoint, "reset", TimeSpan.FromSeconds(2), 10, EnterFixtureLifecycle);
+        var selector = JsonNode.Parse("{\"id\":{\"value\":\"buy\"}}")!.AsObject();
+        ulong epoch = Epoch(runtime); var sent = bridge.Send("once", selector, new(GuaActionType.Click), epoch, () => true);
+        Assert.Equal(ConfirmedActionStage.Enqueued, sent.Stage);
+        Assert.True(runtime.TryConsumeAction(GuaActionType.Click, "buy", out var request)); runtime.EmitActionResult(request, true);
+        using var control = new GuaWebSocketContext(endpoint); control.Reset();
+        var pending = bridge.Poll("once");
+        Assert.Equal(ActionAttemptStatus.Pending, pending.Status); Assert.Equal(ConfirmedActionStage.Enqueued, pending.Stage);
+        Assert.Equal(sent.RequestId, pending.RequestId); Assert.Equal("stale-session-unconfirmed", pending.Reason);
+        Assert.Equal(pending, bridge.Poll("once"));
+        Assert.Equal(pending, bridge.Send("once", selector, new(GuaActionType.Click), Epoch(runtime), () => true));
+        Assert.Equal(0, polls); Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "buy", out _));
+        var ended = bridge.EndWait("once", cancelled);
+        Assert.Equal(cancelled ? ActionAttemptStatus.Aborted : ActionAttemptStatus.TimedOut, ended.Status);
+        Assert.Equal(sent.RequestId, ended.RequestId); Assert.Equal(ConfirmedActionStage.Enqueued, ended.Stage);
+    }
+
+    [Theory]
+    [InlineData("revision")]
+    [InlineData("sessionEpoch")]
+    public async Task OversizedSchemaValidUiTreeMetadataRejectsBeforeActionEnqueue(string counter)
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy"); int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != "get_ui_tree") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject();
+            root["result"]![counter] = JsonNode.Parse("18446744073709551616"); injected++;
+            Assert.True(GuaDistribution.ValidateJson("ui-tree.schema.json", root["result"]!.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var bridge = new BridgeUiActions(proxy.Endpoint, "oversized", TimeSpan.FromSeconds(2), 10, EnterFixtureLifecycle);
+        var selector = JsonNode.Parse("{\"id\":{\"value\":\"buy\"}}")!.AsObject();
+        var result = bridge.Send("once", selector, new(GuaActionType.Click), Epoch(runtime), () => true);
+        Assert.Equal(1, injected); Assert.Equal(ActionAttemptStatus.Rejected, result.Status);
+        Assert.Equal(ConfirmedActionStage.NotSent, result.Stage); Assert.Equal("preflight-rejected", result.Reason);
+        Assert.Equal(result, bridge.Send("once", selector, new(GuaActionType.Click), Epoch(runtime), () => true));
+        Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "buy", out _));
+    }
+
+    [Theory]
     [InlineData("exact", "Buy")]
     [InlineData("contains", "uy")]
     [InlineData("regex", "^B.y$")]

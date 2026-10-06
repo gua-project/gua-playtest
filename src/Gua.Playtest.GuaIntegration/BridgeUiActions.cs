@@ -83,7 +83,7 @@ public sealed class BridgeUiActions : IDisposable
             catch (OperationCanceledException) { return Save(attempt with
                 { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Aborted : ActionAttemptStatus.Pending,
                     Reason = attempt.Stage == ConfirmedActionStage.NotSent ? "cancelled-before-dispatch" : "dispatch-unconfirmed" }); }
-            catch (Exception e) when (e is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException)
+            catch (Exception e) when (e is InvalidOperationException or ArgumentException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException)
             { return Save(attempt with { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Rejected : ActionAttemptStatus.Pending,
                 Reason = attempt.Stage == ConfirmedActionStage.NotSent ? "preflight-rejected" : "dispatch-unconfirmed" }); }
         }
@@ -97,11 +97,11 @@ public sealed class BridgeUiActions : IDisposable
             if (attempt.Status != ActionAttemptStatus.Pending || attempt.RequestId is null) return attempt;
             // A poll may have consumed the remote completion before its reply was lost.
             // Preserve uncertainty until EndWait; another poll cannot restore that evidence.
-            if (attempt.Reason is "completion-unconfirmed" or "correlation-unconfirmed") return attempt;
+            if (attempt.Reason != "enqueued") return attempt;
             try
             {
                 if (context.GetContextStatus().SessionEpoch != attempt.SessionEpoch)
-                    return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "stale-session-unconfirmed" });
+                    return Save(attempt with { Status = ActionAttemptStatus.Pending, Reason = "stale-session-unconfirmed" });
                 if (!context.TryPollActionEvent(attempt.RequestId.Value, out var result)) return attempt;
                 if (result.RequestId != attempt.RequestId || result.SessionEpoch != attempt.SessionEpoch || result.NodeId != attempt.RuntimeId)
                     return Save(attempt with { Status = ActionAttemptStatus.Pending, Reason = "correlation-unconfirmed" });
