@@ -91,7 +91,7 @@ public sealed class BridgeObservations : IDisposable
             }
             catch (ObservationLimitException)
             { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Truncated, "observation-limit")).ToArray()); }
-            catch (Exception error) when (error is InvalidOperationException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
+            catch (Exception error) when (error is InvalidOperationException or ArgumentException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
             { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Unavailable, "observation-unconfirmed")).ToArray()); }
         }
     }
@@ -135,6 +135,8 @@ public sealed class BridgeObservations : IDisposable
                 {
                     var result = context.QueryWorldObjects(BridgeSelectors.World((JsonObject)read["target"]!["selector"]!));
                     if (!result.Valid) return Failure(ReadAvailability.Unavailable, "target-unavailable");
+                    if (result.SessionEpoch != before.SessionEpoch || result.Revision != before.WorldRevision)
+                        return Failure(ReadAvailability.Stale, "stale-query");
                     if (result.Spatial?.Truncated == true) return Failure(ReadAvailability.Truncated, "query-truncated");
                     ids.AddRange(result.Matches.Select(m => m.Id));
                     tree = ParseTree(context.GetWorldObjectTreeJson(), "world-object-tree.schema.json");
@@ -231,11 +233,19 @@ public sealed class BridgeObservations : IDisposable
                         index++;
                     }
                 }
+                // Collecting targets and Values may race a Notify that changes only Observe revision.
+                var finalSnapshot = ParseTransport(context.GetObserveSnapshotJson()).GetProperty("document");
+                if (finalSnapshot.GetProperty("sourceId").GetString() != cursorSourceId ||
+                    finalSnapshot.GetProperty("sessionEpoch").GetUInt64() != cursorEpoch ||
+                    finalSnapshot.GetProperty("revision").GetUInt64() != snapshot.GetProperty("revision").GetUInt64() ||
+                    finalSnapshot.GetProperty("uiRevision").GetUInt64() != after.Revision ||
+                    finalSnapshot.GetProperty("worldRevision").GetUInt64() != after.WorldRevision)
+                    return Failure(ReadAvailability.Stale, "changed-after-snapshot");
                 return new(DateTimeOffset.UtcNow, reads.All(r => r.Availability == ReadAvailability.Available)
                     ? ReadAvailability.Available : reads.Any(r => r.Availability == ReadAvailability.Stale)
                         ? ReadAvailability.Stale : ReadAvailability.Unavailable, reads.AsReadOnly(), relevantChanges.AsReadOnly());
             }
-            catch (Exception error) when (error is InvalidOperationException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
+            catch (Exception error) when (error is InvalidOperationException or ArgumentException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
             { return Failure(ReadAvailability.Unavailable, "observation-unconfirmed"); }
         }
     }

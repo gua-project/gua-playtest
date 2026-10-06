@@ -52,6 +52,14 @@ overflow faults cover all nine counters, missing/duplicate UI and Object IDs
 preserve Stale, and actual object state keys with one/repeated dots retain values.
 Bridge75 passed locally with zero skips and boundaries passed. New exact-head
 real CI and actual Codex review remain required.
+Review of main-integrated 2aad9bb identified a later Notify window, stale world
+query metadata, integer selector rounding and local completion exceptions.
+Final Observe snapshot revision/source/epoch checks reject post-snapshot Notify;
+world query epoch/revision binds to context. Numeric selector types preserve
+integers so actual Gua1.1.1 can refuse unrepresentable double-ABI values rather
+than select a rounded neighbor. Local lost native-owner completion stays Pending
+without repeated poll/resend until EndWait. Native race/cache/neighbor/owner-loss
+regressions verify these failure paths; new exact-head CI/review remain mandatory.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

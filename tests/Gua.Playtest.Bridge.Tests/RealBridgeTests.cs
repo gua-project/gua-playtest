@@ -722,6 +722,118 @@ public sealed class RealBridgeTests
     }
 
     [Fact]
+    public async Task NotifyAfterInitialSnapshotCannotExposePreChangeEvidence()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        bool value = true; using var property = owner.Property("ready", () => GuaValue.Bool(value)); property.Notify();
+        bool armed = false; int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (command, _) =>
+        {
+            if (armed && command.GetProperty("type").GetString() == "get_observe_snapshot")
+            { armed = false; value = false; property.Notify(); injected++; }
+            return false;
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("world", "property", "ready", "bool");
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); armed = true;
+        var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Stale, result.Availability);
+        Assert.Equal("changed-after-snapshot", Assert.Single(result.Reads).Reason); Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
+        var next = reader.Read(read); Assert.Equal(ReadAvailability.Available, next.Availability);
+        Assert.False(Assert.Single(next.Reads).Value!.Value.GetProperty("value").GetBoolean());
+        Assert.False(Assert.Single(next.Changes!).Event.GetProperty("after").GetProperty("value").GetBoolean());
+    }
+
+    [Fact]
+    public async Task CachedWorldQueryCannotMatchAnObjectThatNoLongerSatisfiesSelector()
+    {
+        using var runtime = new GuaRuntime(); World(runtime, "one"); string? cached = null; bool armed = false; int delivered = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != "query_world_objects") return null;
+            if (!armed) { cached = response.GetProperty("result").GetRawText(); return null; }
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject();
+            Assert.Empty(root["result"]!["matches"]!.AsArray());
+            root["result"] = JsonNode.Parse(cached!); delivered++;
+            Assert.True(GuaDistribution.ValidateJson("world-query-result.schema.json", root["result"]!.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("object", "standard", "label", "string", "one");
+        read["target"]!["selector"] = new JsonObject { ["kind"] = new JsonObject { ["value"] = "enemy" } };
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability);
+        runtime.BeginWorldFrame("shop"); runtime.RegisterWorldObject(new("one", "friend", "Friend", GuaWorldSpace.World2D, new(3, 4))); runtime.EndWorldFrame(); armed = true;
+        var result = reader.Read(read); Assert.Equal(1, delivered); Assert.Equal(ReadAvailability.Stale, result.Availability);
+        Assert.Equal("stale-query", Assert.Single(result.Reads).Reason); Assert.Null(Assert.Single(result.Reads).Value);
+    }
+
+    [Theory]
+    [InlineData("9007199254740993")]
+    [InlineData("-9007199254740993")]
+    [InlineData("18446744073709551615")]
+    public async Task InexactWorldStateIntegerCannotMatchItsRoundedNeighbor(string token)
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter(); runtime.BeginWorldFrame("numbers");
+        using var number = JsonDocument.Parse(token);
+        // This host can store only ABI doubles. Deliberately publish the neighboring
+        // representable value, proving that an inexact query cannot select it.
+        object numericState = number.RootElement.GetDouble();
+        runtime.RegisterWorldObject(new("exact", "item", "Exact", GuaWorldSpace.World2D, new(0, 0), State: new Dictionary<string, object?> { ["n"] = numericState }));
+        runtime.EndWorldFrame(); int queries = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (command, _) =>
+        {
+            if (command.GetProperty("type").GetString() == "query_world_objects")
+            { queries++; }
+            return false;
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("object", "standard", "label", "string", "exact");
+        read["target"]!["selector"] = new JsonObject { ["state"] = new JsonObject { ["key"] = "n", ["value"] = JsonNode.Parse(token) } };
+        var result = reader.Read(read); Assert.Equal(0, queries); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Null(Assert.Single(result.Reads).Value);
+    }
+
+    [Theory]
+    [InlineData("9007199254740991")]
+    [InlineData("-9007199254740992")]
+    [InlineData("18446744073709549568")]
+    public async Task ExactWorldStateIntegersRetainNumericWireValue(string token)
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter(); runtime.BeginWorldFrame("numbers");
+        using var number = JsonDocument.Parse(token);
+        object numericState = number.RootElement.TryGetInt64(out var signed) ? (object)signed : number.RootElement.GetUInt64();
+        runtime.RegisterWorldObject(new("exact", "item", "Exact", GuaWorldSpace.World2D, new(0, 0), State: new Dictionary<string, object?> { ["n"] = numericState }));
+        runtime.EndWorldFrame(); int queries = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (command, _) =>
+        {
+            if (command.GetProperty("type").GetString() == "query_world_objects")
+            { Assert.Equal(System.Numerics.BigInteger.Parse(token), new System.Numerics.BigInteger(command.GetProperty("stateNumber").GetDouble())); queries++; }
+            return false;
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("object", "standard", "label", "string", "exact");
+        read["target"]!["selector"] = new JsonObject { ["state"] = new JsonObject { ["key"] = "n", ["value"] = JsonNode.Parse(token) } };
+        var result = reader.Read(read); Assert.Equal(1, queries); Assert.Equal(ReadAvailability.Available, result.Availability);
+        Assert.Equal("exact", Assert.Single(result.Reads).Identity!.RuntimeId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LocalCompletionOwnerLossRemainsPendingUntilExplicitEndWait(bool cancelled)
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableGameInput(GuaGameInputCapabilities.Semantic, () => { });
+        runtime.PublishGameInputActions("fight", [new("attack", "Attack", GuaGameInputValueType.Button)]);
+        ulong epoch = Epoch(runtime), revision = runtime.FindGameInputActionsV2(new(Id: "attack")).Revision;
+        using var bridge = new OwnedGameInput(runtime, "lost-owner", GuaObservationProfile.Debug, 10);
+        var sent = bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, () => true);
+        Assert.True(runtime.TryConsumeGameInput(out var consumed)); runtime.CompleteGameInput(consumed, true);
+        // Trusted fault removes the actual native owner after host completion; no fake result.
+        var nativeOwner = (GuaGameInputSession)typeof(OwnedGameInput).GetField("owner", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(bridge)!;
+        nativeOwner.Dispose();
+        var pending = bridge.Poll("a"); Assert.Equal(ActionAttemptStatus.Pending, pending.Status);
+        Assert.Equal("completion-unconfirmed", pending.Reason); Assert.Equal(ConfirmedActionStage.Enqueued, pending.Stage); Assert.Equal(sent.RequestId, pending.RequestId);
+        Assert.Equal(pending, bridge.Poll("a")); Assert.Equal(pending, bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, () => true));
+        var ended = bridge.EndWait("a", cancelled); Assert.Equal(cancelled ? ActionAttemptStatus.Aborted : ActionAttemptStatus.TimedOut, ended.Status);
+        Assert.Equal(ended, bridge.Poll("a")); Assert.False(runtime.TryConsumeGameInput(out _));
+    }
+
+    [Fact]
     public void BroadSelectorPreservesEveryMatchedValueAndChange()
     {
         using var runtime = new GuaRuntime(); var ids = Enumerable.Range(0, 50).Select(i => "node-" + i).ToArray(); Ui(runtime, ids);

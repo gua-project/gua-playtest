@@ -86,19 +86,19 @@ public sealed class OwnedGameInput : IDisposable
         {
             ObjectDisposedException.ThrowIf(disposed, this);
             var attempt = attempts[actionExecutionId];
-            if (attempt.Status != ActionAttemptStatus.Pending || attempt.RequestId is null) return attempt;
+            if (attempt.Status != ActionAttemptStatus.Pending || attempt.RequestId is null || attempt.Reason != "enqueued") return attempt;
             try
             {
                 if (owner.GetHealth().SessionEpoch != attempt.SessionEpoch)
-                    return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "stale-session-unconfirmed" });
+                    return Save(attempt with { Reason = "stale-session-unconfirmed" });
                 var result = owner.PollResult(attempt.RequestId.Value);
                 if (!result.Completed) return attempt;
                 if (result.RequestId != attempt.RequestId)
-                    return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "correlation-unconfirmed" });
+                    return Save(attempt with { Reason = "correlation-unconfirmed" });
                 return Save(attempt with { Status = result.Succeeded == true ? ActionAttemptStatus.Succeeded : ActionAttemptStatus.Failed,
                     Stage = ConfirmedActionStage.HostCompleted, GuaErrorCode = result.ErrorCode, Reason = "host-completed" });
             }
-            catch (InvalidOperationException) { return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "completion-unconfirmed" }); }
+            catch (InvalidOperationException) { return Save(attempt with { Reason = "completion-unconfirmed" }); }
         }
     }
     public ActionAttempt EndWait(string actionExecutionId, bool cancelled)

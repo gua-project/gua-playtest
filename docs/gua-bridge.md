@@ -61,6 +61,13 @@ Every Observe document, snapshot entry and returned event counter is checked
 against UInt64 before exposure. Inconsistent queried/tree target IDs preserve
 collection-level Stale. Object state is a flat map: the complete suffix after
 `state.` is one key, including any dots; UI nested standard fields retain paths.
+World query epoch/revision must match the bracketed status. A final Observe
+snapshot checks source/epoch/revision after target collection; post-snapshot
+Notify invalidates the pass without consuming its undelivered change.
+Integral state-selector tokens retain signed/unsigned integer types. Gua 1.1.1
+uses a double ABI and rejects inexact integers before query dispatch; these reads
+are Unavailable rather than matching a rounded neighbor. Exactly representable
+large integers remain supported. This is an actual upstream precision limit.
 One ReadBatch shares a node/event and serialized-byte
 budget, including repeated selectors, changes and values. Aggregate overflow
 truncates the entire pass, discarding partially collected values/history.
