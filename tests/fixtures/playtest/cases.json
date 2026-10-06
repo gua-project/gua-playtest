@@ -1,0 +1,12 @@
+{
+  "fixtureVersion": "playtest-fixtures-r1",
+  "cases": [
+    {"id":"shop-normal","scene":"shop","clock":"fixedTick","seed":16,"fault":null,"expected":{"status":"Passed","requests":1,"transactions":1,"responses":1,"resends":0,"completionConfirmed":true}},
+    {"id":"shop-response-lost","scene":"shop","clock":"fixedTick","seed":16,"fault":{"id":"drop-purchase-response","boundary":"AfterPurchaseCommitBeforeResponse","occurrence":1},"expected":{"status":"TimedOut","requests":1,"transactions":1,"responses":0,"resends":0,"completionConfirmed":false}},
+    {"id":"move-wall-2d","scene":"movement2d","requiredEvidence":"realInput","positionTolerance":0.05,"expected":"wall blocks combined directional input"},
+    {"id":"move-wall-3d","scene":"movement3d","requiredEvidence":"realInput","positionTolerance":0.05,"expected":"wall blocks combined directional input"},
+    {"id":"enemies-phase-replacement","scene":"enemyRoom","requiredEvidence":"realInput","expected":"phase change and object replacement invalidate identities; one with multiple matches is unavailable"}
+  ],
+  "variants": ["contractFake","realBridge","godot","unity"],
+  "integrationStatus": "pending"
+}
