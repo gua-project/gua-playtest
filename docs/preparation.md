@@ -179,6 +179,10 @@ Throwing/timed-out writes remain faulted for that join and report DiagnosticsFai
 with original provider type/stack where available; queue overflow is unconfirmed too.
 A trace-write deadline is diagnostic provider evidence and cannot be confused with
 expiry of the cleanup owner's independent deadline.
+Cleanup entry atomically closes diagnostic registration and snapshots its writes,
+even when a later stage is skipped. A preparation task still unwinding at that
+boundary makes diagnostics unconfirmed; late registrations cannot start a sink
+write after the snapshot or silently claim complete persistence.
 Record must be worker-safe and owner-independent. Writes are serialized by one
 sink gate and independently bounded: successful-stage writes use the original
 preparation deadline and operation ceiling; rejection diagnostics use the explicit
@@ -200,6 +204,16 @@ even when the source capture has already completed successfully. The exact proce
 exit task is armed before source invocation, including synchronous source throws.
 Its successful completion is authoritative even when a status getter still reports
 alive; readiness is read directly from that task without an async forwarding layer.
+A separate owned exact-handle watch remains armed across preparation return and
+the initial Running observation/clock processing. The serialized owner samples it
+in that same initial arbitration unit, so an already-known exit outranks an initial
+goal even when the driver/feed is skipped. Cleanup cancels only that owned watch.
+Source cancellation callbacks use safe cancellation and post bounded original
+exception evidence without throwing through the caller's Cancel operation or
+turning a completed authoritative observation into a source failure.
+Late provider callbacks post to a bounded session queue rather than mutate Run
+state or its exception list. The serialized owner drains it and freezes posting
+before primary confirmation; posts after that boundary cannot alter either snapshot.
 more detailed Launch/Connect/Identity/Setup/Planner/Synchronize failure stages are
 retained by this sink without overwriting the original failure during cleanup.
 

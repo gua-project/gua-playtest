@@ -96,6 +96,7 @@ public sealed class PreparationTests
         public TaskCompletionSource<RunObservation>? BlockedCapture { get; set; }
         public int Captures { get; private set; }
         public Action<CancellationToken>? OnCapture { get; set; }
+        public Action<CancellationToken>? OnWait { get; set; }
         public int Releases { get; private set; }
         public int Synchronizations { get; private set; }
         public bool ReleaseConfirmed { get; set; } = true;
@@ -110,7 +111,8 @@ public sealed class PreparationTests
         private RunObservation Observation() => CurrentObservation ?? new(Clock?.Elapsed ?? TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([]));
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { Captures++; OnCapture?.Invoke(token); return CaptureFailure is not null ? ValueTask.FromException<RunObservation>(CaptureFailure) : BlockedCapture is null ? ValueTask.FromResult(Observation()) : new(BlockedCapture.Task); }
-        public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
+        public ValueTask WaitForChangeAsync(CancellationToken token)
+        { OnWait?.Invoke(token); return new(Task.Delay(Timeout.Infinite, token)); }
         public ValueTask<bool> ReleaseAsync(CancellationToken token) { Releases++; OnRelease?.Invoke(); return ValueTask.FromResult(ReleaseConfirmed); }
     }
     private sealed class Connector(Connection connection) : IPreparationConnector
@@ -1028,9 +1030,6 @@ public sealed class PreparationTests
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var capabilities = new CapabilitySet(() => { entered.TrySetResult(); try { release.Wait(); } finally { returned.TrySetResult(); } });
         var clock = new Clock(); var connection = new Connection(); var run = Run(clock); var trace = new Trace();
-        var diagnosticRecorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        trace.OnRecord = item =>
-        { if (item == new PreparationEvent(PreparationStage.Identity, cancel ? PreparationCode.Cancelled : PreparationCode.Timeout)) diagnosticRecorded.TrySetResult(); };
         if (captured) connection.CapturedCapabilities = capabilities;
         else connection.Identity = connection.Identity with { Capabilities = capabilities };
         try
@@ -1043,10 +1042,10 @@ public sealed class PreparationTests
             var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(cancel ? RunReason.Cancelled : RunReason.PreparationTimeout, result.Primary.Cause.Reason);
             Assert.Null(run.RunningOrigin); Assert.Equal(captured ? 1 : 0, connection.Synchronizations);
-            // Global cancellation can confirm before the abandoned preparation
-            // task queues its independent diagnostic; wait for the actual sink.
-            await diagnosticRecorded.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Contains(new(PreparationStage.Identity, cancel ? PreparationCode.Cancelled : PreparationCode.Timeout), trace.Events);
+            // If cleanup closes before the abandoned catch registers its write,
+            // registration is rejected and diagnostics must stay unconfirmed.
+            Assert.True(trace.Events.Contains(new(PreparationStage.Identity, cancel ? PreparationCode.Cancelled : PreparationCode.Timeout)) ||
+                result.PostProcessing.Any(item => item.Reason == PostProcessingReason.DiagnosticsFailed));
             Assert.False(result.PostProcessingComplete); Assert.Equal(1, connection.Releases);
         }
         finally { release.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
@@ -1076,8 +1075,10 @@ public sealed class PreparationTests
     {
         var clock = new GateRaceClock(); var run = Run(clock); run.BeginPreparation(); var cleanup = new OwnedCleanup();
         var policy = Policy(mode); var launcher = new Launcher(); var connector = new Connector(new()); RunOutcome? closed = null;
+        var lateWrites = 0;
         var trace = new Trace { OnRecord = item =>
         {
+            if (item.Code is PreparationCode.Busy or PreparationCode.Cancelled) { lateWrites++; throw new IOException("late-trace"); }
             if (item.Stage != PreparationStage.Started) return;
             var reads = 0;
             clock.OnRead = () =>
@@ -1091,7 +1092,9 @@ public sealed class PreparationTests
         } };
         await Assert.ThrowsAsync<PreparationException>(() => new HostPreparation(policy, clock, launcher, connector, trace)
             .PrepareAsync(run, cleanup, null, null).AsTask());
-        Assert.NotNull(closed); Assert.True(closed.PostProcessingComplete);
+        Assert.NotNull(closed); Assert.False(closed.PostProcessingComplete);
+        Assert.Contains(closed.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed);
+        Assert.Equal(0, lateWrites);
         Assert.Equal(0, launcher.Calls); Assert.Equal(0, connector.Calls);
         var nextClock = new Clock(); var nextConnector = new Connector(new());
         await Execute(new(policy, nextClock, new Launcher(), nextConnector, new Trace()), nextClock);
@@ -1490,4 +1493,62 @@ public sealed class PreparationTests
         Assert.Equal(1, result.ExitCode); Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
         Assert.Contains(result.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
     }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task InitialGoalCannotHideExitAfterPreparationOrDuringInitialClockRead(bool duringEvaluation)
+    {
+        var clock = new GateRaceClock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(true), BooleanUnit(false)) };
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); var calls = 0;
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, cleanup, token) =>
+        {
+            var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+                .PrepareAsync(session, cleanup, null, null, token);
+            if (!duringEvaluation) launcher.Process.ConfirmExitWithStaleStatus();
+            else clock.OnRead = () => { if (run.State == ExecutionState.Running) { clock.OnRead = null; launcher.Process.ConfirmExitWithStaleStatus(); } };
+            return host.Boundary;
+        }, (_, _) => { calls++; return ValueTask.FromResult(true); });
+        Assert.Equal(1, outcome.ExitCode); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Equal(RunReason.ExecutionError, outcome.Primary.Cause.Reason);
+        Assert.Contains(outcome.Events, item => item.Reason == RunReason.GoalSatisfied);
+        Assert.Equal(0, calls); Assert.Equal(0, connection.Captures); Assert.Equal(1, launcher.Process.Shutdowns);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CallerCancellationCannotReceiveSourceCallbackFault(bool waiting)
+    {
+        var clock = new Clock(); var run = Run(clock); run.BeginPreparation(); var cleanup = new OwnedCleanup();
+        var connection = new Connection(); var launcher = new Launcher();
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
+        using var cancellation = new CancellationTokenSource();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.BlockedCapture = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Configure(CancellationToken token)
+        {
+            token.Register(() => { connection.BlockedCapture.TrySetCanceled(token); throw new IOException("source-cancel"); });
+            started.TrySetResult();
+        }
+        connection.OnCapture = Configure; connection.OnWait = Configure;
+        var pending = waiting ? host.Feed.WaitForChangeAsync(cancellation.Token).AsTask() : (Task)host.Feed.CaptureAsync(cancellation.Token).AsTask();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Null(Record.Exception(() => cancellation.Cancel()));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+        run.Evaluate(cancelled: true); var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(RunReason.Cancelled, outcome.Primary.Cause.Reason);
+        Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
+    }
+    [Fact]
+    public async Task PostedProviderEvidenceFreezesBeforePrimarySnapshotAndLatePostsCannotMutateIt()
+    {
+        var clock = new GateRaceClock(); var run = Run(clock); run.BeginPreparation();
+        Exception Fault() { try { throw new IOException(); } catch (Exception exception) { return exception; } }
+        run.PostException(Fault());
+        clock.OnRead = () => { clock.OnRead = null; Task.Run(() => run.PostException(Fault())).GetAwaiter().GetResult(); };
+        run.Evaluate(cancelled: true); var primary = run.CapturePrimary();
+        var before = run.Exceptions.Count;
+        await Task.WhenAll(Enumerable.Range(0, 1000).Select(_ => Task.Run(() => run.PostException(Fault()))));
+        var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
+        Assert.Equal(2, before); Assert.Equal(primary.Exceptions, outcome.Exceptions);
+        Assert.Equal(before, run.Exceptions.Count); Assert.All(outcome.Exceptions, item => Assert.NotNull(item.StackTrace));
+    }
+
 }

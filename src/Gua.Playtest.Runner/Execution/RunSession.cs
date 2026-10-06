@@ -28,6 +28,10 @@ public sealed class RunSession
     private readonly List<RunEvent> events = [];
     private readonly List<RunEvent> pendingEvents = [];
     private readonly List<ExceptionEvidence> exceptions = [];
+    private readonly object postedExceptionGate = new();
+    private readonly Queue<Exception> postedExceptions = new();
+    private bool postedExceptionsClosed;
+    private Func<RunFailureException?>? initialLifecycleFailure;
     private readonly List<ApprovedOperation> operations = [];
     private TimeSpan lastReal, lastCondition, lastCapture, preparationOrigin;
     private bool goalVerified;
@@ -117,6 +121,7 @@ public sealed class RunSession
     {
         Require(ExecutionState.Preparing);
         if (startCaptureArmed) throw new InvalidOperationException("RunningBoundaryCertificateRequired");
+        DrainPostedExceptions(close: false);
         if (ReadReal() - preparationOrigin >= Limits.PreparationTimeout)
             throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         var sharedConditionOrigin = ReadCondition();
@@ -159,6 +164,8 @@ public sealed class RunSession
         lastCapture = boundary.InitialObservation.CapturedAt;
         successSession = StartCondition(success, boundary.InitialObservation.CapturedAt);
         failureSession = StartCondition(failure, boundary.InitialObservation.CapturedAt);
+        DrainPostedExceptions(close: false);
+        initialLifecycleFailure = boundary.InitialLifecycleFailure;
         boundary.Used = true;
         RunningOrigin = boundary.RealCapturedAt; State = ExecutionState.Running;
     }
@@ -325,6 +332,7 @@ public sealed class RunSession
         if (cycle.Any(x => !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) || !Enum.IsDefined(x.Origin)))
             throw new ArgumentException("RunEventInvalid", nameof(candidates));
         if (cycle.Any(x => x.Reason == RunReason.GoalSatisfied)) throw new ArgumentException("GoalRequiresEvidence", nameof(candidates));
+        DrainPostedExceptions(close: false);
         cycle.AddRange(pendingEvents); pendingEvents.Clear();
         TimeSpan now;
         try { now = ReadReal(); }
@@ -402,6 +410,18 @@ public sealed class RunSession
             cycle.AddRange(pendingEvents); pendingEvents.Clear();
             CollectCompletionEvidence();
         }
+        // Keep the armed exact lifecycle watch through initial observation/clock
+        // processing, including initial goal success that skips the driver/feed.
+        if (initialLifecycleFailure is { } lifecycle)
+        {
+            initialLifecycleFailure = null;
+            if (lifecycle() is { } failure) { RecordException(failure); cycle.Add(failure.Cause); }
+        }
+        if (cycle.Count != 0)
+        {
+            DrainPostedExceptions(close: true);
+            cycle.AddRange(pendingEvents); pendingEvents.Clear();
+        }
         // Budget exhaustion is terminal only after the final approved result/observation opportunity.
         // A verified success in that final unit wins over mere exhaustion; errors/cancel/deadline still win.
         if (events.Count + cycle.Count > Limits.MaxEvidenceItems)
@@ -449,6 +469,23 @@ public sealed class RunSession
     private static bool IsTrue(ConditionEvaluation? value) => value?.Evaluation.Error == EvaluationError.None && value.Evaluation.Truth == TruthValue.True;
     public TimeSpan? NextConditionEvaluationAt => new[] { successSession, failureSession }.Any(x => x is not null) ? nextConditionEvaluationAt : null;
     private TimeSpan? nextConditionEvaluationAt;
+    internal void PostException(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        lock (postedExceptionGate)
+            if (!postedExceptionsClosed && postedExceptions.Count < Limits.MaxEvidenceItems)
+                postedExceptions.Enqueue(exception);
+    }
+    private void DrainPostedExceptions(bool close)
+    {
+        Exception[] ready;
+        lock (postedExceptionGate)
+        {
+            if (close) postedExceptionsClosed = true;
+            ready = postedExceptions.ToArray(); postedExceptions.Clear();
+        }
+        foreach (var exception in ready) RecordException(exception);
+    }
     public void RecordException(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);

@@ -35,6 +35,11 @@ public sealed class HostPreparation
     private bool ownershipClosed;
     private IOwnedProcess? preparationProcess;
     private bool executionTraceOverflow;
+    private bool diagnosticRegistrationClosed;
+    private Task[] closedDiagnosticWrites = [];
+    private bool diagnosticPreparationIncomplete;
+    private int preparationInFlight;
+    private Func<RunFailureException?>? initialLifecycleFailure;
     public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
         IPreparationConnector connector, IPreparationTrace trace)
     {
@@ -64,19 +69,26 @@ public sealed class HostPreparation
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(cleanup);
         if (run.State != Gua.Playtest.Core.Contracts.ExecutionState.Preparing) throw new InvalidOperationException("PreparationStateInvalid");
         if (Interlocked.Exchange(ref used, 1) != 0) throw new InvalidOperationException("PreparationAlreadyUsed");
+        Interlocked.Exchange(ref preparationInFlight, 1);
+        try { return await PrepareCoreAsync(run, cleanup, setup, planner, cancellationToken).ConfigureAwait(false); }
+        finally { Interlocked.Exchange(ref preparationInFlight, 0); }
+    }
+    private async ValueTask<PreparedHost> PrepareCoreAsync(RunSession run, OwnedCleanup cleanup,
+        IApprovedSetup? setup, IPreparationPlannerCheck? planner, CancellationToken cancellationToken)
+    {
         preparationDeadline = run.NextRealEvaluationAt;
         preparationCancellation = cancellationToken;
         preparationClock = run.AuthoritativeRealClock;
-        recordException = exception =>
-        {
-            // An abandoned trace/provider continuation cannot mutate a confirmed snapshot.
-            if (run.State == Gua.Playtest.Core.Contracts.ExecutionState.Preparing) run.RecordException(exception);
-        };
+        recordException = run.PostException;
+        // Closing this registration gate is owed even if the Diagnostics stage
+        // cannot be invoked after a blocked primary snapshot consumes cleanup time.
+        cleanup.Register(CleanupStage.OwnershipRelease, _ => ValueTask.FromResult(true), CloseDiagnosticRegistration);
         cleanup.Register(CleanupStage.Diagnostics, async _ =>
         {
-            Task[] writes; lock (executionTraceGate) writes = executionTraceWrites.ToArray();
+            CloseDiagnosticRegistration();
+            Task[] writes; lock (executionTraceGate) writes = closedDiagnosticWrites;
             await Task.WhenAll(writes).ConfigureAwait(false);
-            lock (executionTraceGate) return !executionTraceOverflow;
+            lock (executionTraceGate) return !executionTraceOverflow && !diagnosticPreparationIncomplete;
         });
         await TraceAsync(new(PreparationStage.Started, PreparationCode.Started), required: true).ConfigureAwait(false);
         // This prevents collisions in this Runner process only, never claims a host/manual-input lifecycle lock.
@@ -119,6 +131,37 @@ public sealed class HostPreparation
                     await ReleaseUnregisteredAsync(owned.ShutdownAsync).ConfigureAwait(false);
                     throw;
                 }
+                // One continuous exact-handle watch survives the final preparation
+                // trace and is sampled by the initial Running arbitration owner.
+                var lifetimeCancellation = new CancellationTokenSource();
+                try { RegisterRelease(cleanup, _ =>
+                {
+                    var faults = new List<Exception>();
+                    try { FiniteOperation.CancelSafely(lifetimeCancellation, faults.Add); }
+                    finally { lifetimeCancellation.Dispose(); }
+                    if (faults.Count != 0) return ValueTask.FromException<bool>(new AggregateException(faults));
+                    return ValueTask.FromResult(true);
+                }); }
+                catch { lifetimeCancellation.Dispose(); throw; }
+                Task lifetime;
+                try { lifetime = owned.WaitForExitAsync(lifetimeCancellation.Token).AsTask(); }
+                catch (Exception exception) { lifetime = Task.FromException(exception); }
+                _ = lifetime.ContinueWith(task => _ = task.Exception, CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                initialLifecycleFailure = () =>
+                {
+                    if (!lifetime.IsCompleted) return null;
+                    RunFailureException failure;
+                    if (lifetime.IsCompletedSuccessfully)
+                        failure = new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
+                    else
+                    {
+                        try { lifetime.GetAwaiter().GetResult(); return null; }
+                        catch (Exception exception) { failure = exception as RunFailureException ?? new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, exception, RunPhase.Execution); }
+                    }
+                    RecordDiagnosticTrace(new(PreparationStage.Launch, failure is PreparationException preparation ? preparation.Code : PreparationCode.LaunchFailed));
+                    return failure;
+                };
                 preparationProcess = owned; return owned;
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -201,17 +244,29 @@ public sealed class HostPreparation
         }
         catch (InvalidOperationException) { await FailAsync(PreparationStage.Synchronize, PreparationCode.StaleObservation); throw; }
         await TraceAsync(new(PreparationStage.Ready, PreparationCode.Completed), required: true).ConfigureAwait(false);
+        certificate.InitialLifecycleFailure = initialLifecycleFailure;
         var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, token => ReadProcessStatusAsync(process, RunPhase.Execution, token),
-            RecordDiagnosticTrace);
+            RecordDiagnosticTrace, run.PostException);
         return new(certificate, feed, boundary.CurrentRestorable);
     }
 
+    private void CloseDiagnosticRegistration()
+    {
+        lock (executionTraceGate)
+        {
+            if (diagnosticRegistrationClosed) return;
+            diagnosticRegistrationClosed = true;
+            closedDiagnosticWrites = executionTraceWrites.ToArray();
+            diagnosticPreparationIncomplete = Volatile.Read(ref preparationInFlight) != 0;
+        }
+    }
     private void RecordDiagnosticTrace(PreparationEvent evidence)
     {
         // Diagnostic persistence cannot delay any ready authoritative rejection/failure.
         // Cleanup's bounded Diagnostics stage joins the finite writes before final output.
         lock (executionTraceGate)
         {
+            if (diagnosticRegistrationClosed) { executionTraceOverflow = true; return; }
             if (executionTraceWrites.Count >= 1000) { executionTraceOverflow = true; return; }
             var write = TraceAsync(evidence, retainForCleanup: true).AsTask();
             executionTraceWrites.Add(write);

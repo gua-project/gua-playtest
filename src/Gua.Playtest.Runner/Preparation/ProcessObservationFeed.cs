@@ -4,7 +4,7 @@ namespace Gua.Playtest.Runner.Preparation;
 
 /// <summary>Keep launched-process exit visible during Planner/action waits. Attached processes never enter this wrapper.</summary>
 internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess process,
-    Func<CancellationToken, ValueTask<bool>> readStatus, Action<PreparationEvent> recordTrace) : IRunObservationFeed
+    Func<CancellationToken, ValueTask<bool>> readStatus, Action<PreparationEvent> recordTrace, Action<Exception> recordException) : IRunObservationFeed
 {
     private readonly SemaphoreSlim captureOwner = new(1);
     public async ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken)
@@ -30,7 +30,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         var faults = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
         // This token belongs to the finite owner. Let its guarded cancellation collect
         // callback faults without converting a completed observation into a provider failure.
-        using var registration = cancellationToken.Register(wait.Cancel);
+        using var registration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wait, exception =>
+        { faults.Enqueue(exception); recordException(exception); }));
         Task<T>? changed = null; Task? exited = null;
         Exception? failure = null; T result = default!;
         try
@@ -86,8 +87,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         finally
         {
             registration.Dispose();
-            if (changed?.IsCompleted != true) FiniteOperation.CancelSafely(wait, faults.Enqueue);
-            FiniteOperation.CancelSafely(exitWait, faults.Enqueue);
+            if (changed?.IsCompleted != true) FiniteOperation.CancelSafely(wait, exception => { faults.Enqueue(exception); recordException(exception); });
+            FiniteOperation.CancelSafely(exitWait, exception => { faults.Enqueue(exception); recordException(exception); });
             if (changed is not null) _ = changed.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (exited is not null) _ = exited.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
@@ -100,7 +101,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         }
         var requestedCancellation = failure is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
             (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken);
-        if (!faults.IsEmpty)
+        if (!faults.IsEmpty && failure is not null)
         {
             var evidence = new AggregateException(failure is null ? faults : faults.Prepend(failure));
             if (requestedCancellation)
