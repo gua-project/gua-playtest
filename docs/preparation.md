@@ -37,8 +37,14 @@ No engine install, package publication, authentication or credential change occu
 `ConnectionNotReadyException` certifies that no connection or side effect was
 dispatched/acquired and is the only retryable outcome. All other exceptions,
 unknown receipts, timeout and cancellation terminate the preparation attempt.
-Launch-mode retry backoff races the exact owned process exit watch; a confirmed
-exit terminates with ProcessExited without another connection attempt. Retries
+Every launched preparation operation (connection, identity/status/metadata, Setup,
+Planner availability, synchronization, required trace writes and backoff) races the
+exact owned process exit watch. A confirmed exit terminates with ProcessExited;
+unknown watch faults produce LaunchFailed, never an invented Setup failure. A ready
+clock/provider fault is inspected before any status probe and arbitrated with any
+simultaneous exit using the Run owner's existing priority. Cancellation callback
+faults remain secondary original diagnostics. Underlying provider accounting follows
+its actual task lifetime even when process exit ends the owner wait. Retries
 share the original whole-Preparing deadline; an explicitly longer retry
 delay is not shortened by the per-operation ceiling.
 Each backoff retains an absolute target and verifies clock progress after wake.
@@ -169,6 +175,10 @@ fault becomes ready cannot retroactively acquire that evidence.
 
 Execution lifecycle trace writes are queued (at most 1000) and joined by the bounded
 Diagnostics cleanup stage; persistence cannot delay a ready lifecycle failure.
+Throwing/timed-out writes remain faulted for that join and report DiagnosticsFailed
+with original provider type/stack where available; queue overflow is unconfirmed too.
+A trace-write deadline is diagnostic provider evidence and cannot be confused with
+expiry of the cleanup owner's independent deadline.
 Record must be worker-safe and owner-independent. Writes are serialized by one
 sink gate and independently bounded: successful-stage writes use the original
 preparation deadline and operation ceiling; rejection diagnostics use the explicit

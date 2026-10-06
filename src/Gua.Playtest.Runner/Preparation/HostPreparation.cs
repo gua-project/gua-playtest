@@ -33,6 +33,8 @@ public sealed class HostPreparation
     private int pendingAcquisitions;
     private int pendingPreparationWork;
     private bool ownershipClosed;
+    private IOwnedProcess? preparationProcess;
+    private bool executionTraceOverflow;
     public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
         IPreparationConnector connector, IPreparationTrace trace)
     {
@@ -43,7 +45,7 @@ public sealed class HostPreparation
             !System.Text.RegularExpressions.Regex.IsMatch(policy.Endpoint.OriginalString, @"^wss?://(?:\[[^\]]+\]|[^/:]+):[0-9]+(?:/|$)") || !string.IsNullOrEmpty(policy.Endpoint.UserInfo) ||
             string.IsNullOrWhiteSpace(policy.ExpectedBuildId) || string.IsNullOrWhiteSpace(policy.RequiredProtocol) ||
             policy.Profile is not ("Player" or "Testing" or "Debug") || string.IsNullOrWhiteSpace(policy.Clock) ||
-            !string.IsNullOrEmpty(policy.Endpoint.Query) || !string.IsNullOrEmpty(policy.Endpoint.Fragment) ||
+            !string.IsNullOrEmpty(policy.Endpoint.Query) || !string.IsNullOrEmpty(policy.Endpoint.Fragment) || policy.Launch is { Arguments: null } ||
             policy.Endpoint.OriginalString.Length > 4096 || policy.ExpectedBuildId.Length > 128 ||
             policy.RequiredProtocol.Length > 128 || policy.Clock.Length > 128 ||
             policy.Capabilities is null || policy.Capabilities.Count > 1000 || policy.Capabilities.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 128) ||
@@ -96,7 +98,8 @@ public sealed class HostPreparation
         cleanup.Register(CleanupStage.Diagnostics, async _ =>
         {
             Task[] writes; lock (executionTraceGate) writes = executionTraceWrites.ToArray();
-            await Task.WhenAll(writes).ConfigureAwait(false); return true;
+            await Task.WhenAll(writes).ConfigureAwait(false);
+            lock (executionTraceGate) return !executionTraceOverflow;
         });
         IOwnedProcess? process = null;
         if (policy.HostMode == HostMode.Launch)
@@ -116,7 +119,7 @@ public sealed class HostPreparation
                     await ReleaseUnregisteredAsync(owned.ShutdownAsync).ConfigureAwait(false);
                     throw;
                 }
-                return owned;
+                preparationProcess = owned; return owned;
             }, cancellationToken).ConfigureAwait(false);
         }
         IPreparationConnection? connection = null;
@@ -146,7 +149,7 @@ public sealed class HostPreparation
             catch (ConnectionNotReadyException) when (attempt + 1 < policy.ConnectAttempts)
             {
                 await Step(PreparationStage.RetryDelay, preparationDeadline,
-                    token => RetryDelayAsync(process, token), cancellationToken).ConfigureAwait(false);
+                    RetryDelayAsync, cancellationToken).ConfigureAwait(false);
             }
             catch (ConnectionNotReadyException) { await FailAsync(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
         }
@@ -209,8 +212,11 @@ public sealed class HostPreparation
         // Cleanup's bounded Diagnostics stage joins the finite writes before final output.
         lock (executionTraceGate)
         {
-            if (executionTraceWrites.Count >= 1000) return;
-            executionTraceWrites.Add(TraceAsync(evidence).AsTask());
+            if (executionTraceWrites.Count >= 1000) { executionTraceOverflow = true; return; }
+            var write = TraceAsync(evidence, retainForCleanup: true).AsTask();
+            executionTraceWrites.Add(write);
+            _ = write.ContinueWith(task => _ = task.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
     }
 
@@ -227,46 +233,73 @@ public sealed class HostPreparation
         catch (Exception exception) { throw new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, exception, phase); }
     }
 
-    private async ValueTask<bool> RetryDelayAsync(IOwnedProcess? process, CancellationToken token)
+    private async ValueTask<T> WatchPreparationAsync<T>(Task<T> work, CancellationToken token)
     {
-        using var waits = CancellationTokenSource.CreateLinkedTokenSource(token);
-        Task? delay = null; Task? exited = null;
+        var process = preparationProcess;
+        if (process is null) return await work.ConfigureAwait(false);
+        using var exitCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+        Task? exited = null;
         try
         {
-            exited = process?.WaitForExitAsync(waits.Token).AsTask();
-            delay = DelayAsync();
-            if (exited is not null)
+            try { exited = process.WaitForExitAsync(exitCancellation.Token).AsTask(); }
+            catch (Exception exception) { exited = Task.FromException(exception); }
+            await Task.WhenAny(work, exited).ConfigureAwait(false);
+            // Ready clock/provider faults are evidence before any new status probe.
+            // No getter is needed: the exact-handle successful watch certifies exit.
+            var ready = new List<Exception>();
+            if (exited.IsCompletedSuccessfully) ready.Add(new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited));
+            AddFault(work, launch: false); AddFault(exited, launch: true);
+            if (ready.Count != 0)
             {
-                await Task.WhenAny(delay, exited).ConfigureAwait(false);
-                if (exited.IsCompletedSuccessfully || await ReadProcessStatusAsync(process!, RunPhase.Preparation, token).ConfigureAwait(false))
-                    throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited);
-                if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
+                RunEvent Cause(Exception exception) => exception switch
+                {
+                    ClockProviderException => new(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Clock),
+                    RunFailureException typed => typed.Cause,
+                    OperationCanceledException when token.IsCancellationRequested => new(RunReason.Cancelled, RunPhase.Preparation, RunOrigin.User),
+                    _ => new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)
+                };
+                var chosen = ready.OrderBy(exception => RunSession.Priority(Cause(exception).Reason))
+                    .ThenBy(exception => Cause(exception).Reason).ThenBy(exception => Cause(exception).Phase)
+                    .ThenBy(exception => Cause(exception).Origin).First();
+                foreach (var exception in ready) if (!ReferenceEquals(exception, chosen)) recordException?.Invoke(exception);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(chosen).Throw();
             }
-            await delay.ConfigureAwait(false);
-            if (process is not null && await ReadProcessStatusAsync(process, RunPhase.Preparation, token).ConfigureAwait(false))
-                throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited);
-            return true;
+            return await work.ConfigureAwait(false);
+            void AddFault(Task task, bool launch)
+            {
+                if (!task.IsFaulted && !task.IsCanceled) return;
+                try { task.GetAwaiter().GetResult(); }
+                catch (Exception exception)
+                {
+                    if (launch && exception is not RunFailureException &&
+                        !(exception is OperationCanceledException && token.IsCancellationRequested))
+                        exception = new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, exception);
+                    ready.Add(exception);
+                }
+            }
         }
         finally
         {
-            // Cancellation callbacks and late faults are observed; they cannot extend backoff.
-            FiniteOperation.CancelSafely(waits, _ => { });
-            foreach (var pending in new[] { delay, exited })
-                if (pending is not null) _ = pending.ContinueWith(t => _ = t.Exception, CancellationToken.None,
+            FiniteOperation.CancelSafely(exitCancellation, exception => recordException?.Invoke(exception));
+            foreach (var pending in new Task?[] { work, exited })
+                if (pending is not null) _ = pending.ContinueWith(task => _ = task.Exception, CancellationToken.None,
                     TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
-        async Task DelayAsync()
+    }
+
+    private async ValueTask<bool> RetryDelayAsync(CancellationToken token)
+    {
+        // The same Step lifecycle watch covers backoff, connection, metadata and Setup.
+        var target = preparationClock.Elapsed + policy.RetryDelay;
+        await preparationClock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false);
+        var remaining = target - preparationClock.Elapsed;
+        if (remaining > TimeSpan.Zero)
         {
-            var target = preparationClock.Elapsed + policy.RetryDelay;
-            await preparationClock.DelayAsync(policy.RetryDelay, waits.Token).ConfigureAwait(false);
-            var remaining = target - preparationClock.Elapsed;
-            if (remaining > TimeSpan.Zero)
-            {
-                await FiniteOperation.DelayIndependentAsync(remaining, waits.Token).ConfigureAwait(false);
-                if (preparationClock.Elapsed < target)
-                    throw new ClockProviderException(new InvalidOperationException("RetryClockDidNotAdvance"));
-            }
+            await FiniteOperation.DelayIndependentAsync(remaining, token).ConfigureAwait(false);
+            if (preparationClock.Elapsed < target)
+                throw new ClockProviderException(new InvalidOperationException("RetryClockDidNotAdvance"));
         }
+        return true;
     }
 
     private sealed record SetupAuthority(string[] Operations, TimeSpan Timeout);
@@ -371,15 +404,19 @@ public sealed class HostPreparation
             {
                 if (preparationClock.Elapsed >= deadline) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
                 BeginOwnedWork(acquisition, tracked, token);
-                try { return await action(token).ConfigureAwait(false); }
-                finally
+                async Task<T> ExecuteOwnedAsync()
                 {
-                    if (tracked)
+                    try { return await action(token).ConfigureAwait(false); }
+                    finally
                     {
-                        if (acquisition) Interlocked.Decrement(ref pendingAcquisitions);
-                        else Interlocked.Decrement(ref pendingPreparationWork);
+                        if (tracked)
+                        {
+                            if (acquisition) Interlocked.Decrement(ref pendingAcquisitions);
+                            else Interlocked.Decrement(ref pendingPreparationWork);
+                        }
                     }
                 }
+                return await WatchPreparationAsync(ExecuteOwnedAsync(), token).ConfigureAwait(false);
             }, cancellationToken, recordException).ConfigureAwait(false);
             await TraceAsync(new(stage, PreparationCode.Completed), required: true).ConfigureAwait(false); return result;
         }
@@ -388,6 +425,7 @@ public sealed class HostPreparation
         { await TraceAsync(new(stage, PreparationCode.Cancelled)).ConfigureAwait(false); throw; }
         catch (ConnectionNotReadyException) when (stage == PreparationStage.Connect) { throw; }
         catch (PreparationException exception) { await TraceAsync(new(exception.Stage, exception.Code)).ConfigureAwait(false); throw; }
+        catch (RunFailureException) { throw; }
         catch (ClockProviderException) { throw; }
         catch (Exception exception)
         {
@@ -409,7 +447,7 @@ public sealed class HostPreparation
     private async ValueTask FailAsync(PreparationStage stage, PreparationCode code)
     { await TraceAsync(new(stage, code)); throw new PreparationException(stage, code); }
 
-    private async ValueTask TraceAsync(PreparationEvent evidence, bool required = false)
+    private async ValueTask TraceAsync(PreparationEvent evidence, bool required = false, bool retainForCleanup = false)
     {
         // One worker per sink: a blocked write cannot spawn replacement writes. Error
         // diagnostics have an independent explicit ceiling and cannot replace their cause.
@@ -418,17 +456,28 @@ public sealed class HostPreparation
             var clock = required ? preparationClock : releaseClock;
             var deadline = required ? Min(preparationDeadline, clock.Elapsed + policy.OperationTimeout)
                 : clock.Elapsed + policy.OperationTimeout;
-            await FiniteOperation.RunUntilAsync<bool>(clock, deadline, token => new(Task.Run(async () =>
+            await FiniteOperation.RunUntilAsync<bool>(clock, deadline, token =>
             {
-                await traceGate.WaitAsync(token).ConfigureAwait(false);
-                try { token.ThrowIfCancellationRequested(); trace.Record(evidence); return true; }
-                finally { traceGate.Release(); }
-            }, token)), required ? preparationCancellation : CancellationToken.None).ConfigureAwait(false);
+                var write = Task.Run(async () =>
+                {
+                    await traceGate.WaitAsync(token).ConfigureAwait(false);
+                    try { token.ThrowIfCancellationRequested(); trace.Record(evidence); return true; }
+                    finally { traceGate.Release(); }
+                }, token);
+                return new(required ? WatchPreparationAsync(write, token).AsTask() : write);
+            }, required ? preparationCancellation : CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
+            if (retainForCleanup)
+            {
+                // This trace deadline is provider evidence for cleanup, not proof that
+                // the cleanup owner deadline elapsed. Do not export its provenance.
+                if (FiniteOperation.IsDeadline(exception)) throw new TimeoutException("TraceWriteTimeout", exception);
+                throw;
+            }
             if (!required) { recordException?.Invoke(exception); return; }
-            if (exception is ClockProviderException || FiniteOperation.IsDeadline(exception) ||
+            if (exception is RunFailureException or ClockProviderException || FiniteOperation.IsDeadline(exception) ||
                 exception is OperationCanceledException && preparationCancellation.IsCancellationRequested) throw;
             throw new PreparationException(evidence.Stage, PreparationCode.TraceUnavailable, exception);
         }
