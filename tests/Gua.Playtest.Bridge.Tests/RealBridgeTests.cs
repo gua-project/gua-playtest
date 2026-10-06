@@ -815,6 +815,29 @@ public sealed class RealBridgeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void LocalDispatchExceptionRetainsAttemptUntilExplicitEndWait(bool cancelled)
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableGameInput(GuaGameInputCapabilities.Semantic, () => { });
+        runtime.PublishGameInputActions("fight", [new("attack", "Attack", GuaGameInputValueType.Button)]);
+        ulong epoch = Epoch(runtime), revision = runtime.FindGameInputActionsV2(new(Id: "attack")).Revision;
+        using var bridge = new OwnedGameInput(runtime, "dispatch-exception", GuaObservationProfile.Debug, 10); int checks = 0;
+        bool Authorize()
+        {
+            if (++checks == 2) runtime.PublishGameInputActions("changed", [new("attack", "Changed", GuaGameInputValueType.Button)]);
+            return true;
+        }
+        var pending = bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, Authorize);
+        Assert.Equal(2, checks); Assert.Equal(ActionAttemptStatus.Pending, pending.Status);
+        Assert.Equal("dispatch-unconfirmed", pending.Reason); Assert.Equal(ConfirmedActionStage.DispatchAttempted, pending.Stage);
+        Assert.Null(pending.RequestId); Assert.False(runtime.TryConsumeGameInput(out _));
+        Assert.Equal(pending, bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, Authorize));
+        Assert.Equal(2, checks); Assert.Equal(pending, bridge.Poll("a"));
+        Assert.Equal(cancelled ? ActionAttemptStatus.Aborted : ActionAttemptStatus.TimedOut, bridge.EndWait("a", cancelled).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void LocalCompletionOwnerLossRemainsPendingUntilExplicitEndWait(bool cancelled)
     {
         using var runtime = new GuaRuntime(); runtime.EnableGameInput(GuaGameInputCapabilities.Semantic, () => { });

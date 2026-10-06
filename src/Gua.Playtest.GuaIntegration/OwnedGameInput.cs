@@ -75,7 +75,7 @@ public sealed class OwnedGameInput : IDisposable
             catch (OperationCanceledException)
             { return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "cancelled-unconfirmed" }); }
             catch (InvalidOperationException)
-            { return Save(attempt with { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Rejected : ActionAttemptStatus.Failed,
+            { return Save(attempt with { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Rejected : ActionAttemptStatus.Pending,
                 Reason = attempt.Stage == ConfirmedActionStage.NotSent ? "gua-preflight-rejected" : "dispatch-unconfirmed" }); }
         }
     }

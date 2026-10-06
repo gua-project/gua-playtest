@@ -60,6 +60,10 @@ integers so actual Gua1.1.1 can refuse unrepresentable double-ABI values rather
 than select a rounded neighbor. Local lost native-owner completion stays Pending
 without repeated poll/resend until EndWait. Native race/cache/neighbor/owner-loss
 regressions verify these failure paths; new exact-head CI/review remain mandatory.
+The same uncertainty rule also covers local dispatch exceptions after preflight:
+a real map replacement in the second authorization callback causes actual native
+guard refusal while the untyped exception remains Pending/DispatchAttempted until
+EndWait, with no repeat send. Expanded bridge87 passed locally, skip0.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 
