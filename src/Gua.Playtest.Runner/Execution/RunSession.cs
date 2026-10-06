@@ -67,7 +67,7 @@ public sealed class RunSession
         Require(ExecutionState.Preparing);
         if (startCaptureArmed) throw new InvalidOperationException("RunningBoundaryCertificateRequired");
         if (ReadReal() - preparationOrigin >= Limits.PreparationTimeout)
-            throw new InvalidOperationException("PreparationDeadlineReached");
+            throw new TimeoutException("PreparationDeadlineReached");
         var sharedConditionOrigin = ReadCondition();
         successSession = success?.Start(conditionClock, sharedConditionOrigin);
         failureSession = failure?.Start(conditionClock, sharedConditionOrigin);
@@ -78,7 +78,7 @@ public sealed class RunSession
         Require(ExecutionState.Preparing);
         if (startCaptureArmed) throw new InvalidOperationException("RunningBoundaryAlreadyArmed");
         var real = ReadReal();
-        if (real - preparationOrigin >= Limits.PreparationTimeout) throw new InvalidOperationException("PreparationDeadlineReached");
+        if (real - preparationOrigin >= Limits.PreparationTimeout) throw new TimeoutException("PreparationDeadlineReached");
         var condition = ReadCondition();
         startCaptureArmed = true;
         return new(this, real, condition);
@@ -87,6 +87,7 @@ public sealed class RunSession
     {
         var now = ReadReal();
         var conditionNow = ReadCondition();
+        if (now - preparationOrigin >= Limits.PreparationTimeout) throw new TimeoutException("PreparationDeadlineReached");
         if (real < preparationOrigin || real > now || condition < TimeSpan.Zero || condition > conditionNow ||
             real - preparationOrigin >= Limits.PreparationTimeout)
             throw new InvalidOperationException("RunningBoundaryTimeInvalid");
@@ -194,6 +195,10 @@ public sealed class RunSession
     {
         if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
         var cycle = candidates?.Take(Limits.MaxEvidenceItems + 1).ToList() ?? [];
+        // Caller argument rejection must not consume already-authoritative operation evidence.
+        if (cycle.Any(x => !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) || !Enum.IsDefined(x.Origin)))
+            throw new ArgumentException("RunEventInvalid", nameof(candidates));
+        if (cycle.Any(x => x.Reason == RunReason.GoalSatisfied)) throw new ArgumentException("GoalRequiresEvidence", nameof(candidates));
         cycle.AddRange(pendingEvents); pendingEvents.Clear();
         TimeSpan now;
         try { now = ReadReal(); }
@@ -207,9 +212,6 @@ public sealed class RunSession
             cycle = cycle.OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).Take(Limits.MaxEvidenceItems - 1).ToList();
             cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
         }
-        if (cycle.Any(x => !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) || !Enum.IsDefined(x.Origin)))
-            throw new ArgumentException("RunEventInvalid", nameof(candidates));
-        if (cycle.Any(x => x.Reason == RunReason.GoalSatisfied)) throw new ArgumentException("GoalRequiresEvidence", nameof(candidates));
         if (cancelled) cycle.Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
         if (State == ExecutionState.Preparing && now - preparationOrigin >= Limits.PreparationTimeout)
             cycle.Add(new(RunReason.PreparationTimeout, RunPhase.Preparation, RunOrigin.Clock));

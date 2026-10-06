@@ -1,6 +1,7 @@
 using Gua.Playtest.Core;
 using Gua.Playtest.Core.Contracts;
 using Gua.Playtest.Runner.Conditions;
+using System.Collections.Concurrent;
 
 namespace Gua.Playtest.Runner.Execution;
 
@@ -23,11 +24,30 @@ public static class RunMonitor
         Func<T, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default)
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
+        var cancellationFaults = new ConcurrentQueue<Exception>();
+        var cancellationFaultCount = 0;
+        void QueueCancellationFault(Exception exception)
+        {
+            if (Interlocked.Increment(ref cancellationFaultCount) <= run.Limits.MaxEvidenceItems)
+                cancellationFaults.Enqueue(exception);
+        }
+        void DrainCancellationFaults()
+        {
+            while (cancellationFaults.TryDequeue(out var exception)) run.RecordException(exception);
+        }
+        void EvaluateCapture(RunObservation? captured, IReadOnlyList<RunEvent> readyEvents, bool cancelled)
+        {
+            if (captured is null || captured.Success is null || captured.Failure is null)
+                run.Evaluate(candidates: readyEvents.Append(new(RunReason.ObservationContractViolation,
+                    RunPhase.Execution, RunOrigin.Contract)), cancelled: cancelled);
+            else run.Evaluate(captured.Success, captured.CapturedAt, readyEvents, cancelled, failureUnit: captured.Failure);
+        }
         using var workCancellation = new CancellationTokenSource();
-        using var workRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(workCancellation, run.RecordException));
+        using var workRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(workCancellation, QueueCancellationFault));
         Task<T>? workTask = null;
         async ValueTask<(bool Completed, T? Value, IReadOnlyList<RunEvent> Events)> ReadyWork()
         {
+            DrainCancellationFaults();
             if (workTask is null || !workTask.IsCompleted) return (false, default, []);
             try
             {
@@ -60,8 +80,7 @@ public static class RunMonitor
                     if (captureTask?.IsCompletedSuccessfully == true)
                     {
                         var captured = captureTask.GetAwaiter().GetResult();
-                        run.Evaluate(captured.Success, captured.CapturedAt, readyEvents, cancelled,
-                            failureUnit: captured.Failure);
+                        EvaluateCapture(captured, readyEvents, cancelled);
                     }
                     else run.Evaluate(candidates: readyEvents, cancelled: cancelled);
                 }
@@ -83,12 +102,11 @@ public static class RunMonitor
                 }
                 var result = await ReadyWork().ConfigureAwait(false);
                 // All ready observations/events/cancellation/current deadlines go through one arbiter.
-                run.Evaluate(observation.Success, observation.CapturedAt, result.Events,
-                    cancellationToken.IsCancellationRequested, failureUnit: observation.Failure);
+                EvaluateCapture(observation, result.Events, cancellationToken.IsCancellationRequested);
                 if (result.Completed) return new(run.Primary is null, result.Value);
                 if (run.Primary is not null) break;
                 using var wakeCancellation = new CancellationTokenSource();
-                using var wakeRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wakeCancellation, run.RecordException));
+                using var wakeRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wakeCancellation, QueueCancellationFault));
                 var wakes = new List<Task>();
                 try
                 {
@@ -122,7 +140,14 @@ public static class RunMonitor
                 cancelled: cancellationToken.IsCancellationRequested);
             return new(false, default);
         }
-        finally { FiniteOperation.CancelSafely(workCancellation, run.RecordException); if (workTask is not null) ObserveFault(workTask); }
+        finally
+        {
+            // Join an in-flight caller registration before the owner freezes its exception evidence.
+            workRegistration.Dispose();
+            FiniteOperation.CancelSafely(workCancellation, run.RecordException);
+            DrainCancellationFaults();
+            if (workTask is not null) ObserveFault(workTask);
+        }
     }
     private static TimeSpan Positive(TimeSpan duration) => duration > TimeSpan.Zero ? duration : TimeSpan.Zero;
     private static void ObserveFault(Task task) => _ = task.ContinueWith(t => _ = t.Exception,

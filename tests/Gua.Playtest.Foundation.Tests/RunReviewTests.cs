@@ -10,12 +10,63 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Fact]
+    public void CertifiedStartCannotOutliveCurrentPreparationDeadline()
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock); run.BeginPreparation();
+        clock.At(200); var boundary = Certify(run, clock, clock); clock.At(1000);
+        Assert.Throws<TimeoutException>(() => run.BeginRunning(boundary));
+        Assert.Equal(ExecutionState.Preparing, run.State); Assert.Null(run.RunningOrigin);
+        Assert.Equal(RunReason.PreparationTimeout, run.Evaluate()!.Cause.Reason);
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task LiveCaptureRequiresObservationObjectAndBothMaps(int missing)
+    {
+        var clock = new Clock(); var run = Running(clock, failure: true);
+        RunObservation observation = missing == 3 ? null! : new(TimeSpan.Zero,
+            missing is 0 or 2 ? null! : Unit(), missing is 1 or 2 ? null! : Unit());
+        var result = await RunMonitor.AwaitAsync(run, clock, clock, new Feed(() => observation),
+            _ => ValueTask.FromResult(1), _ => [Event(RunReason.ActionFailed)]);
+        Assert.False(result.Completed); Assert.Equal(RunReason.ObservationContractViolation, run.Primary!.Cause.Reason);
+        Assert.Equal(ResultStatus.Invalid, run.Primary.Status); Assert.Contains(run.Events, x => x.Reason == RunReason.ActionFailed);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InterruptedCompletedCaptureCannotBypassNullMapValidation(bool cancelled)
+    {
+        var capture = new TaskCompletionSource<RunObservation>(); using var cancel = new CancellationTokenSource();
+        var real = new FiniteRaceClock(() => { if (cancelled) cancel.Cancel(); capture.SetResult(new(TimeSpan.Zero, null!, null!)); });
+        var condition = new Clock(); var run = new RunSession(Limits(), real, condition, failure: Condition());
+        run.BeginPreparation(); run.BeginRunning(); var never = new TaskCompletionSource<int>();
+        await RunMonitor.AwaitAsync(run, real, condition, new PendingCaptureFeed(capture.Task),
+            _ => new ValueTask<int>(never.Task), _ => [], cancel.Token);
+        Assert.Equal(RunReason.ObservationContractViolation, run.Primary!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.MaxDuration); never.SetResult(1);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InvalidPublicCandidateCannotConsumePendingUnconfirmedAction(bool fabricatedGoal)
+    {
+        var clock = new Clock(); var run = Running(clock); var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+        operation.BeginDispatch(0); operation.Complete();
+        var candidate = Event(fabricatedGoal ? RunReason.GoalSatisfied : (RunReason)int.MaxValue);
+        Assert.Throws<ArgumentException>(() => run.Evaluate(candidates: [candidate]));
+        Assert.Null(run.Primary); Assert.Empty(run.Events);
+        Assert.Equal(RunReason.ActionUnconfirmed, run.Evaluate(Unit(), clock.Elapsed)!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.GoalSatisfied);
+    }
+    [Fact]
     public async Task ThrowingWakeCancellationCallbackCannotEscapeCaller()
     {
         var clock = new Clock(); var run = Running(clock); using var cancel = new CancellationTokenSource();
         var feed = new CallbackWakeFeed(); var pending = new TaskCompletionSource<int>();
         var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(pending.Task), _ => [], cancel.Token).AsTask();
-        Assert.Null(Record.Exception(cancel.Cancel)); Assert.False((await monitoring).Completed);
+        Assert.Null(await Task.Run(() => Record.Exception(cancel.Cancel))); Assert.False((await monitoring).Completed);
         Assert.Equal(RunReason.Cancelled, run.Primary!.Cause.Reason);
         Assert.Contains(run.Exceptions, x => x.Type == "System.AggregateException"); pending.SetResult(1);
     }
@@ -342,7 +393,11 @@ public sealed partial class RunTests
     {
         var real = new Clock(); var condition = new Clock();
         var node = JsonNode.Parse("""{"kind":"time","withinMilliseconds":0,"condition":{"kind":"targets","target":{"source":"world"},"operator":"exists"}}""")!.AsObject();
-        var goal = PreparedCondition.Create(node, new(10, 1000)); var run = new RunSession(Limits(), real, condition, goal);
+        var goal = PreparedCondition.Create(node, new(10, 1000)); var defaults = Limits();
+        // Isolate delivery lag against maxDuration while keeping preparation itself inside its explicit deadline.
+        var limits = new RunLimits(defaults.MaxDuration, TimeSpan.FromSeconds(10), defaults.CleanupTimeout,
+            defaults.PlannerTimeout, defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = new RunSession(limits, real, condition, goal);
         run.BeginPreparation(); real.At(200); condition.At(200);
         var boundary = Certify(run, real, condition, new(condition.Elapsed, Unit(time: true), Unit("false")));
         real.At(5200); condition.At(5200); run.BeginRunning(boundary);
