@@ -453,26 +453,46 @@ public sealed class RunSession
     {
         ArgumentNullException.ThrowIfNull(exception);
         if (exception is ClockProviderException) QueueClockRejection();
-        var pending = new Queue<Exception>(); pending.Enqueue(exception);
-        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance) { exception };
-        while (pending.TryDequeue(out var current) && exceptions.Count < Limits.MaxEvidenceItems)
+        var remaining = Limits.MaxEvidenceItems - exceptions.Count;
+        if (remaining <= 0) return;
+        // Preserve the public boundary first, then prioritize original provider leaves
+        // over transport AggregateException wrappers. Traversal has its own finite
+        // ceiling, so deeper/wider graphs cannot grow the evidence list or walk forever.
+        var wrappers = new List<Exception>();
+        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        var traversalLimit = (int)Math.Min(100_000L, Math.Max(4096L, (long)remaining * 128));
+        var frames = new Stack<IEnumerator<Exception>>();
+        frames.Push(((IEnumerable<Exception>)[exception]).GetEnumerator());
+        var visited = 0;
+        try
         {
-            if (current is ClockProviderException) QueueClockRejection();
-            exceptions.Add(new(current.GetType().FullName ?? current.GetType().Name, current.StackTrace));
-            var capacity = Limits.MaxEvidenceItems - exceptions.Count - pending.Count;
-            if (current is AggregateException aggregate)
+            while (frames.Count != 0 && exceptions.Count < Limits.MaxEvidenceItems && visited++ < traversalLimit)
             {
-                foreach (var inner in aggregate.InnerExceptions)
+                var frame = frames.Peek();
+                if (!frame.MoveNext()) { frames.Pop().Dispose(); continue; }
+                var current = frame.Current;
+                if (!seen.Add(current)) continue;
+                if (current is ClockProviderException) QueueClockRejection();
+                IEnumerable<Exception>? children = current is AggregateException aggregate ? aggregate.InnerExceptions
+                    : current.InnerException is { } inner ? [inner] : null;
+                if (children is null || current is AggregateException { InnerExceptions.Count: 0 }) Record(current);
+                else
                 {
-                    if (capacity <= 0) break;
-                    // Reserve a slot only for a new reference, including ones already pending.
-                    if (!seen.Add(inner)) continue;
-                    pending.Enqueue(inner); capacity--;
+                    if (ReferenceEquals(current, exception)) Record(current);
+                    else if (wrappers.Count < remaining) wrappers.Add(current);
+                    frames.Push(children.GetEnumerator());
                 }
             }
-            else if (current.InnerException is { } inner && capacity > 0 && seen.Add(inner)) pending.Enqueue(inner);
         }
+        finally { while (frames.TryPop(out var frame)) frame.Dispose(); }
+        foreach (var wrapper in wrappers)
+        {
+            if (exceptions.Count >= Limits.MaxEvidenceItems) break;
+            Record(wrapper);
+        }
+        void Record(Exception current) => exceptions.Add(new(current.GetType().FullName ?? current.GetType().Name, current.StackTrace));
     }
+
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)
     {
         Require(ExecutionState.Completing); State = ExecutionState.Finished;

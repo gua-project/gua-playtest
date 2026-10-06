@@ -117,18 +117,18 @@ public sealed class OwnedCleanup
                 await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(remaining.TotalMilliseconds)), token).ConfigureAwait(false);
         }
     }
-    private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action);
+    private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action, Action? CloseOwnership = null);
     private readonly List<Step> steps = [];
     private readonly object registrationGate = new();
     private bool closed;
-    public void Register(CleanupStage stage, Func<CancellationToken, ValueTask<bool>> action)
+    public void Register(CleanupStage stage, Func<CancellationToken, ValueTask<bool>> action, Action? closeOwnership = null)
     {
         ArgumentNullException.ThrowIfNull(action);
         lock (registrationGate)
         {
-            if (closed || !Enum.IsDefined(stage)) throw new InvalidOperationException("CleanupRegistrationClosed");
+            if (closed || !Enum.IsDefined(stage) || closeOwnership is not null && stage != CleanupStage.OwnershipRelease) throw new InvalidOperationException("CleanupRegistrationClosed");
             if (steps.Count >= 1000) throw new InvalidOperationException("CleanupResourceLimit");
-            steps.Add(new(stage, action));
+            steps.Add(new(stage, action, closeOwnership));
         }
     }
     public async ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken = default,
@@ -170,6 +170,12 @@ public sealed class OwnedCleanup
                 if (!AddIssue(new(Failure(stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)))) break;
             }
         }
+        // Revoke provider starts independently of whether earlier resource releases
+        // will permit terminal exclusion removal. These trusted callbacks are pure,
+        // synchronous gate closures, invoked outside the registration lock.
+        foreach (var step in ordered)
+            if (step.CloseOwnership is { } close)
+                try { close(); } catch (Exception exception) { RecordStageFault(step.Stage, exception); }
         var cleanupClock = new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
             new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
         realClock = cleanupClock;

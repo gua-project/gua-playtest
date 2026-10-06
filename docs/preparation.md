@@ -37,7 +37,9 @@ No engine install, package publication, authentication or credential change occu
 `ConnectionNotReadyException` certifies that no connection or side effect was
 dispatched/acquired and is the only retryable outcome. All other exceptions,
 unknown receipts, timeout and cancellation terminate the preparation attempt.
-Retries share the original whole-Preparing deadline; an explicitly longer retry
+Launch-mode retry backoff races the exact owned process exit watch; a confirmed
+exit terminates with ProcessExited without another connection attempt. Retries
+share the original whole-Preparing deadline; an explicitly longer retry
 delay is not shortened by the per-operation ceiling.
 Each backoff retains an absolute target and verifies clock progress after wake.
 An early wake gets a bounded independent physical wait; a clock that still has not
@@ -158,14 +160,32 @@ retain all changes from that boundary and invalidate stale/gap/epoch evidence.
 the common Gua Trace lifecycle sink owned by #9. Its first call is Started before
 launch/connection, so startup failure is traceable without a live engine. It is
 not a persisted new format, arbitrary exception-message channel or Planner export.
-Trace persistence and prelaunch run-summary creation are #9/#15 composition work.
+Owned process status is pure worker-safe metadata, bounded and launch-stage
+wrapped during preparation and execution. Source failure classification is stable:
+untyped source defects retain Runner ExecutionError even when losing-watch cancellation
+also faults; typed Host lifecycle failures preserve their cause. Ready same-cycle
+failure evidence outranks cancellation; a cancellation received before an asynchronous
+fault becomes ready cannot retroactively acquire that evidence.
+
+Execution lifecycle trace writes are queued (at most 1000) and joined by the bounded
+Diagnostics cleanup stage; persistence cannot delay a ready lifecycle failure.
+Record must be worker-safe and owner-independent. Writes are serialized by one
+sink gate and independently bounded: successful-stage writes use the original
+preparation deadline and operation ceiling; rejection diagnostics use the explicit
+operation ceiling on an independent real clock. A blocked initial write cannot
+prevent cancellation or launch any host. Diagnostic write failures retain type/stack
+as secondary evidence and cannot replace the typed host rejection. Late workers
+have no Run or dispatch authority. Trace persistence and prelaunch run-summary
+creation are #9/#15 composition work.
 The #6 primary remains structured Preparation/Execution/Host/Runner evidence;
 typed host failures retain Host-origin ExecutionError (Failed/exit 1), while
 unknown Runner defects retain exit 10. Original wrapper/provider exception type
 and stack evidence is preserved for #9 redaction, never arbitrary Planner feedback.
 The owner's exception recorder traverses nested typed wrappers and aggregate
 children iteratively with reference deduplication and the existing evidence-item
-ceiling; queue growth is bounded too. Concurrent exit-watch failures remain visible
+ceiling. Leaves take precedence over nested aggregate wrappers after preserving
+the public boundary; traversal is separately capped at max(4096, 128 × remaining
+evidence slots), up to 100000 visits. Stack/visited growth is bounded too. Concurrent exit-watch failures remain visible
 even when the source capture has already completed successfully.
 more detailed Launch/Connect/Identity/Setup/Planner/Synchronize failure stages are
 retained by this sink without overwriting the original failure during cleanup.

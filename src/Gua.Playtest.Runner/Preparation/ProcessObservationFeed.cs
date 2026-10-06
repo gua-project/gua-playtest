@@ -3,7 +3,8 @@ using Gua.Playtest.Runner.Execution;
 namespace Gua.Playtest.Runner.Preparation;
 
 /// <summary>Keep launched-process exit visible during Planner/action waits. Attached processes never enter this wrapper.</summary>
-internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess process, IPreparationTrace trace) : IRunObservationFeed
+internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess process,
+    Func<CancellationToken, ValueTask<bool>> readStatus, Action<PreparationEvent> recordTrace) : IRunObservationFeed
 {
     private readonly SemaphoreSlim captureOwner = new(1);
     public async ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken)
@@ -11,7 +12,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         await captureOwner.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            CheckAlive();
+            await CheckAliveAsync(cancellationToken).ConfigureAwait(false);
             // Keep this task alive until the actual capture ends, even after supersession.
             // RunMonitor joins this task and retains its observation before a fresh capture.
             return await WatchAsync(token => feed.CaptureAsync(token).AsTask(), cancellationToken).ConfigureAwait(false);
@@ -23,7 +24,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
 
     private async Task<T> WatchAsync<T>(Func<CancellationToken, Task<T>> request, CancellationToken cancellationToken)
     {
-        CheckAlive(); cancellationToken.ThrowIfCancellationRequested();
+        await CheckAliveAsync(cancellationToken).ConfigureAwait(false); cancellationToken.ThrowIfCancellationRequested();
         using var wait = new CancellationTokenSource();
         using var exitWait = new CancellationTokenSource();
         var faults = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
@@ -42,7 +43,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             await winner.ConfigureAwait(false);
             // A completed losing watch still carries authoritative lifecycle failure evidence.
             if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
-            CheckAlive();
+            await CheckAliveAsync(CancellationToken.None).ConfigureAwait(false);
             result = await changed.ConfigureAwait(false);
         }
         catch (Exception exception)
@@ -53,7 +54,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             var ready = new List<Exception> { exception };
             if (exited?.IsCompletedSuccessfully == true)
             {
-                trace.Record(new(PreparationStage.Launch, PreparationCode.ProcessExited));
+                recordTrace(new(PreparationStage.Launch, PreparationCode.ProcessExited));
                 ready.Insert(0, new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution));
             }
             foreach (var task in new Task?[] { changed, exited })
@@ -65,7 +66,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                 item is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
                     (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken)
                     ? new(RunReason.Cancelled, RunPhase.Execution, RunOrigin.User)
-                    : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host);
+                    : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner);
             failure = ready.OrderBy(item => RunSession.Priority(Cause(item).Reason))
                 .ThenBy(item => Cause(item).Reason).ThenBy(item => Cause(item).Phase).ThenBy(item => Cause(item).Origin).First();
             foreach (var original in ready)
@@ -90,17 +91,17 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                 throw new PreparationException(preparation.Stage, preparation.Code, evidence, preparation.Cause.Phase);
             if (failure is RunFailureException typedFailure)
                 throw new RunFailureException(typedFailure.Cause, evidence);
-            throw new PreparationException(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed, evidence, RunPhase.Execution);
+            throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), evidence);
         }
         if (requestedCancellation) throw new OperationCanceledException("CaptureCancelled", failure, cancellationToken);
         if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
         return result;
     }
-    private void CheckAlive()
+    private async ValueTask CheckAliveAsync(CancellationToken cancellationToken)
     {
-        if (process.HasExited)
+        if (await readStatus(cancellationToken).ConfigureAwait(false))
         {
-            trace.Record(new(PreparationStage.Launch, PreparationCode.ProcessExited));
+            recordTrace(new(PreparationStage.Launch, PreparationCode.ProcessExited));
             throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
         }
     }

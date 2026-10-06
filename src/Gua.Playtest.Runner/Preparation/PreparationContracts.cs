@@ -7,9 +7,10 @@ public enum PlayMode { Explore, Replay }
 public enum PreparationStage { Started, Ownership, Launch, Connect, Identity, Setup, Planner, Synchronize, Preconditions, Ready, RetryDelay }
 public enum PreparationCode { Started, Completed, Busy, LaunchFailed, ConnectionFailed, IdentityMismatch, CapabilityUnavailable,
     OutstandingRequests, SetupForbidden, SetupFailed, SetupUnconfirmed, PlannerUnavailable, IdentityUnavailable, SynchronizationFailed, StaleObservation, PreconditionsUnsatisfied,
-    Cancelled, Timeout, ProcessExited }
+    Cancelled, Timeout, ProcessExited, TraceUnavailable }
 public sealed record PreparationEvent(PreparationStage Stage, PreparationCode Code);
-/// <summary>Adapter to the common Trace lifecycle sink, entered before launching. Never Planner feedback.</summary>
+/// <summary>Worker-safe, owner-independent adapter to the common Trace lifecycle sink, entered before launching.
+/// Record may persist evidence only; it has no Run/cleanup/dispatch authority. Never Planner feedback.</summary>
 public interface IPreparationTrace { void Record(PreparationEvent evidence); }
 
 /// <summary>Explicit trusted host policy, separate from Scenario and from Planner input.</summary>
@@ -57,6 +58,7 @@ public interface IPreparationConnector
 public sealed class ConnectionNotReadyException : Exception;
 public interface IOwnedProcess
 {
+    // Pure worker-safe status read; no lifecycle mutation or engine-thread dependency.
     bool HasExited { get; }
     ValueTask WaitForExitAsync(CancellationToken cancellationToken);
     ValueTask<bool> ShutdownAsync(CancellationToken cancellationToken);

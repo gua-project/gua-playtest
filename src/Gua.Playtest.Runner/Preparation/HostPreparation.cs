@@ -23,6 +23,11 @@ public sealed class HostPreparation
     private readonly IProcessLauncher launcher;
     private readonly IPreparationConnector connector;
     private readonly IPreparationTrace trace;
+    private readonly SemaphoreSlim traceGate = new(1, 1);
+    private readonly List<Task> executionTraceWrites = [];
+    private readonly object executionTraceGate = new();
+    private TimeSpan preparationDeadline;
+    private CancellationToken preparationCancellation;
     private int used;
     private int pendingReleases;
     private int pendingAcquisitions;
@@ -33,7 +38,7 @@ public sealed class HostPreparation
     {
         ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(launcher); ArgumentNullException.ThrowIfNull(connector); ArgumentNullException.ThrowIfNull(trace);
-        if (!Enum.IsDefined(policy.HostMode) || !Enum.IsDefined(policy.PlayMode) || !policy.Endpoint.IsAbsoluteUri ||
+        if (!Enum.IsDefined(policy.HostMode) || !Enum.IsDefined(policy.PlayMode) || policy.Endpoint is null || !policy.Endpoint.IsAbsoluteUri ||
             policy.Endpoint.Scheme is not ("ws" or "wss") || policy.Endpoint.Port <= 0 ||
             !System.Text.RegularExpressions.Regex.IsMatch(policy.Endpoint.OriginalString, @"^wss?://(?:\[[^\]]+\]|[^/:]+):[0-9]+(?:/|$)") || !string.IsNullOrEmpty(policy.Endpoint.UserInfo) ||
             string.IsNullOrWhiteSpace(policy.ExpectedBuildId) || string.IsNullOrWhiteSpace(policy.RequiredProtocol) ||
@@ -57,15 +62,20 @@ public sealed class HostPreparation
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(cleanup);
         if (run.State != Gua.Playtest.Core.Contracts.ExecutionState.Preparing) throw new InvalidOperationException("PreparationStateInvalid");
         if (Interlocked.Exchange(ref used, 1) != 0) throw new InvalidOperationException("PreparationAlreadyUsed");
-        var preparationDeadline = run.NextRealEvaluationAt;
+        preparationDeadline = run.NextRealEvaluationAt;
+        preparationCancellation = cancellationToken;
         preparationClock = run.AuthoritativeRealClock;
-        recordException = run.RecordException;
-        trace.Record(new(PreparationStage.Started, PreparationCode.Started));
+        recordException = exception =>
+        {
+            // An abandoned trace/provider continuation cannot mutate a confirmed snapshot.
+            if (run.State == Gua.Playtest.Core.Contracts.ExecutionState.Preparing) run.RecordException(exception);
+        };
+        await TraceAsync(new(PreparationStage.Started, PreparationCode.Started), required: true).ConfigureAwait(false);
         // This prevents collisions in this Runner process only, never claims a host/manual-input lifecycle lock.
         var key = policy.Endpoint.AbsoluteUri;
         bool acquiredLease;
         lock (LeaseLock) acquiredLease = ActiveEndpoints.Add(key);
-        if (!acquiredLease) Fail(PreparationStage.Ownership, PreparationCode.Busy);
+        if (!acquiredLease) await FailAsync(PreparationStage.Ownership, PreparationCode.Busy);
         // Acquire cleanup authority before the first await can race the executor deadline.
         try { cleanup.Register(CleanupStage.OwnershipRelease, _ =>
         {
@@ -76,13 +86,18 @@ public sealed class HostPreparation
                     return ValueTask.FromResult(false);
                 ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
             }
-        }); }
+        }, () => { lock (LeaseLock) ownershipClosed = true; }); }
         catch
         {
             // No host/provider work can have started before this initial registration.
             lock (LeaseLock) { ownershipClosed = true; ActiveEndpoints.Remove(key); }
             throw;
         }
+        cleanup.Register(CleanupStage.Diagnostics, async _ =>
+        {
+            Task[] writes; lock (executionTraceGate) writes = executionTraceWrites.ToArray();
+            await Task.WhenAll(writes).ConfigureAwait(false); return true;
+        });
         IOwnedProcess? process = null;
         if (policy.HostMode == HostMode.Launch)
         {
@@ -107,7 +122,7 @@ public sealed class HostPreparation
         IPreparationConnection? connection = null;
         for (var attempt = 0; attempt < policy.ConnectAttempts; attempt++)
         {
-            if (process?.HasExited == true) Fail(PreparationStage.Launch, PreparationCode.ProcessExited);
+            if (process is not null && await ReadProcessStatusAsync(process, RunPhase.Preparation, cancellationToken).ConfigureAwait(false)) await FailAsync(PreparationStage.Launch, PreparationCode.ProcessExited);
             try
             {
                 connection = await Step(PreparationStage.Connect, preparationDeadline, async token =>
@@ -130,23 +145,10 @@ public sealed class HostPreparation
             }
             catch (ConnectionNotReadyException) when (attempt + 1 < policy.ConnectAttempts)
             {
-                await Step(PreparationStage.RetryDelay, preparationDeadline, async token =>
-                {
-                    var target = preparationClock.Elapsed + policy.RetryDelay;
-                    await preparationClock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false);
-                    var remaining = target - preparationClock.Elapsed;
-                    if (remaining > TimeSpan.Zero)
-                    {
-                        // A provider wake is a hint. A bounded physical interval prevents a stalled
-                        // or early-waking provider from spinning or dispatching another connection early.
-                        await FiniteOperation.DelayIndependentAsync(remaining, token).ConfigureAwait(false);
-                        if (preparationClock.Elapsed < target)
-                            throw new ClockProviderException(new InvalidOperationException("RetryClockDidNotAdvance"));
-                    }
-                    return true;
-                }, cancellationToken).ConfigureAwait(false);
+                await Step(PreparationStage.RetryDelay, preparationDeadline,
+                    token => RetryDelayAsync(process, token), cancellationToken).ConfigureAwait(false);
             }
-            catch (ConnectionNotReadyException) { Fail(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
+            catch (ConnectionNotReadyException) { await FailAsync(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
         }
         var connected = connection!;
         var identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
@@ -162,11 +164,11 @@ public sealed class HostPreparation
                 var current = await ReadSetupAsync(setup, setupDeadline, cancellationToken).ConfigureAwait(false);
                 setupDeadline = Min(setupDeadline, setupStartedAt + current.Timeout);
                 if (current.Operations.Length != operations.Length || current.Operations[index] != operations[index])
-                    Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
+                    await FailAsync(PreparationStage.Setup, PreparationCode.SetupForbidden);
                 var receipt = await Step(PreparationStage.Setup, setupDeadline,
                     token => setup.ExecuteOperationAsync(index, connected, token), cancellationToken).ConfigureAwait(false);
                 if (receipt != SetupReceipt.Confirmed)
-                    Fail(PreparationStage.Setup, receipt == SetupReceipt.Failed ? PreparationCode.SetupFailed : PreparationCode.SetupUnconfirmed);
+                    await FailAsync(PreparationStage.Setup, receipt == SetupReceipt.Failed ? PreparationCode.SetupFailed : PreparationCode.SetupUnconfirmed);
             }
             // Approved scene/save setup can establish a new epoch. Verify it rather than assuming old identity survived.
             identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
@@ -175,29 +177,96 @@ public sealed class HostPreparation
         if (policy.PlayMode == PlayMode.Explore)
         {
             if (planner is null || !await Step(PreparationStage.Planner, preparationDeadline, planner.CheckAsync, cancellationToken).ConfigureAwait(false))
-                Fail(PreparationStage.Planner, PreparationCode.PlannerUnavailable);
+                await FailAsync(PreparationStage.Planner, PreparationCode.PlannerUnavailable);
         }
         // Arm only after every readiness check. The provider must create a NEW synchronized capture for this request.
         var capture = run.ArmRunningBoundary();
         var boundary = await Step(PreparationStage.Synchronize, preparationDeadline,
             token => connected.SynchronizeAsync(capture.RequestId, token), cancellationToken).ConfigureAwait(false);
-        if (boundary is null || boundary.Feed is null) Fail(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed);
+        if (boundary is null || boundary.Feed is null) { await FailAsync(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed); throw new InvalidOperationException(); }
         await ValidateIdentityAsync(boundary.CapturedIdentity, preparationDeadline, cancellationToken).ConfigureAwait(false);
         if (!boundary.Continuous || boundary.CapturedIdentity.SourceId != identity.SourceId || boundary.CapturedIdentity.Epoch != identity.Epoch)
-            Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation);
-        if (!boundary.PreconditionsSatisfied) Fail(PreparationStage.Preconditions, PreparationCode.PreconditionsUnsatisfied);
-        if (process?.HasExited == true) Fail(PreparationStage.Launch, PreparationCode.ProcessExited);
-        CheckDeadline(preparationDeadline); cancellationToken.ThrowIfCancellationRequested();
+            await FailAsync(PreparationStage.Synchronize, PreparationCode.StaleObservation);
+        if (!boundary.PreconditionsSatisfied) await FailAsync(PreparationStage.Preconditions, PreparationCode.PreconditionsUnsatisfied);
+        if (process is not null && await ReadProcessStatusAsync(process, RunPhase.Preparation, cancellationToken).ConfigureAwait(false)) await FailAsync(PreparationStage.Launch, PreparationCode.ProcessExited);
+        await CheckDeadlineAsync(preparationDeadline); cancellationToken.ThrowIfCancellationRequested();
         RunStartBoundary certificate;
         try
         {
             certificate = capture.Certify(boundary.CaptureRequestId, boundary.RealCapturedAt, boundary.Observation,
                 boundary.SynchronizationEvidence, boundary.PreconditionsSatisfied);
         }
-        catch (InvalidOperationException) { Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation); throw; }
-        trace.Record(new(PreparationStage.Ready, PreparationCode.Completed));
-        var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, trace);
+        catch (InvalidOperationException) { await FailAsync(PreparationStage.Synchronize, PreparationCode.StaleObservation); throw; }
+        await TraceAsync(new(PreparationStage.Ready, PreparationCode.Completed), required: true).ConfigureAwait(false);
+        var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, token => ReadProcessStatusAsync(process, RunPhase.Execution, token),
+            RecordExecutionTrace);
         return new(certificate, feed, boundary.CurrentRestorable);
+    }
+
+    private void RecordExecutionTrace(PreparationEvent evidence)
+    {
+        // Diagnostic persistence cannot delay a ready authoritative lifecycle failure.
+        // Cleanup's bounded Diagnostics stage joins the finite writes before final output.
+        lock (executionTraceGate)
+        {
+            if (executionTraceWrites.Count >= 1000) return;
+            executionTraceWrites.Add(TraceAsync(evidence).AsTask());
+        }
+    }
+
+    private async ValueTask<bool> ReadProcessStatusAsync(IOwnedProcess process, RunPhase phase, CancellationToken token)
+    {
+        if (phase == RunPhase.Preparation)
+            return await ReadPureAsync(PreparationStage.Launch, preparationDeadline, _ => process.HasExited, token).ConfigureAwait(false);
+        try
+        {
+            return await FiniteOperation.RunAsync<bool>(releaseClock, policy.OperationTimeout,
+                cancellation => new(Task.Run(() => { cancellation.ThrowIfCancellationRequested(); return process.HasExited; }, cancellation)), token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception exception) { throw new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, exception, phase); }
+    }
+
+    private async ValueTask<bool> RetryDelayAsync(IOwnedProcess? process, CancellationToken token)
+    {
+        using var waits = CancellationTokenSource.CreateLinkedTokenSource(token);
+        Task? delay = null; Task? exited = null;
+        try
+        {
+            exited = process?.WaitForExitAsync(waits.Token).AsTask();
+            delay = DelayAsync();
+            if (exited is not null)
+            {
+                await Task.WhenAny(delay, exited).ConfigureAwait(false);
+                if (exited.IsCompletedSuccessfully || await ReadProcessStatusAsync(process!, RunPhase.Preparation, token).ConfigureAwait(false))
+                    throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited);
+                if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
+            }
+            await delay.ConfigureAwait(false);
+            if (process is not null && await ReadProcessStatusAsync(process, RunPhase.Preparation, token).ConfigureAwait(false))
+                throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited);
+            return true;
+        }
+        finally
+        {
+            // Cancellation callbacks and late faults are observed; they cannot extend backoff.
+            FiniteOperation.CancelSafely(waits, _ => { });
+            foreach (var pending in new[] { delay, exited })
+                if (pending is not null) _ = pending.ContinueWith(t => _ = t.Exception, CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        }
+        async Task DelayAsync()
+        {
+            var target = preparationClock.Elapsed + policy.RetryDelay;
+            await preparationClock.DelayAsync(policy.RetryDelay, waits.Token).ConfigureAwait(false);
+            var remaining = target - preparationClock.Elapsed;
+            if (remaining > TimeSpan.Zero)
+            {
+                await FiniteOperation.DelayIndependentAsync(remaining, waits.Token).ConfigureAwait(false);
+                if (preparationClock.Elapsed < target)
+                    throw new ClockProviderException(new InvalidOperationException("RetryClockDidNotAdvance"));
+            }
+        }
     }
 
     private sealed record SetupAuthority(string[] Operations, TimeSpan Timeout);
@@ -312,13 +381,13 @@ public sealed class HostPreparation
                     }
                 }
             }, cancellationToken, recordException).ConfigureAwait(false);
-            trace.Record(new(stage, PreparationCode.Completed)); return result;
+            await TraceAsync(new(stage, PreparationCode.Completed), required: true).ConfigureAwait(false); return result;
         }
-        catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception)) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
+        catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception)) { await TraceAsync(new(stage, PreparationCode.Timeout)).ConfigureAwait(false); throw; }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken)
-        { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
+        { await TraceAsync(new(stage, PreparationCode.Cancelled)).ConfigureAwait(false); throw; }
         catch (ConnectionNotReadyException) when (stage == PreparationStage.Connect) { throw; }
-        catch (PreparationException exception) { trace.Record(new(exception.Stage, exception.Code)); throw; }
+        catch (PreparationException exception) { await TraceAsync(new(exception.Stage, exception.Code)).ConfigureAwait(false); throw; }
         catch (ClockProviderException) { throw; }
         catch (Exception exception)
         {
@@ -331,14 +400,38 @@ public sealed class HostPreparation
                 PreparationStage.Synchronize => PreparationCode.SynchronizationFailed,
                 _ => PreparationCode.SetupFailed
             };
-            trace.Record(new(stage, code)); throw new PreparationException(stage, code,
+            await TraceAsync(new(stage, code)).ConfigureAwait(false); throw new PreparationException(stage, code,
                 exception is ProviderCancellationException ? exception.InnerException : exception);
         }
     }
-    private void CheckDeadline(TimeSpan deadline)
-    { if (preparationClock.Elapsed >= deadline) { trace.Record(new(PreparationStage.Started, PreparationCode.Timeout)); throw FiniteOperation.DeadlineReached("PreparationDeadlineReached"); } }
-    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
-    private void Fail(PreparationStage stage, PreparationCode code)
-    { trace.Record(new(stage, code)); throw new PreparationException(stage, code); }
+    private async ValueTask CheckDeadlineAsync(TimeSpan deadline)
+    { if (preparationClock.Elapsed >= deadline) { await TraceAsync(new(PreparationStage.Started, PreparationCode.Timeout)); throw FiniteOperation.DeadlineReached("PreparationDeadlineReached"); } }
+    private async ValueTask FailAsync(PreparationStage stage, PreparationCode code)
+    { await TraceAsync(new(stage, code)); throw new PreparationException(stage, code); }
+
+    private async ValueTask TraceAsync(PreparationEvent evidence, bool required = false)
+    {
+        // One worker per sink: a blocked write cannot spawn replacement writes. Error
+        // diagnostics have an independent explicit ceiling and cannot replace their cause.
+        try
+        {
+            var clock = required ? preparationClock : releaseClock;
+            var deadline = required ? Min(preparationDeadline, clock.Elapsed + policy.OperationTimeout)
+                : clock.Elapsed + policy.OperationTimeout;
+            await FiniteOperation.RunUntilAsync<bool>(clock, deadline, token => new(Task.Run(async () =>
+            {
+                await traceGate.WaitAsync(token).ConfigureAwait(false);
+                try { token.ThrowIfCancellationRequested(); trace.Record(evidence); return true; }
+                finally { traceGate.Release(); }
+            }, token)), required ? preparationCancellation : CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            if (!required) { recordException?.Invoke(exception); return; }
+            if (exception is ClockProviderException || FiniteOperation.IsDeadline(exception) ||
+                exception is OperationCanceledException && preparationCancellation.IsCancellationRequested) throw;
+            throw new PreparationException(evidence.Stage, PreparationCode.TraceUnavailable, exception);
+        }
+    }
     private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
 }

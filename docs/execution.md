@@ -63,7 +63,10 @@ Real and condition clock instances are supplied by the trusted execution policy,
 
 Endpoint exclusion uses the terminal `OwnershipRelease` cleanup stage after all
 `InputRelease` and `ResourceRelease` obligations, regardless of registration time.
-The owner skips this stage if any preceding resource release is unconfirmed;
+An optional trusted pure synchronous closeOwnership callback registered with
+OwnershipRelease runs at cleanup entry, outside the registration lock, revoking
+provider starts before diagnostics or release. Terminal endpoint removal remains
+separate. The owner skips the release action if any preceding resource release is unconfirmed;
 that flag remains fail closed even after the diagnostic evidence limit is reached.
 Ownership callbacks otherwise share the original cleanup deadline and receive the
 same immediate bounded attempt after expiry. Failure maps to `ResourceReleaseUnconfirmed`.
