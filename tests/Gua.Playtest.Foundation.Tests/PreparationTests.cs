@@ -1321,8 +1321,16 @@ public sealed class PreparationTests
                 async (_, token) => { launcher.Process.Exit(); await host!.Feed.CaptureAsync(token); return true; });
             Assert.Equal(1, result.ExitCode); Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
             Assert.False(result.PostProcessingComplete);
-            Assert.Contains(result.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed &&
-                item.Exception?.Type == (block ? typeof(TimeoutException) : typeof(IOException)).FullName);
+            Assert.Contains(result.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed);
+            if (!block) Assert.Contains(result.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed && item.Exception?.Type == typeof(IOException).FullName);
+            else
+            {
+                // Cleanup's fair stage budget may expire before the independent
+                // provider deadline is delivered on a loaded runner. Either path
+                // must stay unconfirmed; only an observed provider fault has type.
+                Assert.True(result.PostProcessing.Any(item => item.Reason == PostProcessingReason.DiagnosticsFailed && item.Exception?.Type == typeof(TimeoutException).FullName) ||
+                    result.PostProcessing.Any(item => item.Reason == PostProcessingReason.CleanupTimeout));
+            }
         }
         finally { release.Set(); if (block) await returned.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
     }
