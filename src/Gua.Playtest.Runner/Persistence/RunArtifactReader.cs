@@ -18,7 +18,9 @@ public static class RunArtifactReader
             var file = Path.Combine(root, "result.json");
             if (!File.Exists(file)) return new(ResultReadState.Missing);
             RunArtifactStore.CheckPath(file);
-            if (new FileInfo(file).Length > limits.MaxFileBytes) return new(ResultReadState.Invalid);
+            var opened = FileIdentity.OpenRegular(file);
+            using (var stream = opened.Stream)
+                if (stream.Length > limits.MaxFileBytes) return new(ResultReadState.Invalid);
             var report = await new StaticContractValidator([root]).ValidateFileAsync(file, cancellationToken).ConfigureAwait(false);
             if (report.Code == "Interrupted") return new(ResultReadState.Interrupted);
             if (!report.IsValid || report.Document is not ResultDocument result || result.RunId != Path.GetFileName(root))

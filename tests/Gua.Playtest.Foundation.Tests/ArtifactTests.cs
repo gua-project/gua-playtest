@@ -81,6 +81,9 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal(!incomplete, read.Result!.PostProcessing.Complete);
         using var json = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "completion.json")));
         Assert.Equal(state.ToString(), json.RootElement.GetProperty("artifacts")[0].GetProperty("state").GetString());
+        foreach (var artifact in json.RootElement.GetProperty("artifacts").EnumerateArray())
+            foreach (var optional in new[] { "fileName", "bytes", "sha256", "additionalFiles" })
+                Assert.False(artifact.TryGetProperty(optional, out _));
         Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "trace.json")));
     }
     [Fact]
@@ -284,6 +287,42 @@ public sealed class ArtifactTests : IDisposable
         var arguments = OperatingSystem.IsWindows() ? new[] { "/c", "mklink", "/H", link, target } : new[] { target, link };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+    }
+    [Theory]
+    [InlineData("observation-1")]
+    [InlineData("decision-1")]
+    [InlineData("action-1")]
+    [InlineData("Approved")]
+    public void Reference_secret_collisions_fail_without_persisting_changed_identifiers(string secret)
+    {
+        var store = RunArtifactStore.Create(root, Limits, new([secret], []));
+        var result = store.ConfirmPrimary(Passed, [new(ObservationBoundary.PrimaryDecision, "observation-1")],
+            [new("decision-1", "observation-1", "action-1", "Approved")], []);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        Assert.Empty(Directory.GetFiles(store.DirectoryPath, ".pending-*"));
+    }
+    [Fact]
+    public async Task Nonregular_artifact_and_result_are_rejected_before_blocking_read()
+    {
+        if (OperatingSystem.IsWindows()) return; // FIFO fixture exercises installed Unix open/stat ABI on CI.
+        var store = Store(); Confirm(store);
+        void Fifo(string path)
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo") { UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add(path);
+            using var process = System.Diagnostics.Process.Start(start)!;
+            Assert.True(process.WaitForExit(5000)); Assert.Equal(0, process.ExitCode);
+        }
+        Fifo(Path.Combine(store.DirectoryPath, "trace.gua"));
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(),
+            [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", 0, Convert.ToHexStringLower(SHA256.HashData([]))),
+             new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Failure);
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1));
+        Fifo(Path.Combine(store.DirectoryPath, "result.json")); elapsed.Restart();
+        Assert.Equal(ResultReadState.Invalid, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1));
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }

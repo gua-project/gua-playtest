@@ -210,10 +210,13 @@ public sealed class FoundationTests
         {
             using var trace = new GuaTraceSession(new GuaTraceOptions
             { OutputDirectory = root, SavePolicy = GuaTraceSavePolicy.Always, Profile = "player", Secrets = ["secret-token"] });
+            using var telemetry = new TraceFlushTelemetry(trace);
             var step = trace.BeginStep(GuaTraceStepKind.Mark, "fixture secret-token");
             Assert.True(trace.Record(step, "fixture", JsonSerializer.SerializeToElement(new { token = "secret-token" }), sensitive: true));
             trace.EndStep(step, GuaTraceOutcome.Passed);
-            Assert.True(await trace.CompleteAsync(GuaTraceOutcome.Passed), string.Join(",", trace.Status.Issues));
+            var completed = await trace.CompleteAsync(GuaTraceOutcome.Passed);
+            if (!completed) telemetry.ReportFailure();
+            Assert.True(completed, string.Join(",", trace.Status.Issues));
             var read = GuaTraceReader.Read(trace.ArtifactPath);
             Assert.True(read.Manifest.Finalized);
             Assert.Empty(read.Issues);

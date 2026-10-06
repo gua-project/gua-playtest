@@ -155,10 +155,12 @@ public sealed class RunArtifactStore
         if (associated.Count > limits.MaxItems) throw new ArtifactLimitException();
         var path = Path.Combine(DirectoryPath, Path.Combine(segments));
         CheckPath(path);
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        cancellationToken.ThrowIfCancellationRequested();
+        var opened = FileIdentity.OpenRegular(path);
+        using var stream = opened.Stream;
         if (stream.Length != reference.Bytes) throw new InvalidDataException("ArtifactLengthMismatch");
         if (usedBytes + stream.Length > limits.MaxRunBytes) throw new ArtifactLimitException();
-        if (!identities.Add(FileIdentity.Read(stream.SafeFileHandle))) throw new InvalidDataException("ArtifactFileAlias");
+        if (!identities.Add(opened.Identity)) throw new InvalidDataException("ArtifactFileAlias");
         cancellationToken.ThrowIfCancellationRequested();
         if (Convert.ToHexStringLower(SHA256.HashData(stream)) != reference.Sha256) throw new InvalidDataException("ArtifactHashMismatch");
         usedBytes += stream.Length;
@@ -234,7 +236,11 @@ public sealed class RunArtifactStore
             return JsonSerializer.SerializeToNode(value, value.GetType(), Json);
         var result = new JsonObject();
         foreach (var property in value.GetType().GetProperties())
-            Add(result, JsonNamingPolicy.CamelCase.ConvertName(property.Name), property.GetValue(value), ref count, depth, structural: true);
+        {
+            var propertyValue = property.GetValue(value);
+            if (propertyValue is not null)
+                Add(result, JsonNamingPolicy.CamelCase.ConvertName(property.Name), propertyValue, ref count, depth, structural: true);
+        }
         return result;
     }
     private void Add(JsonObject obj, string key, object? value, ref int count, int depth, bool structural = false)
@@ -243,7 +249,8 @@ public sealed class RunArtifactStore
         ChargeChars(key.Length);
         var safeKey = redactor.Redact(key);
         if (structural && (safeKey != key || redactor.Sensitive(key))) throw new InvalidDataException("StructuralRedactionCollision");
-        if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason") &&
+        if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason" or
+            "observationId" or "decisionId" or "actionId" or "reasonCode") &&
             value is string structuralText && redactor.Redact(structuralText) != structuralText)
             throw new InvalidDataException("StructuralRedactionCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
