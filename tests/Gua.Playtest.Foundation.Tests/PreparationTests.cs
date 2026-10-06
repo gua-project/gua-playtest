@@ -55,6 +55,7 @@ public sealed class PreparationTests
         private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Exit() { HasExited = true; exited.TrySetResult(); }
         public void ConfirmExitWithStaleStatus() => exited.TrySetResult();
+        public void FailExit(Exception exception) => exited.TrySetException(exception);
         public ValueTask WaitForExitAsync(CancellationToken token)
         { OnExitWait?.Invoke(token); return ExitWaitFailure is null ? new(DirectExitWatch ? exited.Task : exited.Task.WaitAsync(token)) : ValueTask.FromException(ExitWaitFailure); }
         public ValueTask<bool> ShutdownAsync(CancellationToken token)
@@ -674,7 +675,8 @@ public sealed class PreparationTests
         {
 
             connection.BlockedCapture = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            connection.OnCapture = token => token.Register(() => throw new IOException("losing-capture-cancel"));
+            connection.OnCapture = token =>
+            { token.Register(() => throw new IOException("losing-capture-cancel")); launcher.Process.FailExit(typed); };
         }
         else
         {
@@ -684,7 +686,6 @@ public sealed class PreparationTests
         var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
             .PrepareAsync(run, cleanup, null, null);
         run.BeginRunning(host.Boundary);
-        if (exitWaitFails) launcher.Process.ExitWaitFailure = typed;
         var failure = await Assert.ThrowsAsync<RunFailureException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask());
         Assert.Equal(expected, failure.Cause);
         var evidence = Assert.IsType<AggregateException>(failure.InnerException).Flatten().InnerExceptions;
@@ -848,17 +849,21 @@ public sealed class PreparationTests
     public async Task SimultaneouslyFaultedCaptureAndProcessWatchKeepBothOriginalsAndNormativeCause(int sourceKind)
     {
         var clock = new Clock(); var run = Run(clock); var launcher = new Launcher();
+        launcher.Process.DirectExitWatch = true;
         var contract = new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Contract);
         var hostFailure = new RunEvent(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host);
         var source = sourceKind == 0 ? (Exception)new IOException() :
             new RunFailureException(sourceKind == 2 ? contract : hostFailure, new IOException());
         var exit = new RunFailureException(sourceKind == 2 ? hostFailure : contract, new FormatException());
         var connection = new Connection { CaptureFailure = source };
+        // Deliver both faults in the same actual source invocation, after the
+        // now-watched entry status read; neither is a future unstarted request.
+        connection.OnCapture = _ => launcher.Process.FailExit(exit);
 
         PreparedHost? prepared = null;
         var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, cleanup, token) =>
         { prepared = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
-            .PrepareAsync(session, cleanup, null, null, token); launcher.Process.ExitWaitFailure = exit; return prepared.Boundary; },
+            .PrepareAsync(session, cleanup, null, null, token); return prepared.Boundary; },
             async (_, token) => { await prepared!.Feed.CaptureAsync(token); return true; });
         Assert.Equal(contract, outcome.Primary.Cause); Assert.Equal(2, outcome.ExitCode);
         Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName);
@@ -1584,6 +1589,80 @@ public sealed class PreparationTests
         Assert.Equal(RunReason.PreparationTimeout, result.Primary.Cause.Reason);
         Assert.Equal(0, setup.Calls); Assert.Equal(0, connection.Synchronizations);
         Assert.Contains(new(PreparationStage.Setup, PreparationCode.Timeout), trace.Events);
+    }
+
+    [Theory]
+    [InlineData(false, 0)] [InlineData(true, 0)]
+    [InlineData(false, 1)] [InlineData(true, 1)]
+    [InlineData(false, 2)] [InlineData(true, 2)]
+    [InlineData(false, 3)] [InlineData(true, 3)]
+    public async Task EntryStatusCannotHideExactExitWithStaleBlockingOrThrowingGetter(bool waiting, int mode)
+    {
+        using var release = new ManualResetEventSlim(); using var cancellation = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = Run(clock); run.BeginPreparation(); var cleanup = new OwnedCleanup(); var connection = new Connection();
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary); run.Evaluate();
+        var reads = 0; var sourceStarts = 0;
+        connection.OnCapture = _ => Interlocked.Increment(ref sourceStarts);
+        connection.OnWait = _ => Interlocked.Increment(ref sourceStarts);
+        launcher.Process.OnStatus = () =>
+        {
+            Interlocked.Increment(ref reads); entered.TrySetResult();
+            if (mode == 0) throw new IOException("must-not-read-after-known-exit");
+            if (mode == 2) { try { release.Wait(); } finally { returned.TrySetResult(); } }
+            else launcher.Process.ConfirmExitWithStaleStatus();
+            if (mode == 3) throw new IOException("status-failed-during-exit");
+        };
+        if (mode == 0) launcher.Process.ConfirmExitWithStaleStatus();
+        try
+        {
+            var pending = waiting ? host.Feed.WaitForChangeAsync(cancellation.Token).AsTask() : (Task)host.Feed.CaptureAsync(cancellation.Token).AsTask();
+            if (mode == 2)
+            { await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); launcher.Process.ConfirmExitWithStaleStatus(); cancellation.Cancel(); }
+            var failure = await Assert.ThrowsAsync<PreparationException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(PreparationCode.ProcessExited, failure.Code); Assert.Equal(0, connection.Captures);
+            Assert.Equal(0, sourceStarts);
+            Assert.Equal(mode == 0 ? 0 : 1, reads);
+            launcher.Process.OnStatus = null;
+            run.RecordException(failure); run.Evaluate(candidates: [failure.Cause], cancelled: cancellation.IsCancellationRequested);
+            var outcome = await cleanup.CompleteAsync(run, clock);
+            Assert.Equal(1, outcome.ExitCode); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        }
+        finally { release.Set(); if (mode == 2) await returned.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+    [Fact]
+    public async Task ReadySourceUsesExactWatchWithoutAnotherPotentiallyBlockedStatusRead()
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); run.BeginPreparation();
+        var cleanup = new OwnedCleanup(); var sourceReturned = false; var reads = 0;
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)),
+            CurrentObservation = new(TimeSpan.Zero, BooleanUnit(true), BooleanUnit(false)) };
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary); run.Evaluate();
+        launcher.Process.OnStatus = () => { reads++; if (sourceReturned) throw new IOException("late-getter-must-not-strand-ready-unit"); };
+        connection.OnCapture = _ => sourceReturned = true;
+        var observation = await host.Feed.CaptureAsync(CancellationToken.None);
+        Assert.Equal(1, reads); Assert.Equal(1, connection.Captures);
+        run.Evaluate(observation.Success, observation.CapturedAt, failureUnit: observation.Failure);
+        var result = await cleanup.CompleteAsync(run, clock); Assert.Equal(ResultStatus.Passed, result.Primary.Status);
+    }
+    [Fact]
+    public async Task ContinuousOwnerLifecycleCheckSurvivesTheFirstNonterminalEvaluation()
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); run.BeginPreparation();
+        var cleanup = new OwnedCleanup(); var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(new()), new Trace())
+            .PrepareAsync(run, cleanup, null, null);
+        run.BeginRunning(host.Boundary); run.Evaluate(); Assert.Null(run.Primary);
+        clock.OnRead = () => { clock.OnRead = null; launcher.Process.ConfirmExitWithStaleStatus(); };
+        run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        var result = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(1, result.ExitCode); Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
+        Assert.Contains(result.Events, item => item.Reason == RunReason.GoalSatisfied);
     }
 
 }

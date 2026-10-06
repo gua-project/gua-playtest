@@ -423,8 +423,8 @@ public sealed class RunSession
         // processing, including initial goal success that skips the driver/feed.
         if (initialLifecycleFailure is { } lifecycle)
         {
-            initialLifecycleFailure = null;
-            if (lifecycle() is { } failure) { RecordException(failure); cycle.Add(failure.Cause); }
+            if (lifecycle() is { } failure)
+            { initialLifecycleFailure = null; RecordException(failure); cycle.Add(failure.Cause); }
         }
         if (cycle.Count != 0)
         {

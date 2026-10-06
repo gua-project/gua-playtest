@@ -201,13 +201,19 @@ ceiling. Leaves take precedence over nested aggregate wrappers after preserving
 the public boundary; traversal is separately capped at max(4096, 128 × remaining
 evidence slots), up to 100000 visits. Stack/visited growth is bounded too. Concurrent exit-watch failures remain visible
 even when the source capture has already completed successfully. The exact process
-exit task is armed before source invocation, including synchronous source throws.
+exit task is armed before entry status metadata, capture ownership acquisition and
+source invocation, including synchronous source throws. A ready exit cannot be
+hidden by a stale, blocked or throwing status getter. A completed source result
+uses the exact exit task directly instead of another potentially blocked getter.
+Capture ownership remains held until the actual source invocation ends, including
+late results after cancellation or wrapper supersession.
 Its successful completion is authoritative even when a status getter still reports
 alive; readiness is read directly from that task without an async forwarding layer.
 A separate owned exact-handle watch remains armed across preparation return and
-the initial Running observation/clock processing. The serialized owner samples it
-in that same initial arbitration unit, so an already-known exit outranks an initial
-goal even when the driver/feed is skipped. Cleanup cancels only that owned watch.
+the initial and subsequent Running observation/clock processing. The serialized
+owner keeps sampling it in every arbitration unit until a lifecycle failure is
+consumed or the primary is confirmed, so an already-known exit outranks a goal
+even when the driver/feed is skipped. Cleanup cancels only that owned watch.
 The completed-preparation/deadline path samples that same watch while retaining
 Preparing phase; it records failure/trace evidence without starting Running or
 crediting the initial goal. Whole-Setup metadata deadlines also apply to an empty

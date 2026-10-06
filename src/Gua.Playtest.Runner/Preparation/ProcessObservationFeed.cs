@@ -9,22 +9,20 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
     private readonly SemaphoreSlim captureOwner = new(1);
     public async ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken)
     {
-        await captureOwner.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        return await WatchAsync(async token =>
         {
-            await CheckAliveAsync(cancellationToken).ConfigureAwait(false);
-            // Keep this task alive until the actual capture ends, even after supersession.
-            // RunMonitor joins this task and retains its observation before a fresh capture.
-            return await WatchAsync(token => feed.CaptureAsync(token).AsTask(), cancellationToken).ConfigureAwait(false);
-        }
-        finally { captureOwner.Release(); }
+            await captureOwner.WaitAsync(token).ConfigureAwait(false);
+            try { return await feed.CaptureAsync(token).ConfigureAwait(false); }
+            // Source ownership lasts until the actual invocation ends, including
+            // a late result after wrapper supersession or process exit.
+            finally { captureOwner.Release(); }
+        }, cancellationToken).ConfigureAwait(false);
     }
     public async ValueTask WaitForChangeAsync(CancellationToken cancellationToken) =>
         _ = await WatchAsync(async token => { await feed.WaitForChangeAsync(token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
 
     private async Task<T> WatchAsync<T>(Func<CancellationToken, Task<T>> request, CancellationToken cancellationToken)
     {
-        await CheckAliveAsync(cancellationToken).ConfigureAwait(false); cancellationToken.ThrowIfCancellationRequested();
         using var wait = new CancellationTokenSource();
         using var exitWait = new CancellationTokenSource();
         var faults = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
@@ -40,15 +38,19 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             // Supersession cancels only the source; the lifecycle watch remains live.
             exited = WatchExitAsync();
             if (exited.IsCompletedSuccessfully) throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
-            changed = request(wait.Token);
+            // Entry status is part of the watched task. After source completion
+            // inspect the armed exact exit task directly; a further getter must
+            // not strand an already-authoritative observation or exit notification.
+            changed = ReadSourceAsync();
             var winner = await Task.WhenAny(changed, exited).ConfigureAwait(false);
             await winner.ConfigureAwait(false);
             // Successful exact-handle exit is authoritative even if the getter is stale.
             if (exited.IsCompletedSuccessfully) throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
             // A completed losing watch still carries authoritative lifecycle failure evidence.
             if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
-            await CheckAliveAsync(CancellationToken.None).ConfigureAwait(false);
             result = await changed.ConfigureAwait(false);
+            if (exited.IsCompletedSuccessfully) throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
+            if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -98,6 +100,15 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             // continuation could hide a ready exit behind a ready source result.
             try { return process.WaitForExitAsync(exitWait.Token).AsTask(); }
             catch (Exception exception) { return Task.FromException(exception); }
+        }
+        async Task<T> ReadSourceAsync()
+        {
+            await CheckAliveAsync(wait.Token).ConfigureAwait(false);
+            if (exited?.IsCompletedSuccessfully == true) throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
+            if (exited?.IsFaulted == true || exited?.IsCanceled == true) await exited.ConfigureAwait(false);
+            wait.Token.ThrowIfCancellationRequested();
+            var value = await request(wait.Token).ConfigureAwait(false);
+            return value;
         }
         var requestedCancellation = failure is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
             (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken);
