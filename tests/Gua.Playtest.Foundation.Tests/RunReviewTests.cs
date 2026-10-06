@@ -9,6 +9,66 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Fact]
+    public async Task FalseExecutionFallbackRetainsCancellationAfterFirstEvaluationSample()
+    {
+        using var cancel = new CancellationTokenSource(); var real = new LaunchReadClock(); var condition = new Clock();
+        var run = new RunSession(Limits(), real, condition); int reads = 0;
+        var result = await RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), (_, _) =>
+        {
+            void Read()
+            {
+                // Two finite-operation reads precede Evaluate's real-clock read. Its cancellation
+                // argument has already been sampled when this third read interrupts the caller.
+                if (++reads == 3) cancel.Cancel(); else real.OnRead = Read;
+            }
+            real.OnRead = Read; return ValueTask.FromResult(false);
+        }, cancel.Token);
+        Assert.Equal(10, result.ExitCode); Assert.Equal(RunReason.ExecutionError, result.Primary.Cause.Reason);
+        Assert.Contains(result.Events, x => x.Reason == RunReason.Cancelled && x.Origin == RunOrigin.User);
+        Assert.Equal(ExecutionState.Finished, run.State);
+    }
+    private sealed class StartSequenceClock(params TimeSpan[] values) : IClock
+    {
+        private int reads;
+        public TimeSpan Elapsed => values[Math.Min(reads++, values.Length - 1)];
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => new(new TaskCompletionSource().Task);
+    }
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
+    [InlineData(4)] [InlineData(5)] [InlineData(6)] [InlineData(7)]
+    [InlineData(8)] [InlineData(9)]
+    public async Task PreparationClockRejectionIsInvalidContractAndStillReleasesOwnedResources(int boundary)
+    {
+        var zero = TimeSpan.Zero; var good = TimeSpan.FromMilliseconds(100); var reset = TimeSpan.FromMilliseconds(50);
+        TimeSpan[] readings = boundary switch
+        {
+            0 => [good, reset], 1 => [zero, good, reset], 2 => [zero, good, good, reset],
+            3 => [zero, good, good, reset], 4 => [zero, good, good, good, reset],
+            5 => [zero, good, good, good, good, reset], 6 => [good, reset],
+            7 => [zero, good, reset], 8 => [zero, TimeSpan.FromTicks(-1)], _ => [zero, TimeSpan.MaxValue]
+        };
+        var condition = new StartSequenceClock(readings); var real = new Clock();
+        var run = new RunSession(Limits(), real, condition, Condition(), Condition());
+        var cleanup = new OwnedCleanup(); bool released = false, executed = false;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        RunOutcome result;
+        if (boundary is <= 2 or >= 8)
+            result = await RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), (_, _) =>
+            { executed = true; return ValueTask.FromResult(true); });
+        else
+            result = await RunExecutor.ExecuteAsync(run, real, cleanup, (session, _, _) =>
+            {
+                var request = session.ArmRunningBoundary();
+                return ValueTask.FromResult(request.Certify(request.RequestId, real.Elapsed,
+                    new(good, Unit(), Unit("false")), "fresh/source/epoch", true));
+            }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.Equal(2, result.ExitCode); Assert.Equal(ResultStatus.Invalid, result.Primary.Status);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Clock), result.Primary.Cause);
+        Assert.False(executed); Assert.True(released); Assert.Null(run.RunningOrigin);
+        Assert.False(run.GoalVerified); Assert.Equal(ExecutionState.Finished, run.State);
+        Assert.Contains(result.Exceptions, x => x.Type is "System.InvalidOperationException" or "System.ArgumentOutOfRangeException");
+    }
     [Theory]
     [InlineData(0, false)] [InlineData(0, true)]
     [InlineData(1, false)] [InlineData(1, true)]

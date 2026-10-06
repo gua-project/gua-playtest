@@ -82,7 +82,8 @@ public static class RunExecutor
                     var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
                         token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken).ConfigureAwait(false);
                     run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
-                    if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
+                    if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
+                        cancelled: cancellationToken.IsCancellationRequested);
                 }
             }
         }

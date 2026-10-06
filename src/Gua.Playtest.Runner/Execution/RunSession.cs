@@ -52,8 +52,22 @@ public sealed class RunSession
     {
         var now = conditionClock.Elapsed;
         if (now < lastCondition || now < TimeSpan.Zero || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+        {
+            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
             throw new InvalidOperationException("ConditionClockInvalid");
+        }
         return lastCondition = now;
+    }
+    private ConditionSession? StartCondition(PreparedCondition? prepared, TimeSpan origin)
+    {
+        try { return prepared?.Start(conditionClock, origin); }
+        catch (ArgumentOutOfRangeException)
+        {
+            // A clock can reset between the shared-origin read and either condition's start.
+            // Keep typed contract evidence before rethrowing the unchanged provider exception.
+            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
+            throw;
+        }
     }
     private TimeSpan ReadReal()
     {
@@ -73,8 +87,8 @@ public sealed class RunSession
         if (ReadReal() - preparationOrigin >= Limits.PreparationTimeout)
             throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         var sharedConditionOrigin = ReadCondition();
-        successSession = success?.Start(conditionClock, sharedConditionOrigin);
-        failureSession = failure?.Start(conditionClock, sharedConditionOrigin);
+        successSession = StartCondition(success, sharedConditionOrigin);
+        failureSession = StartCondition(failure, sharedConditionOrigin);
         RunningOrigin = lastReal; State = ExecutionState.Running;
     }
     public RunStartCapture ArmRunningBoundary()
@@ -101,8 +115,8 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(boundary); Require(ExecutionState.Preparing);
         if (boundary.Owner != this || boundary.Used) throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
         ValidateStartTimes(boundary.RealCapturedAt, boundary.InitialObservation.CapturedAt);
-        successSession = success?.Start(conditionClock, boundary.InitialObservation.CapturedAt);
-        failureSession = failure?.Start(conditionClock, boundary.InitialObservation.CapturedAt);
+        successSession = StartCondition(success, boundary.InitialObservation.CapturedAt);
+        failureSession = StartCondition(failure, boundary.InitialObservation.CapturedAt);
         boundary.Used = true;
         RunningOrigin = boundary.RealCapturedAt; State = ExecutionState.Running;
     }
