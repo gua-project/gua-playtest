@@ -34,9 +34,11 @@ public sealed class PreparationTests
     }
     private sealed class Trace : IPreparationTrace
     {
-        public List<PreparationEvent> Events { get; } = [];
+        private readonly object gate = new();
+        private readonly List<PreparationEvent> events = [];
+        public IReadOnlyList<PreparationEvent> Events { get { lock (gate) return events.ToArray(); } }
         public Action<PreparationEvent>? OnRecord { get; set; }
-        public void Record(PreparationEvent evidence) { Events.Add(evidence); OnRecord?.Invoke(evidence); }
+        public void Record(PreparationEvent evidence) { lock (gate) events.Add(evidence); OnRecord?.Invoke(evidence); }
     }
     private sealed class Process : IOwnedProcess
     {
@@ -1093,16 +1095,18 @@ public sealed class PreparationTests
     {
         var clock = new Clock(); var policy = Policy();
         await Execute(new(policy, clock, new Launcher(), new Connector(new() { ReleaseConfirmed = false }), new Trace()), clock);
-        var unrelated = new Connector(new()); var completed = false;
+        var unrelated = new Connector(new());
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var trace = new Trace { OnRecord = item =>
         {
             if (item.Code != PreparationCode.Busy) return;
             Task.Run(async () => await Execute(new(Policy(), clock, new Launcher(), unrelated, new Trace()), clock))
                 .WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
-            completed = true;
+            completed.TrySetResult();
         } };
         await Execute(new(policy, clock, new Launcher(), new Connector(new()), trace), clock);
-        Assert.True(completed); Assert.Equal(1, unrelated.Calls);
+        await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, unrelated.Calls);
     }
 
     [Fact]
