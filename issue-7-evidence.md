@@ -5,7 +5,7 @@ Environment: Windows x64, .NET SDK 10.0.401; actual restored Gua.Testing/Gua.Run
 1.1.1 packages and their native runtime. Core remains native-free.
 
 `dotnet test -c Release --no-restore --logger trx --results-directory artifacts/tests`:
-16 bridge tests, 42 contract tests and 16 foundation tests passed, no skips. The later batch/intermediate-change regression was added after the Windows execution transport disconnected; its execution requires the new-head real CI result.
+16 bridge tests, 42 contract tests and 16 foundation tests passed, no skips. The later batch/intermediate-change and standard string-list regressions were added after the Windows execution transport disconnected; its execution requires the new-head real CI result.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

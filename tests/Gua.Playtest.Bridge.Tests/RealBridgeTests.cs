@@ -338,4 +338,26 @@ public sealed class RealBridgeTests
         Assert.Equal(2, Assert.Single(result[1].Changes!).Event.GetProperty("after").GetProperty("value").GetInt32());
         Assert.All(reader.ReadBatch([a, b]), r => Assert.Empty(r.Changes!));
     }
+
+    [Fact]
+    public void StandardTagsPreserveNonemptyAndEmptyStringListValues()
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter();
+        runtime.BeginWorldFrame("tags");
+        runtime.RegisterWorldObject(new("tagged", "item", "Tagged", GuaWorldSpace.World2D, new(0, 0),
+            VisibleToPlayer: true, Tags: ["rare", "quest"]));
+        runtime.RegisterWorldObject(new("empty", "item", "Empty", GuaWorldSpace.World2D, new(1, 0),
+            VisibleToPlayer: true, Tags: []));
+        runtime.EndWorldFrame(); using var reader = Reader(Start(runtime));
+        var tagged = Read("object", "standard", "tags", "list", "tagged"); tagged["valueType"]!["elementType"] = "string";
+        var empty = Read("object", "standard", "tags", "list", "empty"); empty["valueType"]!["elementType"] = "string";
+        var result = reader.ReadBatch([tagged, empty]);
+        Assert.All(result, r => Assert.Equal(ReadAvailability.Available, r.Availability));
+        var list = Assert.Single(result[0].Reads).Value!.Value;
+        Assert.Equal("list", list.GetProperty("type").GetString()); Assert.Equal("string", list.GetProperty("elementType").GetString());
+        Assert.Equal(new[] { "rare", "quest" }, list.GetProperty("value").EnumerateArray().Select(v => v.GetString()));
+        var noTags = Assert.Single(result[1].Reads).Value!.Value;
+        Assert.Equal("list", noTags.GetProperty("type").GetString()); Assert.Equal("string", noTags.GetProperty("elementType").GetString());
+        Assert.Empty(noTags.GetProperty("value").EnumerateArray());
+    }
 }

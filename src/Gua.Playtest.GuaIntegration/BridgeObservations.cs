@@ -237,6 +237,12 @@ public sealed class BridgeObservations : IDisposable
     private static JsonElement? Scalar(JsonElement field, JsonObject type)
     {
         string kind = type["type"]!.GetValue<string>();
+        if (kind == "list" && type["elementType"]?.GetValue<string>() == "string" && field.ValueKind == JsonValueKind.Array)
+        {
+            var list = new JsonObject { ["type"] = "list", ["elementType"] = "string",
+                ["value"] = JsonNode.Parse(field.GetRawText()) };
+            return GuaDistribution.ValidateJson("value-v1.schema.json", list.ToJsonString()) ? JsonSerializer.SerializeToElement(list) : null;
+        }
         if (kind == "bool" && field.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
             kind == "string" && field.ValueKind != JsonValueKind.String ||
             kind is "integer" or "number" && field.ValueKind != JsonValueKind.Number ||
