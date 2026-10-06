@@ -8,8 +8,22 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
     public async ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken)
     {
         CheckAlive();
-        var capture = await feed.CaptureAsync(cancellationToken).ConfigureAwait(false);
-        CheckAlive(); return capture;
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var capture = feed.CaptureAsync(wait.Token).AsTask();
+        var exited = process.WaitForExitAsync(wait.Token).AsTask();
+        try
+        {
+            var winner = await Task.WhenAny(capture, exited).ConfigureAwait(false);
+            await winner.ConfigureAwait(false);
+            CheckAlive();
+            return await capture.ConfigureAwait(false);
+        }
+        finally
+        {
+            wait.Cancel();
+            _ = capture.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            _ = exited.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        }
     }
     public async ValueTask WaitForChangeAsync(CancellationToken cancellationToken)
     {

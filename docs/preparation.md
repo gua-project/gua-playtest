@@ -70,6 +70,8 @@ handle created by `Process.Start`, never a process name, discovered PID, another
 user's attached process, or a whole process tree. Descendant ownership requires
 independent proof and registration. Process shutdown and connection release are
 registered with #6 cleanup and have finite deadlines even after caller cancellation.
+Connection/owner input release uses `InputRelease` before the process's
+`ResourceRelease`, retaining a live host for authoritative release confirmation.
 Failure preserves the primary result and reports resource release unconfirmed.
 An acquisition still pending at cleanup confirmation also keeps local exclusion
 closed, even if its late task subsequently self-releases; that frozen outcome is
@@ -77,7 +79,8 @@ not silently rewritten into confirmed cleanup or permission to reclaim an owner.
 An attached session owns only its connection/subscriptions/owner input, not the
 external host. `ReleaseAsync` must return authoritative evidence and cannot claim
 lease expiry as confirmed input release. Launched process exit remains visible
-through the returned observation feed during a blocked Planner/action wait.
+through the returned observation feed during both a blocked capture and a blocked
+Planner/action/change wait.
 
 ## Initial synchronized observation
 

@@ -91,7 +91,7 @@ public sealed class HostPreparation
                         await ReleaseUnregisteredAsync(acquired.ReleaseAsync).ConfigureAwait(false);
                         token.ThrowIfCancellationRequested();
                     }
-                    try { RegisterRelease(cleanup, acquired.ReleaseAsync); }
+                    try { RegisterRelease(cleanup, acquired.ReleaseAsync, CleanupStage.InputRelease); }
                     catch
                     {
                         await ReleaseUnregisteredAsync(acquired.ReleaseAsync).ConfigureAwait(false);
@@ -103,7 +103,7 @@ public sealed class HostPreparation
             }
             catch (ConnectionNotReadyException) when (attempt + 1 < policy.ConnectAttempts)
             {
-                await Step(PreparationStage.Connect, preparationDeadline, async token =>
+                await Step(PreparationStage.RetryDelay, preparationDeadline, async token =>
                 { await clock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
             }
             catch (ConnectionNotReadyException) { Fail(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
@@ -114,11 +114,19 @@ public sealed class HostPreparation
         if (setup is not null)
         {
             if (!setup.IsAuthorized(policy.HostMode)) Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
-            var operations = setup.OperationIds.ToArray();
-            if (setup.MaximumOperations is < 1 or > 1000 || operations.Length > setup.MaximumOperations ||
+            var sourceOperations = setup.OperationIds;
+            if (setup.MaximumOperations is < 1 or > 1000 || sourceOperations.Count > setup.MaximumOperations ||
                 setup.Timeout <= TimeSpan.Zero || setup.Timeout > TimeSpan.FromDays(1) ||
-                operations.Any(id => string.IsNullOrWhiteSpace(id) || !setup.AllowedOperationIds.Contains(id)))
+                sourceOperations.Count < 0)
                 Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
+            var operations = new string[sourceOperations.Count];
+            for (var index = 0; index < operations.Length; index++)
+            {
+                var id = sourceOperations[index];
+                if (string.IsNullOrWhiteSpace(id) || id.Length > 128 || !setup.AllowedOperationIds.Contains(id))
+                    Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
+                operations[index] = id;
+            }
             var setupDeadline = Min(preparationDeadline, clock.Elapsed + setup.Timeout);
             for (var index = 0; index < operations.Length; index++)
             {
@@ -169,7 +177,12 @@ public sealed class HostPreparation
                 if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0) return ValueTask.FromResult(false);
                 lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
             }); }
-            catch { if (Volatile.Read(ref pendingReleases) == 0) { lock (LeaseLock) ActiveEndpoints.Remove(key); } throw; }
+            catch
+            {
+                if (Volatile.Read(ref pendingReleases) == 0 && Volatile.Read(ref pendingAcquisitions) == 0)
+                { lock (LeaseLock) ActiveEndpoints.Remove(key); }
+                throw;
+            }
         }
     }
 
@@ -185,10 +198,11 @@ public sealed class HostPreparation
         if (policy.StrictStart && identity.HasOutstandingRequests) Fail(PreparationStage.Identity, PreparationCode.OutstandingRequests);
     }
 
-    private void RegisterRelease(OwnedCleanup cleanup, Func<CancellationToken, ValueTask<bool>> release)
+    private void RegisterRelease(OwnedCleanup cleanup, Func<CancellationToken, ValueTask<bool>> release,
+        CleanupStage stage = CleanupStage.ResourceRelease)
     {
         Interlocked.Increment(ref pendingReleases);
-        try { cleanup.Register(CleanupStage.ResourceRelease, async token =>
+        try { cleanup.Register(stage, async token =>
         {
             var confirmed = await release(token).ConfigureAwait(false);
             if (confirmed) Interlocked.Decrement(ref pendingReleases);
@@ -208,12 +222,15 @@ public sealed class HostPreparation
     private async ValueTask<T> Step<T>(PreparationStage stage, TimeSpan deadline,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken)
     {
-        CheckDeadline(deadline);
+        var remaining = deadline - clock.Elapsed;
+        if (remaining <= TimeSpan.Zero)
+        { trace.Record(new(stage, PreparationCode.Timeout)); throw new TimeoutException("PreparationDeadlineReached"); }
         try
         {
             var acquisition = stage is PreparationStage.Launch or PreparationStage.Connect;
-            var result = await FiniteOperation.RunAsync(clock, Min(policy.OperationTimeout, deadline - clock.Elapsed), async token =>
+            var result = await FiniteOperation.RunAsync(clock, Min(policy.OperationTimeout, remaining), async token =>
             {
+                if (clock.Elapsed >= deadline) throw new TimeoutException("PreparationDeadlineReached");
                 if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
                 try { return await action(token).ConfigureAwait(false); }
                 finally { if (acquisition) Interlocked.Decrement(ref pendingAcquisitions); }
@@ -221,7 +238,8 @@ public sealed class HostPreparation
             trace.Record(new(stage, PreparationCode.Completed)); return result;
         }
         catch (TimeoutException) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
-        catch (OperationCanceledException) { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
         catch (ConnectionNotReadyException) { throw; }
         catch (PreparationException) { throw; }
         catch (Exception exception)

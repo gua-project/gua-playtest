@@ -17,13 +17,13 @@ public sealed class SystemProcessLauncher : IProcessLauncher
         ArgumentNullException.ThrowIfNull(command);
         if (!Path.IsPathFullyQualified(command.Executable) || !File.Exists(command.Executable) ||
             !Path.IsPathFullyQualified(command.WorkingDirectory) || !Directory.Exists(command.WorkingDirectory))
-            throw new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed);
+            throw new IOException("LaunchConfigurationUnavailable");
         var start = new ProcessStartInfo(command.Executable)
         {
             WorkingDirectory = command.WorkingDirectory, UseShellExecute = false, CreateNoWindow = true
         };
         foreach (var argument in command.Arguments) start.ArgumentList.Add(argument);
-        return new OwnedProcess(Process.Start(start) ?? throw new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed));
+        return new OwnedProcess(Process.Start(start) ?? throw new IOException("ProcessCreationFailed"));
     }
     private sealed class OwnedProcess(Process process) : IOwnedProcess
     {

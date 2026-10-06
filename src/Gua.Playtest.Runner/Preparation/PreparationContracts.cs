@@ -4,7 +4,7 @@ namespace Gua.Playtest.Runner.Preparation;
 
 public enum HostMode { Launch, Attach }
 public enum PlayMode { Explore, Replay }
-public enum PreparationStage { Started, Ownership, Launch, Connect, Identity, Setup, Planner, Synchronize, Preconditions, Ready }
+public enum PreparationStage { Started, Ownership, Launch, Connect, Identity, Setup, Planner, Synchronize, Preconditions, Ready, RetryDelay }
 public enum PreparationCode { Started, Completed, Busy, LaunchFailed, ConnectionFailed, IdentityMismatch, CapabilityUnavailable,
     OutstandingRequests, SetupForbidden, SetupFailed, SetupUnconfirmed, PlannerUnavailable, IdentityUnavailable, SynchronizationFailed, StaleObservation, PreconditionsUnsatisfied,
     Cancelled, Timeout, ProcessExited }
