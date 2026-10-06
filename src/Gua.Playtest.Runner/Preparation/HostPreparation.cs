@@ -26,7 +26,7 @@ public sealed class HostPreparation
     private int used;
     private int pendingReleases;
     private int pendingAcquisitions;
-    private int pendingMetadata;
+    private int pendingPreparationWork;
     private bool ownershipClosed;
     public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
         IPreparationConnector connector, IPreparationTrace trace)
@@ -72,7 +72,7 @@ public sealed class HostPreparation
             lock (LeaseLock)
             {
                 ownershipClosed = true;
-                if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0 || Volatile.Read(ref pendingMetadata) != 0)
+                if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0 || Volatile.Read(ref pendingPreparationWork) != 0)
                     return ValueTask.FromResult(false);
                 ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
             }
@@ -248,14 +248,9 @@ public sealed class HostPreparation
 
     private ValueTask<T> ReadPureAsync<T>(PreparationStage stage, TimeSpan deadline,
         Func<CancellationToken, T> read, CancellationToken cancellationToken)
-        => Step<T>(stage, deadline, async token =>
-    {
-        BeginOwnedWork(false, token);
-        try { return await Task.Run(() => read(token), token).ConfigureAwait(false); }
-        finally { Interlocked.Decrement(ref pendingMetadata); }
-    }, cancellationToken);
+        => Step<T>(stage, deadline, token => new(Task.Run(() => read(token), token)), cancellationToken);
 
-    private void BeginOwnedWork(bool acquisition, CancellationToken token)
+    private void BeginOwnedWork(bool acquisition, bool tracked, CancellationToken token)
     {
         // No external callbacks inside the lease gate. A terminal confirmation and
         // a provider start are mutually exclusive even if cancellation arrives in between.
@@ -263,8 +258,11 @@ public sealed class HostPreparation
         {
             token.ThrowIfCancellationRequested();
             if (ownershipClosed) throw new InvalidOperationException("PreparationOwnershipClosed");
-            if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
-            else Interlocked.Increment(ref pendingMetadata);
+            if (tracked)
+            {
+                if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
+                else Interlocked.Increment(ref pendingPreparationWork);
+            }
         }
     }
 
@@ -294,14 +292,25 @@ public sealed class HostPreparation
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var acquisition = stage is PreparationStage.Launch or PreparationStage.Connect;
+            // Only certified no-effect backoff may outlive the lease. All provider work,
+            // including Setup effects and reads, retains exclusion until it actually ends.
+            var tracked = stage != PreparationStage.RetryDelay;
             var operationDeadline = stage == PreparationStage.RetryDelay ? deadline : Min(deadline, preparationClock.Elapsed + policy.OperationTimeout);
             var result = await FiniteOperation.RunUntilAsync(preparationClock, operationDeadline, async token =>
             {
                 if (preparationClock.Elapsed >= deadline) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
-                if (acquisition) BeginOwnedWork(true, token);
+                BeginOwnedWork(acquisition, tracked, token);
                 try { return await action(token).ConfigureAwait(false); }
-                finally { if (acquisition) Interlocked.Decrement(ref pendingAcquisitions); }
+                finally
+                {
+                    if (tracked)
+                    {
+                        if (acquisition) Interlocked.Decrement(ref pendingAcquisitions);
+                        else Interlocked.Decrement(ref pendingPreparationWork);
+                    }
+                }
             }, cancellationToken, recordException).ConfigureAwait(false);
             trace.Record(new(stage, PreparationCode.Completed)); return result;
         }

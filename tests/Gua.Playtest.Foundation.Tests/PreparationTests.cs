@@ -141,6 +141,8 @@ public sealed class PreparationTests
         private IReadOnlySet<string> allowedOperationIds = new HashSet<string> { "scene" };
         public IReadOnlySet<string> AllowedOperationIds { get => ReadAllowed is null ? allowedOperationIds : ReadAllowed(); set => allowedOperationIds = value; }
         public Exception? OperationFailure { get; set; }
+        public TaskCompletionSource<SetupReceipt>? PendingReceipt { get; set; }
+        public TaskCompletionSource OperationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int maximumOperations = 1;
         public int MaximumOperations { get => ReadMaximum is null ? maximumOperations : ReadMaximum(); set => maximumOperations = value; }
         public TimeSpan Timeout => ReadTimeout is null ? TimeSpan.FromSeconds(1) : ReadTimeout();
@@ -148,7 +150,8 @@ public sealed class PreparationTests
         public SetupReceipt Receipt { get; set; } = SetupReceipt.Confirmed;
         public bool IsAuthorized(HostMode mode) { BeforeAuthorization?.Invoke(); return Authorized; }
         public ValueTask<SetupReceipt> ExecuteOperationAsync(int index, IPreparationConnection connection, CancellationToken token)
-        { Calls++; if (OperationFailure is not null) throw OperationFailure; return ValueTask.FromResult(Receipt); }
+        { Calls++; OperationStarted.TrySetResult(); if (OperationFailure is not null) throw OperationFailure;
+            return PendingReceipt is null ? ValueTask.FromResult(Receipt) : new(PendingReceipt.Task); }
     }
     private static PreparationPolicy Policy(HostMode hostMode = HostMode.Attach, PlayMode playMode = PlayMode.Replay)
         => new(hostMode, playMode, new Uri($"ws://localhost:7777/{Guid.NewGuid():N}"), "game", "1", "Testing", "real", ["observe"], true,
@@ -1070,5 +1073,24 @@ public sealed class PreparationTests
         } };
         await Execute(new(policy, clock, new Launcher(), new Connector(new()), trace), clock);
         Assert.True(completed); Assert.Equal(1, unrelated.Calls);
+    }
+
+    [Fact]
+    public async Task UnendedSetupEffectCannotOpenEndpointAfterItsConnectionRelease()
+    {
+        var clock = new Clock(); var policy = Policy(); var connection = new Connection();
+        var setup = new Setup { PendingReceipt = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        try
+        {
+            var pending = Execute(new(policy, clock, new Launcher(), new Connector(connection), new Trace()), clock, setup);
+            await setup.OperationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)); clock.Advance(1000);
+            var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason); Assert.Equal(1, connection.Releases);
+            Assert.False(outcome.PostProcessingComplete);
+            var next = new Connector(new()); var trace = new Trace();
+            await Execute(new(policy, clock, new Launcher(), next, trace), clock);
+            Assert.Equal(0, next.Calls); Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), trace.Events);
+        }
+        finally { setup.PendingReceipt.SetResult(SetupReceipt.Confirmed); }
     }
 }

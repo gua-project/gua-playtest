@@ -99,6 +99,8 @@ Its callback is registered immediately after lease acquisition, before any await
 preparation expiry therefore cannot omit ownership from the cleanup snapshot.
 Provider work start and terminal lease confirmation share a closed gate under the
 lease lock. Counters cannot be sampled as zero just before late acquisition starts.
+Unended provider work, including approved Setup effects, keeps exclusion closed even
+after connection release; certified no-effect retry delay is the sole untracked step.
 Initial registration failure rolls back the lease before any provider can start;
 Busy tracing and all provider callbacks run outside the global lease lock.
 
