@@ -36,6 +36,7 @@ public sealed class HostPreparation
             !System.Text.RegularExpressions.Regex.IsMatch(policy.Endpoint.OriginalString, @"^wss?://(?:\[[^\]]+\]|[^/:]+):[0-9]+(?:/|$)") || !string.IsNullOrEmpty(policy.Endpoint.UserInfo) ||
             string.IsNullOrWhiteSpace(policy.ExpectedBuildId) || string.IsNullOrWhiteSpace(policy.RequiredProtocol) ||
             policy.Profile is not ("Player" or "Testing" or "Debug") || string.IsNullOrWhiteSpace(policy.Clock) ||
+            !string.IsNullOrEmpty(policy.Endpoint.Query) || !string.IsNullOrEmpty(policy.Endpoint.Fragment) ||
             policy.Endpoint.OriginalString.Length > 4096 || policy.ExpectedBuildId.Length > 128 ||
             policy.RequiredProtocol.Length > 128 || policy.Clock.Length > 128 ||
             policy.Capabilities is null || policy.Capabilities.Count > 1000 || policy.Capabilities.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 128) ||
@@ -162,6 +163,7 @@ public sealed class HostPreparation
         var capture = run.ArmRunningBoundary();
         var boundary = await Step(PreparationStage.Synchronize, preparationDeadline,
             token => connected.SynchronizeAsync(capture.RequestId, token), cancellationToken).ConfigureAwait(false);
+        if (boundary is null || boundary.Feed is null) Fail(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed);
         ValidateIdentity(boundary.CapturedIdentity);
         if (!boundary.Continuous || boundary.CapturedIdentity.SourceId != identity.SourceId || boundary.CapturedIdentity.Epoch != identity.Epoch)
             Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation);
@@ -199,12 +201,12 @@ public sealed class HostPreparation
 
     private void ValidateIdentity(HostIdentity identity)
     {
-        if (identity.Protocol != policy.RequiredProtocol || identity.Profile != policy.Profile || identity.Clock != policy.Clock ||
+        if (identity is null || identity.Protocol != policy.RequiredProtocol || identity.Profile != policy.Profile || identity.Clock != policy.Clock ||
             string.IsNullOrWhiteSpace(identity.SourceId) || string.IsNullOrWhiteSpace(identity.Epoch) ||
             (policy.RequireBuildAttestation && identity.AttestedGameBuildId is null) ||
             (identity.AttestedGameBuildId is not null && identity.AttestedGameBuildId != policy.ExpectedBuildId))
             Fail(PreparationStage.Identity, PreparationCode.IdentityMismatch);
-        if (!policy.Capabilities.All(identity.Capabilities.Contains)) Fail(PreparationStage.Identity, PreparationCode.CapabilityUnavailable);
+        if (identity.Capabilities is null || !policy.Capabilities.All(identity.Capabilities.Contains)) Fail(PreparationStage.Identity, PreparationCode.CapabilityUnavailable);
         // Do not clear/reset pending input to conceal an invalid Strict start.
         if (policy.StrictStart && identity.HasOutstandingRequests) Fail(PreparationStage.Identity, PreparationCode.OutstandingRequests);
     }
@@ -236,7 +238,7 @@ public sealed class HostPreparation
         try
         {
             var acquisition = stage is PreparationStage.Launch or PreparationStage.Connect;
-            var operationDeadline = Min(deadline, preparationClock.Elapsed + policy.OperationTimeout);
+            var operationDeadline = stage == PreparationStage.RetryDelay ? deadline : Min(deadline, preparationClock.Elapsed + policy.OperationTimeout);
             var result = await FiniteOperation.RunUntilAsync(preparationClock, operationDeadline, async token =>
             {
                 if (preparationClock.Elapsed >= deadline) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
@@ -269,6 +271,7 @@ public sealed class HostPreparation
     }
     private void CheckDeadline(TimeSpan deadline)
     { if (preparationClock.Elapsed >= deadline) { trace.Record(new(PreparationStage.Started, PreparationCode.Timeout)); throw FiniteOperation.DeadlineReached("PreparationDeadlineReached"); } }
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
     private void Fail(PreparationStage stage, PreparationCode code)
     { trace.Record(new(stage, code)); throw new PreparationException(stage, code); }
     private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;

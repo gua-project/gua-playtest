@@ -40,10 +40,13 @@ public sealed class PreparationTests
     {
         public bool HasExited { get; set; }
         public int Shutdowns { get; private set; }
+        public Action<CancellationToken>? OnExitWait { get; set; }
+        public Exception? ExitWaitFailure { get; set; }
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Exit() { HasExited = true; exited.TrySetResult(); }
-        public ValueTask WaitForExitAsync(CancellationToken token) => new(exited.Task.WaitAsync(token));
+        public ValueTask WaitForExitAsync(CancellationToken token)
+        { OnExitWait?.Invoke(token); return ExitWaitFailure is null ? new(exited.Task.WaitAsync(token)) : ValueTask.FromException(ExitWaitFailure); }
         public ValueTask<bool> ShutdownAsync(CancellationToken token)
         { Shutdowns++; Exit(); Released.TrySetResult(); return ValueTask.FromResult(true); }
     }
@@ -67,6 +70,10 @@ public sealed class PreparationTests
         public bool Stale { get; set; }
         public bool Preconditions { get; set; } = true;
         public bool WrongRequest { get; set; }
+        public bool MissingCapturedCapabilities { get; set; }
+        public bool MissingBoundary { get; set; }
+        public bool MissingFeed { get; set; }
+        public Exception? CaptureFailure { get; set; }
         public RunObservation? InitialObservation { get; set; }
         public RunObservation? CurrentObservation { get; set; }
         public TaskCompletionSource<RunObservation>? BlockedCapture { get; set; }
@@ -78,11 +85,13 @@ public sealed class PreparationTests
         public Action? OnRelease { get; set; }
         public ValueTask<HostIdentity> IdentifyAsync(CancellationToken token) => ValueTask.FromResult(Identity);
         public ValueTask<InitialBoundary> SynchronizeAsync(string captureRequestId, CancellationToken token)
-        { Synchronizations++; return ValueTask.FromResult(new InitialBoundary(Identity with { Epoch = Stale ? "old" : Identity.Epoch }, true, Preconditions,
-            WrongRequest ? "previous-request" : captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero, "subscription-cursor-1", InitialObservation ?? Observation(), this, false)); }
+        { Synchronizations++; if (MissingBoundary) return ValueTask.FromResult<InitialBoundary>(null!);
+            return ValueTask.FromResult(new InitialBoundary(Identity with { Epoch = Stale ? "old" : Identity.Epoch,
+            Capabilities = MissingCapturedCapabilities ? null! : Identity.Capabilities }, true, Preconditions,
+            WrongRequest ? "previous-request" : captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero, "subscription-cursor-1", InitialObservation ?? Observation(), MissingFeed ? null! : this, false)); }
         private RunObservation Observation() => CurrentObservation ?? new(Clock?.Elapsed ?? TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([]));
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
-        { Captures++; OnCapture?.Invoke(token); return BlockedCapture is null ? ValueTask.FromResult(Observation()) : new(BlockedCapture.Task); }
+        { Captures++; OnCapture?.Invoke(token); return CaptureFailure is not null ? ValueTask.FromException<RunObservation>(CaptureFailure) : BlockedCapture is null ? ValueTask.FromResult(Observation()) : new(BlockedCapture.Task); }
         public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
         public ValueTask<bool> ReleaseAsync(CancellationToken token) { Releases++; OnRelease?.Invoke(); return ValueTask.FromResult(ReleaseConfirmed); }
     }
@@ -571,5 +580,86 @@ public sealed class PreparationTests
         Assert.DoesNotContain(outcome.Events, item => item.Reason == RunReason.ExecutionError);
         Assert.True(outcome.PostProcessingComplete);
         if (callbackFault) Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NullHostCapabilitiesFailWithTracedHostEvidence(bool synchronized)
+    {
+        var clock = new Clock(); var connection = new Connection { MissingCapturedCapabilities = synchronized }; var trace = new Trace();
+        if (!synchronized) connection.Identity = connection.Identity with { Capabilities = null! };
+        var outcome = await Execute(new(Policy(), clock, new Launcher(), new Connector(connection), trace), clock);
+        Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin); Assert.Equal(1, outcome.ExitCode);
+        Assert.Contains(new(PreparationStage.Identity, PreparationCode.CapabilityUnavailable), trace.Events);
+        Assert.DoesNotContain(outcome.Exceptions, item => item.Type == typeof(NullReferenceException).FullName);
+    }
+
+    [Fact]
+    public async Task RetryDelayCanExceedOperationTimeoutWithinOriginalPreparationDeadline()
+    {
+        var clock = new Clock(); var connector = new Connector(new() { Clock = clock }) { NotReadyCount = 1 }; var trace = new Trace();
+        var policy = Policy() with { OperationTimeout = TimeSpan.FromMilliseconds(50), RetryDelay = TimeSpan.FromMilliseconds(200) };
+        var pending = Execute(new(policy, clock, new Launcher(), connector, trace), clock);
+        Assert.False(pending.IsCompleted); clock.Advance(200);
+        var outcome = await pending;
+        Assert.Equal(ResultStatus.Unverified, outcome.Primary.Status); Assert.Equal(2, connector.Calls);
+        Assert.Contains(new(PreparationStage.RetryDelay, PreparationCode.Completed), trace.Events);
+        Assert.DoesNotContain(trace.Events, item => item.Code == PreparationCode.Timeout);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TypedSourceFailureSurvivesLosingWaitCancellationFault(bool exitWaitFails)
+    {
+        var clock = new Clock(); var run = Run(clock); run.BeginPreparation(); var cleanup = new OwnedCleanup(); var launcher = new Launcher();
+        var connection = new Connection(); var expected = new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Contract);
+        var typed = new RunFailureException(expected);
+        if (exitWaitFails)
+        {
+            launcher.Process.ExitWaitFailure = typed;
+            connection.BlockedCapture = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            connection.OnCapture = token => token.Register(() => throw new IOException("losing-capture-cancel"));
+        }
+        else
+        {
+            connection.CaptureFailure = typed;
+            launcher.Process.OnExitWait = token => token.Register(() => throw new IOException("losing-exit-cancel"));
+        }
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null);
+        run.BeginRunning(host.Boundary);
+        var failure = await Assert.ThrowsAsync<RunFailureException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask());
+        Assert.Equal(expected, failure.Cause);
+        var evidence = Assert.IsType<AggregateException>(failure.InnerException).Flatten().InnerExceptions;
+        Assert.Contains(typed, evidence); Assert.Contains(evidence, item => item is IOException);
+        run.Evaluate(candidates: [failure.Cause]); var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(ResultStatus.Invalid, outcome.Primary.Status); Assert.Equal(2, outcome.ExitCode);
+        connection.BlockedCapture?.SetResult(new(TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([])));
+    }
+
+    [Theory]
+    [InlineData("?credential=value")]
+    [InlineData("#alias")]
+    public void EndpointQueryOrFragmentCannotReachConnector(string suffix)
+    {
+        var policy = Policy() with { Endpoint = new Uri("ws://localhost:7777/path" + suffix) };
+        Assert.Throws<ArgumentException>(() => new HostPreparation(policy, new Clock(), new Launcher(), new Connector(new()), new Trace()));
+    }
+
+    [Theory]
+    [InlineData("identity")]
+    [InlineData("boundary")]
+    [InlineData("feed")]
+    public async Task MissingHostReadinessComponentIsTracedAndFailsClosed(string missing)
+    {
+        var clock = new Clock(); var connection = new Connection { MissingBoundary = missing == "boundary", MissingFeed = missing == "feed" }; var trace = new Trace();
+        if (missing == "identity") connection.Identity = null!;
+        var outcome = await Execute(new(Policy(), clock, new Launcher(), new Connector(connection), trace), clock);
+        Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin); Assert.Equal(1, outcome.ExitCode);
+        Assert.Contains(missing == "identity" ? new(PreparationStage.Identity, PreparationCode.IdentityMismatch)
+            : new(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed), trace.Events);
+        Assert.True(outcome.PostProcessingComplete);
     }
 }

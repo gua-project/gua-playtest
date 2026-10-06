@@ -61,6 +61,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                 throw new OperationCanceledException("CaptureCancelled", evidence, cancellationToken);
             if (failure is PreparationException preparation)
                 throw new PreparationException(preparation.Stage, preparation.Code, evidence, preparation.Cause.Phase);
+            if (failure is RunFailureException typedFailure)
+                throw new RunFailureException(typedFailure.Cause, evidence);
             throw new PreparationException(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed, evidence, RunPhase.Execution);
         }
         if (requestedCancellation) throw new OperationCanceledException("CaptureCancelled", failure, cancellationToken);

@@ -22,7 +22,8 @@ the owner's token normalization; unrelated provider cancellation remains a failu
 
 `PreparationPolicy` is trusted execution policy, separate from Scenario meaning
 and Planner input. It requires mode, endpoint with an explicit port, expected game
-build, protocol, host profile, clock, capabilities, strict-start/build-attestation
+build, no endpoint user-info/query/fragment, protocol, host profile, clock,
+capabilities, strict-start/build-attestation
 requirements, finite operation/retry/shutdown limits and a bounded connection
 attempt count (1..100). Durations must be positive and at most one day. Launch
 requires a `LaunchCommand`; attach rejects one. `SystemProcessLauncher` requires
@@ -36,7 +37,8 @@ No engine install, package publication, authentication or credential change occu
 `ConnectionNotReadyException` certifies that no connection or side effect was
 dispatched/acquired and is the only retryable outcome. All other exceptions,
 unknown receipts, timeout and cancellation terminate the preparation attempt.
-Retries share the original whole-Preparing deadline. Async providers return
+Retries share the original whole-Preparing deadline; an explicitly longer retry
+delay is not shortened by the per-operation ceiling. Async providers return
 promptly, honor cancellation, and release acquisitions returned after cancellation.
 The coordinator also releases late returned connections with a finite independent
 shutdown ceiling, and registers each on-time acquisition immediately.
@@ -46,8 +48,11 @@ Registered cleanup remains governed by #6's overall deadline and release orderin
 
 `HostIdentity.AttestedGameBuildId` is actual approved game-host/fixture evidence,
 never the Gua package's BuildId or a port-match inference. Protocol/profile/clock
-and every required capability must match. A strict start rejects outstanding
-requests before any Setup; it never resets to conceal them. Scene/save Setup can
+and every required capability must match.
+Missing identity, capability collection, synchronized boundary or feed fails with
+fixed stage-specific Host evidence before Running or dispatch.
+A strict start rejects outstanding requests before any Setup; it never resets
+to conceal them. Scene/save Setup can
 change epoch, so identity and strict requests are rechecked after Setup.
 
 `IApprovedSetup` is an Environment-approved fixture mapping, inaccessible to the
