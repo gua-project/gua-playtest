@@ -57,6 +57,10 @@ schema-valid cached tree from the same epoch is Stale/stale-tree. Counters that
 cannot fit the native UInt64 representation fail closed rather than escaping.
 Matched IDs, snapshot entries and standard nodes are indexed before iteration;
 broad selector/change filtering does not scan all targets for each event.
+Every Observe document, snapshot entry and returned event counter is checked
+against UInt64 before exposure. Inconsistent queried/tree target IDs preserve
+collection-level Stale. Object state is a flat map: the complete suffix after
+`state.` is one key, including any dots; UI nested standard fields retain paths.
 One ReadBatch shares a node/event and serialized-byte
 budget, including repeated selectors, changes and values. Aggregate overflow
 truncates the entire pass, discarding partially collected values/history.

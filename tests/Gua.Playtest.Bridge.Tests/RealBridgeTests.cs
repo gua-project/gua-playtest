@@ -643,8 +643,20 @@ public sealed class RealBridgeTests
     [InlineData("snapshot", "worldFrame")]
     [InlineData("snapshot", "ownerId")]
     [InlineData("snapshot", "registrationId")]
+    [InlineData("snapshot", "sequence")]
+    [InlineData("snapshot", "uiFrame")]
+    [InlineData("snapshot", "uiRevision")]
+    [InlineData("snapshot", "worldRevision")]
     [InlineData("subscribe", "sessionEpoch")]
     [InlineData("poll", "sessionEpoch")]
+    [InlineData("poll", "sequence")]
+    [InlineData("poll", "revision")]
+    [InlineData("poll", "uiFrame")]
+    [InlineData("poll", "uiRevision")]
+    [InlineData("poll", "worldFrame")]
+    [InlineData("poll", "worldRevision")]
+    [InlineData("poll", "ownerId")]
+    [InlineData("poll", "registrationId")]
     public async Task SchemaValidOversizedCountersBecomeUnavailable(string mode, string field)
     {
         using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
@@ -666,6 +678,47 @@ public sealed class RealBridgeTests
         if (mode == "poll") { Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); value++; property.Notify(); armed = true; }
         var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
         Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
+    }
+
+    [Theory]
+    [InlineData("ui", false)]
+    [InlineData("ui", true)]
+    [InlineData("object", false)]
+    [InlineData("object", true)]
+    public async Task InconsistentQueriedTargetRemainsStaleAtCollectionLevel(string source, bool duplicate)
+    {
+        using var runtime = new GuaRuntime();
+        if (source == "ui") Ui(runtime, "one"); else World(runtime, "one");
+        int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != (source == "ui" ? "get_ui_tree" : "get_world_object_tree")) return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var tree = root["result"]!.AsObject();
+            var nodes = tree[source == "ui" ? "nodes" : "objects"]!.AsArray();
+            if (duplicate) nodes.Add(nodes[0]!.DeepClone()); else nodes.Clear();
+            Assert.True(GuaDistribution.ValidateJson(source == "ui" ? "ui-tree.schema.json" : "world-object-tree.schema.json", tree.ToJsonString()));
+            injected++; return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint);
+        var result = reader.Read(Read(source, "standard", "label", "string", "one"));
+        Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Stale, result.Availability);
+        var item = Assert.Single(result.Reads); Assert.Equal(ReadAvailability.Stale, item.Availability);
+        Assert.Equal("target-changed", item.Reason); Assert.Null(item.Value); Assert.Empty(result.Changes!);
+    }
+
+    [Fact]
+    public void WorldStateSuffixIsOneFlatKeyIncludingDots()
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter(); runtime.BeginWorldFrame("combat");
+        runtime.RegisterWorldObject(new("one", "enemy", "Enemy", GuaWorldSpace.World2D, new(3, 4),
+            State: new Dictionary<string, object?> { ["combat.phase"] = "attack", ["combat..phase"] = "defend", ["combat"] = "idle" }));
+        runtime.EndWorldFrame(); using var reader = Reader(Start(runtime));
+        foreach (var (key, expected) in new[] { ("combat.phase", "attack"), ("combat..phase", "defend"), ("combat", "idle") })
+        {
+            var result = reader.Read(Read("object", "standard", "state." + key, "string", "one"));
+            Assert.Equal(ReadAvailability.Available, result.Availability);
+            Assert.Equal(expected, Assert.Single(result.Reads).Value!.Value.GetProperty("value").GetString());
+        }
     }
 
     [Fact]

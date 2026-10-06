@@ -44,6 +44,14 @@ subscribe/snapshot/poll and epoch/revision/frame/owner/registration counters.
 A real broad UI selector preserves all 50 targets and 50 changes. Bridge58 passed
 locally, skip0, boundaries passed; previous merged Core suites passed contracts528
 and foundation22. New final-head CI and Codex review are required.
+Further completed review found unconverted event counters, collection-level
+Stale loss and flat state keys containing dots. All Observe metadata counters
+now validate UInt64 before exposure; target/tree inconsistencies remain Stale;
+object state suffixes resolve as whole keys. Real native schema-valid event
+overflow faults cover all nine counters, missing/duplicate UI and Object IDs
+preserve Stale, and actual object state keys with one/repeated dots retain values.
+Bridge75 passed locally with zero skips and boundaries passed. New exact-head
+real CI and actual Codex review remain required.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

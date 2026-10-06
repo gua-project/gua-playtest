@@ -189,7 +189,10 @@ public sealed class BridgeObservations : IDisposable
                         if (node.Length != 1) { reads.Add(new(ReadAvailability.Stale, "target-changed", identity)); continue; }
                         JsonElement field = node[0];
                         bool found = true;
-                        foreach (string part in read["field"]!.GetValue<string>().Split('.'))
+                        string fieldName = read["field"]!.GetValue<string>();
+                        var parts = source == "object" && fieldName.StartsWith("state.", StringComparison.Ordinal)
+                            ? new[] { "state", fieldName[6..] } : fieldName.Split('.');
+                        foreach (string part in parts)
                             if (field.ValueKind != JsonValueKind.Object || !field.TryGetProperty(part, out field)) { found = false; break; }
                         var value = found ? Scalar(field, (JsonObject)read["valueType"]!) : null;
                         identity = identity with { Revision = tree.GetProperty("revision").GetUInt64(),
@@ -229,7 +232,8 @@ public sealed class BridgeObservations : IDisposable
                     }
                 }
                 return new(DateTimeOffset.UtcNow, reads.All(r => r.Availability == ReadAvailability.Available)
-                    ? ReadAvailability.Available : ReadAvailability.Unavailable, reads.AsReadOnly(), relevantChanges.AsReadOnly());
+                    ? ReadAvailability.Available : reads.Any(r => r.Availability == ReadAvailability.Stale)
+                        ? ReadAvailability.Stale : ReadAvailability.Unavailable, reads.AsReadOnly(), relevantChanges.AsReadOnly());
             }
             catch (Exception error) when (error is InvalidOperationException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
             { return Failure(ReadAvailability.Unavailable, "observation-unconfirmed"); }
@@ -244,9 +248,12 @@ public sealed class BridgeObservations : IDisposable
             root.GetProperty("document").GetProperty("profile").GetString() != ProfileName)
             throw new InvalidOperationException("Bridge profile or schema mismatch.");
         if (root.GetProperty("catalogs").GetArrayLength() > maxNodes) throw new ObservationLimitException();
+        ValidateCounters(root.GetProperty("document"));
         if (root.GetProperty("document").TryGetProperty("entries", out var entries) &&
             entries.GetArrayLength() != root.GetProperty("catalogs").GetArrayLength())
             throw new InvalidOperationException("Unpaired Observe catalogs.");
+        if (root.GetProperty("document").TryGetProperty("entries", out entries))
+            foreach (var entry in entries.EnumerateArray()) ValidateCounters(entry);
         if (root.GetProperty("document").TryGetProperty("events", out var events) &&
             events.GetArrayLength() != root.GetProperty("catalogs").GetArrayLength())
             throw new InvalidOperationException("Unpaired Observe change catalogs.");
@@ -254,12 +261,20 @@ public sealed class BridgeObservations : IDisposable
         {
             var document = root.GetProperty("document");
             foreach (var change in events.EnumerateArray())
+            {
+                ValidateCounters(change);
                 if (change.GetProperty("sourceId").GetString() != document.GetProperty("sourceId").GetString() ||
                     change.GetProperty("sessionEpoch").GetUInt64() != document.GetProperty("sessionEpoch").GetUInt64() ||
                     change.GetProperty("profile").GetString() != ProfileName)
                     throw new InvalidOperationException("Observe event identity mismatch.");
+            }
         }
         return root;
+    }
+    private static void ValidateCounters(JsonElement metadata)
+    {
+        foreach (string counter in new[] { "sequence", "sessionEpoch", "revision", "uiFrame", "uiRevision", "worldFrame", "worldRevision", "ownerId", "registrationId" })
+            if (metadata.TryGetProperty(counter, out var value)) _ = value.GetUInt64();
     }
     private JsonElement ParseTree(string json, string schema)
     {
