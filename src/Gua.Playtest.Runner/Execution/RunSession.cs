@@ -144,11 +144,12 @@ public sealed class RunSession
             real - preparationOrigin >= Limits.PreparationTimeout)
             RejectStartObservation("RunningBoundaryTimeInvalid");
     }
-    internal void RejectStartObservation(string code)
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+    internal void RejectStartObservation(string code, Exception? rejection = null)
     {
         var cause = new RunEvent(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract);
         if (!pendingEvents.Contains(cause)) pendingEvents.Add(cause);
-        throw new InvalidOperationException(code);
+        throw rejection ?? new InvalidOperationException(code);
     }
     public void BeginRunning(RunStartBoundary boundary)
     {

@@ -9,6 +9,24 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task MissingStartupObservationMapsRetainContractCauseAndOwnedRelease(int missing)
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock, Condition());
+        bool released = false, executed = false;
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (session, owned, _) =>
+        {
+            owned.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+            var request = session.ArmRunningBoundary();
+            var observation = missing == 0 ? null : new RunObservation(clock.Elapsed,
+                missing == 1 ? null! : Unit(), missing == 2 ? null! : Unit("false"));
+            return ValueTask.FromResult(request.Certify(request.RequestId, clock.Elapsed, observation!, "fresh/source", true));
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.True(released); Assert.False(executed); Assert.False(run.GoalVerified);
+        Assert.Equal(new RunEvent(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract), outcome.Primary.Cause);
+        Assert.Equal(2, outcome.ExitCode);
+        Assert.Contains(outcome.Exceptions, x => x.Type == "System.ArgumentNullException");
+    }
     private sealed class SerializedCaptureFeed(bool ignoreCancellation, bool failure) : IRunObservationFeed
     {
         public int Captures; public bool Ended;

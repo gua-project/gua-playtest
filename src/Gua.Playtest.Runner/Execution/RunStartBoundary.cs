@@ -15,9 +15,12 @@ public sealed class RunStartCapture
     public RunStartBoundary Certify(string captureRequestId, TimeSpan capturedRealAt,
         RunObservation initialObservation, string synchronizationEvidence, bool preconditionsSatisfied)
     {
-        ArgumentNullException.ThrowIfNull(initialObservation);
-        ArgumentNullException.ThrowIfNull(initialObservation.Success);
-        ArgumentNullException.ThrowIfNull(initialObservation.Failure);
+        if (initialObservation is null)
+            owner.RejectStartObservation("RunningBoundaryObservationMissing", new ArgumentNullException(nameof(initialObservation)));
+        if (initialObservation.Success is null)
+            owner.RejectStartObservation("RunningBoundarySuccessMissing", new ArgumentNullException(nameof(initialObservation.Success)));
+        if (initialObservation.Failure is null)
+            owner.RejectStartObservation("RunningBoundaryFailureMissing", new ArgumentNullException(nameof(initialObservation.Failure)));
         if (certified || owner.State != ExecutionState.Preparing || captureRequestId != RequestId ||
             !preconditionsSatisfied || string.IsNullOrWhiteSpace(synchronizationEvidence) || synchronizationEvidence.Length > 256)
             throw new InvalidOperationException("RunningBoundaryUncertified");
