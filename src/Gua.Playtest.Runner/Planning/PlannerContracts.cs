@@ -33,7 +33,8 @@ public interface IPlannerAuthority
     bool CheckInputBoundary(JsonObject proposal);
 }
 
-public sealed record PlannerAdoption(PlannerFeedbackCode Code, ApprovedDecision? Approved = null, bool RetryAllowed = false);
+public sealed record PlannerAdoption(PlannerFeedbackCode Code, ApprovedDecision? Approved = null,
+    bool RetryAllowed = false, Execution.RunEvent? TerminalEvent = null);
 
 public sealed class PlannerRequest
 {

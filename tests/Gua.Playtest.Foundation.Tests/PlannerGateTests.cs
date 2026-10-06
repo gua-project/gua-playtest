@@ -277,8 +277,7 @@ public sealed class PlannerGateTests
     {
         var s = new Setup(); var request = s.Begin(); var order = new List<string>(); var planner = new BlockedPlanner(order);
         var work = PlannerTurn.AwaitAsync(s.Gate, request, s.Run, s.Clock, s.Clock, new Feed(), planner,
-            _ => { Assert.Equal(ExecutionState.Completing, s.Run.State); order.Add("release-inputs"); return new ValueTask<bool>(true); },
-            _ => []).AsTask();
+            _ => { Assert.Equal(ExecutionState.Completing, s.Run.State); order.Add("release-inputs"); return new ValueTask<bool>(true); }).AsTask();
         s.Clock.At(request.Deadline);
         var result = await work.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
@@ -342,6 +341,48 @@ public sealed class PlannerGateTests
         var s = new Setup(); var r = s.Begin(); var proposal = new JsonObject { ["kind"] = "execute", ["mode"] = "single",
             ["action"] = new JsonObject { ["kind"] = "raw", ["input"] = new JsonObject { ["offsetMilliseconds"] = 0, ["kind"] = kind, ["operation"] = operation, ["target"] = target } } };
         Assert.Equal(PlannerFeedbackCode.OutputInvalid, s.Gate.Adopt(r, Response(r, proposal)).Code);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
+
+    private sealed class ImmediatePlanner(PlannerReply reply, bool throws = false) : IPlanner<PlannerInputDocument, PlannerReply>
+    {
+        public ValueTask<PlannerReply> DecideAsync(PlannerInputDocument input, CancellationToken token)
+            => throws ? throw new IOException("PRIVATE_BACKEND_EXCEPTION") : new(reply);
+    }
+    [Theory]
+    [InlineData(PlannerReplyStatus.UsageLimit, RunReason.PlannerUsageLimit)]
+    [InlineData(PlannerReplyStatus.ConnectionFailure, RunReason.PlannerConnectionFailure)]
+    [InlineData(PlannerReplyStatus.OutputInvalid, RunReason.PlannerOutputInvalid)]
+    public async Task BackendFaultsHaveCanonicalPlannerOrigin(PlannerReplyStatus status, RunReason reason)
+    {
+        var s = new Setup(); var r = s.Begin();
+        var result = await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(), new ImmediatePlanner(new(status)), _ => new(true));
+        Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
+        Assert.Equal(reason, s.Run.Primary!.Cause.Reason); Assert.Equal(RunOrigin.Planner, s.Run.Primary.Cause.Origin);
+        Assert.Equal(ResultStatus.Failed, s.Run.Primary.Status);
+    }
+
+    [Fact]
+    public async Task BackendExceptionDoesNotBecomeScenarioInvalidOrLeakItsMessage()
+    {
+        var s = new Setup(); var r = s.Begin();
+        await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(), new ImmediatePlanner(new(PlannerReplyStatus.Completed), throws: true), _ => new(true));
+        Assert.Equal(RunReason.PlannerConnectionFailure, s.Run.Primary!.Cause.Reason);
+        Assert.DoesNotContain("PRIVATE_BACKEND_EXCEPTION", s.Run.Primary.ToString());
+        Assert.Empty(s.Run.Exceptions);
+    }
+
+    [Fact]
+    public async Task ExhaustedInvalidOutputRetriesTerminateWithPlannerCause()
+    {
+        var s = new Setup(decisions: 1); var r = s.Begin();
+        var result = await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(),
+            new ImmediatePlanner(new(PlannerReplyStatus.Completed, Encoding.UTF8.GetBytes("{\"partial\":"))), _ => new(true));
+        Assert.False(result.Adoption!.RetryAllowed); Assert.True(result.Interrupted);
+        Assert.Equal(PlannerFeedbackCode.OutputInvalid, result.Adoption.Code);
+        Assert.Equal(RunReason.PlannerOutputInvalid, s.Run.Primary!.Cause.Reason);
+        Assert.Equal(RunOrigin.Planner, s.Run.Primary.Cause.Origin);
+        Assert.Equal(ResultStatus.Failed, s.Run.Primary.Status);
         Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
     }
 }

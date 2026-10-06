@@ -87,7 +87,7 @@ public sealed class PlannerGate
         request.Closed = true;
         // Even finish takes an approved finite final observation opportunity; it never establishes success.
         var operation = request.Permit.Approve(count, window);
-        if (operation is null) { Record(request, PlannerFeedbackCode.BudgetDenied); return new(PlannerFeedbackCode.BudgetDenied); }
+        if (operation is null) return Reject(request, PlannerFeedbackCode.BudgetDenied);
         var reference = Record(request, PlannerFeedbackCode.Approved);
         return new(PlannerFeedbackCode.Approved, new(this, operation, decision, request.Basis, reference));
     }
@@ -101,7 +101,9 @@ public sealed class PlannerGate
     private PlannerAdoption Reject(PlannerRequest request, PlannerFeedbackCode code)
     {
         Cancel(request); Record(request, code);
-        return new(code, RetryAllowed: !unsafeToContinue && run.State == ExecutionState.Running && !run.ActionsClosing);
+        var retry = !unsafeToContinue && run.State == ExecutionState.Running && !run.ActionsClosing;
+        return new(code, RetryAllowed: retry, TerminalEvent: retry ? null :
+            new(RunReason.PlannerOutputInvalid, RunPhase.Execution, RunOrigin.Planner));
     }
 
     internal PlannerFeedbackCode Validate(JsonObject decision, ProjectedPlannerState basis, bool requireNeutral = true)

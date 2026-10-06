@@ -14,19 +14,24 @@ public static class PlannerTurn
     public static async ValueTask<PlannerTurnResult> AwaitAsync(PlannerGate gate, PlannerRequest request,
         RunSession run, IClock realClock, IClock conditionClock, IRunObservationFeed feed,
         IPlanner<Core.Contracts.PlannerInputDocument, PlannerReply> planner,
-        Func<CancellationToken, ValueTask<bool>> releaseOwnedInputs,
-        Func<PlannerReply, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default)
+        Func<CancellationToken, ValueTask<bool>> releaseOwnedInputs, CancellationToken cancellationToken = default)
     {
         // Do not let RunMonitor cancel the actual Planner before owner-scoped input release.
         using var plannerCancellation = new CancellationTokenSource();
+        PlannerAdoption? adoption = null;
         try
         {
             var result = await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
-                _ => ProposeAsync(planner, request, plannerCancellation.Token), resultEvents, cancellationToken).ConfigureAwait(false);
+                _ => ProposeAsync(planner, request, plannerCancellation.Token), Events, cancellationToken).ConfigureAwait(false);
             if (result.Completed)
             {
                 var reply = result.Value!;
-                return new(gate.Adopt(request, reply.CompletedJson ?? []), false, true);
+                adoption = gate.Adopt(request, reply.CompletedJson ?? []);
+                if (adoption.TerminalEvent is not { } terminal) return new(adoption, false, true);
+                // Recapture current conditions and arbitrate a noncontinuable invalid output with all
+                // ready machine failure/cancel/deadline evidence, rather than assigning a primary here.
+                await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
+                    _ => new ValueTask<RunEvent>(terminal), e => [e], cancellationToken).ConfigureAwait(false);
             }
             // RunSession is already closed. Late results cannot pass gate.Adopt, even if cancellation is ignored.
             var released = false;
@@ -37,7 +42,7 @@ public static class PlannerTurn
             }
             catch { /* The driver maps false to owned cleanup/postprocessing evidence. */ }
             gate.Cancel(request);
-            return new(null, true, released);
+            return new(adoption, true, released);
         }
         finally { plannerCancellation.Cancel(); }
     }
@@ -53,5 +58,13 @@ public static class PlannerTurn
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch { return new(PlannerReplyStatus.ConnectionFailure); }
     }
+
+    public static IReadOnlyList<RunEvent> Events(PlannerReply reply) => reply.Status switch
+    {
+        PlannerReplyStatus.Completed => [],
+        PlannerReplyStatus.UsageLimit => [new(RunReason.PlannerUsageLimit, RunPhase.Execution, RunOrigin.Planner)],
+        PlannerReplyStatus.ConnectionFailure => [new(RunReason.PlannerConnectionFailure, RunPhase.Execution, RunOrigin.Planner)],
+        _ => [new(RunReason.PlannerOutputInvalid, RunPhase.Execution, RunOrigin.Planner)]
+    };
 
 }

@@ -88,12 +88,14 @@ only acquired Run-owned inputs. Synchronous blocking providers cannot be preempt
 by a task deadline and are not conforming adapters.
 
 `PlannerReplyStatus` distinguishes completed output, usage limit, connection
-failure and invalid output, without leaking exception text. The trusted
-`resultEvents` adapter must map those statuses to #6's canonical Planner-origin
-failure causes; it may not drop a failure or classify it as Scenario invalid.
-The enum/priority remains #6's single ownership; canonical integration follows
-its reviewed commit. Exhausted invalid-output retries terminate as
-PlannerOutputInvalid via the driver, rather than continuing without a request.
+failure and invalid output, without leaking exception text. `PlannerTurn.Events`
+maps these to #6's canonical PlannerUsageLimit/PlannerConnectionFailure/
+PlannerOutputInvalid with Planner origin, never Scenario invalid. Those canonical
+reasons come from #6 integration commit 39ba68d; this module does not redefine
+their priority. A noncontinuable rejected proposal exposes `TerminalEvent`.
+PlannerTurn recaptures current machine conditions and sends that event through
+RunMonitor before cleanup. Exhausted invalid-output retries terminate as
+PlannerOutputInvalid, rather than continuing without a request.
 
 `PlannerDecisionReference(RunId, DecisionRequestId, BasedOnObservationId, Code)`
 is the immutable host artifact reference. #9 maps IDs and the structured enum
@@ -115,13 +117,13 @@ These are deterministic native-free tests, not real Codex/game E2E evidence.
 
 Keep issue #11 open for full acceptance. Remaining obligations:
 
-- #6 canonical Planner causes/final initial boundary; integrate final main and
+- #6 final reviewed/merged initial boundary and execution policy; integrate final main and
   rerun checks/review after #6 merges.
 - #7/#10/#15: actual current-definition/type/value/consent/input-lifetime checks,
   guarded enqueue, public source/profile/epoch identity, real resubscribe,
   action confirmation and permitted read/condition composition (INPUT-001/003,
   CLOCK-005, BOUND-003, AT-PLANNER-001/003/005/006).
-- #8/#12/#15: actual Explore scheduling, invalid-output terminal mapping,
+- #8/#12/#15: actual Explore scheduling and forwarding adoption TerminalEvent,
   ordinary finish observation/completion, mandatory cleanup flags and Replay
   no-repair behavior (ACTION-004, GOAL-003, PLANNER-010).
 - #9/#13: send-before redaction plus persistence redaction, actual App Server
