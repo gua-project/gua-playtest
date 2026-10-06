@@ -22,7 +22,8 @@ public static class RunArtifactReader
                 if (stream.Length > limits.MaxFileBytes) return new(ResultReadState.Invalid);
             var report = await new StaticContractValidator([root]).ValidateFileAsync(file, cancellationToken).ConfigureAwait(false);
             if (report.Code == "Interrupted") return new(ResultReadState.Interrupted);
-            if (!report.IsValid || report.Document is not ResultDocument result || result.RunId != Path.GetFileName(root))
+            if (!report.IsValid || report.Document is not ResultDocument result ||
+                !string.Equals(result.RunId, Path.GetFileName(root), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 return new(ResultReadState.Invalid);
             return new(ResultReadState.Verified, result);
         }

@@ -146,6 +146,9 @@ public sealed class RunArtifactStore
     }
     private void ValidateFile(ArtifactFileReference reference, HashSet<string> associated, HashSet<FileIdentity> identities, CancellationToken cancellationToken)
     {
+        // Eight segments of at most128 characters, seven separators. Bound before Split/Regex.
+        if (reference.FileName is null || reference.FileName.Length > 8 * 128 + 7 ||
+            reference.FileName.AsSpan().Count('/') > 7) throw new InvalidDataException("ArtifactReceiptInvalid");
         var segments = reference.FileName.Split('/');
         if (segments.Length > 8 || segments.Any(x => !Regex.IsMatch(x, "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?$", RegexOptions.CultureInvariant)) ||
             new[] { "run.json", "primary.json", "completion.json", "result.json" }.Contains(segments[0], StringComparer.OrdinalIgnoreCase) ||

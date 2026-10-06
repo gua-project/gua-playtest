@@ -366,5 +366,41 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal(ResultReadState.Invalid, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
         File.Delete(file);
     }
+    [Fact]
+    public void Redaction_suppresses_containing_values_without_repeated_allocations_or_exposed_tails()
+    {
+        var redactor = new PersistenceRedactor(["ab", "abc", "bc", "\uD83D\uDD11secret"], []);
+        foreach (var text in new[] { "prefix abc suffix", "abc", "cab", "safe \uD83D\uDD11secret data" })
+        { Assert.Equal("", redactor.Redact(text)); Assert.Equal("", redactor.Redact(redactor.Redact(text))); }
+        Assert.Equal("unchanged", redactor.Redact("unchanged"));
+        var adversarial = new string('a', 100000) + new string('b', 100000);
+        var watch = System.Diagnostics.Stopwatch.StartNew(); var before = GC.GetAllocatedBytesForCurrentThread();
+        var sanitized = redactor.Redact(adversarial);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal("", sanitized); Assert.InRange(allocated, 0, 32768); Assert.True(watch.Elapsed < TimeSpan.FromSeconds(3));
+        Assert.Throws<ArgumentException>(() => new PersistenceRedactor([new string('x', PersistenceRedactor.MaxSecretCharacters), "y"], []));
+    }
+    [Fact]
+    public async Task Result_identity_accepts_equivalent_Windows_path_casing()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var store = Store(); Confirm(store); Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        var alternate = Path.Combine(Path.GetDirectoryName(store.DirectoryPath)!, Path.GetFileName(store.DirectoryPath).ToUpperInvariant());
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(alternate, Limits)).State);
+    }
+    [Fact]
+    public void Oversized_receipt_names_fail_before_proportional_split_allocations()
+    {
+        foreach (var name in new[] { new string('x', 100000), new string('/', 100000), "a/a/a/a/a/a/a/a/a", "trace.gua" })
+        {
+            var store = Store(); Confirm(store);
+            var reference = new ArtifactReceipt(ArtifactKind.Trace, ArtifactState.Saved, name, 1, new string('0', 64));
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            var result = store.Complete(Outcome(), [reference, new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow);
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.Equal(name == "trace.gua" ? PersistenceFailure.IoFailure : PersistenceFailure.InvalidEvidence, result.Failure);
+            Assert.InRange(allocated, 0, 32768);
+        }
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }
