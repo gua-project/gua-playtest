@@ -40,6 +40,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             exited = process.WaitForExitAsync(exitWait.Token).AsTask();
             var winner = await Task.WhenAny(changed, exited).ConfigureAwait(false);
             await winner.ConfigureAwait(false);
+            // A completed losing watch still carries authoritative lifecycle failure evidence.
+            if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
             CheckAlive();
             result = await changed.ConfigureAwait(false);
         }

@@ -116,7 +116,20 @@ public sealed class HostPreparation
             catch (ConnectionNotReadyException) when (attempt + 1 < policy.ConnectAttempts)
             {
                 await Step(PreparationStage.RetryDelay, preparationDeadline, async token =>
-                { await preparationClock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
+                {
+                    var target = preparationClock.Elapsed + policy.RetryDelay;
+                    await preparationClock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false);
+                    var remaining = target - preparationClock.Elapsed;
+                    if (remaining > TimeSpan.Zero)
+                    {
+                        // A provider wake is a hint. A bounded physical interval prevents a stalled
+                        // or early-waking provider from spinning or dispatching another connection early.
+                        await FiniteOperation.DelayIndependentAsync(remaining, token).ConfigureAwait(false);
+                        if (preparationClock.Elapsed < target)
+                            throw new ClockProviderException(new InvalidOperationException("RetryClockDidNotAdvance"));
+                    }
+                    return true;
+                }, cancellationToken).ConfigureAwait(false);
             }
             catch (ConnectionNotReadyException) { Fail(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
         }
@@ -127,7 +140,8 @@ public sealed class HostPreparation
         {
             if (!setup.IsAuthorized(policy.HostMode)) Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
             var sourceOperations = setup.OperationIds;
-            if (setup.MaximumOperations is < 1 or > 1000 || sourceOperations.Count > setup.MaximumOperations ||
+            var allowedOperations = setup.AllowedOperationIds;
+            if (sourceOperations is null || allowedOperations is null || setup.MaximumOperations is < 1 or > 1000 || sourceOperations.Count > setup.MaximumOperations ||
                 setup.Timeout <= TimeSpan.Zero || setup.Timeout > TimeSpan.FromDays(1) ||
                 sourceOperations.Count < 0)
                 Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
@@ -135,15 +149,16 @@ public sealed class HostPreparation
             for (var index = 0; index < operations.Length; index++)
             {
                 var id = sourceOperations[index];
-                if (string.IsNullOrWhiteSpace(id) || id.Length > 128 || !setup.AllowedOperationIds.Contains(id))
+                if (string.IsNullOrWhiteSpace(id) || id.Length > 128 || !allowedOperations.Contains(id))
                     Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
                 operations[index] = id;
             }
             var setupDeadline = Min(preparationDeadline, preparationClock.Elapsed + setup.Timeout);
             for (var index = 0; index < operations.Length; index++)
             {
-                if (!setup.IsAuthorized(policy.HostMode) || setup.OperationIds.Count != operations.Length ||
-                    setup.OperationIds[index] != operations[index] || !setup.AllowedOperationIds.Contains(operations[index]))
+                var currentOperations = setup.OperationIds; var currentAllowed = setup.AllowedOperationIds;
+                if (!setup.IsAuthorized(policy.HostMode) || currentOperations is null || currentAllowed is null || currentOperations.Count != operations.Length ||
+                    currentOperations[index] != operations[index] || !currentAllowed.Contains(operations[index]))
                     Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
                 var receipt = await Step(PreparationStage.Setup, setupDeadline,
                     token => setup.ExecuteOperationAsync(index, connected, token), cancellationToken).ConfigureAwait(false);
@@ -251,7 +266,7 @@ public sealed class HostPreparation
         catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception)) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken)
         { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
-        catch (ConnectionNotReadyException) { throw; }
+        catch (ConnectionNotReadyException) when (stage == PreparationStage.Connect) { throw; }
         catch (PreparationException) { throw; }
         catch (ClockProviderException) { throw; }
         catch (Exception exception)

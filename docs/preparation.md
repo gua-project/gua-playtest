@@ -38,8 +38,11 @@ No engine install, package publication, authentication or credential change occu
 dispatched/acquired and is the only retryable outcome. All other exceptions,
 unknown receipts, timeout and cancellation terminate the preparation attempt.
 Retries share the original whole-Preparing deadline; an explicitly longer retry
-delay is not shortened by the per-operation ceiling. Async providers return
-promptly, honor cancellation, and release acquisitions returned after cancellation.
+delay is not shortened by the per-operation ceiling.
+Each backoff retains an absolute target and verifies clock progress after wake.
+An early wake gets a bounded independent physical wait; a clock that still has not
+reached the target fails closed rather than spinning or starting another attempt.
+Providers return promptly, honor cancellation, and release acquisitions returned after cancellation.
 The coordinator also releases late returned connections with a finite independent
 shutdown ceiling, and registers each on-time acquisition immediately.
 Shutdown ceilings use an independent physical clock, including late self-release
@@ -136,6 +139,10 @@ The #6 primary remains structured Preparation/Execution/Host/Runner evidence;
 typed host failures retain Host-origin ExecutionError (Failed/exit 1), while
 unknown Runner defects retain exit 10. Original wrapper/provider exception type
 and stack evidence is preserved for #9 redaction, never arbitrary Planner feedback.
+The owner's exception recorder traverses nested typed wrappers and aggregate
+children iteratively with reference deduplication and the existing evidence-item
+ceiling; queue growth is bounded too. Concurrent exit-watch failures remain visible
+even when the source capture has already completed successfully.
 more detailed Launch/Connect/Identity/Setup/Planner/Synchronize failure stages are
 retained by this sink without overwriting the original failure during cleanup.
 

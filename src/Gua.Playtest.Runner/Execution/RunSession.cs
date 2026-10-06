@@ -453,13 +453,20 @@ public sealed class RunSession
     {
         ArgumentNullException.ThrowIfNull(exception);
         if (exception is ClockProviderException) QueueClockRejection();
-        if (exceptions.Count < Limits.MaxEvidenceItems)
-            exceptions.Add(new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace));
-        if (exception is RunFailureException or ProviderCancellationException or ClockProviderException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
-            exceptions.Add(new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace));
-        if (exception is AggregateException aggregate)
-            foreach (var inner in aggregate.Flatten().InnerExceptions.Take(Math.Max(0, Limits.MaxEvidenceItems - exceptions.Count)))
-                exceptions.Add(new(inner.GetType().FullName ?? inner.GetType().Name, inner.StackTrace));
+        var pending = new Queue<Exception>(); pending.Enqueue(exception);
+        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        while (pending.TryDequeue(out var current) && exceptions.Count < Limits.MaxEvidenceItems)
+        {
+            if (!seen.Add(current)) continue;
+            if (current is ClockProviderException) QueueClockRejection();
+            exceptions.Add(new(current.GetType().FullName ?? current.GetType().Name, current.StackTrace));
+            var capacity = Limits.MaxEvidenceItems - exceptions.Count - pending.Count;
+            if (current is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions.Take(Math.Max(0, capacity))) pending.Enqueue(inner);
+            }
+            else if (current.InnerException is { } inner && capacity > 0) pending.Enqueue(inner);
+        }
     }
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)
     {

@@ -54,9 +54,10 @@ public sealed class PreparationTests
     {
         public int Calls { get; private set; }
         public bool Fail { get; set; }
+        public Exception? FailureException { get; set; }
         public Process Process { get; } = new();
         public ValueTask<IOwnedProcess> LaunchAsync(LaunchCommand command, CancellationToken token)
-        { Calls++; if (Fail) throw new IOException("private-path"); return ValueTask.FromResult<IOwnedProcess>(Process); }
+        { Calls++; if (FailureException is not null) throw FailureException; if (Fail) throw new IOException("private-path"); return ValueTask.FromResult<IOwnedProcess>(Process); }
     }
     private sealed class DelayedLauncher : IProcessLauncher
     {
@@ -74,6 +75,8 @@ public sealed class PreparationTests
         public bool MissingBoundary { get; set; }
         public bool MissingFeed { get; set; }
         public Exception? CaptureFailure { get; set; }
+        public Exception? IdentityFailure { get; set; }
+        public Exception? SynchronizeFailure { get; set; }
         public RunObservation? InitialObservation { get; set; }
         public RunObservation? CurrentObservation { get; set; }
         public TaskCompletionSource<RunObservation>? BlockedCapture { get; set; }
@@ -83,9 +86,10 @@ public sealed class PreparationTests
         public int Synchronizations { get; private set; }
         public bool ReleaseConfirmed { get; set; } = true;
         public Action? OnRelease { get; set; }
-        public ValueTask<HostIdentity> IdentifyAsync(CancellationToken token) => ValueTask.FromResult(Identity);
+        public ValueTask<HostIdentity> IdentifyAsync(CancellationToken token)
+        { if (IdentityFailure is not null) throw IdentityFailure; return ValueTask.FromResult(Identity); }
         public ValueTask<InitialBoundary> SynchronizeAsync(string captureRequestId, CancellationToken token)
-        { Synchronizations++; if (MissingBoundary) return ValueTask.FromResult<InitialBoundary>(null!);
+        { if (SynchronizeFailure is not null) throw SynchronizeFailure; Synchronizations++; if (MissingBoundary) return ValueTask.FromResult<InitialBoundary>(null!);
             return ValueTask.FromResult(new InitialBoundary(Identity with { Epoch = Stale ? "old" : Identity.Epoch,
             Capabilities = MissingCapturedCapabilities ? null! : Identity.Capabilities }, true, Preconditions,
             WrongRequest ? "previous-request" : captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero, "subscription-cursor-1", InitialObservation ?? Observation(), MissingFeed ? null! : this, false)); }
@@ -115,7 +119,8 @@ public sealed class PreparationTests
     private sealed class Planner : IPreparationPlannerCheck
     {
         public int Checks { get; private set; }
-        public ValueTask<bool> CheckAsync(CancellationToken token) { Checks++; return ValueTask.FromResult(true); }
+        public Exception? FailureException { get; set; }
+        public ValueTask<bool> CheckAsync(CancellationToken token) { Checks++; if (FailureException is not null) throw FailureException; return ValueTask.FromResult(true); }
     }
     private sealed class DelayedConnector : IPreparationConnector
     {
@@ -125,15 +130,18 @@ public sealed class PreparationTests
     private sealed class Setup : IApprovedSetup
     {
         public bool Authorized { get; set; } = true;
-        public IReadOnlyList<string> OperationIds { get; set; } = ["scene"];
-        public IReadOnlySet<string> AllowedOperationIds { get; } = new HashSet<string> { "scene" };
+        private IReadOnlyList<string> operationIds = ["scene"];
+        public Func<IReadOnlyList<string>>? ReadOperations { get; set; }
+        public IReadOnlyList<string> OperationIds { get => ReadOperations is null ? operationIds : ReadOperations(); set => operationIds = value; }
+        public IReadOnlySet<string> AllowedOperationIds { get; set; } = new HashSet<string> { "scene" };
+        public Exception? OperationFailure { get; set; }
         public int MaximumOperations { get; set; } = 1;
         public TimeSpan Timeout => TimeSpan.FromSeconds(1);
         public int Calls { get; private set; }
         public SetupReceipt Receipt { get; set; } = SetupReceipt.Confirmed;
         public bool IsAuthorized(HostMode mode) => Authorized;
         public ValueTask<SetupReceipt> ExecuteOperationAsync(int index, IPreparationConnection connection, CancellationToken token)
-        { Calls++; return ValueTask.FromResult(Receipt); }
+        { Calls++; if (OperationFailure is not null) throw OperationFailure; return ValueTask.FromResult(Receipt); }
     }
     private static PreparationPolicy Policy(HostMode hostMode = HostMode.Attach, PlayMode playMode = PlayMode.Replay)
         => new(hostMode, playMode, new Uri($"ws://localhost:7777/{Guid.NewGuid():N}"), "game", "1", "Testing", "real", ["observe"], true,
@@ -634,8 +642,10 @@ public sealed class PreparationTests
         Assert.Equal(expected, failure.Cause);
         var evidence = Assert.IsType<AggregateException>(failure.InnerException).Flatten().InnerExceptions;
         Assert.Contains(typed, evidence); Assert.Contains(evidence, item => item is IOException);
-        run.Evaluate(candidates: [failure.Cause]); var outcome = await cleanup.CompleteAsync(run, clock);
+        run.RecordException(failure); run.Evaluate(candidates: [failure.Cause]); var outcome = await cleanup.CompleteAsync(run, clock);
         Assert.Equal(ResultStatus.Invalid, outcome.Primary.Status); Assert.Equal(2, outcome.ExitCode);
+        Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
+        Assert.Contains(outcome.Exceptions, item => item.Type == typed.GetType().FullName && item.StackTrace == typed.StackTrace);
         connection.BlockedCapture?.SetResult(new(TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([])));
     }
 
@@ -661,5 +671,98 @@ public sealed class PreparationTests
         Assert.Contains(missing == "identity" ? new(PreparationStage.Identity, PreparationCode.IdentityMismatch)
             : new(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed), trace.Events);
         Assert.True(outcome.PostProcessingComplete);
+    }
+
+    private sealed class EarlyWakeClock : IClock
+    {
+        public TimeSpan Elapsed { get; private set; }
+        public void Advance(int milliseconds) => Elapsed += TimeSpan.FromMilliseconds(milliseconds);
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        { token.ThrowIfCancellationRequested(); return ValueTask.CompletedTask; }
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EarlyWakeCannotStartRetryBeforeItsAbsoluteClockTarget(bool advance)
+    {
+        var clock = new EarlyWakeClock(); var connector = new Connector(new() { Clock = clock }) { NotReadyCount = 1 };
+        var policy = Policy() with { RetryDelay = TimeSpan.FromMilliseconds(60) };
+        var pending = Execute(new(policy, clock, new Launcher(), connector, new Trace()), clock);
+        Assert.Equal(1, connector.Calls); Assert.False(pending.IsCompleted);
+        if (advance) clock.Advance(60);
+        var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(advance ? 2 : 1, connector.Calls);
+        Assert.Equal(advance ? ResultStatus.Unverified : ResultStatus.Invalid, outcome.Primary.Status);
+        if (!advance) Assert.Equal(RunOrigin.Clock, outcome.Primary.Cause.Origin);
+    }
+
+    [Fact]
+    public async Task ReadyCaptureCannotHideConcurrentTypedProcessWatchFailure()
+    {
+        var clock = new Clock(); var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition());
+        var launcher = new Launcher { Process = { ExitWaitFailure = new RunFailureException(new(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Contract)) } };
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)),
+            CurrentObservation = new(TimeSpan.Zero, BooleanUnit(true), BooleanUnit(false)) };
+        var preparation = new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace()); PreparedHost? host = null;
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, cleanup, token) =>
+        { host = await preparation.PrepareAsync(session, cleanup, null, null, token); return host.Boundary; },
+            async (session, token) => (await RunMonitor.AwaitAsync(session, clock, clock, host!.Feed,
+                _ => ValueTask.FromResult(1), _ => [], token)).Completed);
+        Assert.Equal(ResultStatus.Invalid, outcome.Primary.Status); Assert.Equal(RunOrigin.Contract, outcome.Primary.Cause.Origin);
+        Assert.DoesNotContain(outcome.Events, item => item.Reason == RunReason.GoalSatisfied);
+    }
+
+    [Theory]
+    [InlineData("operations")]
+    [InlineData("permissions")]
+    [InlineData("changed")]
+    public async Task MissingSetupListRejectsBeforeAnyOperation(string missing)
+    {
+        var clock = new Clock(); var setup = new Setup(); var trace = new Trace();
+        if (missing == "operations") setup.OperationIds = null!;
+        if (missing == "permissions") setup.AllowedOperationIds = null!;
+        if (missing == "changed") { var reads = 0; setup.ReadOperations = () => ++reads == 1 ? ["scene"] : null!; }
+        var outcome = await Execute(new(Policy(), clock, new Launcher(), new Connector(new()), trace), clock, setup);
+        Assert.Equal(0, setup.Calls); Assert.Equal(1, outcome.ExitCode); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Contains(new(PreparationStage.Setup, PreparationCode.SetupForbidden), trace.Events);
+    }
+
+    [Theory]
+    [InlineData(PreparationStage.Launch, PreparationCode.LaunchFailed)]
+    [InlineData(PreparationStage.Identity, PreparationCode.IdentityUnavailable)]
+    [InlineData(PreparationStage.Setup, PreparationCode.SetupFailed)]
+    [InlineData(PreparationStage.Planner, PreparationCode.PlannerUnavailable)]
+    [InlineData(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed)]
+    public async Task ConnectionRetrySentinelFromOtherStageIsTracedHostFailure(PreparationStage stage, PreparationCode expected)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var planner = new Planner(); var setup = new Setup(); var trace = new Trace();
+        var exception = new ConnectionNotReadyException();
+        switch (stage)
+        {
+            case PreparationStage.Launch: launcher.FailureException = exception; break;
+            case PreparationStage.Identity: connection.IdentityFailure = exception; break;
+            case PreparationStage.Setup: setup.OperationFailure = exception; break;
+            case PreparationStage.Planner: planner.FailureException = exception; break;
+            case PreparationStage.Synchronize: connection.SynchronizeFailure = exception; break;
+        }
+        var connector = new Connector(connection);
+        var outcome = await Execute(new(Policy(stage == PreparationStage.Launch ? HostMode.Launch : HostMode.Attach,
+            stage == PreparationStage.Planner ? PlayMode.Explore : PlayMode.Replay), clock, launcher, connector, trace), clock,
+            stage == PreparationStage.Setup ? setup : null, stage == PreparationStage.Planner ? planner : null);
+        Assert.Equal(1, outcome.ExitCode); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Contains(new(stage, expected), trace.Events); Assert.True(connector.Calls <= 1);
+        Assert.DoesNotContain(trace.Events, item => item.Stage == PreparationStage.RetryDelay);
+    }
+
+    [Fact]
+    public async Task NestedExceptionWalkRemainsInsideExplicitEvidenceLimit()
+    {
+        var clock = new Clock(); var limits = new RunLimits(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 5, 5, 2, 32);
+        var run = new RunSession(limits, clock, clock); run.BeginPreparation();
+        var cause = new RunEvent(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host);
+        run.RecordException(new RunFailureException(cause, new AggregateException(Enumerable.Range(0, 1000).Select(_ => new IOException()))));
+        run.Evaluate(candidates: [cause]); var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
+        Assert.Equal(32, outcome.Exceptions.Count); Assert.Equal(cause, outcome.Primary.Cause);
     }
 }
