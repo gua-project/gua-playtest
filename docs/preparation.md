@@ -7,6 +7,13 @@ introduced. A new `HostPreparation` is constructed for every Run, including any
 restart. The CLI composition and approved engine fixture adapters remain explicit
 integration work; this module does not make the validation CLI a playable command.
 
+Compose `PrepareAsync(run, cleanup, setup, plannerCheck, token)` into the production
+`RunExecutor.ExecuteAsync` preparation callback; return the resulting
+`PreparedHost.Boundary` and keep its `Feed` for monitored Running work. The preparation
+deadline comes directly from that session, so callers cannot renew it. The executor
+evaluates the certified initial capture before invoking its execution callback.
+No user-supplied callback gets an alternate primary-result authority.
+
 ## Explicit policy and authority
 
 `PreparationPolicy` is trusted execution policy, separate from Scenario meaning
@@ -17,6 +24,8 @@ attempt count (1..100). Durations must be positive and at most one day. Launch
 requires a `LaunchCommand`; attach rejects one. `SystemProcessLauncher` requires
 absolute existing executable and working directory paths and passes individually
 specified arguments without a shell. Nothing searches for ports or executables.
+Launch creation returns an async task promptly; a delayed OS acquisition is either
+registered or shut down under the independent bounded cleanup ceiling.
 No engine install, package publication, authentication or credential change occurs.
 
 `IPreparationConnector.ConnectAsync` performs only connection establishment. A
@@ -74,6 +83,12 @@ adapter synchronizes a new subscription and initial evaluation capture. It must
 verify source/epoch/continuity and check only actual beginning prerequisites;
 future Boss/attack absence and a normal empty UI are not blanket rejection rules.
 No whole-Tree stillness prerequisite is introduced. Replay needs no Planner.
+
+`SynchronizeAsync(captureRequestId, token)` returns `InitialBoundary` with current
+captured `HostIdentity`, continuity, precondition truth, the echoed request ID,
+actual real capture time, synchronization evidence ID, exact `RunObservation`,
+continuous feed and independent current-start restoration evidence. The capability
+and profile are rechecked in that capture, not inferred from earlier metadata.
 
 The paired startup boundary provided by #6 is the integration contract: arm only
 after readiness, correlate a new capture with its one-use RequestId, retain actual

@@ -16,6 +16,7 @@ public sealed class HostPreparation
     private readonly IPreparationTrace trace;
     private bool used;
     private int pendingReleases;
+    private int pendingAcquisitions;
     public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
         IPreparationConnector connector, IPreparationTrace trace)
     {
@@ -26,7 +27,9 @@ public sealed class HostPreparation
             !System.Text.RegularExpressions.Regex.IsMatch(policy.Endpoint.OriginalString, @"^wss?://(?:\[[^\]]+\]|[^/:]+):[0-9]+(?:/|$)") || !string.IsNullOrEmpty(policy.Endpoint.UserInfo) ||
             string.IsNullOrWhiteSpace(policy.ExpectedBuildId) || string.IsNullOrWhiteSpace(policy.RequiredProtocol) ||
             policy.Profile is not ("Player" or "Testing" or "Debug") || string.IsNullOrWhiteSpace(policy.Clock) ||
-            policy.Capabilities is null || policy.Capabilities.Any(string.IsNullOrWhiteSpace) ||
+            policy.Endpoint.OriginalString.Length > 4096 || policy.ExpectedBuildId.Length > 128 ||
+            policy.RequiredProtocol.Length > 128 || policy.Clock.Length > 128 ||
+            policy.Capabilities is null || policy.Capabilities.Count > 1000 || policy.Capabilities.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 128) ||
             (policy.HostMode == HostMode.Launch) != (policy.Launch is not null) || policy.ConnectAttempts is < 1 or > 100)
             throw new ArgumentException("PreparationPolicyInvalid", nameof(policy));
         foreach (var duration in new[] { policy.OperationTimeout, policy.RetryDelay, policy.ShutdownTimeout })
@@ -36,9 +39,12 @@ public sealed class HostPreparation
         this.clock = clock; this.launcher = launcher; this.connector = connector; this.trace = trace;
     }
 
-    public async ValueTask<InitialBoundary> PrepareAsync(OwnedCleanup cleanup, TimeSpan preparationDeadline,
+    public async ValueTask<PreparedHost> PrepareAsync(RunSession run, OwnedCleanup cleanup,
         IApprovedSetup? setup, IPreparationPlannerCheck? planner, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(cleanup);
+        if (run.State != Gua.Playtest.Core.Contracts.ExecutionState.Preparing) throw new InvalidOperationException("PreparationStateInvalid");
+        var preparationDeadline = run.NextRealEvaluationAt;
         if (used) throw new InvalidOperationException("PreparationAlreadyUsed");
         used = true;
         trace.Record(new(PreparationStage.Started, PreparationCode.Started));
@@ -53,22 +59,23 @@ public sealed class HostPreparation
         IOwnedProcess? process = null;
         if (policy.HostMode == HostMode.Launch)
         {
-            cancellationToken.ThrowIfCancellationRequested(); CheckDeadline(preparationDeadline);
-            try { process = launcher.Launch(policy.Launch!); }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            { Fail(PreparationStage.Launch, PreparationCode.LaunchFailed); }
-            var owned = process!;
-            try
+            process = await Step(PreparationStage.Launch, preparationDeadline, async token =>
             {
-                RegisterRelease(cleanup, token => FiniteOperation.RunAsync(clock,
-                    policy.ShutdownTimeout, owned.ShutdownAsync, token));
-            }
-            catch
-            {
-                await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, owned.ShutdownAsync).ConfigureAwait(false);
-                throw;
-            }
-            trace.Record(new(PreparationStage.Launch, PreparationCode.Completed));
+                var owned = await launcher.LaunchAsync(policy.Launch!, token).ConfigureAwait(false);
+                if (token.IsCancellationRequested)
+                {
+                    await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, owned.ShutdownAsync).ConfigureAwait(false);
+                    token.ThrowIfCancellationRequested();
+                }
+                try { RegisterRelease(cleanup, releaseToken => FiniteOperation.RunAsync(clock,
+                    policy.ShutdownTimeout, owned.ShutdownAsync, releaseToken)); }
+                catch
+                {
+                    await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, owned.ShutdownAsync).ConfigureAwait(false);
+                    throw;
+                }
+                return owned;
+            }, cancellationToken).ConfigureAwait(false);
         }
         IPreparationConnection? connection = null;
         for (var attempt = 0; attempt < policy.ConnectAttempts; attempt++)
@@ -132,15 +139,26 @@ public sealed class HostPreparation
             if (planner is null || !await Step(PreparationStage.Planner, preparationDeadline, planner.CheckAsync, cancellationToken).ConfigureAwait(false))
                 Fail(PreparationStage.Planner, PreparationCode.PlannerUnavailable);
         }
-        var boundary = await Step(PreparationStage.Synchronize, preparationDeadline, connected.SynchronizeAsync, cancellationToken).ConfigureAwait(false);
+        // Arm only after every readiness check. The provider must create a NEW synchronized capture for this request.
+        var capture = run.ArmRunningBoundary();
+        var boundary = await Step(PreparationStage.Synchronize, preparationDeadline,
+            token => connected.SynchronizeAsync(capture.RequestId, token), cancellationToken).ConfigureAwait(false);
         ValidateIdentity(boundary.CapturedIdentity);
         if (!boundary.Continuous || boundary.CapturedIdentity.SourceId != identity.SourceId || boundary.CapturedIdentity.Epoch != identity.Epoch)
             Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation);
         if (!boundary.PreconditionsSatisfied) Fail(PreparationStage.Preconditions, PreparationCode.PreconditionsUnsatisfied);
         if (process?.HasExited == true) Fail(PreparationStage.Launch, PreparationCode.ProcessExited);
         CheckDeadline(preparationDeadline); cancellationToken.ThrowIfCancellationRequested();
+        RunStartBoundary certificate;
+        try
+        {
+            certificate = capture.Certify(boundary.CaptureRequestId, boundary.RealCapturedAt, boundary.Observation,
+                boundary.SynchronizationEvidence, boundary.PreconditionsSatisfied);
+        }
+        catch (InvalidOperationException) { Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation); throw; }
         trace.Record(new(PreparationStage.Ready, PreparationCode.Completed));
-        return process is null ? boundary : boundary with { Feed = new ProcessObservationFeed(boundary.Feed, process, trace) };
+        var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, trace);
+        return new(certificate, feed, boundary.CurrentRestorable);
         }
         finally
         {
@@ -148,10 +166,10 @@ public sealed class HostPreparation
             try { cleanup.Register(CleanupStage.ResourceRelease, _ =>
             {
                 // Unknown release preserves the local exclusion; a new Run cannot reclaim an uncertain owner.
-                if (Volatile.Read(ref pendingReleases) != 0) return ValueTask.FromResult(false);
+                if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0) return ValueTask.FromResult(false);
                 lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
             }); }
-            catch { lock (LeaseLock) ActiveEndpoints.Remove(key); throw; }
+            catch { if (Volatile.Read(ref pendingReleases) == 0) { lock (LeaseLock) ActiveEndpoints.Remove(key); } throw; }
         }
     }
 
@@ -185,7 +203,13 @@ public sealed class HostPreparation
         CheckDeadline(deadline);
         try
         {
-            var result = await FiniteOperation.RunAsync(clock, Min(policy.OperationTimeout, deadline - clock.Elapsed), action, cancellationToken).ConfigureAwait(false);
+            var acquisition = stage is PreparationStage.Launch or PreparationStage.Connect;
+            var result = await FiniteOperation.RunAsync(clock, Min(policy.OperationTimeout, deadline - clock.Elapsed), async token =>
+            {
+                if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
+                try { return await action(token).ConfigureAwait(false); }
+                finally { if (acquisition) Interlocked.Decrement(ref pendingAcquisitions); }
+            }, cancellationToken).ConfigureAwait(false);
             trace.Record(new(stage, PreparationCode.Completed)); return result;
         }
         catch (TimeoutException) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
@@ -195,6 +219,7 @@ public sealed class HostPreparation
         {
             trace.Record(new(stage, stage switch
             {
+                PreparationStage.Launch => PreparationCode.LaunchFailed,
                 PreparationStage.Connect => PreparationCode.ConnectionFailed,
                 PreparationStage.Identity => PreparationCode.IdentityUnavailable,
                 PreparationStage.Planner => PreparationCode.PlannerUnavailable,

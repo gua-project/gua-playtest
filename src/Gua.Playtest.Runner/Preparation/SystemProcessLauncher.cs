@@ -5,7 +5,14 @@ namespace Gua.Playtest.Runner.Preparation;
 /// <summary>No shell, discovery, guessed arguments, process-name lookup, or process-tree termination.</summary>
 public sealed class SystemProcessLauncher : IProcessLauncher
 {
-    public IOwnedProcess Launch(LaunchCommand command)
+    public ValueTask<IOwnedProcess> LaunchAsync(LaunchCommand command, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        // OS creation may block. Return promptly so the execution owner can enforce its real deadline.
+        // The coordinator registers or releases the returned handle even if it arrives after cancellation.
+        return new(Task.Run(() => Launch(command), CancellationToken.None));
+    }
+    private static IOwnedProcess Launch(LaunchCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!Path.IsPathFullyQualified(command.Executable) || !File.Exists(command.Executable) ||

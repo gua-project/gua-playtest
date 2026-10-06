@@ -21,7 +21,9 @@ public sealed record PreparationPolicy(HostMode HostMode, PlayMode PlayMode, Uri
 public sealed record HostIdentity(string? AttestedGameBuildId, string Protocol, string Profile, string Clock,
     IReadOnlySet<string> Capabilities, string SourceId, string Epoch, bool HasOutstandingRequests);
 public sealed record InitialBoundary(HostIdentity CapturedIdentity, bool Continuous, bool PreconditionsSatisfied,
+    string CaptureRequestId, TimeSpan RealCapturedAt, string SynchronizationEvidence,
     RunObservation Observation, IRunObservationFeed Feed, bool CurrentRestorable);
+public sealed record PreparedHost(RunStartBoundary Boundary, IRunObservationFeed Feed, bool CurrentRestorable);
 public enum SetupReceipt { Confirmed, Failed, Unconfirmed }
 /// <summary>Trusted Environment fixture mapping. Setup is not a play action, reset, or Planner capability.
 /// The fixture internally enforces its explicit time/operation/permission ceilings before every dispatch.</summary>
@@ -38,7 +40,7 @@ public interface IPreparationConnection
 {
     ValueTask<HostIdentity> IdentifyAsync(CancellationToken cancellationToken);
     // Must subscribe then capture, returning current identity and the same evaluation unit used for start preconditions.
-    ValueTask<InitialBoundary> SynchronizeAsync(CancellationToken cancellationToken);
+    ValueTask<InitialBoundary> SynchronizeAsync(string captureRequestId, CancellationToken cancellationToken);
     // Closes only this connection and its owner-scoped input/subscriptions; never host reset/kill.
     ValueTask<bool> ReleaseAsync(CancellationToken cancellationToken);
 }
@@ -58,7 +60,7 @@ public interface IOwnedProcess
 public interface IProcessLauncher
 {
     // Owns the newly created handle only. Never discovers/attaches by PID/name/port.
-    IOwnedProcess Launch(LaunchCommand command);
+    ValueTask<IOwnedProcess> LaunchAsync(LaunchCommand command, CancellationToken cancellationToken);
 }
 public interface IPreparationPlannerCheck
 {
