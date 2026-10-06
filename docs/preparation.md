@@ -13,6 +13,10 @@ Compose `PrepareAsync(run, cleanup, setup, plannerCheck, token)` into the produc
 deadline comes directly from that session, so callers cannot renew it. The executor
 evaluates the certified initial capture before invoking its execution callback.
 No user-supplied callback gets an alternate primary-result authority.
+Preparation reads the session's validated authoritative clock and uses absolute
+operation deadlines. A provider's own `TimeoutException` is a Host failure, not
+proof the Runner deadline elapsed. Caller cancellation is attributed only through
+the owner's token normalization; unrelated provider cancellation remains a failure.
 
 ## Explicit policy and authority
 
@@ -81,6 +85,10 @@ external host. `ReleaseAsync` must return authoritative evidence and cannot clai
 lease expiry as confirmed input release. Launched process exit remains visible
 through the returned observation feed during both a blocked capture and a blocked
 Planner/action/change wait.
+This wrapper retains the actual underlying capture task after cancellation and
+joins it before a fresh request. It does not advertise independent capture scopes.
+Process exit interrupts both capture and that join; cancellation callback failures
+are retained as inner evidence without replacing the selected Host exit cause.
 
 ## Initial synchronized observation
 

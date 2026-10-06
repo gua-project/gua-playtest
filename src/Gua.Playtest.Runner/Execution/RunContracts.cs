@@ -48,7 +48,7 @@ public sealed record PrimaryResult(ResultStatus Status, RunEvent Cause)
 public enum PostProcessingReason
 {
     PrimarySnapshotFailed, DiagnosticsFailed, ArtifactFailed, InputReleaseUnconfirmed, ResourceReleaseUnconfirmed,
-    Cancelled, CleanupTimeout
+    Cancelled, CleanupTimeout, CleanupClockInvalid, EvidenceLimitExceeded
 }
 public sealed record ExceptionEvidence(string Type, string? StackTrace);
 public sealed record PostProcessingIssue(PostProcessingReason Reason, ExceptionEvidence? Exception = null);

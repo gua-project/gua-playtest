@@ -15,11 +15,17 @@ public sealed class RunStartCapture
     public RunStartBoundary Certify(string captureRequestId, TimeSpan capturedRealAt,
         RunObservation initialObservation, string synchronizationEvidence, bool preconditionsSatisfied)
     {
-        ArgumentNullException.ThrowIfNull(initialObservation);
         if (certified || owner.State != ExecutionState.Preparing || captureRequestId != RequestId ||
-            !preconditionsSatisfied || string.IsNullOrWhiteSpace(synchronizationEvidence) || synchronizationEvidence.Length > 256 ||
-            capturedRealAt < readyReal || initialObservation.CapturedAt < readyCondition)
+            !preconditionsSatisfied || string.IsNullOrWhiteSpace(synchronizationEvidence) || synchronizationEvidence.Length > 256)
             throw new InvalidOperationException("RunningBoundaryUncertified");
+        if (initialObservation is null)
+            owner.RejectStartObservation("RunningBoundaryObservationMissing", new ArgumentNullException(nameof(initialObservation)));
+        if (initialObservation.Success is null)
+            owner.RejectStartObservation("RunningBoundarySuccessMissing", new ArgumentNullException(nameof(initialObservation.Success)));
+        if (initialObservation.Failure is null)
+            owner.RejectStartObservation("RunningBoundaryFailureMissing", new ArgumentNullException(nameof(initialObservation.Failure)));
+        if (capturedRealAt < readyReal || initialObservation.CapturedAt < readyCondition)
+            owner.RejectStartObservation("RunningBoundaryUncertified");
         owner.ValidateStartTimes(capturedRealAt, initialObservation.CapturedAt);
         certified = true;
         return new(owner, capturedRealAt, initialObservation, synchronizationEvidence);

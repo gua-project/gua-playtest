@@ -11,6 +11,8 @@ public sealed class HostPreparation
     private static readonly HashSet<string> ActiveEndpoints = new(StringComparer.Ordinal);
     private readonly PreparationPolicy policy;
     private readonly IClock clock;
+    private IClock preparationClock = null!;
+    private Action<Exception>? recordException;
     private readonly IProcessLauncher launcher;
     private readonly IPreparationConnector connector;
     private readonly IPreparationTrace trace;
@@ -47,6 +49,8 @@ public sealed class HostPreparation
         var preparationDeadline = run.NextRealEvaluationAt;
         if (used) throw new InvalidOperationException("PreparationAlreadyUsed");
         used = true;
+        preparationClock = run.AuthoritativeRealClock;
+        recordException = run.RecordException;
         trace.Record(new(PreparationStage.Started, PreparationCode.Started));
         // This prevents collisions in this Runner process only, never claims a host/manual-input lifecycle lock.
         var key = policy.Endpoint.AbsoluteUri;
@@ -104,7 +108,7 @@ public sealed class HostPreparation
             catch (ConnectionNotReadyException) when (attempt + 1 < policy.ConnectAttempts)
             {
                 await Step(PreparationStage.RetryDelay, preparationDeadline, async token =>
-                { await clock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
+                { await preparationClock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
             }
             catch (ConnectionNotReadyException) { Fail(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
         }
@@ -127,7 +131,7 @@ public sealed class HostPreparation
                     Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
                 operations[index] = id;
             }
-            var setupDeadline = Min(preparationDeadline, clock.Elapsed + setup.Timeout);
+            var setupDeadline = Min(preparationDeadline, preparationClock.Elapsed + setup.Timeout);
             for (var index = 0; index < operations.Length; index++)
             {
                 if (!setup.IsAuthorized(policy.HostMode) || setup.OperationIds.Count != operations.Length ||
@@ -222,26 +226,25 @@ public sealed class HostPreparation
     private async ValueTask<T> Step<T>(PreparationStage stage, TimeSpan deadline,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken)
     {
-        var remaining = deadline - clock.Elapsed;
-        if (remaining <= TimeSpan.Zero)
-        { trace.Record(new(stage, PreparationCode.Timeout)); throw new TimeoutException("PreparationDeadlineReached"); }
         try
         {
             var acquisition = stage is PreparationStage.Launch or PreparationStage.Connect;
-            var result = await FiniteOperation.RunAsync(clock, Min(policy.OperationTimeout, remaining), async token =>
+            var operationDeadline = Min(deadline, preparationClock.Elapsed + policy.OperationTimeout);
+            var result = await FiniteOperation.RunUntilAsync(preparationClock, operationDeadline, async token =>
             {
-                if (clock.Elapsed >= deadline) throw new TimeoutException("PreparationDeadlineReached");
+                if (preparationClock.Elapsed >= deadline) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
                 if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
                 try { return await action(token).ConfigureAwait(false); }
                 finally { if (acquisition) Interlocked.Decrement(ref pendingAcquisitions); }
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken, recordException).ConfigureAwait(false);
             trace.Record(new(stage, PreparationCode.Completed)); return result;
         }
-        catch (TimeoutException) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception)) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken)
         { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
         catch (ConnectionNotReadyException) { throw; }
         catch (PreparationException) { throw; }
+        catch (ClockProviderException) { throw; }
         catch (Exception exception)
         {
             var code = stage switch
@@ -253,11 +256,12 @@ public sealed class HostPreparation
                 PreparationStage.Synchronize => PreparationCode.SynchronizationFailed,
                 _ => PreparationCode.SetupFailed
             };
-            trace.Record(new(stage, code)); throw new PreparationException(stage, code, exception);
+            trace.Record(new(stage, code)); throw new PreparationException(stage, code,
+                exception is ProviderCancellationException ? exception.InnerException : exception);
         }
     }
     private void CheckDeadline(TimeSpan deadline)
-    { if (clock.Elapsed >= deadline) { trace.Record(new(PreparationStage.Started, PreparationCode.Timeout)); throw new TimeoutException("PreparationDeadlineReached"); } }
+    { if (preparationClock.Elapsed >= deadline) { trace.Record(new(PreparationStage.Started, PreparationCode.Timeout)); throw FiniteOperation.DeadlineReached("PreparationDeadlineReached"); } }
     private void Fail(PreparationStage stage, PreparationCode code)
     { trace.Record(new(stage, code)); throw new PreparationException(stage, code); }
     private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
