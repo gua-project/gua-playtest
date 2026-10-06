@@ -1,0 +1,2 @@
+goal:
+  <<: {objective: test}

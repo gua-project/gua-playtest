@@ -1,0 +1,45 @@
+{
+  "kind": "replayPlan",
+  "schemaVersion": 1,
+  "planId": "purchase-plan",
+  "scenario": {
+    "path": "scenario.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "recording": {
+    "path": "recording.json",
+    "sha256": "997339991a1c4bc66e686c19f5a3c24586166c4a54f5bf6a7d1c47bc8960ad86"
+  },
+  "timing": "conditionSynchronized",
+  "completion": "afterPlan",
+  "checkpoints": [
+    {
+      "beforeStep": 1,
+      "condition": {
+        "kind": "assertion",
+        "read": {
+          "target": {
+            "source": "ui",
+            "selector": {
+              "role": {
+                "value": "checkbox"
+              }
+            }
+          },
+          "region": "standard",
+          "field": "state.checked",
+          "valueType": {
+            "type": "bool"
+          }
+        },
+        "quantifier": "one",
+        "operator": "equals",
+        "expected": {
+          "type": "bool",
+          "value": true
+        }
+      },
+      "timeoutMilliseconds": 1000
+    }
+  ]
+}

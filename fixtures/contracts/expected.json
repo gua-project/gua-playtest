@@ -1,0 +1,78 @@
+[
+  {
+    "file": "scenario.json",
+    "expected": "Valid"
+  },
+  {
+    "file": "scenario.yaml",
+    "expected": "Valid"
+  },
+  {
+    "file": "environment.json",
+    "expected": "Valid"
+  },
+  {
+    "file": "plan.json",
+    "expected": "Valid"
+  },
+  {
+    "file": "registry.json",
+    "expected": "Valid"
+  },
+  {
+    "file": "unknown-goal-field.json",
+    "expected": "SchemaInvalid"
+  },
+  {
+    "file": "unknown-version.json",
+    "expected": "SchemaInvalid"
+  },
+  {
+    "file": "type-mismatch.json",
+    "expected": "TypeMismatch"
+  },
+  {
+    "file": "null-value.json",
+    "expected": "SchemaInvalid"
+  },
+  {
+    "file": "multiple-goals.json",
+    "expected": "SchemaInvalid"
+  },
+  {
+    "file": "duplicate.json",
+    "expected": "DuplicateKey"
+  },
+  {
+    "file": "duplicate.yaml",
+    "expected": "DuplicateKey"
+  },
+  {
+    "file": "tag.yaml",
+    "expected": "YamlFeatureForbidden"
+  },
+  {
+    "file": "cycle.yaml",
+    "expected": "YamlFeatureForbidden"
+  },
+  {
+    "file": "merge.yaml",
+    "expected": "YamlFeatureForbidden"
+  },
+  {
+    "file": "multi.yaml",
+    "expected": "YamlFeatureForbidden"
+  },
+  {
+    "file": "nonfinite.yaml",
+    "expected": "NonFiniteNumber"
+  },
+  {
+    "file": "nonfinite.json",
+    "expected": "NonFiniteNumber"
+  },
+  {
+    "file": "bad-hash.json",
+    "expected": "HashMismatch"
+  }
+]

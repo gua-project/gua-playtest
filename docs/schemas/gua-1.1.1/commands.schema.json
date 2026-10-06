@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua.dev/schema/commands.schema.json",
+  "title": "Gua Command",
+  "oneOf": [
+    { "$ref": "#/$defs/get_spatial_info" },
+    { "$ref": "#/$defs/query_spatial_batch" },
+    { "$ref": "#/$defs/poll_spatial_batch" },
+    { "$ref": "#/$defs/cancel_spatial_batch" },
+    { "$ref": "#/$defs/semanticLint" },
+    { "$ref": "#/$defs/getUiTree" },
+    { "$ref": "#/$defs/getWorldObjectTree" },
+    { "$ref": "#/$defs/queryWorldObjects" },
+    { "$ref": "#/$defs/nodeCommand" },
+    { "$ref": "#/$defs/pressKey" },
+    { "$ref": "#/$defs/valueAction" },
+    { "$ref": "#/$defs/checkedAction" },
+    { "$ref": "#/$defs/selectAction" },
+    { "$ref": "#/$defs/scrollAction" },
+    { "$ref": "#/$defs/resetContext" },
+    { "$ref": "#/$defs/captureScreenshot" },
+    { "$ref": "#/$defs/clockInstall" },
+    { "$ref": "#/$defs/clockRunFor" },
+    { "$ref": "#/$defs/gameInputAction" },
+    { "$ref": "#/$defs/findGameInputActions" },
+    { "$ref": "#/$defs/rawKey" },
+    { "$ref": "#/$defs/pointerInput" },
+    { "$ref": "#/$defs/gamepadInput" },
+    { "$ref": "#/$defs/textInput" },
+    { "$ref": "#/$defs/moveGamepad" },
+    { "$ref": "#/$defs/simpleCommand" }
+  ],
+  "$defs": {
+    "get_spatial_info": {"type":"object","required":["type"],"additionalProperties":false,"properties":{"type":{"const":"get_spatial_info"}}},
+    "query_spatial_batch": {"type":"object","required":["type","batch"],"additionalProperties":false,"properties":{"type":{"const":"query_spatial_batch"},"batch":{"$ref":"spatial-host-r1.schema.json#/$defs/batch"}}},
+    "poll_spatial_batch": {"type":"object","required":["type","batchId"],"additionalProperties":false,"properties":{"type":{"const":"poll_spatial_batch"},"batchId":{"type":"integer","minimum":1,"maximum":9007199254740991}}},
+    "cancel_spatial_batch": {"type":"object","required":["type","batchId"],"additionalProperties":false,"properties":{"type":{"const":"cancel_spatial_batch"},"batchId":{"type":"integer","minimum":1,"maximum":9007199254740991}}},
+    "semanticLint": {
+      "type": "object", "required": ["type"], "additionalProperties": false,
+      "properties": { "type": { "const": "semantic_lint" }, "includeWorld": { "type": "boolean" } }
+    },
+    "getUiTree": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "get_ui_tree" }
+      }
+    },
+    "getWorldObjectTree": {
+      "type": "object", "required": ["type"], "additionalProperties": false,
+      "properties": { "type": { "const": "get_world_object_tree" } }
+    },
+    "queryWorldObjects": {
+      "type": "object", "required": ["type"], "additionalProperties": false,
+      "properties": {
+        "type": { "const": "query_world_objects" },
+        "worldId": { "type": "string", "minLength": 1 }, "worldIdMatch": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "kind": { "type": "string", "minLength": 1 }, "kindMatch": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "label": { "type": "string", "minLength": 1 }, "labelMatch": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "tag": { "type": "string", "minLength": 1 }, "tagMatch": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "parentId": { "type": "string", "minLength": 1 }, "directChild": { "type": "integer", "enum": [0, 1] },
+        "visibleToPlayer": { "type": "integer", "minimum": 0, "maximum": 2 }, "active": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "stateKey": { "type": "string", "minLength": 1 }, "stateType": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "stateString": { "type": "string" }, "stateNumber": { "type": "number" }, "stateBool": { "type": "boolean" },
+        "relativeToObjectId": { "type": "string", "minLength": 1 },
+        "maxDistance": { "type": "number", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 4294967295 }
+      },
+      "oneOf": [
+        { "not": { "anyOf": [
+          { "required": ["stateKey"] }, { "required": ["stateType"] }, { "required": ["stateString"] },
+          { "required": ["stateNumber"] }, { "required": ["stateBool"] }
+        ] } },
+        { "required": ["stateKey", "stateType"], "properties": { "stateType": { "const": 0 } },
+          "not": { "anyOf": [{ "required": ["stateString"] }, { "required": ["stateNumber"] }, { "required": ["stateBool"] }] } },
+        { "required": ["stateKey", "stateType", "stateString"], "properties": { "stateType": { "const": 1 } },
+          "not": { "anyOf": [{ "required": ["stateNumber"] }, { "required": ["stateBool"] }] } },
+        { "required": ["stateKey", "stateType", "stateNumber"], "properties": { "stateType": { "const": 2 } },
+          "not": { "anyOf": [{ "required": ["stateString"] }, { "required": ["stateBool"] }] } },
+        { "required": ["stateKey", "stateType", "stateBool"], "properties": { "stateType": { "const": 3 } },
+          "not": { "anyOf": [{ "required": ["stateString"] }, { "required": ["stateNumber"] }] } }
+      ],
+      "allOf": [
+        { "if": { "required": ["directChild"], "properties": { "directChild": { "const": 1 } } },
+          "then": { "required": ["parentId"] } },
+        { "if": { "anyOf": [{ "required": ["relativeToObjectId"] }, { "required": ["maxDistance"] }, { "required": ["limit"] }] },
+          "then": { "required": ["relativeToObjectId", "maxDistance"] } }
+      ]
+    },
+    "nodeCommand": {
+      "type": "object",
+      "required": ["type", "nodeId"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": ["get_node", "click_node", "focus_node", "wait_for_node"]
+        },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 0 },
+        "requestId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "pressKey": {
+      "type": "object",
+      "required": ["type", "key"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "press_key" },
+        "key": { "type": "string", "minLength": 1 },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "modifiers": { "type": "integer", "minimum": 0 },
+        "requestId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "valueAction": {
+      "type": "object",
+      "required": ["type", "nodeId", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "set_value" },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" },
+        "sensitive": { "type": "boolean", "default": false },
+        "requestId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "checkedAction": {
+      "type": "object",
+      "required": ["type", "nodeId", "checked"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "set_checked" },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "checked": { "type": "boolean" },
+        "requestId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "selectAction": {
+      "type": "object",
+      "required": ["type", "nodeId", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "select" },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "value": { "type": "string", "minLength": 1 },
+        "requestId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "scrollAction": {
+      "type": "object",
+      "required": ["type", "nodeId", "deltaX", "deltaY"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "scroll" },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "deltaX": { "type": "number" },
+        "deltaY": { "type": "number" },
+        "scrollUnit": { "type": "integer", "enum": [0, 1] },
+        "requestId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "resetContext": {
+      "type": "object",
+      "required": ["type", "expectedSessionEpoch"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "reset_context" },
+        "expectedSessionEpoch": { "type": "integer", "minimum": 1 },
+        "flags": { "type": "integer", "minimum": 0, "maximum": 255, "default": 207 },
+        "flagsVersion": { "type": "integer", "enum": [1, 2], "default": 2 },
+        "strict": { "type": "boolean", "default": false }
+      }
+    },
+    "captureScreenshot": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "capture_screenshot" },
+        "afterFrameSequence": { "type": ["integer", "null"], "minimum": 0 },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clockInstall": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "clock_install" },
+        "initialTimeMs": { "type": "number", "minimum": 0, "default": 0 },
+        "stepMs": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "clockRunFor": {
+      "type": "object",
+      "required": ["type", "durationMs"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "clock_run_for" },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "stepMs": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "gameInputAction": {
+      "type": "object",
+      "required": ["type", "actionId"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["press_game_input_action", "set_game_input_action", "release_game_input_action"] },
+        "actionId": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$" },
+        "value": {
+          "anyOf": [
+            { "type": "boolean" },
+            { "type": "number" },
+            { "type": "string", "maxLength": 40 },
+            { "type": "object" }
+          ]
+        },
+        "leaseMs": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "confirmed": { "type": "boolean", "default": false },
+        "sensitive": { "type": "boolean", "default": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "set_game_input_action" } }, "required": ["type"] },
+          "then": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "press_game_input_action" } }, "required": ["type"] },
+          "then": { "not": { "anyOf": [{ "required": ["value"] }, { "required": ["leaseMs"] }, { "required": ["sensitive"] }] } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "release_game_input_action" } }, "required": ["type"] },
+          "then": { "not": { "anyOf": [
+            { "required": ["value"] }, { "required": ["leaseMs"] },
+            { "required": ["confirmed"] }, { "required": ["sensitive"] }
+          ] } }
+        }
+      ]
+    },
+    "findGameInputActions": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "find_game_input_actions" },
+        "actionId": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$", "maxLength": 127 },
+        "query": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\u0000]+$" },
+        "valueType": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "active": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "context": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000]+$" },
+        "category": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$", "maxLength": 127 },
+        "tags": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000]+$" } },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+      }
+    },
+    "keyboardCode": {
+      "type": "string",
+      "enum": [
+        "Backquote", "Backslash", "Backspace", "BracketLeft", "BracketRight", "CapsLock", "Comma",
+        "ContextMenu", "Delete", "End", "Enter", "Equal", "Escape", "Home", "Insert", "MetaLeft",
+        "MetaRight", "Minus", "NumLock", "PageDown", "PageUp", "Pause", "Period", "Quote", "ScrollLock",
+        "Semicolon", "ShiftLeft", "ShiftRight", "Slash", "Space", "Tab", "ControlLeft", "ControlRight",
+        "AltLeft", "AltRight", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "PrintScreen",
+        "NumpadAdd", "NumpadDecimal", "NumpadDivide", "NumpadEnter", "NumpadMultiply",
+        "NumpadSubtract",
+        "KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG", "KeyH", "KeyI", "KeyJ", "KeyK", "KeyL", "KeyM",
+        "KeyN", "KeyO", "KeyP", "KeyQ", "KeyR", "KeyS", "KeyT", "KeyU", "KeyV", "KeyW", "KeyX", "KeyY", "KeyZ",
+        "Digit0", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9",
+        "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+        "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24",
+        "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9"
+      ]
+    },
+    "rawKey": {
+      "type": "object", "required": ["type", "code"], "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["key_down", "key_up", "press_physical_key"] },
+        "code": { "$ref": "#/$defs/keyboardCode" },
+        "leaseMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
+    "pointerInput": {
+      "type": "object", "required": ["type"], "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["pointer_move", "pointer_button_down", "pointer_button_up", "pointer_wheel"] },
+        "mode": { "enum": ["absolute", "delta"] },
+        "coordinateSpace": { "enum": ["viewport_normalized", "viewport_pixels"] },
+        "x": { "type": "number" }, "y": { "type": "number" },
+        "button": { "enum": ["primary", "secondary", "auxiliary", "back", "forward"] },
+        "deltaX": { "type": "number" }, "deltaY": { "type": "number" },
+        "wheelUnit": { "enum": ["pixels", "lines"] },
+        "leaseMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "pointer_move" } }, "required": ["type"] },
+          "then": {
+            "required": ["mode", "x", "y"],
+            "not": { "anyOf": [
+              { "required": ["button"] }, { "required": ["deltaX"] }, { "required": ["deltaY"] },
+              { "required": ["wheelUnit"] }, { "required": ["leaseMs"] }
+            ] },
+            "allOf": [
+              {
+                "if": { "properties": { "mode": { "const": "absolute" } }, "required": ["mode"] },
+                "then": {
+                  "required": ["coordinateSpace"],
+                  "allOf": [{
+                    "if": { "properties": { "coordinateSpace": { "const": "viewport_normalized" } }, "required": ["coordinateSpace"] },
+                    "then": { "properties": { "x": { "minimum": 0, "maximum": 1 }, "y": { "minimum": 0, "maximum": 1 } } }
+                  }]
+                },
+                "else": { "not": { "required": ["coordinateSpace"] } }
+              }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["pointer_button_down", "pointer_button_up"] } }, "required": ["type"] },
+          "then": {
+            "required": ["button"],
+            "not": { "anyOf": [
+              { "required": ["mode"] }, { "required": ["coordinateSpace"] }, { "required": ["x"] },
+              { "required": ["y"] }, { "required": ["deltaX"] }, { "required": ["deltaY"] },
+              { "required": ["wheelUnit"] }
+            ] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "pointer_wheel" } }, "required": ["type"] },
+          "then": {
+            "anyOf": [{ "required": ["deltaX"] }, { "required": ["deltaY"] }],
+            "not": { "anyOf": [
+              { "required": ["mode"] }, { "required": ["coordinateSpace"] }, { "required": ["x"] },
+              { "required": ["y"] }, { "required": ["button"] }, { "required": ["leaseMs"] }
+            ] }
+          }
+        }
+      ]
+    },
+    "gamepadInput": {
+      "type": "object", "required": ["type"], "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["gamepad_button_down", "gamepad_button_up", "set_gamepad_axis", "reset_gamepad"] },
+        "gamepadIndex": { "type": "integer", "minimum": 0, "maximum": 3, "default": 0 },
+        "button": { "enum": ["south", "east", "west", "north", "left_shoulder", "right_shoulder", "left_trigger", "right_trigger", "back", "start", "left_stick", "right_stick", "dpad_up", "dpad_down", "dpad_left", "dpad_right"] },
+        "axis": { "enum": ["left_stick_x", "left_stick_y", "right_stick_x", "right_stick_y"] },
+        "value": { "type": "number", "minimum": -1, "maximum": 1 },
+        "leaseMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["gamepad_button_down", "gamepad_button_up"] } }, "required": ["type"] },
+          "then": {
+            "required": ["button"],
+            "not": { "anyOf": [{ "required": ["axis"] }, { "required": ["value"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "set_gamepad_axis" } }, "required": ["type"] },
+          "then": {
+            "required": ["axis", "value"],
+            "not": { "required": ["button"] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "reset_gamepad" } }, "required": ["type"] },
+          "then": {
+            "not": { "anyOf": [
+              { "required": ["button"] }, { "required": ["axis"] }, { "required": ["value"] }, { "required": ["leaseMs"] }
+            ] }
+          }
+        }
+      ]
+    },
+    "textInput": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "text_input" },
+        "text": { "type": "string", "maxLength": 40 },
+        "sensitive": { "type": "boolean", "default": false },
+        "secretKey": { "type": "string", "minLength": 1 }
+      }
+    },
+    "moveGamepad": {
+      "type": "object",
+      "required": ["type", "axis", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "move_gamepad" },
+        "axis": { "type": "string", "minLength": 1 },
+        "value": { "type": "number", "minimum": -1, "maximum": 1 }
+      }
+    },
+    "simpleCommand": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": ["get_screenshot", "get_logs", "get_diagnostics", "get_version", "get_context_status", "poll_events", "poll_game_input", "get_clock", "clock_pause", "clock_resume", "get_game_input_actions", "get_game_input_state", "release_all_game_inputs"]
+        },
+        "requestId": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "poll_game_input" } }, "required": ["type"] },
+          "then": { "required": ["requestId"] }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["poll_events", "poll_game_input"] } }, "required": ["type"] },
+          "else": { "not": { "required": ["requestId"] } }
+        }
+      ]
+    }
+  }
+}

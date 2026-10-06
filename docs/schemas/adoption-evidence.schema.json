@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/adoption-evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "adoptionEvidence"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "plan": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "scenario": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "recording": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "testRunId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "identity": {
+      "$ref": "common.schema.json#/$defs/identity"
+    },
+    "completion": {
+      "const": "afterPlan"
+    },
+    "planCompleted": {
+      "const": true
+    },
+    "goalVerified": {
+      "const": true
+    },
+    "postProcessingComplete": {
+      "const": true
+    },
+    "aiUsed": {
+      "const": false
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "plan",
+    "scenario",
+    "recording",
+    "testRunId",
+    "identity",
+    "completion",
+    "planCompleted",
+    "goalVerified",
+    "postProcessingComplete",
+    "aiUsed"
+  ]
+}

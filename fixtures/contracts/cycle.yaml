@@ -1,0 +1,1 @@
+goal: &a {self: *a}

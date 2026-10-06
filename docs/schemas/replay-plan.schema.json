@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/replay-plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "replayPlan"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "planId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "scenario": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "recording": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "timing": {
+      "enum": [
+        "recorded",
+        "conditionSynchronized"
+      ]
+    },
+    "completion": {
+      "enum": [
+        "onGoal",
+        "afterPlan"
+      ]
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "beforeStep": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "condition": {
+            "$ref": "common.schema.json#/$defs/condition"
+          },
+          "timeoutMilliseconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400000
+          }
+        },
+        "required": [
+          "beforeStep",
+          "condition",
+          "timeoutMilliseconds"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 1000
+    },
+    "initial": {
+      "$ref": "common.schema.json#/$defs/condition"
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "planId",
+    "scenario",
+    "recording",
+    "timing",
+    "completion",
+    "checkpoints"
+  ]
+}

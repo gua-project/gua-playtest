@@ -21,7 +21,15 @@ foreach ($name in $expected.Keys) {
         throw "Dependency graph mismatch: $name"
     }
     $packages = @($project.SelectNodes('//PackageReference'))
-    if ($name -ne 'GuaIntegration' -and $packages.Count) { throw "Unexpected product package dependency: $name" }
+    if ($name -notin @('Core', 'GuaIntegration') -and $packages.Count) { throw "Unexpected product package dependency: $name" }
+    if ($name -eq 'Core') {
+        if ($packages.Count -ne 2) { throw 'Unexpected schema package graph' }
+        foreach ($package in $packages) {
+            if (($package.Include -eq 'JsonSchema.Net' -and $package.Version -eq '[7.3.4]') -or
+                ($package.Include -eq 'YamlDotNet' -and $package.Version -eq '[16.3.0]')) { continue }
+            throw 'Schema package pin mismatch'
+        }
+    }
     if ($name -eq 'GuaIntegration') {
         if ($packages.Count -ne 2) { throw 'Unexpected Gua package graph' }
         foreach ($package in $packages) {
@@ -33,7 +41,7 @@ foreach ($name in $expected.Keys) {
     if ($project.SelectNodes('//Reference|//Compile[@Include]|//Import').Count) { throw "External source/import boundary: $name" }
 }
 if (@(Get-ChildItem (Join-Path $root 'src') -Recurse -Filter *.csproj).Count -ne 5) { throw 'Expected five product projects' }
-$coreFiles = Get-ChildItem (Join-Path $root 'src/Gua.Playtest.Core') -Filter *.cs
+$coreFiles = Get-ChildItem (Join-Path $root 'src/Gua.Playtest.Core') -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch '[\\/]obj[\\/]' }
 if ($coreFiles | Select-String -Pattern 'using Gua\.(Core|Runtime|Testing)|Codex|DllImport|Process\.') {
     throw 'Core has an engine/planner dependency'
 }

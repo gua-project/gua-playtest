@@ -1,0 +1,62 @@
+{
+  "kind": "environment",
+  "schemaVersion": 1,
+  "environmentId": "local-test",
+  "buildId": "fixture-build-A",
+  "connection": {
+    "endpoint": "ws://127.0.0.1:17777",
+    "credential": {
+      "secretKey": "bridge-token"
+    }
+  },
+  "profile": "Player",
+  "limits": {
+    "maxDurationMilliseconds": 30000,
+    "maxActions": 50,
+    "maxDecisions": 50,
+    "prepareTimeoutMilliseconds": 1000,
+    "cleanupTimeoutMilliseconds": 1000,
+    "plannerTimeoutMilliseconds": 1000,
+    "waitTimeoutMilliseconds": 1000,
+    "maxSegmentMilliseconds": 1000,
+    "maxLatenessMilliseconds": 1000,
+    "maxObservationNodes": 1000,
+    "maxObservationBytes": 1048576,
+    "regexTimeoutMilliseconds": 100,
+    "regexMaxPatternLength": 1024,
+    "stagnationActionLimit": 12,
+    "stagnationRepeatLimit": 4,
+    "recoveryDecisionLimit": 2,
+    "traceMaxBytes": 8388608,
+    "traceMaxEvents": 10000,
+    "traceQueueCapacity": 1024,
+    "traceMaxAttachmentBytes": 1048576
+  },
+  "permissions": {
+    "actionIds": [
+      "purchase"
+    ],
+    "rawInput": false,
+    "reads": [
+      {
+        "target": {
+          "source": "ui",
+          "selector": {
+            "role": {
+              "value": "checkbox"
+            }
+          }
+        },
+        "region": "standard",
+        "field": "state.checked",
+        "valueType": {
+          "type": "bool"
+        }
+      }
+    ]
+  },
+  "trace": {
+    "captureMode": "recent",
+    "savePolicy": "onFailure"
+  }
+}

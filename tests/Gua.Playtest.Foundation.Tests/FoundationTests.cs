@@ -58,11 +58,50 @@ public sealed class FoundationTests
     }
 
     [Fact]
-    public async Task ScenarioValidatorIsNeverSuccessfulStub()
+    public async Task ScenarioValidationRequiresExplicitAllowedRoot()
     {
         using var output = new StringWriter();
         Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "scenario.json"], output));
-        Assert.Contains("scenario-validator-not-implemented", output.ToString());
+        Assert.Contains("explicit-validation-arguments-required", output.ToString());
+    }
+
+    [Fact]
+    public async Task MissingAndBrokenAllowedRootsReturnStructuredInvalid()
+    {
+        var scope = Directory.CreateTempSubdirectory("gua-root-cli-");
+        var missing = Path.Combine(scope.FullName,"missing");
+        var target = Directory.CreateDirectory(Path.Combine(scope.FullName,"target"));
+        var broken = Path.Combine(scope.FullName,"broken");
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var start = new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true };
+                start.ArgumentList.Add("/c"); start.ArgumentList.Add("mklink"); start.ArgumentList.Add("/J"); start.ArgumentList.Add(broken); start.ArgumentList.Add(target.FullName);
+                using var process = System.Diagnostics.Process.Start(start)!;
+                await process.WaitForExitAsync(); Assert.Equal(0,process.ExitCode);
+            }
+            else Directory.CreateSymbolicLink(broken,target.FullName);
+            target.Delete();
+            foreach (var root in new[] { missing, broken })
+            {
+                using var output = new StringWriter();
+                Assert.Equal(2,await CliApplication.ExecuteAsync(["validate","--allow-root",root,"input.json"],output));
+                using var document = JsonDocument.Parse(output.ToString());
+                Assert.Equal("Invalid",document.RootElement.GetProperty("status").GetString());
+                Assert.Equal("InvalidAllowedRoots",document.RootElement.GetProperty("code").GetString());
+                Assert.DoesNotContain(scope.FullName,output.ToString());
+            }
+        }
+        finally
+        {
+            if (new DirectoryInfo(broken).LinkTarget is not null)
+            {
+                if (OperatingSystem.IsWindows()) Directory.Delete(broken);
+                else File.Delete(broken);
+            }
+            scope.Delete(true);
+        }
     }
 
     [Fact]

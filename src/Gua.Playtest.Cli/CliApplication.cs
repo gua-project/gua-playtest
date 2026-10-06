@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Gua.Playtest.Core;
+using Gua.Playtest.Core.Contracts;
 using Gua.Playtest.GuaIntegration;
 using Gua.Playtest.Runner;
 
@@ -13,7 +14,7 @@ public static class CliApplication
     {
         if (args is ["--help"] or [])
         {
-            await output.WriteLineAsync("gua-playtest validate --gua-schema <packaged-schema-name> <json-file>\ngua-playtest doctor --native\nScenario validation, run, replay and report commands are pending #2/#15.");
+            await output.WriteLineAsync("gua-playtest validate --allow-root <existing-directory> <json-or-yaml-file>\ngua-playtest validate --gua-schema <packaged-schema-name> <json-file>\ngua-playtest doctor --native\nRun, replay and report commands are pending #15.");
             return 0;
         }
         if (args is ["--version"])
@@ -33,6 +34,15 @@ public static class CliApplication
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             { result = new(ValidationStatus.Interrupted, "doctor-interrupted"); }
             catch (Exception) { result = new(ValidationStatus.Unavailable, "native-package-unavailable-or-incompatible"); }
+        }
+        else if (args is ["validate", "--allow-root", var root, var contractFile])
+        {
+            try
+            {
+                result = await new ValidationRunner(new ContractValidatorAdapter([root])).ValidateAsync(contractFile, cancellationToken);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+            { result = new(ValidationStatus.Invalid, "InvalidAllowedRoots"); }
         }
         else if (args is ["validate", "--gua-schema", var schema, var file])
         {
@@ -58,7 +68,7 @@ public static class CliApplication
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
             { result = new(ValidationStatus.Invalid, "document-unreadable"); }
         }
-        else result = new(ValidationStatus.Unavailable, args.FirstOrDefault() == "validate" ? "scenario-validator-not-implemented" : "unsupported-command");
+        else result = new(ValidationStatus.Unavailable, args.FirstOrDefault() == "validate" ? "explicit-validation-arguments-required" : "unsupported-command");
         await output.WriteLineAsync(JsonSerializer.Serialize(new { status = result.Status.ToString(), code = result.Code }));
         return result.ExitCode;
     }

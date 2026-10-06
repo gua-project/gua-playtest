@@ -1,3 +1,5 @@
+> 現在の契約: [contracts.md](contracts.md)、[schema](schemas/)。実Issue対応と追加DASH要件はtraceability.json。以下のreview-ledger-r1の起票前情報は履歴であり、2026-10-06の明示実装許可と区別する。現行Gua参照はgua-v1.1.1 / 88f5dca4aa97c5d5187ab66ea4416377f3affc96。
+
 # Gua Playtest 合意仕様・起票準備パック
 
 作成日: 2026-09-16  

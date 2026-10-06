@@ -1,0 +1,18 @@
+{
+  "kind": "scenarioRegistry",
+  "schemaVersion": 1,
+  "registryId": "local",
+  "scenarios": [
+    {
+      "scenarioId": "shop.purchase",
+      "definitionVersion": "v1",
+      "file": {
+        "path": "scenario.json",
+        "sha256": "0d3286f141bc59214a1d70972a9f255c34633f85f5c61032fb81c4c006458d0b"
+      }
+    }
+  ],
+  "artifactRoots": [
+    "."
+  ]
+}

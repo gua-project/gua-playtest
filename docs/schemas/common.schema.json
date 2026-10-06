@@ -1,0 +1,1104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/common.schema.json",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "read": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "ui"
+                    },
+                    "selector": {
+                      "$ref": "https://gua.dev/schema/selector.schema.json"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "selector"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "object"
+                    },
+                    "selector": {
+                      "$ref": "https://gua.dev/schema/world-selector.schema.json"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "selector"
+                  ]
+                }
+              ]
+            },
+            "region": {
+              "const": "standard"
+            },
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "valueType": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "bool",
+                        "integer",
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "const": "enum"
+                    },
+                    "enumType": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "enumType"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "list",
+                        "set"
+                      ]
+                    },
+                    "elementType": {
+                      "enum": [
+                        "bool",
+                        "integer",
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "elementType"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "list",
+                        "set"
+                      ]
+                    },
+                    "elementType": {
+                      "const": "enum"
+                    },
+                    "enumType": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "elementType",
+                    "enumType"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "region",
+            "field",
+            "valueType"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "ui"
+                    },
+                    "selector": {
+                      "$ref": "https://gua.dev/schema/selector.schema.json"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "selector"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "object"
+                    },
+                    "selector": {
+                      "$ref": "https://gua.dev/schema/world-selector.schema.json"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "selector"
+                  ]
+                }
+              ]
+            },
+            "region": {
+              "const": "observe"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "valueType": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "bool",
+                        "integer",
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "const": "enum"
+                    },
+                    "enumType": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "enumType"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "list",
+                        "set"
+                      ]
+                    },
+                    "elementType": {
+                      "enum": [
+                        "bool",
+                        "integer",
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "elementType"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "list",
+                        "set"
+                      ]
+                    },
+                    "elementType": {
+                      "const": "enum"
+                    },
+                    "enumType": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "elementType",
+                    "enumType"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "region",
+            "name",
+            "valueType"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "const": "world"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "region": {
+              "const": "property"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "valueType": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "bool",
+                        "integer",
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "const": "enum"
+                    },
+                    "enumType": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "enumType"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "list",
+                        "set"
+                      ]
+                    },
+                    "elementType": {
+                      "enum": [
+                        "bool",
+                        "integer",
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "elementType"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "list",
+                        "set"
+                      ]
+                    },
+                    "elementType": {
+                      "const": "enum"
+                    },
+                    "enumType": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "elementType",
+                    "enumType"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "region",
+            "name",
+            "valueType"
+          ]
+        }
+      ]
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "const": "ui"
+            },
+            "selector": {
+              "$ref": "https://gua.dev/schema/selector.schema.json"
+            }
+          },
+          "required": [
+            "source",
+            "selector"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "const": "object"
+            },
+            "selector": {
+              "$ref": "https://gua.dev/schema/world-selector.schema.json"
+            }
+          },
+          "required": [
+            "source",
+            "selector"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "const": "world"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        }
+      ]
+    },
+    "valueType": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "bool",
+                "integer",
+                "number",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "enum"
+            },
+            "enumType": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+            }
+          },
+          "required": [
+            "type",
+            "enumType"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "list",
+                "set"
+              ]
+            },
+            "elementType": {
+              "enum": [
+                "bool",
+                "integer",
+                "number",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "elementType"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "list",
+                "set"
+              ]
+            },
+            "elementType": {
+              "const": "enum"
+            },
+            "enumType": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
+            }
+          },
+          "required": [
+            "type",
+            "elementType",
+            "enumType"
+          ]
+        }
+      ]
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "assertion"
+            },
+            "read": {
+              "$ref": "common.schema.json#/$defs/read"
+            },
+            "quantifier": {
+              "enum": [
+                "one",
+                "any",
+                "all",
+                "none"
+              ]
+            },
+            "operator": {
+              "enum": [
+                "equals",
+                "notEquals",
+                "greaterThan",
+                "greaterThanOrEqual",
+                "lessThan",
+                "lessThanOrEqual",
+                "approximatelyEquals",
+                "contains",
+                "startsWith",
+                "endsWith",
+                "matches",
+                "notContains",
+                "containsAll",
+                "containsAny",
+                "isEmpty",
+                "isNotEmpty",
+                "countEquals",
+                "countNotEquals",
+                "countGreaterThan",
+                "countGreaterThanOrEqual",
+                "countLessThan",
+                "countLessThanOrEqual",
+                "sequenceEquals",
+                "startsWithSequence",
+                "endsWithSequence",
+                "containsSequence"
+              ]
+            },
+            "expected": {
+              "$ref": "https://gua.dev/schema/value-v1.schema.json"
+            },
+            "tolerance": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "read",
+            "quantifier",
+            "operator"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "targets"
+            },
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "ui"
+                    },
+                    "selector": {
+                      "$ref": "https://gua.dev/schema/selector.schema.json"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "selector"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "object"
+                    },
+                    "selector": {
+                      "$ref": "https://gua.dev/schema/world-selector.schema.json"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "selector"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "const": "world"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                }
+              ]
+            },
+            "operator": {
+              "enum": [
+                "exists",
+                "notExists",
+                "countEquals",
+                "countNotEquals",
+                "countGreaterThan",
+                "countGreaterThanOrEqual",
+                "countLessThan",
+                "countLessThanOrEqual"
+              ]
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "operator"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "all",
+                "any"
+              ]
+            },
+            "conditions": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/condition"
+              },
+              "minItems": 1,
+              "maxItems": 100
+            }
+          },
+          "required": [
+            "kind",
+            "conditions"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "time"
+            },
+            "condition": {
+              "$ref": "common.schema.json#/$defs/condition"
+            },
+            "withinMilliseconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 86400000
+            },
+            "forMilliseconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 86400000
+            }
+          },
+          "required": [
+            "kind",
+            "condition"
+          ]
+        }
+      ]
+    },
+    "fixedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDurationMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "maxActions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "maxDecisions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "prepareTimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "cleanupTimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "plannerTimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "waitTimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "maxSegmentMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60000
+        },
+        "maxLatenessMilliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60000
+        },
+        "maxObservationNodes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "maxObservationBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "regexTimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "regexMaxPatternLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "stagnationActionLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "stagnationRepeatLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "recoveryDecisionLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "traceMaxBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "traceMaxEvents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "traceQueueCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "traceMaxAttachmentBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "traceRecentSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "default": 100
+        }
+      },
+      "required": [
+        "maxDurationMilliseconds",
+        "maxActions",
+        "maxDecisions",
+        "prepareTimeoutMilliseconds",
+        "cleanupTimeoutMilliseconds",
+        "plannerTimeoutMilliseconds",
+        "waitTimeoutMilliseconds",
+        "maxSegmentMilliseconds",
+        "maxLatenessMilliseconds",
+        "maxObservationNodes",
+        "maxObservationBytes",
+        "regexTimeoutMilliseconds",
+        "regexMaxPatternLength",
+        "stagnationActionLimit",
+        "stagnationRepeatLimit",
+        "recoveryDecisionLimit",
+        "traceMaxBytes",
+        "traceMaxEvents",
+        "traceQueueCapacity",
+        "traceMaxAttachmentBytes"
+      ]
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "secretKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        }
+      },
+      "required": [
+        "secretKey"
+      ]
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "ui"
+            },
+            "selector": {
+              "$ref": "https://gua.dev/schema/selector.schema.json"
+            },
+            "operation": {
+              "enum": [
+                "click",
+                "focus",
+                "set_value",
+                "set_checked",
+                "select",
+                "scroll",
+                "press_key"
+              ]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ]
+                }
+              ]
+            },
+            "secret": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "secretKey": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                }
+              },
+              "required": [
+                "secretKey"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "selector",
+            "operation"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "semantic"
+            },
+            "actionId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "operation": {
+              "enum": [
+                "press",
+                "set",
+                "release"
+              ]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ]
+                }
+              ]
+            },
+            "secret": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "secretKey": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                }
+              },
+              "required": [
+                "secretKey"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "actionId",
+            "operation"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "raw"
+            },
+            "input": {
+              "$ref": "https://gua.dev/schema/timed-segment-v1.schema.json#/$defs/input"
+            }
+          },
+          "required": [
+            "kind",
+            "input"
+          ]
+        }
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scenarioId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "definitionVersion": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "scenarioSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "buildId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "environmentSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "scenarioId",
+        "definitionVersion",
+        "scenarioSha256",
+        "buildId",
+        "environmentSha256"
+      ]
+    }
+  }
+}
