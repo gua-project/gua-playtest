@@ -173,7 +173,7 @@ also faults; typed Host lifecycle failures preserve their cause. Ready same-cycl
 failure evidence outranks cancellation; a cancellation received before an asynchronous
 fault becomes ready cannot retroactively acquire that evidence.
 
-Execution lifecycle trace writes are queued (at most 1000) and joined by the bounded
+Preparation rejection and execution lifecycle trace writes are queued (at most 1000) and joined by the bounded
 Diagnostics cleanup stage; persistence cannot delay a ready lifecycle failure.
 Throwing/timed-out writes remain faulted for that join and report DiagnosticsFailed
 with original provider type/stack where available; queue overflow is unconfirmed too.
@@ -196,7 +196,10 @@ children iteratively with reference deduplication and the existing evidence-item
 ceiling. Leaves take precedence over nested aggregate wrappers after preserving
 the public boundary; traversal is separately capped at max(4096, 128 × remaining
 evidence slots), up to 100000 visits. Stack/visited growth is bounded too. Concurrent exit-watch failures remain visible
-even when the source capture has already completed successfully.
+even when the source capture has already completed successfully. The exact process
+exit task is armed before source invocation, including synchronous source throws.
+Its successful completion is authoritative even when a status getter still reports
+alive; readiness is read directly from that task without an async forwarding layer.
 more detailed Launch/Connect/Identity/Setup/Planner/Synchronize failure stages are
 retained by this sink without overwriting the original failure during cleanup.
 

@@ -35,12 +35,15 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         Exception? failure = null; T result = default!;
         try
         {
+            // Arm before source invocation, including its synchronous throw path.
+            // Supersession cancels only the source; the lifecycle watch remains live.
+            exited = WatchExitAsync();
+            if (exited.IsCompletedSuccessfully) throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
             changed = request(wait.Token);
-            // Supersession cancels the source, not the process-exit watch: ending the wrapper
-            // early here would hide a late authoritative observation from the monitor's join.
-            exited = process.WaitForExitAsync(exitWait.Token).AsTask();
             var winner = await Task.WhenAny(changed, exited).ConfigureAwait(false);
             await winner.ConfigureAwait(false);
+            // Successful exact-handle exit is authoritative even if the getter is stale.
+            if (exited.IsCompletedSuccessfully) throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
             // A completed losing watch still carries authoritative lifecycle failure evidence.
             if (exited.IsFaulted || exited.IsCanceled) await exited.ConfigureAwait(false);
             await CheckAliveAsync(CancellationToken.None).ConfigureAwait(false);
@@ -61,7 +64,15 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                 if (task?.IsFaulted == true || task?.IsCanceled == true)
                     try { task.GetAwaiter().GetResult(); }
                     catch (Exception original)
-                    { if (!ready.Any(item => ReferenceEquals(item, original))) ready.Add(original); }
+                    {
+                        if (ReferenceEquals(task, exited) && original is not RunFailureException &&
+                            !(original is OperationCanceledException && exitWait.IsCancellationRequested))
+                        {
+                            ready.RemoveAll(item => ReferenceEquals(item, original));
+                            ready.Add(new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, original, RunPhase.Execution));
+                        }
+                        else if (!ready.Any(item => ReferenceEquals(item, original))) ready.Add(original);
+                    }
             RunEvent Cause(Exception item) => item is RunFailureException typed ? typed.Cause :
                 item is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
                     (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken)
@@ -79,6 +90,13 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             FiniteOperation.CancelSafely(exitWait, faults.Enqueue);
             if (changed is not null) _ = changed.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (exited is not null) _ = exited.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        }
+        Task WatchExitAsync()
+        {
+            // Preserve readiness of the provider's exact task; an async forwarding
+            // continuation could hide a ready exit behind a ready source result.
+            try { return process.WaitForExitAsync(exitWait.Token).AsTask(); }
+            catch (Exception exception) { return Task.FromException(exception); }
         }
         var requestedCancellation = failure is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
             (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken);

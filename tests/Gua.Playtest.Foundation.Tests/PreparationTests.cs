@@ -48,11 +48,13 @@ public sealed class PreparationTests
         public int Shutdowns { get; private set; }
         public Action<CancellationToken>? OnExitWait { get; set; }
         public Exception? ExitWaitFailure { get; set; }
+        public bool DirectExitWatch { get; set; }
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Exit() { HasExited = true; exited.TrySetResult(); }
+        public void ConfirmExitWithStaleStatus() => exited.TrySetResult();
         public ValueTask WaitForExitAsync(CancellationToken token)
-        { OnExitWait?.Invoke(token); return ExitWaitFailure is null ? new(exited.Task.WaitAsync(token)) : ValueTask.FromException(ExitWaitFailure); }
+        { OnExitWait?.Invoke(token); return ExitWaitFailure is null ? new(DirectExitWatch ? exited.Task : exited.Task.WaitAsync(token)) : ValueTask.FromException(ExitWaitFailure); }
         public ValueTask<bool> ShutdownAsync(CancellationToken token)
         { Shutdowns++; Exit(); Released.TrySetResult(); return ValueTask.FromResult(true); }
     }
@@ -1168,7 +1170,8 @@ public sealed class PreparationTests
         var trace = new Trace { OnRecord = item => { if (item.Code is PreparationCode.Busy or PreparationCode.IdentityMismatch) throw new IOException(); } };
         var result = await Execute(new(policy, clock, new Launcher(), new Connector(connection), trace), clock);
         Assert.Equal(1, result.ExitCode); Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
-        Assert.Contains(result.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
+        Assert.Contains(result.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed &&
+            item.Exception is { } exception && exception.Type == typeof(IOException).FullName && exception.StackTrace is not null);
         Assert.Contains(trace.Events, item => item.Code == (busy ? PreparationCode.Busy : PreparationCode.IdentityMismatch));
     }
     [Fact]
@@ -1403,5 +1406,71 @@ public sealed class PreparationTests
             setup.PendingReceipt?.TrySetResult(SetupReceipt.Confirmed); planner.PendingCheck?.TrySetResult(true);
             connection.PendingBoundary?.TrySetResult(null!);
         }
+    }
+
+    [Fact]
+    public async Task RejectionTraceCannotHideReadyHostFailureAtPreparationDeadline()
+    {
+        using var release = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clock = new Clock(); var connection = new Connection();
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Identity = connection.Identity with { Capabilities = new CapabilitySet(() =>
+        { clock.Advance(1900); throw new PreparationException(PreparationStage.Identity, PreparationCode.IdentityMismatch); }) };
+        var trace = new Trace { OnRecord = item =>
+        {
+            if (item.Code != PreparationCode.IdentityMismatch) return;
+            entered.TrySetResult(); try { release.Wait(); } finally { returned.TrySetResult(); }
+        } };
+        try
+        {
+            var preparation = new HostPreparation(Policy() with { OperationTimeout = TimeSpan.FromSeconds(2) }, clock, new Launcher(), new Connector(connection), trace);
+            var run = Run(clock); var cleanup = new OwnedCleanup();
+            cleanup.Register(CleanupStage.PrimarySnapshot, _ => { cleanupStarted.TrySetResult(); return ValueTask.FromResult(true); });
+            var pending = RunExecutor.ExecuteAsync(run, clock, cleanup,
+                async (session, owned, token) => (await preparation.PrepareAsync(session, owned, null, null, token)).Boundary,
+                (_, _) => ValueTask.FromResult(true)).AsTask();
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)); clock.Advance(100);
+            var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, result.ExitCode); Assert.Equal(RunReason.ExecutionError, result.Primary.Cause.Reason);
+            Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin); Assert.False(result.PostProcessingComplete);
+            Assert.Contains(result.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed);
+        }
+        finally { release.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task SuccessfulExitWatchOverridesStaleStatusWithReadyOrPendingSource(bool pending)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var run = Run(clock);
+        run.BeginPreparation(); var cleanup = new OwnedCleanup();
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
+        launcher.Process.DirectExitWatch = true;
+        if (pending) connection.BlockedCapture = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.OnCapture = _ => launcher.Process.ConfirmExitWithStaleStatus();
+        var failure = await Assert.ThrowsAsync<PreparationException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(PreparationCode.ProcessExited, failure.Code); Assert.False(launcher.Process.HasExited);
+        Assert.Equal(RunOrigin.Host, failure.Cause.Origin);
+        run.RecordException(failure); run.Evaluate(candidates: [failure.Cause]); var result = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(1, result.ExitCode); Assert.Equal(1, launcher.Process.Shutdowns);
+        connection.BlockedCapture?.TrySetResult(new(TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([])));
+    }
+    [Fact]
+    public async Task ExitWatchIsArmedBeforeSynchronousSourceThrow()
+    {
+        var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var run = Run(clock);
+        run.BeginPreparation(); var cleanup = new OwnedCleanup();
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
+        launcher.Process.DirectExitWatch = true;
+        var armed = false; launcher.Process.OnExitWait = _ => armed = true;
+        connection.OnCapture = _ => { Assert.True(armed); launcher.Process.ConfirmExitWithStaleStatus(); throw new IOException(); };
+        var failure = await Assert.ThrowsAsync<PreparationException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask());
+        Assert.Equal(PreparationCode.ProcessExited, failure.Code);
+        run.RecordException(failure); run.Evaluate(candidates: [failure.Cause]); var result = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(1, result.ExitCode); Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
+        Assert.Contains(result.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
     }
 }

@@ -72,6 +72,12 @@ public sealed class HostPreparation
             // An abandoned trace/provider continuation cannot mutate a confirmed snapshot.
             if (run.State == Gua.Playtest.Core.Contracts.ExecutionState.Preparing) run.RecordException(exception);
         };
+        cleanup.Register(CleanupStage.Diagnostics, async _ =>
+        {
+            Task[] writes; lock (executionTraceGate) writes = executionTraceWrites.ToArray();
+            await Task.WhenAll(writes).ConfigureAwait(false);
+            lock (executionTraceGate) return !executionTraceOverflow;
+        });
         await TraceAsync(new(PreparationStage.Started, PreparationCode.Started), required: true).ConfigureAwait(false);
         // This prevents collisions in this Runner process only, never claims a host/manual-input lifecycle lock.
         var key = policy.Endpoint.AbsoluteUri;
@@ -95,12 +101,6 @@ public sealed class HostPreparation
             lock (LeaseLock) { ownershipClosed = true; ActiveEndpoints.Remove(key); }
             throw;
         }
-        cleanup.Register(CleanupStage.Diagnostics, async _ =>
-        {
-            Task[] writes; lock (executionTraceGate) writes = executionTraceWrites.ToArray();
-            await Task.WhenAll(writes).ConfigureAwait(false);
-            lock (executionTraceGate) return !executionTraceOverflow;
-        });
         IOwnedProcess? process = null;
         if (policy.HostMode == HostMode.Launch)
         {
@@ -202,13 +202,13 @@ public sealed class HostPreparation
         catch (InvalidOperationException) { await FailAsync(PreparationStage.Synchronize, PreparationCode.StaleObservation); throw; }
         await TraceAsync(new(PreparationStage.Ready, PreparationCode.Completed), required: true).ConfigureAwait(false);
         var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, token => ReadProcessStatusAsync(process, RunPhase.Execution, token),
-            RecordExecutionTrace);
+            RecordDiagnosticTrace);
         return new(certificate, feed, boundary.CurrentRestorable);
     }
 
-    private void RecordExecutionTrace(PreparationEvent evidence)
+    private void RecordDiagnosticTrace(PreparationEvent evidence)
     {
-        // Diagnostic persistence cannot delay a ready authoritative lifecycle failure.
+        // Diagnostic persistence cannot delay any ready authoritative rejection/failure.
         // Cleanup's bounded Diagnostics stage joins the finite writes before final output.
         lock (executionTraceGate)
         {
@@ -420,11 +420,11 @@ public sealed class HostPreparation
             }, cancellationToken, recordException).ConfigureAwait(false);
             await TraceAsync(new(stage, PreparationCode.Completed), required: true).ConfigureAwait(false); return result;
         }
-        catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception)) { await TraceAsync(new(stage, PreparationCode.Timeout)).ConfigureAwait(false); throw; }
+        catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception)) { RecordDiagnosticTrace(new(stage, PreparationCode.Timeout)); throw; }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken)
-        { await TraceAsync(new(stage, PreparationCode.Cancelled)).ConfigureAwait(false); throw; }
+        { RecordDiagnosticTrace(new(stage, PreparationCode.Cancelled)); throw; }
         catch (ConnectionNotReadyException) when (stage == PreparationStage.Connect) { throw; }
-        catch (PreparationException exception) { await TraceAsync(new(exception.Stage, exception.Code)).ConfigureAwait(false); throw; }
+        catch (PreparationException exception) { RecordDiagnosticTrace(new(exception.Stage, exception.Code)); throw; }
         catch (RunFailureException) { throw; }
         catch (ClockProviderException) { throw; }
         catch (Exception exception)
@@ -438,14 +438,14 @@ public sealed class HostPreparation
                 PreparationStage.Synchronize => PreparationCode.SynchronizationFailed,
                 _ => PreparationCode.SetupFailed
             };
-            await TraceAsync(new(stage, code)).ConfigureAwait(false); throw new PreparationException(stage, code,
+            RecordDiagnosticTrace(new(stage, code)); throw new PreparationException(stage, code,
                 exception is ProviderCancellationException ? exception.InnerException : exception);
         }
     }
-    private async ValueTask CheckDeadlineAsync(TimeSpan deadline)
-    { if (preparationClock.Elapsed >= deadline) { await TraceAsync(new(PreparationStage.Started, PreparationCode.Timeout)); throw FiniteOperation.DeadlineReached("PreparationDeadlineReached"); } }
-    private async ValueTask FailAsync(PreparationStage stage, PreparationCode code)
-    { await TraceAsync(new(stage, code)); throw new PreparationException(stage, code); }
+    private ValueTask CheckDeadlineAsync(TimeSpan deadline)
+    { if (preparationClock.Elapsed >= deadline) { RecordDiagnosticTrace(new(PreparationStage.Started, PreparationCode.Timeout)); throw FiniteOperation.DeadlineReached("PreparationDeadlineReached"); } return ValueTask.CompletedTask; }
+    private ValueTask FailAsync(PreparationStage stage, PreparationCode code)
+    { RecordDiagnosticTrace(new(stage, code)); return ValueTask.FromException(new PreparationException(stage, code)); }
 
     private async ValueTask TraceAsync(PreparationEvent evidence, bool required = false, bool retainForCleanup = false)
     {
