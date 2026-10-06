@@ -291,4 +291,31 @@ public sealed class RealBridgeTests
         Assert.NotEqual(original.Identity.RegistrationId, current.Identity.RegistrationId);
         Assert.Equal(3, current.Value!.Value.GetProperty("value").GetInt32());
     }
+
+    [Fact]
+    public void NativeGuardRechecksMapAtConsumptionAfterSuccessfulEnqueue()
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableGameInput(GuaGameInputCapabilities.Semantic, () => { });
+        runtime.PublishGameInputActions("fight", [new("attack", "Attack", GuaGameInputValueType.Button)]);
+        ulong epoch = Epoch(runtime), revision = runtime.FindGameInputActionsV2(new(Id: "attack")).Revision;
+        using var bridge = new OwnedGameInput(runtime, "race", GuaObservationProfile.Debug, 10);
+        var sent = bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, () => true);
+        Assert.Equal(ConfirmedActionStage.Enqueued, sent.Stage);
+        runtime.PublishGameInputActions("changed", [new("attack", "Changed", GuaGameInputValueType.Button)]);
+        Assert.False(runtime.TryConsumeGameInput(out _));
+        var result = bridge.Poll("a"); Assert.Equal(ActionAttemptStatus.Failed, result.Status);
+        Assert.Equal(ConfirmedActionStage.HostCompleted, result.Stage); Assert.NotEqual(0, result.GuaErrorCode);
+    }
+
+    [Fact]
+    public void ValueTypeChangeNeverReturnsOldValue()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        bool change = false; using var item = owner.Property("phase", () => change ? GuaValue.String("two") : GuaValue.Integer(1));
+        item.Notify(); using var reader = Reader(Start(runtime)); var read = Read("world", "property", "phase");
+        Assert.Equal(1, Assert.Single(reader.Read(read).Reads).Value!.Value.GetProperty("value").GetInt32());
+        change = true; item.Notify(); var result = Assert.Single(reader.Read(read).Reads);
+        Assert.Equal(ReadAvailability.Unavailable, result.Availability); Assert.Null(result.Value);
+        Assert.Equal("value-type-changed", result.Reason);
+    }
 }

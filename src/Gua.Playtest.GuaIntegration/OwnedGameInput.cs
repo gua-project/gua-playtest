@@ -93,6 +93,8 @@ public sealed class OwnedGameInput : IDisposable
                     return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "stale-session-unconfirmed" });
                 var result = owner.PollResult(attempt.RequestId.Value);
                 if (!result.Completed) return attempt;
+                if (result.RequestId != attempt.RequestId)
+                    return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "correlation-unconfirmed" });
                 return Save(attempt with { Status = result.Succeeded == true ? ActionAttemptStatus.Succeeded : ActionAttemptStatus.Failed,
                     Stage = ConfirmedActionStage.HostCompleted, GuaErrorCode = result.ErrorCode, Reason = "host-completed" });
             }
