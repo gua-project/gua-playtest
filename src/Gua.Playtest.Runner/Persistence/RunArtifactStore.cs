@@ -81,7 +81,8 @@ public sealed class RunArtifactStore
         {
             if (primary is not null || completionAttempted) throw new InvalidDataException("PrimaryAlreadyConfirmed");
             if (result is null || result.Cause is null || !Enum.IsDefined(result.Status) || !Enum.IsDefined(result.Cause.Reason) ||
-                !Enum.IsDefined(result.Cause.Phase) || !Enum.IsDefined(result.Cause.Origin)) throw new InvalidDataException("PrimaryResultInvalid");
+                !Enum.IsDefined(result.Cause.Phase) || !Enum.IsDefined(result.Cause.Origin) || !StatusConsistent(result))
+                throw new InvalidDataException("PrimaryResultInvalid");
             ValidateReferences(observations, decisions);
             if (observations.Any(x => x.Boundary == ObservationBoundary.AfterCleanup)) throw new InvalidDataException("ObservationBoundaryInvalid");
             // Freeze in memory even if the disk write fails; persistence never authorizes a replacement result.
@@ -106,6 +107,7 @@ public sealed class RunArtifactStore
             if (artifacts.Count != 2 || artifacts.Select(x => x.Kind).Distinct().Count() != 2) throw new InvalidDataException("ArtifactKindsInvalid");
             var associated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var identities = new HashSet<FileIdentity>();
+            SeedSummaryIdentities(identities);
             foreach (var receipt in artifacts) ValidateReceipt(receipt, outcome.Primary, associated, identities, cancellationToken);
             var issues = outcome.PostProcessing.ToList();
             if (persistenceIncomplete || artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed))
@@ -130,6 +132,34 @@ public sealed class RunArtifactStore
             if (!Token(decision.DecisionId) || !Token(decision.ObservationId) ||
                 (decision.ActionId is not null && !Token(decision.ActionId)) || !Token(decision.ReasonCode))
                 throw new InvalidDataException("ReferenceInvalid");
+    }
+    private static bool StatusConsistent(PrimaryResult result) => result.Cause.Reason switch
+    {
+        RunReason.InvalidContract or RunReason.ObservationContractViolation => result.Status == ResultStatus.Invalid,
+        RunReason.Cancelled => result.Status == ResultStatus.Aborted,
+        RunReason.MaxDuration => result.Status == ResultStatus.TimedOut,
+        RunReason.GoalSatisfied => result.Status == ResultStatus.Passed,
+        RunReason.ExplorationFinished => result.Status == ResultStatus.Unverified,
+        // RunSession maps these to Unverified without a success condition, Failed otherwise.
+        // The frozen primary does not contain that private condition configuration.
+        RunReason.ActionsExhausted or RunReason.DecisionsExhausted or RunReason.RecoveryExhausted =>
+            result.Status is ResultStatus.Failed or ResultStatus.Unverified,
+        _ => result.Status == ResultStatus.Failed
+    };
+    private void SeedSummaryIdentities(HashSet<FileIdentity> identities)
+    {
+        foreach (var name in new[] { ".owner", "run.json", "primary.json", "completion.json", "result.json" })
+        {
+            var file = Path.Combine(DirectoryPath, name);
+            try
+            {
+                CheckPath(file);
+                var opened = FileIdentity.OpenRegular(file);
+                using var stream = opened.Stream;
+                if (!identities.Add(opened.Identity)) throw new InvalidDataException("SummaryFileAlias");
+            }
+            catch (FileNotFoundException) { } // Optional summaries may be absent; access failure is not absence.
+        }
     }
     private void ValidateReceipt(ArtifactReceipt receipt, PrimaryResult result, HashSet<string> associated, HashSet<FileIdentity> identities, CancellationToken cancellationToken)
     {
@@ -173,14 +203,16 @@ public sealed class RunArtifactStore
     private byte[] Encode<T>(T value) => Encode(value, out _);
     private byte[] Encode<T>(T value, out int nodeCount)
     {
-        // Construct a bounded sanitized tree directly from source objects. No unredacted serialized
-        // buffer, temporary file or hash is ever created.
+        // Construct a bounded sanitized tree, then reject secrets re-formed by JSON syntax
+        // before exposing fixed bytes, hashing or publication.
         var count = 0;
         sanitizedChars = 0;
         var safe = SafeNode(value, ref count);
         nodeCount = count;
         using var output = new LimitedBuffer(limits.MaxFileBytes);
         using (var writer = new Utf8JsonWriter(output)) { if (safe is null) writer.WriteNullValue(); else safe.WriteTo(writer, Json); }
+        if (redactor.ContainsUtf8Secret(output.GetBuffer().AsSpan(0, checked((int)output.Length))))
+            throw new InvalidDataException("EncodedSecretCollision");
         return output.ToArray();
     }
     private JsonNode? SafeNode(object? value, ref int count, int depth = 0)

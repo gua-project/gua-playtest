@@ -532,5 +532,80 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal(missing ? ResultReadState.Missing : ResultReadState.Unreadable, readback.State);
         Assert.Null(readback.Result);
     }
+    [Theory]
+    [InlineData("[true,false]", "true,false")]
+    [InlineData("[\"a\",\"b\"]", "a\",\"b")]
+    [InlineData("[\"é\",\"b\"]", "\\u00E9\",\"b")]
+    public void Encoded_token_boundary_secrets_are_rejected_before_fixed_copy_hash_or_publication(string input, string secret)
+    {
+        using var source = JsonDocument.Parse(input);
+        var store = RunArtifactStore.Create(root, Limits, new([secret], []));
+        Assert.Equal(PersistenceFailure.InvalidEvidence,
+            store.BeginPreparation(new("public", [], new Dictionary<string, string>(), [new("scenario", source.RootElement)])).Failure);
+        Assert.Equal(input, source.RootElement.GetRawText());
+        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(x => Path.GetFileName(x)!).ToArray());
+    }
+    [Fact]
+    public void Final_encoding_checks_generated_boundaries_and_utf8_matches_without_allocating_decoded_buffers()
+    {
+        var store = RunArtifactStore.Create(root, Limits, new(["GoalSatisfied\",\"phase"], []));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.ConfirmPrimary(Passed, [], [], []).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        var redactor = new PersistenceRedactor(["🔑secret"], []);
+        var bytes = Encoding.UTF8.GetBytes(new string('x', 100000) + "🔑secret");
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        Assert.True(redactor.ContainsUtf8Secret(bytes));
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 32768);
+        Assert.False(redactor.ContainsUtf8Secret(Encoding.UTF8.GetBytes("unchanged 🔑safe")));
+    }
+    [Theory]
+    [InlineData("run.json")]
+    [InlineData("primary.json")]
+    public void Summary_hardlink_cannot_be_admitted_as_an_opaque_gua_receipt(string summary)
+    {
+        var store = Store(); Assert.True(store.BeginPreparation(Metadata).Saved); Confirm(store);
+        var source = Path.Combine(store.DirectoryPath, summary); var bytes = File.ReadAllBytes(source);
+        CreateHardLink(Path.Combine(store.DirectoryPath, "trace.gua"), source);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(),
+            [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", bytes.Length, Convert.ToHexStringLower(SHA256.HashData(bytes))),
+             new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Failure);
+        Assert.Equal(bytes, File.ReadAllBytes(source));
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "completion.json")));
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "result.json")));
+    }
+    [Theory]
+    [InlineData(ResultStatus.Passed, RunReason.ActionFailed, false)]
+    [InlineData(ResultStatus.Passed, RunReason.Cancelled, false)]
+    [InlineData(ResultStatus.Passed, RunReason.ExplorationFinished, false)]
+    [InlineData(ResultStatus.Failed, RunReason.GoalSatisfied, false)]
+    [InlineData(ResultStatus.Failed, RunReason.Cancelled, false)]
+    [InlineData(ResultStatus.Invalid, RunReason.MaxDuration, false)]
+    [InlineData(ResultStatus.Unverified, RunReason.PreparationTimeout, false)]
+    [InlineData(ResultStatus.Failed, RunReason.ActionsExhausted, true)]
+    [InlineData(ResultStatus.Unverified, RunReason.ActionsExhausted, true)]
+    [InlineData(ResultStatus.Failed, RunReason.DecisionsExhausted, true)]
+    [InlineData(ResultStatus.Unverified, RunReason.DecisionsExhausted, true)]
+    [InlineData(ResultStatus.Failed, RunReason.RecoveryExhausted, true)]
+    [InlineData(ResultStatus.Unverified, RunReason.RecoveryExhausted, true)]
+    public async Task Primary_cause_cannot_be_relabelled_success_and_both_budget_condition_modes_remain_valid(
+        ResultStatus status, RunReason reason, bool valid)
+    {
+        var store = Store(); var primary = new PrimaryResult(status, new(reason, RunPhase.Execution, RunOrigin.Budget));
+        var confirmation = store.ConfirmPrimary(primary, [], [], []);
+        if (!valid)
+        {
+            Assert.Equal(PersistenceFailure.InvalidEvidence, confirmation.Failure);
+            Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+            Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(primary), Omitted, [], DateTimeOffset.UtcNow).Failure);
+            Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "result.json")));
+            return;
+        }
+        Assert.True(confirmation.Saved);
+        Assert.True(store.Complete(Outcome(primary), [new(ArtifactKind.Trace, ArtifactState.NotExecuted),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var readback = await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits);
+        Assert.Equal(ResultReadState.Verified, readback.State); Assert.Equal(status, readback.Result!.Status);
+        Assert.Equal(reason.ToString(), readback.Result.Reason);
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }

@@ -72,5 +72,30 @@ public sealed class PersistenceRedactor
         return false;
     }
     internal bool Sensitive(string name) => fields.Contains(name);
+    internal bool ContainsUtf8Secret(ReadOnlySpan<byte> bytes)
+    {
+        var state = 0;
+        Span<char> characters = stackalloc char[2];
+        while (!bytes.IsEmpty)
+        {
+            int consumed, length;
+            if (bytes[0] < 128) { characters[0] = (char)bytes[0]; consumed = length = 1; }
+            else
+            {
+                if (System.Text.Rune.DecodeFromUtf8(bytes, out var rune, out consumed) != System.Buffers.OperationStatus.Done)
+                    throw new InvalidDataException("EncodedUtf8Invalid");
+                length = rune.EncodeToUtf16(characters);
+            }
+            for (var index = 0; index < length; index++)
+            {
+                var character = characters[index];
+                while (state != 0 && !nodes[state].Edges.ContainsKey(character)) state = nodes[state].Failure;
+                state = nodes[state].Edges.TryGetValue(character, out var next) ? next : 0;
+                if (nodes[state].Terminal) return true;
+            }
+            bytes = bytes[consumed..];
+        }
+        return false;
+    }
 }
 internal sealed class ArtifactLimitException : Exception;
