@@ -2,9 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const equal = isDeepStrictEqual;
 
 // Inputs are independent host counters, saved Runner result, and Gua Trace extraction.
 // This verifies their agreement with a pre-run pinned case, not their authenticity.

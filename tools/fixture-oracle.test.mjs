@@ -59,6 +59,12 @@ test('missing normal-path evidence is also rejected', () => {
   const bundle = sample(false); delete bundle.facts.responses;
   assert.equal(verifyPurchase(catalog.cases[0], bundle).verified, false);
 });
+test('JSON property order does not change an identical frozen fault plan', () => {
+  const bundle = sample();
+  bundle.identity.fault = { occurrence: 1, boundary: 'AfterPurchaseCommitBeforeResponse', id: 'drop-purchase-response' };
+  bundle.facts.faultReceipts = [bundle.identity.fault];
+  assert.equal(verifyPurchase(catalog.cases[1], bundle).verified, true);
+});
 test('pins expected bytes before validation and reports evidence hash', () => {
   const scope = mkdtempSync(join(tmpdir(), 'gua-oracle-'));
   try {
