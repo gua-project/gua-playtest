@@ -46,7 +46,8 @@ public sealed class OwnedCleanup
         {
             var step = ordered[i];
             // Share remaining time fairly: a noncooperative early task cannot consume all later release attempts.
-            var remaining = deadline - realClock.Elapsed;
+            var sampledNow = realClock.Elapsed;
+            var remaining = deadline - sampledNow;
             if (remaining <= TimeSpan.Zero)
             {
                 issues.Add(new(PostProcessingReason.CleanupTimeout)); issues.Add(new(Failure(step.Stage))); continue;
@@ -56,7 +57,7 @@ public sealed class OwnedCleanup
             var token = step.Stage is CleanupStage.Diagnostics or CleanupStage.Artifacts ? cancellationToken : CancellationToken.None;
             try
             {
-                var result = await FiniteOperation.RunAsync(realClock, share, step.Action, token).ConfigureAwait(false);
+                var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, step.Action, token).ConfigureAwait(false);
                 if (!result) issues.Add(new(Failure(step.Stage)));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -91,12 +92,19 @@ public sealed class OwnedCleanup
 /// Late results never acquire Run authority. A real clock must advance independently of simulation.</summary>
 public static class FiniteOperation
 {
-    public static async ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
+    public static ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default)
     {
         if (timeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeout));
+        return RunUntilAsync(realClock, realClock.Elapsed + timeout, action, cancellationToken);
+    }
+    /// <summary>Uses the owner's absolute deadline without rebasing a previously computed remainder.</summary>
+    public static async ValueTask<T> RunUntilAsync<T>(IClock realClock, TimeSpan deadline,
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default)
+    {
         cancellationToken.ThrowIfCancellationRequested();
-        var startDeadline = realClock.Elapsed + timeout;
+        var startDeadline = deadline;
+        if (realClock.Elapsed >= startDeadline) throw new TimeoutException("OperationDeadlineReached");
         using var operationCancellation = new CancellationTokenSource();
         using var timerCancellation = new CancellationTokenSource();
         Task<T>? operation = null;

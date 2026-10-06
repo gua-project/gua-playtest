@@ -15,7 +15,7 @@ public static class RunExecutor
         CancellationToken cancellationToken = default,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
         => await ExecuteCoreAsync(run, realClock, cleanup,
-            async token => new PreparedRun(await prepare(cleanup, token).ConfigureAwait(false), null), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
+            token => prepare(cleanup, token), ready => new PreparedRun(ready, null), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
 
     /// <summary>Production initial-boundary path: preparation arms a readiness capability after Setup/compat checks,
     /// synchronizes the subscription and capture, verifies prerequisites in that unit, and returns its certificate.</summary>
@@ -25,11 +25,11 @@ public static class RunExecutor
         CancellationToken cancellationToken = default,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
         => await ExecuteCoreAsync(run, realClock, cleanup,
-            async token => new PreparedRun(true, await prepare(run, cleanup, token).ConfigureAwait(false)
+            token => prepare(run, cleanup, token), boundary => new PreparedRun(true, boundary
                 ?? throw new InvalidOperationException("RunningBoundaryCertificateRequired")), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
 
-    private static async ValueTask<RunOutcome> ExecuteCoreAsync(RunSession run, IClock realClock,
-        OwnedCleanup cleanup, Func<CancellationToken, ValueTask<PreparedRun>> prepare,
+    private static async ValueTask<RunOutcome> ExecuteCoreAsync<T>(RunSession run, IClock realClock,
+        OwnedCleanup cleanup, Func<CancellationToken, ValueTask<T>> prepare, Func<T, PreparedRun> mapPreparation,
         Func<RunSession, CancellationToken, ValueTask<bool>> execute, CancellationToken cancellationToken,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary)
     {
@@ -38,8 +38,20 @@ public static class RunExecutor
         try
         {
             run.BeginPreparation();
-            var prepared = await FiniteOperation.RunAsync(realClock, run.Limits.PreparationTimeout,
-                prepare, cancellationToken).ConfigureAwait(false);
+            Task<T>? preparationTask = null;
+            T preparation;
+            try
+            {
+                preparation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
+                    token => { preparationTask = prepare(token).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && preparationTask?.IsCompletedSuccessfully == true)
+            {
+                // Completed preparation is evidence, even when cancellation wins its wait.
+                // A certified initial failure outranks cancellation; no driver starts after cancellation.
+                preparation = preparationTask.GetAwaiter().GetResult();
+            }
+            var prepared = mapPreparation(preparation);
             if (!prepared.Ready) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)],
                 cancelled: cancellationToken.IsCancellationRequested);
             else
@@ -54,9 +66,8 @@ public static class RunExecutor
                 if (run.Primary is null)
                 {
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
-                    var remaining = run.RunningOrigin!.Value + run.Limits.MaxDuration - realClock.Elapsed;
-                    if (remaining <= TimeSpan.Zero) throw new TimeoutException("RunDeadlineReached");
-                    var complete = await FiniteOperation.RunAsync(realClock, remaining,
+                    var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
+                    var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
                         token => execute(run, token), cancellationToken).ConfigureAwait(false);
                     run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
                     if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);

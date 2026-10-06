@@ -10,6 +10,72 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletedPreparationEvidenceSurvivesCallerCancellation(bool certified)
+    {
+        using var cancel = new CancellationTokenSource(); var condition = new Clock();
+        var preparation = new TaskCompletionSource<bool>(); var boundary = new TaskCompletionSource<RunStartBoundary>();
+        RunStartBoundary? certificate = null;
+        var clock = new CallbackDelayClock(() => { cancel.Cancel(); if (certified) boundary.SetResult(certificate!); else preparation.SetResult(false); });
+        var run = new RunSession(Limits(), clock, condition, failure: certified ? Condition() : null); bool executed = false, released = false;
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        RunOutcome result;
+        if (certified)
+            result = await RunExecutor.ExecuteAsync(run, clock, cleanup, (session, _, _) =>
+            {
+                var request = session.ArmRunningBoundary();
+                certificate = request.Certify(request.RequestId, clock.Elapsed, new(condition.Elapsed, Unit("false"), Unit()), "live", true);
+                return new(boundary.Task);
+            }, (_, _) => { executed = true; return ValueTask.FromResult(true); }, cancel.Token);
+        else result = await RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => new(preparation.Task),
+            (_, _) => { executed = true; return ValueTask.FromResult(true); }, cancel.Token);
+        Assert.False(executed); Assert.True(released); Assert.Equal(1, result.ExitCode);
+        Assert.Equal(certified ? RunReason.FailureCondition : RunReason.ExecutionError, result.Primary.Cause.Reason);
+        Assert.Contains(result.Events, x => x.Reason == RunReason.Cancelled);
+    }
+    private sealed class CallbackDelayClock(Action callback, int invokeAt = 1) : IClock
+    {
+        private int delays;
+        public TimeSpan Elapsed => TimeSpan.Zero;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            if (++delays == invokeAt) callback();
+            return new(new TaskCompletionSource().Task);
+        }
+    }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task LosingWakeFaultIsArbitratedWithReadyWork(bool actionFailed, bool internallyCancelled)
+    {
+        var condition = new Clock(); var work = new TaskCompletionSource<int>(); var wake = new TaskCompletionSource();
+        var clock = new CallbackDelayClock(() => { work.SetResult(1); if (internallyCancelled) wake.SetCanceled(); else wake.SetException(new IOException("lost notification")); }, invokeAt: 2);
+        var run = new RunSession(Limits(), clock, condition); run.BeginPreparation(); run.BeginRunning();
+        var result = await RunMonitor.AwaitAsync(run, clock, condition, new LosingWakeFeed(wake.Task), _ => new ValueTask<int>(work.Task),
+            _ => actionFailed ? [Event(RunReason.ActionFailed)] : []);
+        Assert.False(result.Completed); Assert.Equal(actionFailed ? RunReason.ActionFailed : RunReason.ExecutionError, run.Primary!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.ExecutionError);
+        Assert.Contains(run.Exceptions, x => x.Type == (internallyCancelled ? "System.Threading.Tasks.TaskCanceledException" : "System.IO.IOException"));
+    }
+    private sealed class LosingWakeFeed(Task wake) : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => ValueTask.FromResult(new RunObservation(TimeSpan.Zero, Unit("false"), Unit("false")));
+        public ValueTask WaitForChangeAsync(CancellationToken token) => new(wake);
+    }
+    [Fact]
+    public async Task AbsoluteDeadlineCannotBeRebasedAfterOwnerComputesRemainder()
+    {
+        var clock = new Clock(); clock.At(999); var deadline = TimeSpan.FromSeconds(1); var invoked = false;
+        var previouslyComputedRemainder = deadline - clock.Elapsed; Assert.Equal(TimeSpan.FromMilliseconds(1), previouslyComputedRemainder);
+        clock.At(1001);
+        await Assert.ThrowsAsync<TimeoutException>(() => FiniteOperation.RunUntilAsync(clock, deadline, _ =>
+        { invoked = true; return ValueTask.FromResult(true); }).AsTask());
+        Assert.False(invoked);
+    }
+    [Theory]
     [InlineData(RunReason.Cancelled, false, RunReason.ActionUnconfirmed)]
     [InlineData(RunReason.Cancelled, true, RunReason.ActionUnconfirmed)]
     [InlineData(RunReason.InvalidContract, false, RunReason.InvalidContract)]
@@ -167,7 +233,8 @@ public sealed partial class RunTests
     private sealed class FaultOnReadClock(Action fault) : IClock
     {
         private int reads;
-        public TimeSpan Elapsed { get { if (++reads == 2) fault(); return reads >= 2 ? TimeSpan.FromSeconds(1) : TimeSpan.Zero; } }
+        // Deadline creation and the pre-invocation absolute check precede provider work.
+        public TimeSpan Elapsed { get { if (++reads == 3) fault(); return reads >= 3 ? TimeSpan.FromSeconds(1) : TimeSpan.Zero; } }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => throw new NotSupportedException();
     }
     [Theory]

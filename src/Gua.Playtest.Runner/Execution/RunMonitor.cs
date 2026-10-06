@@ -99,7 +99,7 @@ public static class RunMonitor
                 }
                 try
                 {
-                    observation = await FiniteOperation.RunAsync(realClock, remaining,
+                    observation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
                         token => { captureTask = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(captureTask); },
                         captureCancellation.Token).ConfigureAwait(false);
                 }
@@ -121,6 +121,8 @@ public static class RunMonitor
                 using var wakeCancellation = new CancellationTokenSource();
                 using var wakeRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wakeCancellation, QueueCancellationFault));
                 var wakes = new List<Task>();
+                var wakeFaults = new List<Exception>();
+                bool wakeCancelled = false;
                 try
                 {
                     wakes.Add(feed.WaitForChangeAsync(wakeCancellation.Token).AsTask());
@@ -132,13 +134,30 @@ public static class RunMonitor
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    var ready = await ReadyWork().ConfigureAwait(false);
-                    run.Evaluate(candidates: ready.Events, cancelled: true);
+                    wakeCancelled = true;
                 }
+                catch (Exception exception) { wakeFaults.Add(exception); }
                 finally
                 {
+                    // Snapshot independent failures before cancelling obsolete waits. A losing
+                    // notification fault is still authoritative monitoring failure evidence.
+                    foreach (var task in wakes.Where(x => x.IsFaulted))
+                        foreach (var exception in task.Exception!.InnerExceptions)
+                            if (!wakeFaults.Contains(exception)) wakeFaults.Add(exception);
+                    if (!cancellationToken.IsCancellationRequested)
+                        foreach (var task in wakes.Where(x => x.IsCanceled))
+                            try { task.GetAwaiter().GetResult(); }
+                            catch (OperationCanceledException exception) { wakeFaults.Add(exception); }
                     FiniteOperation.CancelSafely(wakeCancellation, run.RecordException);
                     foreach (var task in wakes) ObserveFault(task);
+                }
+                if (wakeFaults.Count != 0 || wakeCancelled || cancellationToken.IsCancellationRequested)
+                {
+                    foreach (var exception in wakeFaults) run.RecordException(exception);
+                    var ready = await ReadyWork().ConfigureAwait(false);
+                    run.Evaluate(candidates: ready.Events.Concat(wakeFaults.Select(exception => exception is RunFailureException failure
+                        ? failure.Cause : new RunEvent(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner))),
+                        cancelled: wakeCancelled || cancellationToken.IsCancellationRequested);
                 }
             }
             return new(false, default);
