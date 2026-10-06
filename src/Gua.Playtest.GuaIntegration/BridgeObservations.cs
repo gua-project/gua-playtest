@@ -133,16 +133,21 @@ public sealed class BridgeObservations : IDisposable
                 }
                 else if (source == "object")
                 {
-                    var result = context.QueryWorldObjects(BridgeSelectors.World((JsonObject)read["target"]!["selector"]!));
+                    var selector = BridgeSelectors.World((JsonObject)read["target"]!["selector"]!);
+                    var result = context.QueryWorldObjects(selector);
                     if (!result.Valid) return Failure(ReadAvailability.Unavailable, "target-unavailable");
                     if (result.SessionEpoch != before.SessionEpoch || result.Revision != before.WorldRevision)
                         return Failure(ReadAvailability.Stale, "stale-query");
                     if (result.Spatial?.Truncated == true) return Failure(ReadAvailability.Truncated, "query-truncated");
+                    if ((selector.Limit is not null || selector.Near is not null) && result.Spatial is null)
+                        return Failure(ReadAvailability.Truncated, "query-completeness-unconfirmed");
                     ids.AddRange(result.Matches.Select(m => m.Id));
                     tree = ParseTree(context.GetWorldObjectTreeJson(), "world-object-tree.schema.json");
                 }
                 else if (source == "world") ids.Add("");
                 else return Failure(ReadAvailability.Unavailable, "invalid-read");
+                if (ids.Count != ids.Distinct(StringComparer.Ordinal).Count())
+                    return Failure(ReadAvailability.Stale, "duplicate-target");
                 if (ids.Count > maxNodes) return Failure(ReadAvailability.Truncated, "node-limit");
                 budget.TakeNodes(Math.Max(0, ids.Count - 1));
                 var after = context.GetContextStatus();

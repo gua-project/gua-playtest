@@ -62,13 +62,14 @@ public sealed class OwnedGameInput : IDisposable
                 // Confirmation-required actions are refused; trusted consent integration belongs to Runner.
                 runtime.ValidateGameInput(profile, expectedEpoch, expectedActionRevision, kind, operation, target, value,
                     lease, x, y, deviceIndex, false, false);
-                attempt = attempt with { Status = ActionAttemptStatus.Pending, Stage = ConfirmedActionStage.DispatchAttempted };
-                Save(attempt);
                 ulong request = owner.SendGuarded(expectedEpoch, expectedActionRevision, kind, operation, target, value,
                     lease, x, y, deviceIndex, false, false, () =>
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         if (!authorizeNow()) throw new InvalidOperationException("Permission revoked.");
+                        cancellationToken.ThrowIfCancellationRequested();
+                        attempt = attempt with { Status = ActionAttemptStatus.Pending, Stage = ConfirmedActionStage.DispatchAttempted };
+                        Save(attempt);
                     });
                 return Save(attempt with { RequestId = request, Stage = ConfirmedActionStage.Enqueued, Reason = "enqueued" });
             }

@@ -68,6 +68,11 @@ Integral state-selector tokens retain signed/unsigned integer types. Gua 1.1.1
 uses a double ABI and rejects inexact integers before query dispatch; these reads
 are Unavailable rather than matching a rounded neighbor. Exactly representable
 large integers remain supported. This is an actual upstream precision limit.
+Decimal/exponent syntax does not bypass integral precision checks. Query match
+IDs must be unique; malformed duplicates fail Stale instead of duplicating target
+witnesses. Near/limited queries need explicit spatial truncation metadata and
+fail Truncated when it is missing. Enqueue-boundary permission/cancellation
+refusal retains NotSent; DispatchAttempted starts after those checks succeed.
 One ReadBatch shares a node/event and serialized-byte
 budget, including repeated selectors, changes and values. Aggregate overflow
 truncates the entire pass, discarding partially collected values/history.

@@ -64,6 +64,14 @@ The same uncertainty rule also covers local dispatch exceptions after preflight:
 a real map replacement in the second authorization callback causes actual native
 guard refusal while the untyped exception remains Pending/DispatchAttempted until
 EndWait, with no repeat send. Expanded bridge87 passed locally, skip0.
+Actual review then identified exponent syntax, duplicate query IDs, missing
+limited-query completeness and enqueue-boundary permission denial. Decimal and
+exponent tokens normalize integral values before checking native precision;
+duplicate UI/World witnesses fail Stale; near/limited queries require truncation
+metadata. Permission/cancellation refusal before native enqueue stays NotSent.
+Native tests include inexact and exact exponent/decimal values, >UInt64 exact
+integers, duplicate query responses, missing completeness, and boundary refusal.
+An actual limited query verifies both truncated and complete native matches.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

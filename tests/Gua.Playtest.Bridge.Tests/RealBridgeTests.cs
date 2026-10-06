@@ -768,6 +768,10 @@ public sealed class RealBridgeTests
     [InlineData("9007199254740993")]
     [InlineData("-9007199254740993")]
     [InlineData("18446744073709551615")]
+    [InlineData("9.007199254740993e15")]
+    [InlineData("-9.007199254740993E+15")]
+    [InlineData("9007199254740993.0")]
+    [InlineData("9007199254740993000e-3")]
     public async Task InexactWorldStateIntegerCannotMatchItsRoundedNeighbor(string token)
     {
         using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter(); runtime.BeginWorldFrame("numbers");
@@ -790,26 +794,112 @@ public sealed class RealBridgeTests
     }
 
     [Theory]
-    [InlineData("9007199254740991")]
-    [InlineData("-9007199254740992")]
-    [InlineData("18446744073709549568")]
-    public async Task ExactWorldStateIntegersRetainNumericWireValue(string token)
+    [InlineData("9007199254740991", "9007199254740991")]
+    [InlineData("-9007199254740992", "-9007199254740992")]
+    [InlineData("18446744073709549568", "18446744073709549568")]
+    [InlineData("9.007199254740992e15", "9007199254740992")]
+    [InlineData("9007199254740992.0", "9007199254740992")]
+    [InlineData("1.208925819614629174706176e24", "1208925819614629174706176")]
+    public async Task ExactWorldStateIntegersRetainNumericWireValue(string token, string expectedInteger)
     {
         using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter(); runtime.BeginWorldFrame("numbers");
         using var number = JsonDocument.Parse(token);
-        object numericState = number.RootElement.TryGetInt64(out var signed) ? (object)signed : number.RootElement.GetUInt64();
+        object numericState = number.RootElement.GetDouble();
         runtime.RegisterWorldObject(new("exact", "item", "Exact", GuaWorldSpace.World2D, new(0, 0), State: new Dictionary<string, object?> { ["n"] = numericState }));
         runtime.EndWorldFrame(); int queries = 0;
         await using var proxy = new BridgeFaultProxy(Start(runtime), (command, _) =>
         {
             if (command.GetProperty("type").GetString() == "query_world_objects")
-            { Assert.Equal(System.Numerics.BigInteger.Parse(token), new System.Numerics.BigInteger(command.GetProperty("stateNumber").GetDouble())); queries++; }
+            { Assert.Equal(System.Numerics.BigInteger.Parse(expectedInteger), new System.Numerics.BigInteger(command.GetProperty("stateNumber").GetDouble())); queries++; }
             return false;
         });
         using var reader = Reader(proxy.Endpoint); var read = Read("object", "standard", "label", "string", "exact");
         read["target"]!["selector"] = new JsonObject { ["state"] = new JsonObject { ["key"] = "n", ["value"] = JsonNode.Parse(token) } };
         var result = reader.Read(read); Assert.Equal(1, queries); Assert.Equal(ReadAvailability.Available, result.Availability);
         Assert.Equal("exact", Assert.Single(result.Reads).Identity!.RuntimeId);
+    }
+
+    [Theory]
+    [InlineData("denied")]
+    [InlineData("throws")]
+    [InlineData("cancelled")]
+    public void LocalEnqueueBoundaryRefusalIsKnownNotSent(string mode)
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableGameInput(GuaGameInputCapabilities.Semantic, () => { });
+        runtime.PublishGameInputActions("fight", [new("attack", "Attack", GuaGameInputValueType.Button)]);
+        ulong epoch = Epoch(runtime), revision = runtime.FindGameInputActionsV2(new(Id: "attack")).Revision;
+        using var bridge = new OwnedGameInput(runtime, "boundary", GuaObservationProfile.Debug, 10);
+        using var cancellation = new CancellationTokenSource(); int checks = 0;
+        bool Authorize()
+        {
+            if (++checks != 2) return true;
+            if (mode == "throws") throw new InvalidOperationException("private authorization detail");
+            if (mode == "cancelled") cancellation.Cancel();
+            return mode != "denied";
+        }
+        var result = bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, Authorize, cancellation.Token);
+        Assert.Equal(2, checks); Assert.Equal(ConfirmedActionStage.NotSent, result.Stage); Assert.Null(result.RequestId);
+        Assert.Equal(mode == "cancelled" ? ActionAttemptStatus.Aborted : ActionAttemptStatus.Rejected, result.Status);
+        Assert.False(runtime.TryConsumeGameInput(out _));
+        Assert.Equal(result, bridge.EndWait("a", false));
+        Assert.Equal(result, bridge.Send("a", epoch, revision, GuaGameInputKind.Semantic, GuaGameInputOperation.Press, "attack", null, null, Authorize));
+        Assert.Equal(2, checks);
+    }
+
+    [Theory]
+    [InlineData("ui")]
+    [InlineData("object")]
+    public async Task DuplicateQueryMatchIdsDoNotCreateDuplicateWitnesses(string source)
+    {
+        using var runtime = new GuaRuntime(); if (source == "ui") Ui(runtime, "one"); else World(runtime, "one"); int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != (source == "ui" ? "query_nodes" : "query_world_objects")) return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var matches = root["result"]!["matches"]!.AsArray();
+            matches.Add(matches[0]!.DeepClone()); injected++;
+            if (source == "object") Assert.True(GuaDistribution.ValidateJson("world-query-result.schema.json", root["result"]!.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var result = reader.Read(Read(source, "standard", "label", "string", "one"));
+        Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Stale, result.Availability);
+        Assert.Equal("duplicate-target", Assert.Single(result.Reads).Reason); Assert.Null(Assert.Single(result.Reads).Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LimitedWorldQueryWithoutCompletenessMetadataCannotExposeMatches(bool limited)
+    {
+        using var runtime = new GuaRuntime(); World(runtime, "one"); int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != "query_world_objects") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); root["result"]!.AsObject().Remove("spatial"); injected++;
+            Assert.True(GuaDistribution.ValidateJson("world-query-result.schema.json", root["result"]!.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("object", "standard", "label", "string", "one");
+        read["target"]!["selector"]!["near"] = new JsonObject { ["relativeToObjectId"] = "one", ["maxDistance"] = 10 };
+        if (limited) read["target"]!["selector"]!["limit"] = 1;
+        var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Truncated, result.Availability);
+        Assert.Equal("query-completeness-unconfirmed", Assert.Single(result.Reads).Reason); Assert.Null(Assert.Single(result.Reads).Value);
+    }
+
+    [Fact]
+    public void NativeLimitedWorldQueryPreservesTruncationAndCompleteMatches()
+    {
+        using var runtime = new GuaRuntime(); runtime.EnableWorldObjectTreeAdapter(); runtime.BeginWorldFrame("range");
+        runtime.RegisterWorldObject(new("anchor", "landmark", "Anchor", GuaWorldSpace.World2D, new(0, 0)));
+        runtime.RegisterWorldObject(new("first", "enemy", "First", GuaWorldSpace.World2D, new(1, 0)));
+        runtime.RegisterWorldObject(new("second", "enemy", "Second", GuaWorldSpace.World2D, new(2, 0)));
+        runtime.EndWorldFrame(); using var reader = Reader(Start(runtime)); var read = Read("object", "standard", "label", "string", "unused");
+        read["target"]!["selector"] = new JsonObject { ["kind"] = new JsonObject { ["value"] = "enemy" },
+            ["near"] = new JsonObject { ["relativeToObjectId"] = "anchor", ["maxDistance"] = 10 }, ["limit"] = 1 };
+        var truncated = reader.Read(read); Assert.Equal(ReadAvailability.Truncated, truncated.Availability);
+        Assert.Null(Assert.Single(truncated.Reads).Value);
+        read["target"]!["selector"]!["limit"] = 2;
+        var complete = reader.Read(read); Assert.Equal(ReadAvailability.Available, complete.Availability);
+        Assert.Equal(new[] { "first", "second" }, complete.Reads.Select(r => r.Identity!.RuntimeId));
     }
 
     [Theory]
