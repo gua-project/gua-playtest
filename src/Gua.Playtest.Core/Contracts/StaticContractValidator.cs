@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using YamlDotNet.Core;
 
 namespace Gua.Playtest.Core.Contracts;
@@ -34,11 +33,6 @@ public sealed record StaticValidationReport(string Code, ContractDocument? Docum
 public sealed class StaticContractValidator
 {
     private readonly AllowedPaths paths;
-    private static readonly JsonSerializerOptions ModelOptions = new()
-    {
-        PropertyNameCaseInsensitive = false, PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
     public StaticContractValidator(IEnumerable<string> allowedRoots) => paths = new AllowedPaths(allowedRoots);
 
     public async ValueTask<StaticValidationReport> ValidateFileAsync(string file, CancellationToken cancellationToken = default)
@@ -184,15 +178,15 @@ public sealed class StaticContractValidator
 
     private static ContractDocument Deserialize(JsonObject json) => ContractSemantics.Text(json, "kind") switch
     {
-        "scenario" => json.Deserialize<ScenarioDocument>(ModelOptions)!,
-        "environment" => json.Deserialize<EnvironmentDocument>(ModelOptions)!,
-        "replayPlan" => json.Deserialize<ReplayPlanDocument>(ModelOptions)!,
-        "plannerInput" => json.Deserialize<PlannerInputDocument>(ModelOptions)!,
-        "plannerDecision" => json.Deserialize<PlannerDecisionDocument>(ModelOptions)!,
-        "run" => json.Deserialize<RunDocument>(ModelOptions)!,
-        "result" => json.Deserialize<ResultDocument>(ModelOptions)!,
-        "scenarioRegistry" => json.Deserialize<ScenarioRegistryDocument>(ModelOptions)!,
-        "adoptionEvidence" => json.Deserialize<AdoptionEvidenceDocument>(ModelOptions)!,
+        "scenario" => json.Deserialize<ScenarioDocument>(ContractJson.Options)!,
+        "environment" => json.Deserialize<EnvironmentDocument>(ContractJson.Options)!,
+        "replayPlan" => json.Deserialize<ReplayPlanDocument>(ContractJson.Options)!,
+        "plannerInput" => json.Deserialize<PlannerInputDocument>(ContractJson.Options)!,
+        "plannerDecision" => json.Deserialize<PlannerDecisionDocument>(ContractJson.Options)!,
+        "run" => json.Deserialize<RunDocument>(ContractJson.Options)!,
+        "result" => json.Deserialize<ResultDocument>(ContractJson.Options)!,
+        "scenarioRegistry" => json.Deserialize<ScenarioRegistryDocument>(ContractJson.Options)!,
+        "adoptionEvidence" => json.Deserialize<AdoptionEvidenceDocument>(ContractJson.Options)!,
         _ => throw new ContractException("SchemaInvalid")
     };
 }

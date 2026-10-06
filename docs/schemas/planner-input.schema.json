@@ -64,14 +64,9 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
         },
-        "sourceId": {
+        "observedAt": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-        },
-        "sessionEpoch": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
+          "format": "date-time"
         },
         "profile": {
           "enum": [
@@ -80,10 +75,49 @@
             "Debug"
           ]
         },
-        "revision": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": [
+                  "ui",
+                  "object",
+                  "world"
+                ]
+              },
+              "sourceId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "sessionEpoch": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "frameSequence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "source",
+              "sourceId",
+              "sessionEpoch",
+              "revision",
+              "frameSequence"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 3
         },
         "complete": {
           "type": "boolean"
@@ -122,10 +156,9 @@
       },
       "required": [
         "observationId",
-        "sourceId",
-        "sessionEpoch",
+        "observedAt",
         "profile",
-        "revision",
+        "sources",
         "complete",
         "reads"
       ]

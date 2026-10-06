@@ -14,6 +14,12 @@ internal static class ContractSemantics
         if (document["permissions"]?["reads"] is JsonArray reads) foreach (var read in reads) CheckRead(read!.AsObject());
         switch (Text(document, "kind"))
         {
+            case "environment":
+                if (!Uri.TryCreate(Text(document["connection"]!, "endpoint"), UriKind.Absolute, out var endpoint)
+                    || endpoint.Scheme is not ("ws" or "wss") || string.IsNullOrEmpty(endpoint.Host)
+                    || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0)
+                    throw new ContractException("EndpointInvalid");
+                break;
             case "plannerDecision":
                 var decision = document["decision"]!.AsObject();
                 if (decision["condition"] is { } condition) Walk(condition);
@@ -21,10 +27,18 @@ internal static class ContractSemantics
                 CheckDecision(decision); break;
             case "plannerInput":
                 if (Text(document, "basedOnObservationId") != Text(document["observation"]!, "observationId")) throw new ContractException("IdentityMismatch");
+                var sourceNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var source in document["observation"]!["sources"]!.AsArray())
+                    if (!sourceNames.Add(Text(source!, "source"))) throw new ContractException("ObservationShapeInvalid");
                 foreach (var read in document["observation"]!["reads"]!.AsArray())
                 {
                     CheckRead(read!["read"]!.AsObject());
+                    if (!sourceNames.Contains(Text(read["read"]!["target"]!, "source"))) throw new ContractException("ObservationShapeInvalid");
                     if ((Text(read!, "status") == "available") != (read!["value"] is not null)) throw new ContractException("ObservationShapeInvalid");
+                    if (document["observation"]!["complete"]!.GetValue<bool>() && Text(read!, "status") is "omitted" or "truncated" or "stale" or "gap") throw new ContractException("ObservationShapeInvalid");
+                    if (read["value"] is { } value)
+                        foreach (var field in new[] { "type", "elementType", "enumType" })
+                            if (Text(read["read"]!["valueType"]!, field) != Text(value, field)) throw new ContractException("TypeMismatch");
                 }
                 break;
         }

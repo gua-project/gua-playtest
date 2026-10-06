@@ -51,8 +51,8 @@ public static class ContractSchemas
             using var stream = Assembly.GetManifestResourceStream(resource)!;
             using var reader = new StreamReader(stream);
             var json = reader.ReadToEnd();
-            var id = JsonNode.Parse(json)!["$id"]!.GetValue<string>();
-            var name = new Uri(id).Segments[^1];
+            // Public filename and schema $id are distinct in upstream Trace schemas.
+            var name = resource[Prefix.Length..].Replace('\\', '/').Split('/')[^1];
             result.Add(name, JsonSchema.FromText(json));
         }
         return result;

@@ -3,5 +3,6 @@
     <PackageReference Include="JsonSchema.Net" Version="[7.3.4]" />
     <PackageReference Include="YamlDotNet" Version="[16.3.0]" />
     <EmbeddedResource Include="../../docs/schemas/**/*.schema.json" LogicalName="Gua.Playtest.Schemas.%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Include="../../docs/schemas/gua-1.1.1/LICENSE" Pack="true" PackagePath="notices/Gua.LICENSE" CopyToOutputDirectory="PreserveNewest" Link="notices/Gua.LICENSE" />
   </ItemGroup>
 </Project>

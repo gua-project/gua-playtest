@@ -181,9 +181,25 @@ public sealed class StaticContractsTests
     }
 
     [Fact]
+    public async Task ConnectionCredentialsAreReferencesNotEndpointUserInfoOrQuery()
+    {
+        using var scope = new FixtureScope(); var path = Path.Combine(scope.Root, "environment.json");
+        var environment = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        foreach (var endpoint in new[] { "ws://user:SECRET_MARKER@localhost:1234", "ws://localhost:1234?token=SECRET_MARKER", "ws://localhost:1234#SECRET_MARKER" })
+        {
+            environment["connection"]!["endpoint"] = endpoint; await File.WriteAllTextAsync(path, environment.ToJsonString());
+            var result = await new StaticContractValidator([scope.Root]).ValidateFileAsync(path);
+            Assert.Equal("EndpointInvalid", result.Code); Assert.DoesNotContain("SECRET_MARKER", result.ToString()); Assert.Empty(result.Files);
+        }
+    }
+
+    [Fact]
     public void EmbeddedSchemasHaveClosedLocalReferencesAndGuaBytesMatchManifest()
     {
         Assert.Contains("value-v1.schema.json", ContractSchemas.Names);
+        var schemas = ContractSchemas.Names.Select(name => JsonNode.Parse(ContractSchemas.ReadSchema(name))!.AsObject()).ToArray();
+        var ids = schemas.Select(schema => schema["$id"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+        foreach (var schema in schemas) CheckReferences(schema, new Uri(schema["$id"]!.GetValue<string>()), ids);
         var source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../docs/schemas/gua-1.1.1"));
         var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(source, "manifest.json")))!;
         foreach (var (name, hash) in manifest["files"]!.AsObject())
@@ -192,6 +208,20 @@ public sealed class StaticContractsTests
             Assert.Equal(hash!.GetValue<string>(), Convert.ToHexStringLower(SHA256.HashData(bytes)));
             Assert.Equal(File.ReadAllText(Path.Combine(source, name)), ContractSchemas.ReadSchema(name));
         }
+    }
+
+    private static void CheckReferences(JsonNode node, Uri baseUri, HashSet<string> ids)
+    {
+        if (node is JsonObject map)
+        {
+            if (map["$ref"] is { } reference)
+            {
+                var resolved = new Uri(baseUri, reference.GetValue<string>());
+                Assert.Contains(resolved.GetLeftPart(UriPartial.Path), ids);
+            }
+            foreach (var pair in map) if (pair.Value is not null) CheckReferences(pair.Value, baseUri, ids);
+        }
+        else if (node is JsonArray array) foreach (var item in array) if (item is not null) CheckReferences(item, baseUri, ids);
     }
 
     private static async Task ChangeReference(string root, string path)

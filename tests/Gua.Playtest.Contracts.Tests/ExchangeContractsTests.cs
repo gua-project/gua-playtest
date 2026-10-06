@@ -88,6 +88,39 @@ public sealed class ExchangeContractsTests
         }
     }
 
+    [Fact]
+    public async Task PlannerInputKeepsIndependentSourcesCompletenessAndValueType()
+    {
+        using var scope = new Scope();
+        var environment = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"fixtures","environment.json")))!;
+        var read = environment["permissions"]!["reads"]![0]!.DeepClone();
+        var observationRead = new JsonObject { ["read"]=read,["status"]="available",["value"]=new JsonObject { ["type"]="bool",["value"]=true } };
+        var input = new JsonObject { ["kind"]="plannerInput",["schemaVersion"]=1,["runId"]="run-1",["decisionRequestId"]="decision-1",["basedOnObservationId"]="observation-1",["objective"]="Check the exposed checkbox",["limits"]=environment["limits"]!.DeepClone(),["remaining"]=new JsonObject { ["actions"]=1,["decisions"]=1,["durationMilliseconds"]=1000 },["observation"]=new JsonObject { ["observationId"]="observation-1",["observedAt"]="2026-10-06T13:00:00Z",["profile"]="Player",["sources"]=new JsonArray(new JsonObject { ["source"]="ui",["sourceId"]="source-1",["sessionEpoch"]=1,["revision"]=1,["frameSequence"]=1 }),["complete"]=true,["reads"]=new JsonArray(observationRead) },["actionDefinitions"]=new JsonObject { ["schemaVersion"]=1,["sessionEpoch"]=1,["revision"]=1,["context"]="fixture",["actions"]=new JsonArray() },["feedback"]=new JsonArray() };
+        var result = await scope.Validate(input); Assert.True(result.IsValid, result.Code); Assert.IsType<PlannerInputDocument>(result.Document);
+        observationRead["status"]="gap"; observationRead.Remove("value");
+        Assert.Equal("ObservationShapeInvalid", (await scope.Validate(input)).Code);
+        input["observation"]!["complete"]=false;
+        Assert.True((await scope.Validate(input)).IsValid);
+        input["basedOnObservationId"]="different";
+        Assert.Equal("IdentityMismatch", (await scope.Validate(input)).Code);
+    }
+
+    [Fact]
+    public async Task ModelsSerializeToTheirSchemaWithOptionalFieldsOmitted()
+    {
+        using var scope = new Scope();
+        var fixtureRoot = Path.Combine(AppContext.BaseDirectory,"fixtures");
+        foreach (var name in new[] { "scenario.json", "environment.json" })
+        {
+            var original = await new StaticContractValidator([fixtureRoot]).ValidateFileAsync(Path.Combine(fixtureRoot,name));
+            Assert.True(original.IsValid, original.Code);
+            var serialized = JsonNode.Parse(ContractJson.Serialize(original.Document!))!.AsObject();
+            Assert.Equal(original.Document!.Kind, serialized["kind"]!.GetValue<string>());
+            var roundtrip = await scope.Validate(serialized);
+            Assert.True(roundtrip.IsValid, roundtrip.Code); Assert.Equal(original.Document.GetType(), roundtrip.Document!.GetType());
+        }
+    }
+
     private sealed class Scope : IDisposable
     {
         private readonly string root = Directory.CreateTempSubdirectory("gua-exchange-").FullName;

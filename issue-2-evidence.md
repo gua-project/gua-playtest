@@ -1,6 +1,6 @@
 # Issue 2 contract acceptance evidence
 
-Refs #2. This PR depends on #3 / PR #27, whose foundation commits are temporarily stacked for integration. It must not merge before #3; a base update creates a new head requiring fresh CI and Codex GitHub review. Static acceptance does not close downstream runtime integration obligations or issue #2 automatically.
+Refs #2. Foundation PR #27 merged as `97c2797181cbca980cf6e5959ef43dd038603f47` and is integrated into this branch. Base integration creates a new head requiring fresh CI and Codex GitHub review. Static acceptance does not close downstream runtime integration obligations or issue #2 automatically.
 
 ## Scope and contract decisions
 
