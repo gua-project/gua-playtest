@@ -8,7 +8,15 @@ public sealed record ResultReadback(ResultReadState State, ResultDocument? Resul
 /// results never derive Passed from primary snapshots, observations or temporary files.</summary>
 public static class RunArtifactReader
 {
-    public static async ValueTask<ResultReadback> ReadResultAsync(string directory, ArtifactLimits limits,
+    public static ValueTask<ResultReadback> ReadResultAsync(string directory, ArtifactLimits limits,
+        CancellationToken cancellationToken = default)
+        => ReadWithValidatorAsync(directory, limits,
+            (root, file, token) => new StaticContractValidator([root]).ValidateFileAsync(file, token), cancellationToken);
+
+    // Internal boundary permits deterministic second-open race fixtures. Public callers always
+    // use the independent static contract validator and cannot replace its authority.
+    internal static async ValueTask<ResultReadback> ReadWithValidatorAsync(string directory, ArtifactLimits limits,
+        Func<string, string, CancellationToken, ValueTask<StaticValidationReport>> validate,
         CancellationToken cancellationToken = default)
     {
         try
@@ -20,8 +28,10 @@ public static class RunArtifactReader
             var opened = FileIdentity.OpenRegular(file);
             using (var stream = opened.Stream)
                 if (stream.Length > limits.MaxFileBytes) return new(ResultReadState.Invalid);
-            var report = await new StaticContractValidator([root]).ValidateFileAsync(file, cancellationToken).ConfigureAwait(false);
+            var report = await validate(root, file, cancellationToken).ConfigureAwait(false);
             if (report.Code == "Interrupted") return new(ResultReadState.Interrupted);
+            if (report.Code == "ReferenceMissing") return new(ResultReadState.Missing);
+            if (report.Code == "ReferenceUnreadable") return new(ResultReadState.Unreadable);
             if (!report.IsValid || report.Document is not ResultDocument result ||
                 !string.Equals(result.RunId, Path.GetFileName(root), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 return new(ResultReadState.Invalid);

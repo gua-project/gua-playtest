@@ -496,5 +496,41 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal(before.Count, Directory.GetFiles(store.DirectoryPath).Length);
         foreach (var file in before) Assert.Equal(file.Value, File.ReadAllBytes(Path.Combine(store.DirectoryPath, file.Key!)));
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Filesystem_failure_between_admission_and_validator_read_preserves_classification(bool missing)
+    {
+        var store = Store(); Confirm(store); Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        string? observedCode = null;
+        var readback = await RunArtifactReader.ReadWithValidatorAsync(store.DirectoryPath, Limits, async (allowedRoot, file, token) =>
+        {
+            Assert.True(File.Exists(file)); // Reader already admitted this real regular file.
+            Assert.True(new FileInfo(file).Length > 0);
+            var validator = new StaticContractValidator([allowedRoot]);
+            StaticValidationReport report;
+            if (missing)
+            {
+                File.Delete(file);
+                report = await validator.ValidateFileAsync(file, token);
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                using var blocked = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+                report = await validator.ValidateFileAsync(file, token);
+            }
+            else
+            {
+                var permissions = File.GetUnixFileMode(file);
+                try { File.SetUnixFileMode(file, 0); report = await validator.ValidateFileAsync(file, token); }
+                finally { File.SetUnixFileMode(file, permissions); }
+            }
+            observedCode = report.Code;
+            return report; // Genuine filesystem report from the production validator, no invented report.
+        });
+        Assert.Equal(missing ? "ReferenceMissing" : "ReferenceUnreadable", observedCode);
+        Assert.Equal(missing ? ResultReadState.Missing : ResultReadState.Unreadable, readback.State);
+        Assert.Null(readback.Result);
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }
