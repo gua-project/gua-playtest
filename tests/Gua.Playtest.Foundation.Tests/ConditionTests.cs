@@ -388,6 +388,16 @@ public sealed class ConditionTests
     }
 
     [Fact]
+    public void QuantifiedAnyCannotBorrowHoldFromDifferentProvingTarget()
+    {
+        var clock = new Clock(); var session = Prepare(Time(Assertion("any"), duration: 1000)).Start(clock);
+        Evaluate(session, "$/condition", "TF");
+        clock.At(500); Evaluate(session, "$/condition", "FT", true);
+        clock.At(1000); Assert.Equal(ConditionCompletion.Pending, Evaluate(session, "$/condition", "FT", true).Completion);
+        clock.At(1500); Assert.Equal(ConditionCompletion.Satisfied, Evaluate(session, "$/condition", "FT", true).Completion);
+    }
+
+    [Fact]
     public void NestedTimersChooseEarliestDeadlineAndZeroDurationsLatch()
     {
         var clock = new Clock(); var session = Prepare(Time(Group("all", Time(Assertion(), 1000, 500), Assertion()), 2000, 1000)).Start(clock);

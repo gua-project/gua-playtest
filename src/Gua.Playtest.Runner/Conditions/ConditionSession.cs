@@ -119,6 +119,7 @@ public sealed class ConditionSession
             return Plain(EvaluationResult.Unknown(unavailable));
         }
         EvaluationResult result;
+        string[] provingTargets = [];
         var count = observation.Targets.Count;
         if (node.Kind == "targets")
         {
@@ -144,6 +145,8 @@ public sealed class ConditionSession
             var values = observation.Targets.Select(t => t.ValueJson is { } wire ? node.Comparison!.EvaluateJson(wire, t.Catalog)
                 : IsUnavailable(t.Unavailable) ? node.Comparison!.EvaluateUnavailable(t.Unavailable)
                 : EvaluationResult.Violation(EvaluationCode.InvalidObservation)).ToArray();
+            if (node.Quantifier == "any") provingTargets = observation.Targets.Where((_, i) => values[i].Truth == TruthValue.True)
+                .Select(t => t.Identity).Order(StringComparer.Ordinal).ToArray();
             var errors = TruthLogic.Any(values.Length == 0 ? new[] { EvaluationResult.Known(false) } : values);
             if (errors.Error != EvaluationError.None) result = errors;
             else if (node.Quantifier == "one" && count > 1) result = EvaluationResult.Violation(EvaluationCode.TargetAmbiguous);
@@ -158,7 +161,8 @@ public sealed class ConditionSession
                 _ => EvaluationResult.InvalidConfiguration()
             };
         }
-        var witness = result.Truth == TruthValue.True ? Join(new[] { node.Path, observation.ScopeIdentity }.Concat(observation.Targets.Select(t => t.Identity).Order(StringComparer.Ordinal))) : null;
+        var witness = result.Truth == TruthValue.True ? Join(new[] { node.Path, observation.ScopeIdentity,
+            Join(observation.Targets.Select(t => t.Identity).Order(StringComparer.Ordinal)), Join(provingTargets) }) : null;
         return new(result, ConditionCompletion.Open, witness, observation.ContinuousFromPrevious, null);
     }
 
