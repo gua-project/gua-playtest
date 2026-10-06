@@ -1,0 +1,16 @@
+{
+  "version": "review-ledger-r1-fixed-expectations",
+  "cases": [
+    {"id":"all-simultaneous","samples":[[true,false],[false,true]],"expectedTruth":"False","rule":"ordinary all uses one evaluation unit; never union historical successes"},
+    {"id":"all-empty","samples":[[]],"expectedTruth":"False"},
+    {"id":"three-valued-missing","samples":[[true,"missing"]],"expectedTruth":"Unknown","rule":"absence is not zero or false"},
+    {"id":"truncated-search","samples":[["truncated"]],"expectedTruth":"Unknown"},
+    {"id":"within-expired-unknown","samples":[["missing","deadline"]],"expectedTemporalState":"Expired","rule":"unknown does not extend deadline"},
+    {"id":"for-replacement","samples":[["target-a",true],["target-b",true]],"expected":"continuity broken; prior target time cannot satisfy replacement"},
+    {"id":"same-cycle-failure","samples":[["success","failure"]],"expectedStatus":"Failed"},
+    {"id":"global-deadline","samples":[["pending","globalDeadline"]],"expectedStatus":"TimedOut"},
+    {"id":"cancel-completing","samples":[["Passed","Completing","cancel"]],"expected":"preserve established Passed; report incomplete mandatory postprocessing separately"},
+    {"id":"segment-budget","remainingMilliseconds":10,"segmentMilliseconds":11,"expected":"reject before any input; reserve entire segment budget"}
+  ],
+  "status": "external expected data only; Runner tests pending #4/#5/#6"
+}
