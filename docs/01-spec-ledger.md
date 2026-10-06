@@ -36,13 +36,13 @@ Replay・静的検証・保存結果のreportにPlannerを必須としない。A
 
 **AT-BOUND-004（未実行）:** Codex未導入・未認証環境でvalidate/replay/reportの必要範囲が動く。
 
-### BOUND-005 変更・起票は後で実施
+### BOUND-005 作業許可の履歴
 
-この成果物は起票前の台帳であり、GitHubへ書込まない。移管は10月1日に行うというユーザー方針を維持し、審査期間のルールや新たな実装完了日は推測しない。
+2026-09-16の台帳は起票前の計画のみであり、起票が実装許可を意味しなかった。2026-10-06の明示依頼は全Issueの専用threadでの実装とdraft PRを許可する。mergeは最終headの実CI成功と実Codex GitHub review完了・actionable指摘ゼロが条件。release、credential/security変更は含まない。
 
 **主担当案:** `P-01`　**協力:** なし
 
-**AT-BOUND-005（未実行）:** 実際のIssue作成・既存本文変更・移管は別の明示依頼で行う。
+**AT-BOUND-005:** 起票前の制限と現在の明示実装許可・merge gateを別履歴として保持する。
 
 ## VALUE: 共通Value
 
@@ -1072,3 +1072,39 @@ valueSchemaで入力構造・範囲・各値の意味を機械可読にし、exa
 | 成功した探索の観測値をそのまま正式な期待値にする | 候補→条件確認→AIなし試験→明示採用を経る。 |
 
 旧案は上記の現仕様へ置換する。未実装TODOとして復活させない。
+
+## DASH local dashboard追加要件
+
+#26によりv0.1へ追加した4要件。元126要件は削減しない。契約は[contracts.md](contracts.md)、実Runner/browser/配布物の受け入れは#26/#18。
+
+### DASH-001 明示Scenario登録母集団
+
+登録Scenarioを明示一覧から読み、Runがない項目も未実行として表示する。
+
+**主担当:** #26 **協力:** #2/#9/#15/#17/#18
+
+**AT-DASH-001（未実行）:** 登録Scenarioを明示一覧から読み、Runがない項目も未実行として表示する。
+
+### DASH-002 ScenarioとbuildとEnvironment識別
+
+stableID、定義版、bytes hash、実buildID、実効Environment識別で照合し、識別不明旧Runを実績に混ぜない。
+
+**主担当:** #26 **協力:** #2/#9/#15/#17/#18
+
+**AT-DASH-002（未実行）:** stableID、定義版、bytes hash、実buildID、実効Environment識別で照合し、識別不明旧Runを実績に混ぜない。
+
+### DASH-003 結果と履歴の忠実な表示
+
+全status、未確定、読取失敗、詳細省略/欠損/保存失敗、exit11、最新失敗と過去成功を区別する。
+
+**主担当:** #26 **協力:** #2/#9/#15/#17/#18
+
+**AT-DASH-003（未実行）:** 全status、未確定、読取失敗、詳細省略/欠損/保存失敗、exit11、最新失敗と過去成功を区別する。
+
+### DASH-004 読取専用入口と共通Viewerと配布
+
+明示rootとrefreshで読取のみ、Gua Viewer導線、秘密値とpath境界を守り実Runner/browser/配布物で検証する。
+
+**主担当:** #26 **協力:** #2/#9/#15/#17/#18
+
+**AT-DASH-004（未実行）:** 明示rootとrefreshで読取のみ、Gua Viewer導線、秘密値とpath境界を守り実Runner/browser/配布物で検証する。

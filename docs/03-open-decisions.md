@@ -12,7 +12,7 @@
 
 **固定する時点:** 破壊的なprotocol変更・型生成・全client実装に入る前。契約済みのFake/プロジェクト作業は継続可能。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** Gua側は1.1.1公開契約で確定。Playtest版1のlocal schema registry、版/能力の分離はcontracts.mdへ反映。
 
 ## OPEN-02 Value・演算子の細部とenum境界
 
@@ -32,7 +32,7 @@ getter型登録の変化をいつ検出するか、公開frame/tickか明示通�
 
 **固定する時点:** G-02のnative/binding API実装前。最初に閉じる契約課題。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** Gua Observe v1で確定済み。frame sample/Notify、Owner/登録寿命、Snapshot/cursor、gap/staleを再利用。
 
 ## OPEN-04 既存標準stateとカスタムObserveの参照
 
@@ -42,7 +42,7 @@ visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、
 
 **固定する時点:** 正式Target schemaとselector変換を固定する前。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** Target/readのsource/region/selectorと同一性cacheはcontracts.mdで確定。比較/時間意味は#4/#5、runtime解決は#7。
 
 ## OPEN-05 条件評価の完全な状態表
 
@@ -82,7 +82,7 @@ visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、
 
 **固定する時点:** plan create/acceptのファイル形式を公開する前。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** bytes SHA-256、外部採用証拠、全Recording境界はcontracts.mdで確定。実完走/採用の受け入れは#10/#14。
 
 ## OPEN-09 Planner実行隔離と接続契約
 
@@ -102,7 +102,7 @@ Trace byte/event/queue/attachment上限、準備/cleanup/Planner/waitの既定�
 
 **固定する時点:** 無制限動作を残さず、その機能の公開・本番fixture実行前に有限値を固定する。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** 公開形式は明示有限Environment limitsで確定。100step以外に提案既定値を導入しない。runtime制御/実効解決は#6/#12/#15。
 
 ## OPEN-11 配布と互換性の実測値
 
@@ -122,10 +122,10 @@ Trace byte/event/queue/attachment上限、準備/cleanup/Planner/waitの既定�
 
 **固定する時点:** 公開API・NuGet登録・GitHub起票前。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** 型/schema名と実Issue対応はcontracts.mdとtraceability.jsonで確定。結果reason/tie-breakは#6、CLI入口の正式組立は#15。
 
 ## 今回の整理から見た最初の一件
 
-最初はOPEN-03を閉じるのが妥当である。理由は、getter型Observeの変更検知境界が決まらないと、リアルタイム通知、Snapshot/Changeの連続性、for、Traceの中間変化、Planner観測の保証範囲が同時に曖昧になるためである。
+OPEN-03はGua 1.1.1で確定済み。現在はPlaytest側のOPEN-02/05/06/09/11を担当Issueで具体化し、確定した契約から並行実装する。
 
 これはObserveを別方式へ変更する決定ではない。既に採用したAPIとread-only方針を維持し、どの瞬間に変化を確定して通知するかを具体化する。

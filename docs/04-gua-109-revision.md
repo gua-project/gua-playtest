@@ -1,3 +1,5 @@
+> 履歴注記 2026-10-06: 以下は起票前改訂案。Gua #109および#123〜#128は1.1.1で実装済み。Playtestは現行GuaTraceSession/Reader/Reportとschemaを再利用し、この案を第二Trace実装の依頼にしない。
+
 # Gua #109 改訂本文案
 
 ## 概要

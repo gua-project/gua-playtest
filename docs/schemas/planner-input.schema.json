@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/planner-input.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "plannerInput"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "decisionRequestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "basedOnObservationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "limits": {
+      "$ref": "common.schema.json#/$defs/limits"
+    },
+    "remaining": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "decisions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMilliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "actions",
+        "decisions",
+        "durationMilliseconds"
+      ]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "sessionEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "profile": {
+          "enum": [
+            "Player",
+            "Testing",
+            "Debug"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "read": {
+                "$ref": "common.schema.json#/$defs/read"
+              },
+              "status": {
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "omitted",
+                  "truncated",
+                  "stale",
+                  "gap"
+                ]
+              },
+              "value": {
+                "$ref": "https://gua.dev/schema/value-v1.schema.json"
+              }
+            },
+            "required": [
+              "read",
+              "status"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "observationId",
+        "sourceId",
+        "sessionEpoch",
+        "profile",
+        "revision",
+        "complete",
+        "reads"
+      ]
+    },
+    "actionDefinitions": {
+      "oneOf": [
+        {
+          "$ref": "https://gua.dev/schema/game-input-actions.schema.json"
+        },
+        {
+          "$ref": "https://gua.dev/schema/game-input-actions-v2.schema.json"
+        }
+      ]
+    },
+    "feedback": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "relatedDecisionRequestId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 1000
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "runId",
+    "decisionRequestId",
+    "basedOnObservationId",
+    "objective",
+    "limits",
+    "remaining",
+    "observation",
+    "actionDefinitions",
+    "feedback"
+  ]
+}

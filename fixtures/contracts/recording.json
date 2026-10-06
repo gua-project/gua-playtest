@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "steps": [
+    {
+      "action": "click",
+      "target": {
+        "role": "button",
+        "name": "Buy"
+      },
+      "relativeMilliseconds": 0,
+      "preRevision": 1,
+      "postRevision": 2,
+      "sensitive": false
+    }
+  ]
+}

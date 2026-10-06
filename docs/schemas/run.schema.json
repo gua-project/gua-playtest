@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/run.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "run"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "identity": {
+      "$ref": "common.schema.json#/$defs/identity"
+    },
+    "mode": {
+      "enum": [
+        "Explore",
+        "Replay"
+      ]
+    },
+    "executionState": {
+      "enum": [
+        "Created",
+        "Preparing",
+        "Running",
+        "Completing",
+        "Finished"
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scenario": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "environment": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    },
+    "plan": {
+      "$ref": "common.schema.json#/$defs/fixedFile"
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "runId",
+    "identity",
+    "mode",
+    "executionState",
+    "startedAt",
+    "scenario",
+    "environment"
+  ]
+}

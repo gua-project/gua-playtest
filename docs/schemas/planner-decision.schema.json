@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/planner-decision.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "plannerDecision"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decisionRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "basedOnObservationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "execute"
+            },
+            "mode": {
+              "const": "single"
+            },
+            "action": {
+              "$ref": "common.schema.json#/$defs/action"
+            }
+          },
+          "required": [
+            "kind",
+            "mode",
+            "action"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schemaVersion",
+        "runId",
+        "decisionRequestId",
+        "basedOnObservationId",
+        "decision"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "plannerDecision"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decisionRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "basedOnObservationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "execute"
+            },
+            "mode": {
+              "const": "timed"
+            },
+            "segment": {
+              "$ref": "https://gua.dev/schema/timed-segment-v1.schema.json"
+            }
+          },
+          "required": [
+            "kind",
+            "mode",
+            "segment"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schemaVersion",
+        "runId",
+        "decisionRequestId",
+        "basedOnObservationId",
+        "decision"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "plannerDecision"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decisionRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "basedOnObservationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "observe"
+            },
+            "reads": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/read"
+              },
+              "minItems": 1,
+              "maxItems": 100
+            }
+          },
+          "required": [
+            "kind",
+            "reads"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schemaVersion",
+        "runId",
+        "decisionRequestId",
+        "basedOnObservationId",
+        "decision"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "plannerDecision"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decisionRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "basedOnObservationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "wait"
+            },
+            "durationMilliseconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400000
+            }
+          },
+          "required": [
+            "kind",
+            "durationMilliseconds"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schemaVersion",
+        "runId",
+        "decisionRequestId",
+        "basedOnObservationId",
+        "decision"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "plannerDecision"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decisionRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "basedOnObservationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "wait"
+            },
+            "condition": {
+              "$ref": "common.schema.json#/$defs/condition"
+            },
+            "timeoutMilliseconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400000
+            }
+          },
+          "required": [
+            "kind",
+            "condition",
+            "timeoutMilliseconds"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schemaVersion",
+        "runId",
+        "decisionRequestId",
+        "basedOnObservationId",
+        "decision"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "plannerDecision"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decisionRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "basedOnObservationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "finish"
+            },
+            "report": {
+              "enum": [
+                "goalClaimed",
+                "stuck",
+                "cannotProceed"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "report"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schemaVersion",
+        "runId",
+        "decisionRequestId",
+        "basedOnObservationId",
+        "decision"
+      ]
+    }
+  ]
+}

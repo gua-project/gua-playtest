@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/scenario.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "scenario"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "scenarioId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "definitionVersion": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "success": {
+          "$ref": "common.schema.json#/$defs/condition"
+        },
+        "failure": {
+          "$ref": "common.schema.json#/$defs/condition"
+        }
+      },
+      "required": [
+        "objective"
+      ]
+    },
+    "setup": {
+      "$ref": "common.schema.json#/$defs/condition"
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDurationMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400000
+        },
+        "maxActions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "allowedActionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "minItems": 0,
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "maxDurationMilliseconds",
+        "maxActions"
+      ]
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "scenarioId",
+    "definitionVersion",
+    "name",
+    "goal",
+    "constraints"
+  ]
+}

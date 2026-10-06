@@ -1,5 +1,5 @@
 {
-  "requirement_count": 126,
+  "requirement_count": 130,
   "draft_work_item_count": 29,
   "gua_work_items": 12,
   "playtest_work_items": 17,
@@ -13,5 +13,7 @@
   "actual_product_tests_executed": false,
   "current_code_completeness_audited": false,
   "github_writes_performed": false,
-  "note": "Only the consistency of this planning document was checked. This is not evidence that Gua Playtest passes any test."
+  "note": "Planning consistency metadata; historical product test flags are not current execution evidence. See contracts.md and issue-2 acceptance evidence.",
+  "original_requirement_count": 126,
+  "dashboard_additional_requirement_count": 4
 }

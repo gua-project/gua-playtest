@@ -1,0 +1,38 @@
+{
+  "kind": "scenario",
+  "schemaVersion": 1,
+  "scenarioId": "shop.purchase",
+  "definitionVersion": "v1",
+  "name": "Purchase one item",
+  "goal": {
+    "objective": "Test",
+    "success": {
+      "kind": "assertion",
+      "read": {
+        "target": {
+          "source": "ui",
+          "selector": {
+            "role": {
+              "value": "checkbox"
+            }
+          }
+        },
+        "region": "standard",
+        "field": "state.checked",
+        "valueType": {
+          "type": "bool"
+        }
+      },
+      "quantifier": "one",
+      "operator": "equals",
+      "expected": {
+        "type": "bool",
+        "value": null
+      }
+    }
+  },
+  "constraints": {
+    "maxDurationMilliseconds": 30000,
+    "maxActions": 50
+  }
+}

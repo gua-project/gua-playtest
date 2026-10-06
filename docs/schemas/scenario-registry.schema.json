@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/scenario-registry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "scenarioRegistry"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "registryId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scenarioId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "definitionVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "file": {
+            "$ref": "common.schema.json#/$defs/fixedFile"
+          }
+        },
+        "required": [
+          "scenarioId",
+          "definitionVersion",
+          "file"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 1000
+    },
+    "artifactRoots": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "minItems": 1,
+      "maxItems": 100
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "registryId",
+    "scenarios",
+    "artifactRoots"
+  ]
+}

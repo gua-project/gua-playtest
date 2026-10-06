@@ -1,8 +1,8 @@
 {
-  "document_version": "review-ledger-r1",
+  "document_version": "contracts-r1",
   "created_at": "2026-09-16",
   "source_commit": "10a8ef71713fe491633cf2b5649c76007cfd4767",
-  "scope_note": "Design agreements and draft implementation mapping; not a current-code audit or product test report.",
+  "scope_note": "Original 126 design requirements plus #26 dashboard requirements. Static implementation evidence is separate from runtime acceptance.",
   "github_writes_performed": false,
   "requirements": [
     {
@@ -78,7 +78,7 @@
       "id": "BOUND-005",
       "group": "BOUND",
       "title": "変更・起票は後で実施",
-      "rule": "この成果物は起票前の台帳であり、GitHubへ書込まない。移管は10月1日に行うというユーザー方針を維持し、審査期間のルールや新たな実装完了日は推測しない。",
+      "rule": "Planning-only restriction applied to the original ledger. Explicit 2026-10-06 implementation request authorizes implementation/PRs and gated merges; issue creation alone never grants implementation/release authority.",
       "owner": "P-01",
       "collaborators": [],
       "design_status": "agreed",
@@ -86,7 +86,7 @@
       "verification_status": "not-executed",
       "acceptance_test": {
         "id": "AT-BOUND-005",
-        "description": "実際のIssue作成・既存本文変更・移管は別の明示依頼で行う。"
+        "description": "Record the original planning restriction separately from current explicit implementation and final-head merge gates."
       }
     },
     {
@@ -2144,6 +2144,90 @@
         "id": "AT-INPUT-003",
         "description": "旧clientの扱いと入力型の不正を検証し、古いconfirmedを再生の承認に流用しない。"
       }
+    },
+    {
+      "id": "DASH-001",
+      "group": "DASH",
+      "title": "明示Scenario登録母集団",
+      "rule": "登録Scenarioを明示一覧から読み、Runがない項目も未実行として表示する。",
+      "owner": "P-26",
+      "collaborators": [
+        "P-01",
+        "P-08",
+        "P-13",
+        "P-17",
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DASH-001",
+        "description": "登録Scenarioを明示一覧から読み、Runがない項目も未実行として表示する。"
+      }
+    },
+    {
+      "id": "DASH-002",
+      "group": "DASH",
+      "title": "ScenarioとbuildとEnvironment識別",
+      "rule": "stableID、定義版、bytes hash、実buildID、実効Environment識別で照合し、識別不明旧Runを実績に混ぜない。",
+      "owner": "P-26",
+      "collaborators": [
+        "P-01",
+        "P-08",
+        "P-13",
+        "P-17",
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DASH-002",
+        "description": "stableID、定義版、bytes hash、実buildID、実効Environment識別で照合し、識別不明旧Runを実績に混ぜない。"
+      }
+    },
+    {
+      "id": "DASH-003",
+      "group": "DASH",
+      "title": "結果と履歴の忠実な表示",
+      "rule": "全status、未確定、読取失敗、詳細省略/欠損/保存失敗、exit11、最新失敗と過去成功を区別する。",
+      "owner": "P-26",
+      "collaborators": [
+        "P-01",
+        "P-08",
+        "P-13",
+        "P-17",
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DASH-003",
+        "description": "全status、未確定、読取失敗、詳細省略/欠損/保存失敗、exit11、最新失敗と過去成功を区別する。"
+      }
+    },
+    {
+      "id": "DASH-004",
+      "group": "DASH",
+      "title": "読取専用入口と共通Viewerと配布",
+      "rule": "明示rootとrefreshで読取のみ、Gua Viewer導線、秘密値とpath境界を守り実Runner/browser/配布物で検証する。",
+      "owner": "P-26",
+      "collaborators": [
+        "P-01",
+        "P-08",
+        "P-13",
+        "P-17",
+        "P-16"
+      ],
+      "design_status": "agreed",
+      "implementation_status": "not-audited",
+      "verification_status": "not-executed",
+      "acceptance_test": {
+        "id": "AT-DASH-004",
+        "description": "明示rootとrefreshで読取のみ、Gua Viewer導線、秘密値とpath境界を守り実Runner/browser/配布物で検証する。"
+      }
     }
   ],
   "issues": [
@@ -2171,7 +2255,8 @@
       "blocking_decisions": [
         "OPEN-01",
         "OPEN-02"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/118"
     },
     {
       "id": "G-02",
@@ -2198,7 +2283,8 @@
       "blocking_decisions": [
         "OPEN-03",
         "OPEN-04"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/119"
     },
     {
       "id": "G-03",
@@ -2225,7 +2311,8 @@
       "blocking_decisions": [
         "OPEN-01",
         "OPEN-03"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/120"
     },
     {
       "id": "G-04",
@@ -2246,7 +2333,8 @@
       "collaborating_requirements": [],
       "blocking_decisions": [
         "OPEN-01"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/121"
     },
     {
       "id": "G-05",
@@ -2277,7 +2365,8 @@
       ],
       "blocking_decisions": [
         "OPEN-07"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/122"
     },
     {
       "id": "G-06",
@@ -2304,7 +2393,8 @@
       ],
       "blocking_decisions": [
         "OPEN-11"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/129"
     },
     {
       "id": "T-01",
@@ -2331,7 +2421,8 @@
       "blocking_decisions": [
         "OPEN-01",
         "OPEN-10"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/123"
     },
     {
       "id": "T-02",
@@ -2358,7 +2449,8 @@
         "TRACE-003",
         "CLOCK-004"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua/issues/124"
     },
     {
       "id": "T-03",
@@ -2388,7 +2480,8 @@
       ],
       "blocking_decisions": [
         "OPEN-03"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua/issues/125"
     },
     {
       "id": "T-04",
@@ -2411,7 +2504,8 @@
       "collaborating_requirements": [
         "RUN-003"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua/issues/126"
     },
     {
       "id": "T-05",
@@ -2434,7 +2528,8 @@
       "collaborating_requirements": [
         "TRACE-009"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua/issues/127"
     },
     {
       "id": "T-06",
@@ -2459,7 +2554,8 @@
         "TRACE-011",
         "FIX-006"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua/issues/128"
     },
     {
       "id": "P-01",
@@ -2496,7 +2592,8 @@
         "OPEN-08",
         "OPEN-10",
         "OPEN-12"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/2"
     },
     {
       "id": "P-02",
@@ -2519,7 +2616,8 @@
         "FIX-001",
         "DELIVERY-001"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/3"
     },
     {
       "id": "P-03",
@@ -2554,7 +2652,8 @@
         "OPEN-02",
         "OPEN-04",
         "OPEN-05"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/4"
     },
     {
       "id": "P-04",
@@ -2590,7 +2689,8 @@
       ],
       "blocking_decisions": [
         "OPEN-05"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/5"
     },
     {
       "id": "P-05",
@@ -2638,7 +2738,8 @@
         "OPEN-05",
         "OPEN-06",
         "OPEN-10"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/6"
     },
     {
       "id": "P-06",
@@ -2667,7 +2768,8 @@
       "collaborating_requirements": [
         "REPLAY-003"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/8"
     },
     {
       "id": "P-07",
@@ -2710,7 +2812,8 @@
       ],
       "blocking_decisions": [
         "OPEN-04"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/7"
     },
     {
       "id": "P-08",
@@ -2744,7 +2847,8 @@
         "FILE-006",
         "CLI-004"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/9"
     },
     {
       "id": "P-09",
@@ -2780,7 +2884,8 @@
       "blocking_decisions": [
         "OPEN-07",
         "OPEN-08"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/10"
     },
     {
       "id": "P-10",
@@ -2821,7 +2926,8 @@
       ],
       "blocking_decisions": [
         "OPEN-09"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/11"
     },
     {
       "id": "P-11",
@@ -2854,7 +2960,8 @@
       ],
       "blocking_decisions": [
         "OPEN-10"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/12"
     },
     {
       "id": "P-12",
@@ -2886,7 +2993,8 @@
       "blocking_decisions": [
         "OPEN-09",
         "OPEN-11"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/13"
     },
     {
       "id": "P-13",
@@ -2931,7 +3039,8 @@
       "blocking_decisions": [
         "OPEN-06",
         "OPEN-12"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/15"
     },
     {
       "id": "P-14",
@@ -2961,7 +3070,8 @@
       ],
       "blocking_decisions": [
         "OPEN-08"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/14"
     },
     {
       "id": "P-15",
@@ -2990,7 +3100,8 @@
       "collaborating_requirements": [
         "DELIVERY-003"
       ],
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/16"
     },
     {
       "id": "P-16",
@@ -3027,7 +3138,8 @@
       ],
       "blocking_decisions": [
         "OPEN-11"
-      ]
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/18"
     },
     {
       "id": "P-17",
@@ -3051,6 +3163,24 @@
       "blocking_decisions": [
         "OPEN-11",
         "OPEN-12"
+      ],
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/17"
+    },
+    {
+      "id": "P-26",
+      "title": "読取専用local dashboard",
+      "github_url": "https://github.com/gua-project/gua-playtest/issues/26",
+      "integration_dependencies": [
+        "P-01",
+        "P-08",
+        "P-13",
+        "T-05"
+      ],
+      "requirements": [
+        "DASH-001",
+        "DASH-002",
+        "DASH-003",
+        "DASH-004"
       ]
     }
   ],
@@ -3315,37 +3445,37 @@
     {
       "id": "S-109",
       "title": "Gua #109 現行本文",
-      "url": "https://github.com/link1345/gua/issues/109",
+      "url": "https://github.com/gua-project/gua/issues/109",
       "observed": "open。旧本文で、100step・失敗時保存と#106/#107/#108連携が記載されている。改訂案の反映は未実施。"
     },
     {
       "id": "S-106",
       "title": "Gua #106 Semantic Lint",
-      "url": "https://github.com/link1345/gua/issues/106",
+      "url": "https://github.com/gua-project/gua/issues/106",
       "observed": "明示的Lint、runtimeの通常公開を自動拒否しない、profile境界。"
     },
     {
       "id": "S-107",
       "title": "Gua #107 Locator auto-wait",
-      "url": "https://github.com/link1345/gua/issues/107",
+      "url": "https://github.com/gua-project/gua/issues/107",
       "observed": "直前再解決、strict複数一致、enqueueとcompletion、総時間予算。"
     },
     {
       "id": "S-108",
       "title": "Gua #108 Semantic baseline比較",
-      "url": "https://github.com/link1345/gua/issues/108",
+      "url": "https://github.com/gua-project/gua/issues/108",
       "observed": "baselineの既定除外と明示更新。Traceとは役割が違う。"
     },
     {
       "id": "S-INPUT",
       "title": "InputAction応答schema（固定commit）",
-      "url": "https://github.com/link1345/gua/blob/10a8ef71713fe491633cf2b5649c76007cfd4767/protocol/schema/game-input-actions.schema.json",
+      "url": "https://github.com/gua-project/gua/blob/10a8ef71713fe491633cf2b5649c76007cfd4767/protocol/schema/game-input-actions.schema.json",
       "observed": "descriptionは既に必須。valueTypeはbutton/axis1d/vector2/text。valueSchema/examplesの新設範囲とは区別する。"
     },
     {
       "id": "S-REC",
       "title": "Recording schema（固定commit）",
-      "url": "https://github.com/link1345/gua/blob/10a8ef71713fe491633cf2b5649c76007cfd4767/protocol/schema/recording.schema.json",
+      "url": "https://github.com/gua-project/gua/blob/10a8ef71713fe491633cf2b5649c76007cfd4767/protocol/schema/recording.schema.json",
       "observed": "schemaVersion 1/2、game_input/operation/arguments、requestId、pre/postRevision、secretKey等。定義だけで全Replay経路実装済みとは判断しない。"
     }
   ],
@@ -3379,5 +3509,47 @@
     "P-15",
     "P-17",
     "P-16"
-  ]
+  ],
+  "authorization_history": [
+    {
+      "date": "2026-09-16",
+      "scope": "Planning only; no implementation or merge authorization implied by issue creation."
+    },
+    {
+      "date": "2026-10-06",
+      "scope": "Explicit request authorizes implementation, draft PRs and merge only after final-head real CI and completed Codex GitHub AI review with no actionable findings. No release or credential/security changes."
+    }
+  ],
+  "actual_issue_mapping": {
+    "P-01": "https://github.com/gua-project/gua-playtest/issues/2",
+    "P-02": "https://github.com/gua-project/gua-playtest/issues/3",
+    "P-03": "https://github.com/gua-project/gua-playtest/issues/4",
+    "P-04": "https://github.com/gua-project/gua-playtest/issues/5",
+    "P-05": "https://github.com/gua-project/gua-playtest/issues/6",
+    "P-06": "https://github.com/gua-project/gua-playtest/issues/8",
+    "P-07": "https://github.com/gua-project/gua-playtest/issues/7",
+    "P-08": "https://github.com/gua-project/gua-playtest/issues/9",
+    "P-09": "https://github.com/gua-project/gua-playtest/issues/10",
+    "P-10": "https://github.com/gua-project/gua-playtest/issues/11",
+    "P-11": "https://github.com/gua-project/gua-playtest/issues/12",
+    "P-12": "https://github.com/gua-project/gua-playtest/issues/13",
+    "P-13": "https://github.com/gua-project/gua-playtest/issues/15",
+    "P-14": "https://github.com/gua-project/gua-playtest/issues/14",
+    "P-15": "https://github.com/gua-project/gua-playtest/issues/16",
+    "P-16": "https://github.com/gua-project/gua-playtest/issues/18",
+    "P-17": "https://github.com/gua-project/gua-playtest/issues/17",
+    "G-01": "https://github.com/gua-project/gua/issues/118",
+    "G-02": "https://github.com/gua-project/gua/issues/119",
+    "G-03": "https://github.com/gua-project/gua/issues/120",
+    "G-04": "https://github.com/gua-project/gua/issues/121",
+    "G-05": "https://github.com/gua-project/gua/issues/122",
+    "G-06": "https://github.com/gua-project/gua/issues/129",
+    "T-01": "https://github.com/gua-project/gua/issues/123",
+    "T-02": "https://github.com/gua-project/gua/issues/124",
+    "T-03": "https://github.com/gua-project/gua/issues/125",
+    "T-04": "https://github.com/gua-project/gua/issues/126",
+    "T-05": "https://github.com/gua-project/gua/issues/127",
+    "T-06": "https://github.com/gua-project/gua/issues/128",
+    "P-26": "https://github.com/gua-project/gua-playtest/issues/26"
+  }
 }

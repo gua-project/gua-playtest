@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gua-playtest.dev/schema/environment.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "environment"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "environmentId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "buildId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "pattern": "^wss?://[^\\s]+$",
+          "maxLength": 4096
+        },
+        "credential": {
+          "$ref": "common.schema.json#/$defs/secret"
+        }
+      },
+      "required": [
+        "endpoint"
+      ]
+    },
+    "profile": {
+      "enum": [
+        "Player",
+        "Testing",
+        "Debug"
+      ]
+    },
+    "limits": {
+      "$ref": "common.schema.json#/$defs/limits"
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "minItems": 0,
+          "maxItems": 1000
+        },
+        "rawInput": {
+          "type": "boolean"
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/read"
+          },
+          "minItems": 0,
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "actionIds",
+        "rawInput",
+        "reads"
+      ]
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fixtureId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        }
+      },
+      "required": [
+        "fixtureId"
+      ]
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "captureMode": {
+          "enum": [
+            "recent",
+            "streaming"
+          ]
+        },
+        "savePolicy": {
+          "enum": [
+            "onFailure",
+            "always"
+          ]
+        }
+      },
+      "required": [
+        "captureMode",
+        "savePolicy"
+      ]
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "environmentId",
+    "buildId",
+    "connection",
+    "profile",
+    "limits",
+    "permissions",
+    "trace"
+  ]
+}

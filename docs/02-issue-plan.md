@@ -1,6 +1,6 @@
 # Issue起票案と依存関係
 
-これは作業分割案であり、GitHubにはまだ作成していない。既存機能の全件差分監査でもない。実起票時は既存実装・PR・命名に合わせ、追加ではなく接続/修正/回帰試験で足りる部分を重複実装しない。
+これは元の作業分割案を保持する履歴である。現在の実Issue対応はtraceability.jsonのactual_issue_mappingを正本とする。既存機能の全件差分監査でもない。実起票時は既存実装・PR・命名に合わせ、追加ではなく接続/修正/回帰試験で足りる部分を重複実装しない。
 
 ## 親Issueと既存Issue
 
@@ -726,3 +726,38 @@ Guaの基盤要件はGua側で自己完結して試験できるようにする�
 G-/T-/P-IDを実Issue番号へ対応付ける。親子関係と統合依存を別欄にする。既存Issueのopen/closed、関連PR、移管先、既存コードを再取得して確認し、重複Issueを避ける。機能が既に存在すれば、不足契約・接続・試験・文書だけを起票する。
 
 GitHubの本文/ラベル/PR/リポジトリは、この文書の作成では変更していない。
+
+## 現在のIssue対応と追加依存
+
+- P-01: https://github.com/gua-project/gua-playtest/issues/2
+- P-02: https://github.com/gua-project/gua-playtest/issues/3
+- P-03: https://github.com/gua-project/gua-playtest/issues/4
+- P-04: https://github.com/gua-project/gua-playtest/issues/5
+- P-05: https://github.com/gua-project/gua-playtest/issues/6
+- P-06: https://github.com/gua-project/gua-playtest/issues/8
+- P-07: https://github.com/gua-project/gua-playtest/issues/7
+- P-08: https://github.com/gua-project/gua-playtest/issues/9
+- P-09: https://github.com/gua-project/gua-playtest/issues/10
+- P-10: https://github.com/gua-project/gua-playtest/issues/11
+- P-11: https://github.com/gua-project/gua-playtest/issues/12
+- P-12: https://github.com/gua-project/gua-playtest/issues/13
+- P-13: https://github.com/gua-project/gua-playtest/issues/15
+- P-14: https://github.com/gua-project/gua-playtest/issues/14
+- P-15: https://github.com/gua-project/gua-playtest/issues/16
+- P-16: https://github.com/gua-project/gua-playtest/issues/18
+- P-17: https://github.com/gua-project/gua-playtest/issues/17
+- G-01: https://github.com/gua-project/gua/issues/118
+- G-02: https://github.com/gua-project/gua/issues/119
+- G-03: https://github.com/gua-project/gua/issues/120
+- G-04: https://github.com/gua-project/gua/issues/121
+- G-05: https://github.com/gua-project/gua/issues/122
+- G-06: https://github.com/gua-project/gua/issues/129
+- T-01: https://github.com/gua-project/gua/issues/123
+- T-02: https://github.com/gua-project/gua/issues/124
+- T-03: https://github.com/gua-project/gua/issues/125
+- T-04: https://github.com/gua-project/gua/issues/126
+- T-05: https://github.com/gua-project/gua/issues/127
+- T-06: https://github.com/gua-project/gua/issues/128
+- P-26: https://github.com/gua-project/gua-playtest/issues/26
+
+#26は#2の登録/識別契約、#9のRun/result、#15の入口、Gua#127の共通Viewerを統合する。#17へ説明、#18と親#1へ実Runner/browser/配布物証拠を追加する。#2のコード接続は#3基盤を取り込む。着手依存と統合/リリース証拠を区別する。
