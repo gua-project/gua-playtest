@@ -447,6 +447,35 @@ public sealed class ConditionTests
         Assert.Equal(TimeSpan.Zero, clock.RequestedDelay);
         Assert.Equal(ConditionCompletion.Pending, session.Evaluate(Unit()).Completion);
     }
+
+    [Fact]
+    public void AuthoritativeBoundaryTimestampAllowsInitialWithinZeroDespiteDeliveryDelay()
+    {
+        var clock = new Clock(); clock.At(100);
+        var boundary = clock.Elapsed;
+        clock.At(101); var prepared = Prepare(Time(Assertion(), 0, 0));
+        var success = prepared.Start(clock, boundary);
+        clock.At(102); var failure = prepared.Start(clock, boundary);
+        var unit = Unit(("$/condition", Observe("T")));
+        Assert.Equal(ConditionCompletion.Satisfied, success.EvaluateAt(unit, boundary).Completion);
+        Assert.Equal(ConditionCompletion.Satisfied, failure.EvaluateAt(unit, boundary).Completion);
+        Assert.Throws<InvalidOperationException>(() => success.EvaluateAt(unit, boundary - TimeSpan.FromTicks(1)));
+        Assert.Throws<InvalidOperationException>(() => success.EvaluateAt(unit, clock.Elapsed + TimeSpan.FromTicks(1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => prepared.Start(clock, clock.Elapsed + TimeSpan.FromTicks(1)));
+    }
+
+    [Fact]
+    public void DeliveredLateObservationGetsNoCreditBeforeFirstObservedTrue()
+    {
+        var clock = new Clock(); var prepared = Prepare(Time(Assertion(), 5000, 2000)); var session = prepared.Start(clock, TimeSpan.Zero);
+        clock.At(10000);
+        var trueAt4500 = Unit(("$/condition", Observe("T")));
+        var pending = session.EvaluateAt(trueAt4500, TimeSpan.FromMilliseconds(4500));
+        Assert.Equal(ConditionCompletion.Pending, pending.Completion);
+        Assert.Equal(TimeSpan.FromMilliseconds(6500), pending.NextEvaluationAt);
+        Assert.Equal(ConditionCompletion.Pending, session.EvaluateAt(Unit(("$/condition", Observe("T", continuous: true))), TimeSpan.FromMilliseconds(6499)).Completion);
+        Assert.Equal(ConditionCompletion.Satisfied, session.EvaluateAt(Unit(("$/condition", Observe("T", continuous: true))), TimeSpan.FromMilliseconds(6500)).Completion);
+    }
 }
 
 internal static class ConditionTestJson

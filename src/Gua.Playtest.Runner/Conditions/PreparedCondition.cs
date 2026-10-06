@@ -46,4 +46,7 @@ public sealed class PreparedCondition
 
     /// <summary>Call at Running or wait-point arrival. There is no credit for unmonitored earlier time.</summary>
     public ConditionSession Start(IClock clock) => new(this, clock);
+
+    /// <summary>Use the same authoritative Running/wait boundary for multiple monitors.</summary>
+    public ConditionSession Start(IClock clock, TimeSpan origin) => new(this, clock, origin);
 }

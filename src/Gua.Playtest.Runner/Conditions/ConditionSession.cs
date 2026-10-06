@@ -22,20 +22,35 @@ public sealed class ConditionSession
     private readonly Dictionary<string, TimeState> states = new(StringComparer.Ordinal);
     public TimeSpan Origin => origin;
 
-    internal ConditionSession(PreparedCondition prepared, IClock clock)
+    internal ConditionSession(PreparedCondition prepared, IClock clock, TimeSpan? boundary = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         this.prepared = prepared;
         this.clock = clock;
-        origin = last = clock.Elapsed;
+        var current = clock.Elapsed;
+        origin = last = boundary ?? current;
         if (origin < TimeSpan.Zero || origin > TimeSpan.MaxValue - TimeSpan.FromDays(2))
             throw new ArgumentOutOfRangeException(nameof(clock));
+        if (current < origin) throw new ArgumentOutOfRangeException(nameof(boundary));
     }
 
     public ConditionEvaluation Evaluate(ConditionObservationUnit unit)
     {
-        ArgumentNullException.ThrowIfNull(unit);
         var now = clock.Elapsed; // one timestamp for the entire group
+        return EvaluateCore(unit, now);
+    }
+
+    /// <summary>Evaluate at the trusted unit's monotonic capture/boundary timestamp, not its delivery time.
+    /// The owner must supply all relevant intervening units; this cannot backdate a hold before its first observation.</summary>
+    public ConditionEvaluation EvaluateAt(ConditionObservationUnit unit, TimeSpan evaluatedAt)
+    {
+        if (evaluatedAt > clock.Elapsed) throw new InvalidOperationException("ConditionObservationInFuture");
+        return EvaluateCore(unit, evaluatedAt);
+    }
+
+    private ConditionEvaluation EvaluateCore(ConditionObservationUnit unit, TimeSpan now)
+    {
+        ArgumentNullException.ThrowIfNull(unit);
         if (now < last) throw new InvalidOperationException("ConditionClockRegressed");
         if (now > TimeSpan.MaxValue - TimeSpan.FromDays(2)) throw new InvalidOperationException("ConditionClockOutOfRange");
         last = now;
