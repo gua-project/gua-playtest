@@ -9,7 +9,7 @@ const equal = isDeepStrictEqual;
 
 // Inputs are independent host counters, saved Runner result, and Gua Trace extraction.
 // This verifies their agreement with a pre-run pinned case, not their authenticity.
-export function verifyPurchase(caseDefinition, bundle) {
+export function verifyPurchase(caseDefinition, bundle, catalogFixtureVersion) {
   const failures = [];
   const check = (condition, code) => { if (!condition) failures.push(code); };
   const expected = caseDefinition.expected;
@@ -17,7 +17,8 @@ export function verifyPurchase(caseDefinition, bundle) {
   if (failures.length) return { verified: false, failures };
   const { identity = {}, facts = {}, result = {}, trace = {} } = bundle;
   check(identity.caseId === caseDefinition.id, 'case-identity');
-  check(identity.fixtureVersion === 'playtest-fixtures-r1', 'fixture-version');
+  check(typeof catalogFixtureVersion === 'string' && catalogFixtureVersion.length > 0 &&
+    identity.fixtureVersion === catalogFixtureVersion, 'fixture-version');
   check(typeof identity.buildId === 'string' && identity.buildId.length > 0, 'build-identity');
   check(identity.seed === caseDefinition.seed && identity.clock === caseDefinition.clock, 'seed-clock');
   check(equal(identity.fault, caseDefinition.fault), 'fault-plan-changed');
@@ -55,7 +56,7 @@ export function verifyFiles(catalogPath, expectedCatalogHash, bundlePath) {
   const bundle = JSON.parse(bundleBytes);
   const cases = catalog.cases.filter(c => c.id === bundle.identity?.caseId);
   if (cases.length !== 1) throw new Error('case-not-unique');
-  return { ...verifyPurchase(cases[0], bundle), expectedCatalogSha256: expectedCatalogHash,
+  return { ...verifyPurchase(cases[0], bundle, catalog.fixtureVersion), expectedCatalogSha256: expectedCatalogHash,
     evidenceSha256: sha256(bundleBytes) };
 }
 

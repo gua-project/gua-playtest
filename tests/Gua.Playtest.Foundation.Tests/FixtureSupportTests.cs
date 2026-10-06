@@ -34,13 +34,31 @@ public sealed class FixtureSupportTests
         var plan = new[] { new AuthorizedFault("drop-purchase-response", FaultBoundary.AfterPurchaseCommitBeforeResponse, 2) };
         var harness = new FaultHarness(plan);
         plan[0] = new AuthorizedFault("changed", FaultBoundary.BeforeGameInput, 1);
-        Assert.Null(harness.Reach(FaultBoundary.BeforeGameInput));
-        Assert.Null(harness.Reach(FaultBoundary.AfterPurchaseCommitBeforeResponse));
+        bool responseDropped = false;
+        bool ApplyDrop() { responseDropped = true; return true; }
+        Assert.Null(harness.ApplyAt(FaultBoundary.BeforeGameInput, ApplyDrop));
+        Assert.Null(harness.ApplyAt(FaultBoundary.AfterPurchaseCommitBeforeResponse, ApplyDrop));
+        Assert.False(responseDropped);
         Assert.Throws<InvalidOperationException>(harness.RequireAllFired);
-        Assert.Equal("drop-purchase-response", harness.Reach(FaultBoundary.AfterPurchaseCommitBeforeResponse)!.Id);
+        Assert.Equal("drop-purchase-response", harness.ApplyAt(FaultBoundary.AfterPurchaseCommitBeforeResponse, ApplyDrop)!.Id);
+        Assert.True(responseDropped);
         harness.RequireAllFired();
-        Assert.Null(harness.Reach(FaultBoundary.AfterPurchaseCommitBeforeResponse));
+        Assert.Null(harness.ApplyAt(FaultBoundary.AfterPurchaseCommitBeforeResponse, ApplyDrop));
         Assert.Single(harness.Receipts);
+    }
+
+    [Fact]
+    public void FalseOrThrowingFaultEffectNeverProducesReceiptOrPassesAllFired()
+    {
+        var noEffect = new FaultHarness([new("drop", FaultBoundary.AfterPurchaseCommitBeforeResponse, 1)]);
+        Assert.Null(noEffect.ApplyAt(FaultBoundary.AfterPurchaseCommitBeforeResponse, () => false));
+        Assert.Empty(noEffect.Receipts);
+        Assert.Throws<InvalidOperationException>(noEffect.RequireAllFired);
+        var failed = new FaultHarness([new("drop", FaultBoundary.AfterPurchaseCommitBeforeResponse, 1)]);
+        Assert.Throws<IOException>(() => failed.ApplyAt(FaultBoundary.AfterPurchaseCommitBeforeResponse,
+            () => throw new IOException("effect-failed")));
+        Assert.Empty(failed.Receipts);
+        Assert.Throws<InvalidOperationException>(failed.RequireAllFired);
     }
 
     [Fact]

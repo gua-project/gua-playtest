@@ -26,7 +26,7 @@ function sample(faulted = true) {
 test('normal and fault paths use fixed external expectations without claiming E2E', () => {
   for (const faulted of [false, true]) {
     const bundle = sample(faulted);
-    const report = verifyPurchase(catalog.cases.find(c => c.id === bundle.identity.caseId), bundle);
+    const report = verifyPurchase(catalog.cases.find(c => c.id === bundle.identity.caseId), bundle, catalog.fixtureVersion);
     assert.equal(report.verified, true);
     assert.equal(report.evidenceTier, 'contractFake');
     assert.equal(report.productEndToEndAcceptance, false);
@@ -53,17 +53,17 @@ const mutations = [
 ];
 for (const [name, mutate] of mutations) test(`rejects ${name}`, () => {
   const bundle = sample(); mutate(bundle);
-  assert.equal(verifyPurchase(catalog.cases[1], bundle).verified, false);
+  assert.equal(verifyPurchase(catalog.cases[1], bundle, catalog.fixtureVersion).verified, false);
 });
 test('missing normal-path evidence is also rejected', () => {
   const bundle = sample(false); delete bundle.facts.responses;
-  assert.equal(verifyPurchase(catalog.cases[0], bundle).verified, false);
+  assert.equal(verifyPurchase(catalog.cases[0], bundle, catalog.fixtureVersion).verified, false);
 });
 test('JSON property order does not change an identical frozen fault plan', () => {
   const bundle = sample();
   bundle.identity.fault = { occurrence: 1, boundary: 'AfterPurchaseCommitBeforeResponse', id: 'drop-purchase-response' };
   bundle.facts.faultReceipts = [bundle.identity.fault];
-  assert.equal(verifyPurchase(catalog.cases[1], bundle).verified, true);
+  assert.equal(verifyPurchase(catalog.cases[1], bundle, catalog.fixtureVersion).verified, true);
 });
 test('pins expected bytes before validation and reports evidence hash', () => {
   const scope = mkdtempSync(join(tmpdir(), 'gua-oracle-'));
@@ -74,5 +74,21 @@ test('pins expected bytes before validation and reports evidence hash', () => {
     assert.equal(report.verified, true);
     assert.equal(report.evidenceSha256, sha256(bytes));
     assert.throws(() => verifyFiles(catalogPath, '0'.repeat(64), evidence));
+  } finally { rmSync(scope, { recursive: true }); }
+});
+test('pinned revised catalog requires its actual fixture version', () => {
+  const scope = mkdtempSync(join(tmpdir(), 'gua-catalog-revision-'));
+  try {
+    const revisedPath = join(scope, 'cases.json');
+    const revisedBytes = JSON.stringify({ ...catalog, fixtureVersion: 'playtest-fixtures-r2' });
+    writeFileSync(revisedPath, revisedBytes);
+    const evidencePath = join(scope, 'bundle.json');
+    const bundle = sample(); writeFileSync(evidencePath, JSON.stringify(bundle));
+    const stale = verifyFiles(revisedPath, sha256(revisedBytes), evidencePath);
+    assert.equal(stale.verified, false);
+    assert.ok(stale.failures.includes('fixture-version'));
+    bundle.identity.fixtureVersion = 'playtest-fixtures-r2';
+    writeFileSync(evidencePath, JSON.stringify(bundle));
+    assert.equal(verifyFiles(revisedPath, sha256(revisedBytes), evidencePath).verified, true);
   } finally { rmSync(scope, { recursive: true }); }
 });

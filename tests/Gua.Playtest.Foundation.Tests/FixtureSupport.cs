@@ -40,13 +40,16 @@ public sealed class FaultHarness
             throw new ArgumentException("invalid-fault-plan");
     }
     public IReadOnlyList<FaultReceipt> Receipts => receipts.ToArray();
-    public FaultReceipt? Reach(FaultBoundary boundary)
+    public FaultReceipt? ApplyAt(FaultBoundary boundary, Func<bool> applyFault)
     {
         if (!Enum.IsDefined(boundary)) throw new ArgumentOutOfRangeException(nameof(boundary));
+        ArgumentNullException.ThrowIfNull(applyFault);
         int occurrence = occurrences.GetValueOrDefault(boundary) + 1;
         occurrences[boundary] = occurrence;
         var fault = plan.SingleOrDefault(f => f.Boundary == boundary && f.Occurrence == occurrence);
         if (fault is null) return null;
+        // Boundary occurrence alone is not evidence. Failed/throwing effects leave no receipt.
+        if (!applyFault()) return null;
         var receipt = new FaultReceipt(fault.Id, boundary, occurrence);
         receipts.Add(receipt);
         return receipt;

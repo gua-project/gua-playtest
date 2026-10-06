@@ -16,10 +16,12 @@ engine variant before any acceptance run. Purchase cases require exact counts an
 Real-time variants require a separately pinned, explicit lateness policy before execution;
 they cannot silently reuse fixedTick claims. Seed alone does not make a run deterministic.
 
-`FaultHarness` freezes a copy of authorized descriptors at construction. `Reach` increments
-the count for exactly one named boundary and emits a receipt only for the approved occurrence.
-The caller performs the actual effect at that boundary; a receipt alone proves neither an
-effect nor end-to-end behavior. `RequireAllFired` rejects an unreached fault. No reset, removal,
+`FaultHarness` freezes a copy of authorized descriptors at construction. `ApplyAt` increments
+the count for exactly one named boundary and invokes the effect callback only for the approved
+occurrence. It emits a receipt only after that callback successfully confirms the effect by
+returning true. False or throwing callbacks leave no receipt; `RequireAllFired` rejects them
+and unreached faults. A callback must confirm the actual operation, never a planned effect.
+A receipt alone does not prove end-to-end behavior. No reset, removal,
 or plan replacement API exists. Do not expose the harness, descriptors, oracle data or receipts
 to the Planner. ScriptedPlanner snapshots only decision payloads and copies the current request
 correlation. Runner #11 still validates freshness, permissions and consumed-once decisions.
