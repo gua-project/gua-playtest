@@ -23,7 +23,7 @@ public sealed class PlannerGate
     public PlannerGate(RunSession run, IClock realClock, IPlannerAuthority authority,
         string runId, string publicObjective, ResourceLimits effectiveLimits)
     {
-        this.run = run; clock = realClock; this.authority = authority; this.runId = runId;
+        this.run = run; clock = run.AuthoritativeRealClock; this.authority = authority; this.runId = runId;
         objective = publicObjective; limits = effectiveLimits;
         // Do not advertise ceilings greater or different from the execution owner's actual limits.
         if (limits.MaxActions != run.Limits.MaxActions || limits.MaxDecisions != run.Limits.MaxDecisions ||
@@ -99,6 +99,21 @@ public sealed class PlannerGate
         return new(PlannerFeedbackCode.Approved, new(this, operation, decision, request.Basis, reference));
     }
 
+    internal bool Owns(RunSession session, PlannerRequest request) => ReferenceEquals(run, session)
+        && ReferenceEquals(request.Owner, this) && ReferenceEquals(active, request) && !request.Closed;
+
+    // A completed backend response is evidence before the fresh observation join. It grants no
+    // action authority; adoption and current checks still happen after machine arbitration.
+    internal void ConfirmResponse(PlannerRequest request)
+    {
+        if (!Owns(run, request) || request.ResponseConfirmed) return;
+        var now = clock.Elapsed;
+        if (!request.Permit.ConfirmResponse()) return;
+        request.ResponseConfirmed = true;
+        request.ConfirmedDeadline = now + run.Limits.WaitTimeout < run.RunningOrigin!.Value + run.Limits.MaxDuration
+            ? now + run.Limits.WaitTimeout : run.RunningOrigin.Value + run.Limits.MaxDuration;
+    }
+
     public void Cancel(PlannerRequest request)
     {
         if (ReferenceEquals(active, request) && !request.Closed)
@@ -107,13 +122,15 @@ public sealed class PlannerGate
 
     private PlannerAdoption Reject(PlannerRequest request, PlannerFeedbackCode code)
     {
-        if (clock.Elapsed >= request.Deadline) code = PlannerFeedbackCode.PlannerTimeout;
+        var expired = clock.Elapsed >= request.Deadline;
+        if (expired) code = request.ResponseConfirmed ? PlannerFeedbackCode.ResponseClosed : PlannerFeedbackCode.PlannerTimeout;
         Cancel(request); Record(request, code);
-        if (code == PlannerFeedbackCode.PlannerTimeout) unsafeToContinue = true;
+        if (expired || code == PlannerFeedbackCode.PlannerTimeout) unsafeToContinue = true;
         var retry = !unsafeToContinue && run.State == ExecutionState.Running && !run.ActionsClosing;
         return new(code, RetryAllowed: retry, TerminalEvent: retry ? null :
-            new(code == PlannerFeedbackCode.PlannerTimeout ? RunReason.PlannerTimeout : RunReason.PlannerOutputInvalid,
-                RunPhase.Execution, RunOrigin.Planner));
+            new(expired && request.ResponseConfirmed ? RunReason.WaitExpired :
+                code == PlannerFeedbackCode.PlannerTimeout ? RunReason.PlannerTimeout : RunReason.PlannerOutputInvalid,
+                RunPhase.Execution, expired && request.ResponseConfirmed ? RunOrigin.Host : RunOrigin.Planner));
     }
 
     internal PlannerFeedbackCode Validate(JsonObject decision, ProjectedPlannerState basis, bool requireNeutral = true)

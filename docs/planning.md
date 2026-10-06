@@ -87,6 +87,12 @@ published capability. No unrestricted transport fallback is introduced.
 ## Monitoring, faults and diagnostics
 
 `PlannerTurn.AwaitAsync` runs the existing #6 `RunMonitor` while a Planner thinks.
+All clock arguments are bound to the Run owner's validated real/condition clocks; a
+second supplied clock cannot replace deadline authority. A completed backend reply
+is confirmed on the serialized monitor before its post-work capture join, without
+adopting or dispatching. This closes PlannerTimeout and starts the finite WaitTimeout
+for fresh synchronization/adoption. The default feed joins the underlying old capture
+before requesting a new unit; this module never infers independent capture capability.
 Failure conditions, condition timers, real deadlines and cancellation retain
 their machine-owned arbitration. On interruption Run authority closes first,
 then a finite owner-scoped input release is attempted, then cancellation is
@@ -102,7 +108,7 @@ by a task deadline and are not conforming adapters.
 failure and invalid output, without leaking exception text. `PlannerTurn.Events`
 maps these to #6's canonical PlannerUsageLimit/PlannerConnectionFailure/
 PlannerOutputInvalid with Planner origin, never Scenario invalid. Those canonical
-reasons come from #6 (latest integration 985c9b4); this module does not redefine
+reasons come from the reviewed #6 merge on main (2668926); this module does not redefine
 their priority. A noncontinuable rejected proposal exposes `TerminalEvent`.
 PlannerTurn recaptures current machine conditions and sends that event through
 RunMonitor before cleanup. Exhausted invalid-output retries terminate as

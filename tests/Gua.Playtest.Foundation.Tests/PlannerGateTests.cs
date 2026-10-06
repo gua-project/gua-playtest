@@ -46,14 +46,14 @@ public sealed class PlannerGateTests
         public Authority Authority = new();
         public RunSession Run;
         public PlannerGate Gate;
-        public Setup(long actions = 5, long decisions = 5)
+        public Setup(long actions = 5, long decisions = 5, IClock? gateClock = null)
         {
             var limits = new RunLimits(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1),
                 TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1), actions, decisions, 2, 1024);
             Run = new(limits, Clock, Clock); Run.BeginPreparation(); Run.BeginRunning();
             var projection = new ResourceLimits(5000, actions, decisions, 1000, 1000, 1000, 2000, 1000, 0,
                 1000, 100000, 100, 1024, 12, 4, 2, 100000, 1024, 1024, 100000);
-            Gate = new(Run, Clock, Authority, "run-1", "Buy through the exposed control", projection);
+            Gate = new(Run, gateClock ?? Clock, Authority, "run-1", "Buy through the exposed control", projection);
         }
         public PlannerRequest Begin() => Gate.Begin(State())!;
     }
@@ -423,6 +423,55 @@ public sealed class PlannerGateTests
         Assert.Equal(PlannerFeedbackCode.ResponseClosed, approved.BeginDispatch(0));
     }
 
+    [Fact]
+    public void GateUsesOwnerClockEvenWhenCallerSuppliesAnotherClock()
+    {
+        var s = new Setup(gateClock: new Clock { Elapsed = TimeSpan.FromHours(1) });
+        var r = s.Begin();
+        Assert.Equal(5000, r.CopyInput().Remaining["durationMilliseconds"]!.GetValue<long>());
+        s.Clock.At(r.Deadline);
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, s.Gate.Adopt(r, Response(r, Single())).Code);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
+
+    private sealed class JoinedFeed(Clock clock) : IRunObservationFeed
+    {
+        public int Calls;
+        public TaskCompletionSource<RunObservation> First = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
+            => ++Calls == 1 ? new(First.Task) : new(new RunObservation(clock.Elapsed, new([]), new([])));
+        public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
+    }
+
+    [Fact]
+    public async Task CompletedReplyJoinsOldCaptureThenAdoptsAfterOriginalPlannerDeadline()
+    {
+        var s = new Setup(); var r = s.Begin(); var originalDeadline = r.Deadline;
+        var feed = new JoinedFeed(s.Clock); var planner = new BlockedPlanner([]);
+        var work = PlannerTurn.AwaitAsync(s.Gate, r, s.Run, new Clock(), new Clock(), feed, planner, _ => new(true)).AsTask();
+        s.Clock.At(TimeSpan.FromMilliseconds(500));
+        planner.Completion.SetResult(new(PlannerReplyStatus.Completed, Response(r, Single())));
+        for (var i = 0; r.Deadline == originalDeadline && i < 1000; i++) await Task.Delay(1);
+        Assert.Equal(TimeSpan.FromMilliseconds(2500), r.Deadline);
+        Assert.Equal(1, feed.Calls); // ordinary adapter cannot start a replacement while underlying capture runs
+        s.Clock.At(TimeSpan.FromMilliseconds(1100));
+        feed.First.SetResult(new(s.Clock.Elapsed, new([]), new([])));
+        var result = await work.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, feed.Calls); Assert.False(result.Interrupted);
+        Assert.Equal(PlannerFeedbackCode.Approved, result.Adoption!.Code);
+        Assert.Null(s.Run.Primary); Assert.Equal(PlannerFeedbackCode.Approved, result.Adoption.Approved!.BeginDispatch(0));
+    }
+
+    [Fact]
+    public async Task TurnRejectsAnotherRunBeforeInvokingPlanner()
+    {
+        var s = new Setup(); var other = new Setup(); var r = s.Begin();
+        var planner = new BlockedPlanner([]);
+        await Assert.ThrowsAsync<ArgumentException>(() => PlannerTurn.AwaitAsync(s.Gate, r, other.Run,
+            s.Clock, s.Clock, new Feed(), planner, _ => new(true)).AsTask());
+        Assert.Equal(0, other.Run.Budget.Snapshot.Decisions);
+    }
+
     private sealed class ThrowingCancellationPlanner : IPlanner<PlannerInputDocument, PlannerReply>
     {
         public ValueTask<PlannerReply> DecideAsync(PlannerInputDocument input, CancellationToken token)
@@ -440,7 +489,7 @@ public sealed class PlannerGateTests
         var result = await work.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
         Assert.Equal(RunReason.PlannerTimeout, s.Run.Primary!.Cause.Reason);
-        Assert.Single(s.Run.Exceptions); Assert.DoesNotContain("PRIVATE_CANCEL_EXCEPTION", s.Run.Exceptions.Single().ToString());
+        Assert.Contains(s.Run.Exceptions, x => x.Type == typeof(IOException).FullName); Assert.All(s.Run.Exceptions, x => Assert.DoesNotContain("PRIVATE_CANCEL_EXCEPTION", x.ToString()));
     }
 
     [Theory]

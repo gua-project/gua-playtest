@@ -46,9 +46,11 @@ public sealed class PlannerRequest
     internal PlannerInputDocument Input { get; }
     internal ProjectedPlannerState Basis { get; }
     internal bool Closed { get; set; }
+    internal bool ResponseConfirmed { get; set; }
+    internal TimeSpan? ConfirmedDeadline { get; set; }
     public string DecisionRequestId => Input.DecisionRequestId;
     public bool Recovering { get; }
-    public TimeSpan Deadline => Permit.Deadline;
+    public TimeSpan Deadline => ConfirmedDeadline ?? Permit.Deadline;
     public PlannerInputDocument CopyInput() => Input with
     {
         Remaining = (JsonObject)Input.Remaining.DeepClone(), Observation = (JsonObject)Input.Observation.DeepClone(),

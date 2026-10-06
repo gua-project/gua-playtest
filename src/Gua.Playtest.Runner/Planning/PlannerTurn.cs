@@ -16,13 +16,17 @@ public static class PlannerTurn
         IPlanner<Core.Contracts.PlannerInputDocument, PlannerReply> planner,
         Func<CancellationToken, ValueTask<bool>> releaseOwnedInputs, CancellationToken cancellationToken = default)
     {
+        if (!gate.Owns(run, request)) throw new ArgumentException("PlannerRequestOwnerMismatch");
+        realClock = run.AuthoritativeRealClock;
+        conditionClock = run.AuthoritativeConditionClock;
         // Do not let RunMonitor cancel the actual Planner before owner-scoped input release.
         using var plannerCancellation = new CancellationTokenSource();
         PlannerAdoption? adoption = null;
         try
         {
             var result = await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
-                _ => ProposeAsync(planner, request, plannerCancellation.Token), Events, cancellationToken).ConfigureAwait(false);
+                _ => ProposeAsync(planner, request, plannerCancellation.Token), Events, cancellationToken,
+                reply => { if (reply.Status == PlannerReplyStatus.Completed) gate.ConfirmResponse(request); }).ConfigureAwait(false);
             if (result.Completed)
             {
                 var reply = result.Value!;
@@ -38,9 +42,9 @@ public static class PlannerTurn
             try
             {
                 released = await FiniteOperation.RunAsync(realClock, run.Limits.CleanupTimeout,
-                    releaseOwnedInputs, CancellationToken.None).ConfigureAwait(false);
+                    releaseOwnedInputs, CancellationToken.None, run.RecordException).ConfigureAwait(false);
             }
-            catch { /* The driver maps false to owned cleanup/postprocessing evidence. */ }
+            catch (Exception exception) { run.RecordException(exception); /* Driver maps false to postprocessing evidence. */ }
             gate.Cancel(request);
             return new(adoption, true, released);
         }
