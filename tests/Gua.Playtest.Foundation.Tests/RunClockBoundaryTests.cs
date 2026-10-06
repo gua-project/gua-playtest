@@ -9,6 +9,28 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData(0, 0)] [InlineData(0, 1)] [InlineData(0, 2)]
+    [InlineData(1, 0)] [InlineData(1, 1)] [InlineData(1, 2)]
+    [InlineData(2, 0)] [InlineData(2, 1)] [InlineData(2, 2)]
+    public void UnrelatedMalformedStartupCallbacksCannotPoisonValidBoundary(int misuse, int missing)
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock, Condition()); run.BeginPreparation();
+        var request = run.ArmRunningBoundary();
+        RunStartBoundary? boundary = misuse == 0 ? null : request.Certify(request.RequestId, clock.Elapsed,
+            new(clock.Elapsed, Unit(), Unit("false")), "fresh/source", true);
+        if (misuse == 2) run.BeginRunning(boundary!);
+        var malformed = missing == 0 ? null : new RunObservation(clock.Elapsed,
+            missing == 1 ? null! : Unit(), missing == 2 ? null! : Unit("false"));
+        Assert.Throws<InvalidOperationException>(() => request.Certify(misuse == 0 ? "unrelated-request" : request.RequestId,
+            clock.Elapsed, malformed!, "fresh/source", true));
+        if (misuse == 0) boundary = request.Certify(request.RequestId, clock.Elapsed,
+            new(clock.Elapsed, Unit(), Unit("false")), "fresh/source", true);
+        if (misuse != 2) run.BeginRunning(boundary!);
+        run.Evaluate(Unit(), clock.Elapsed, failureUnit: Unit("false"));
+        Assert.Equal(RunReason.GoalSatisfied, run.Primary!.Cause.Reason);
+        Assert.DoesNotContain(run.Events, x => x.Reason == RunReason.ObservationContractViolation);
+    }
     [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
     public async Task MissingStartupObservationMapsRetainContractCauseAndOwnedRelease(int missing)
     {
