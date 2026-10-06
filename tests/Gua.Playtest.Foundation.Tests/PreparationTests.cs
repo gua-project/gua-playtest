@@ -881,6 +881,7 @@ public sealed class PreparationTests
     [InlineData(3, false)] [InlineData(4, false)] [InlineData(5, false)]
     [InlineData(0, true)] [InlineData(1, true)] [InlineData(2, true)]
     [InlineData(3, true)] [InlineData(4, true)] [InlineData(5, true)]
+    [InlineData(6, false)] [InlineData(6, true)]
     public async Task BlockingSetupMetadataCannotSuppressOwnerDeadlineOrCancellation(int member, bool cancel)
     {
         using var releaseRead = new ManualResetEventSlim(); using var cancellation = new CancellationTokenSource();
@@ -896,6 +897,7 @@ public sealed class PreparationTests
             case 3: setup.OperationIds = new MetadataCountList(Block); break;
             case 4: setup.ReadMaximum = () => { Block(); return 1; }; break;
             case 5: setup.ReadTimeout = () => { Block(); return TimeSpan.FromSeconds(1); }; break;
+            case 6: var reads = 0; setup.BeforeAuthorization = () => { if (++reads == 2) Block(); }; break;
         }
         try
         {
@@ -907,10 +909,12 @@ public sealed class PreparationTests
             var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(cancel ? ResultStatus.Aborted : ResultStatus.Failed, outcome.Primary.Status);
             Assert.Equal(cancel ? RunReason.Cancelled : RunReason.PreparationTimeout, outcome.Primary.Cause.Reason);
-            Assert.Equal(0, setup.Calls); Assert.Equal(1, connection.Releases); Assert.True(outcome.PostProcessingComplete);
-            // The still-blocked pure metadata worker owns no endpoint resource or dispatch authority.
-            var connector = new Connector(new()); await Execute(new(policy, clock, new Launcher(), connector, new Trace()), clock);
-            Assert.Equal(1, connector.Calls);
+            Assert.Equal(0, setup.Calls); Assert.Equal(1, connection.Releases); Assert.False(outcome.PostProcessingComplete);
+            Assert.Contains(outcome.PostProcessing, item => item.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+            // No unlimited replacement workers while an earlier provider read remains unended.
+            var connector = new Connector(new()); var later = new Trace();
+            await Execute(new(policy, clock, new Launcher(), connector, later), clock);
+            Assert.Equal(0, connector.Calls); Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), later.Events);
         }
         finally { releaseRead.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
         Assert.Equal(0, setup.Calls);

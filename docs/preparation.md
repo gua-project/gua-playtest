@@ -67,6 +67,9 @@ Metadata properties, collection Count/index/Contains and authorization checks ar
 pure worker-safe reads, isolated within the same bounded Step as asynchronous work.
 A blocking read cannot prevent the owner timer/cancellation; late reads cannot dispatch
 or mutate Run/cleanup/Trace. The Setup deadline includes metadata acquisition time.
+An unended metadata worker keeps ownership exclusion closed and reports unconfirmed
+cleanup, preventing unlimited replacement workers. Its late end does not reopen
+an exclusion whose outcome was already frozen as unconfirmed.
 Receipt failure and unknown outcome terminate without retry;
 successful Setup alone does not prove the start preconditions. Attach needs explicit
 fixture authorization and never implies reset consent. The fixture must implement

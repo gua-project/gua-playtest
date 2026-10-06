@@ -26,6 +26,7 @@ public sealed class HostPreparation
     private bool used;
     private int pendingReleases;
     private int pendingAcquisitions;
+    private int pendingMetadata;
     public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
         IPreparationConnector connector, IPreparationTrace trace)
     {
@@ -69,7 +70,8 @@ public sealed class HostPreparation
         // Acquire cleanup authority before the first await can race the executor deadline.
         cleanup.Register(CleanupStage.OwnershipRelease, _ =>
         {
-            if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0) return ValueTask.FromResult(false);
+            if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0 || Volatile.Read(ref pendingMetadata) != 0)
+                return ValueTask.FromResult(false);
             lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
         });
         IOwnedProcess? process = null;
@@ -191,8 +193,11 @@ public sealed class HostPreparation
 
     private sealed record SetupAuthority(string[] Operations, TimeSpan Timeout);
     private ValueTask<SetupAuthority> ReadSetupAsync(IApprovedSetup setup, TimeSpan deadline, CancellationToken cancellationToken)
-        => Step<SetupAuthority>(PreparationStage.Setup, deadline, token => new(Task.Run(() =>
+        => Step<SetupAuthority>(PreparationStage.Setup, deadline, async token =>
         {
+            Interlocked.Increment(ref pendingMetadata);
+            try { return await Task.Run(() =>
+            {
             // Pure adapter metadata is isolated from the owner continuation. Even a
             // blocking getter cannot prevent its original timer/cancellation from running.
             // A late worker may finish reading, but has no Run, cleanup or dispatch authority.
@@ -214,7 +219,9 @@ public sealed class HostPreparation
                 operations[index] = id;
             }
             return new SetupAuthority(operations, timeout);
-        }, token)), cancellationToken);
+            }, token).ConfigureAwait(false); }
+            finally { Interlocked.Decrement(ref pendingMetadata); }
+        }, cancellationToken);
 
     private void ValidateIdentity(HostIdentity identity)
     {
