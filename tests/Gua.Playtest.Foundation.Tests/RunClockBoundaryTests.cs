@@ -7,6 +7,20 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public void DispatchRetryCannotOutrunPendingTerminalClockEvidence(int kind)
+    {
+        var clock = new LaunchReadClock { Now = TimeSpan.FromMilliseconds(100) };
+        var run = new RunSession(Limits(), clock, new Clock()); run.BeginPreparation(); run.BeginRunning();
+        var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+        clock.Now = kind switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue };
+        Assert.Throws<InvalidOperationException>(() => operation.BeginDispatch(0));
+        clock.Now = TimeSpan.FromMilliseconds(100);
+        Assert.Throws<InvalidOperationException>(() => operation.BeginDispatch(0));
+        Assert.Equal(DeliveryState.Reserved, operation.Actions!.Deliveries[0]); Assert.Equal(0, run.Budget.Snapshot.Actions);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Clock), run.Evaluate()!.Cause);
+        Assert.Equal(DeliveryState.NotSent, operation.Actions.Deliveries[0]); Assert.Equal(2, run.Primary!.ExitCode);
+    }
     private sealed class ReadFaultClock : IClock
     {
         public bool Broken;

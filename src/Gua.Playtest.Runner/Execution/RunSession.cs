@@ -282,7 +282,7 @@ public sealed class RunSession
         }
         public void BeginDispatch(int index)
         {
-            if (owner.IsConfirmingWork || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || owner.ReadReal() >= ResultDeadline)
+            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || owner.ReadReal() >= ResultDeadline)
                 throw new InvalidOperationException("OperationClosed");
             Actions!.BeginDispatch(index);
         }
