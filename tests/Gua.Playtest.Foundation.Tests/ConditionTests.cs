@@ -296,7 +296,8 @@ public sealed class ConditionTests
         Assert.Equal(TruthValue.True, result.Evaluation.Truth);
         var invalid = session.Evaluate(Unit(("$", new("scope", true, new[] { new ConditionTargetObservation("id", "{\"type\":\"integer\",\"value\":9007199254740991.1}") }))));
         Assert.Equal(EvaluationError.ObservationContractViolation, invalid.Evaluation.Error);
-        Assert.Contains("9007199254740991", prepared.Leaves.Single().DefinitionJson);
+        Assert.DoesNotContain("9007199254740991", prepared.Leaves.Single().DefinitionJson);
+        Assert.True(JsonNode.DeepEquals(node["read"], Json(prepared.Leaves.Single().DefinitionJson)["read"]));
     }
 
     [Fact]
@@ -512,6 +513,28 @@ public sealed class ConditionTests
         Assert.Equal(ConditionCompletion.Expired, failed.Completion);
         Assert.Equal(EvaluationError.ObservationContractViolation, failed.Evaluation.Error);
         Assert.Equal(TruthValue.Unknown, failed.Evaluation.Truth);
+    }
+
+    [Fact]
+    public void ObservationAdapterRequestsContainOnlyReadOrTargetAndNeverComparisonConfiguration()
+    {
+        var assertion = Json("""
+            {"kind":"assertion","quantifier":"any","operator":"matches","read":{"region":"property","target":{"source":"world"},"name":"field","valueType":{"type":"string"}},"expected":{"type":"string","value":"^secret-pattern$"}}
+            """);
+        var target = Targets("countEquals", 123456);
+        var prepared = Prepare(Group("all", assertion, target));
+        var readRequest = Json(prepared.Leaves[0].DefinitionJson);
+        var targetRequest = Json(prepared.Leaves[1].DefinitionJson);
+        Assert.Equal(new[] { "read" }, readRequest.Select(p => p.Key));
+        Assert.Equal(new[] { "target" }, targetRequest.Select(p => p.Key));
+        Assert.True(JsonNode.DeepEquals(assertion["read"], readRequest["read"]));
+        Assert.True(JsonNode.DeepEquals(target["target"], targetRequest["target"]));
+        Assert.DoesNotContain("secret-pattern", prepared.Leaves[0].DefinitionJson);
+        Assert.DoesNotContain("123456", prepared.Leaves[1].DefinitionJson);
+        assertion["read"]!["name"] = "mutated";
+        target["target"]!["source"] = "mutated";
+        Assert.Equal("field", Json(prepared.Leaves[0].DefinitionJson)["read"]!["name"]!.GetValue<string>());
+        Assert.Equal("world", Json(prepared.Leaves[1].DefinitionJson)["target"]!["source"]!.GetValue<string>());
     }
 }
 

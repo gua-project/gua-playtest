@@ -26,7 +26,11 @@ public sealed class PreparedCondition
             var kind = node["kind"]!.GetValue<string>();
             var children = kind is "all" or "any" ? node["conditions"]!.AsArray().Select((c, i) => Build(c!.AsObject(), path + "/conditions/" + i)).ToArray()
                 : kind == "time" ? new[] { Build(node["condition"]!.AsObject(), path + "/condition") } : [];
-            if (kind is "assertion" or "targets") leaves.Add(new(path, node.ToJsonString()));
+            if (kind is "assertion" or "targets")
+            {
+                var requestField = kind == "assertion" ? "read" : "target";
+                leaves.Add(new(path, new JsonObject { [requestField] = node[requestField]!.DeepClone() }.ToJsonString()));
+            }
             long count = 0;
             if (node["count"] is { } countNode)
             {
