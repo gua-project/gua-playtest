@@ -12,9 +12,12 @@ public sealed class RunBudget
     internal RunBudget(RunLimits limits) => this.limits = limits;
     public BudgetSnapshot Snapshot => new(actions, reserved, decisions, actionDecisions, recovery);
     internal bool Closed { get; private set; }
-    internal RunReason? Exhaustion => actions + reserved >= limits.MaxActions ? RunReason.ActionsExhausted :
-        decisions >= limits.MaxDecisions ? RunReason.DecisionsExhausted :
-        recovery >= limits.RecoveryDecisions ? RunReason.RecoveryExhausted : null;
+    internal IReadOnlyList<RunReason> Exhaustions => new[] {
+        actions + reserved >= limits.MaxActions ? RunReason.ActionsExhausted : (RunReason?)null,
+        decisions >= limits.MaxDecisions ? RunReason.DecisionsExhausted : (RunReason?)null,
+        recovery >= limits.RecoveryDecisions ? RunReason.RecoveryExhausted : (RunReason?)null
+    }.Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+    internal RunReason? Exhaustion => Exhaustions.Select(x => (RunReason?)x).FirstOrDefault();
     internal bool RequestDecision(bool recovering)
     {
         if (Closed || Exhaustion.HasValue) return false;

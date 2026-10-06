@@ -15,6 +15,19 @@ public enum RunReason
 }
 public enum CompletionPolicy { OnGoal, AfterPlan }
 public sealed record RunEvent(RunReason Reason, RunPhase Phase, RunOrigin Origin);
+/// <summary>Trusted adapters classify a failure without mutating the session from a late callback.
+/// This cannot claim machine success. Original provider exceptions may be retained as InnerException.</summary>
+public class RunFailureException : Exception
+{
+    public RunEvent Cause { get; }
+    public RunFailureException(RunEvent cause, Exception? innerException = null) : base("RunAdapterFailure", innerException)
+    {
+        ArgumentNullException.ThrowIfNull(cause);
+        if (!Enum.IsDefined(cause.Reason) || !Enum.IsDefined(cause.Phase) || !Enum.IsDefined(cause.Origin) || cause.Reason == RunReason.GoalSatisfied)
+            throw new ArgumentException("RunFailureCauseInvalid", nameof(cause));
+        Cause = cause;
+    }
+}
 public sealed record PrimaryResult(ResultStatus Status, RunEvent Cause)
 {
     public string Message => Cause.Reason switch
@@ -35,7 +48,7 @@ public sealed record PrimaryResult(ResultStatus Status, RunEvent Cause)
 public enum PostProcessingReason
 {
     PrimarySnapshotFailed, DiagnosticsFailed, ArtifactFailed, InputReleaseUnconfirmed, ResourceReleaseUnconfirmed,
-    Cancelled, CleanupTimeout
+    Cancelled, CleanupTimeout, CleanupClockInvalid, EvidenceLimitExceeded
 }
 public sealed record ExceptionEvidence(string Type, string? StackTrace);
 public sealed record PostProcessingIssue(PostProcessingReason Reason, ExceptionEvidence? Exception = null);
