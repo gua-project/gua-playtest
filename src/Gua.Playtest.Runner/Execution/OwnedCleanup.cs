@@ -20,6 +20,8 @@ public sealed class OwnedCleanup
         private long fallbackOffset;
         private bool fallback;
         private long hardWakeAt;
+        private readonly ConcurrentQueue<Exception> timerFaults = new();
+        private readonly List<Task> timers = [];
         public CleanupClock(RunSession run, Action<Exception> reject)
         {
             this.run = run; this.reject = reject;
@@ -30,6 +32,7 @@ public sealed class OwnedCleanup
         {
             get
             {
+                if (!fallback && timerFaults.TryDequeue(out var fault)) Reject(fault);
                 if (!fallback)
                     try
                     {
@@ -50,23 +53,42 @@ public sealed class OwnedCleanup
             fallbackOffset = last.Ticks - lastSafety.Ticks;
             reject(exception);
         }
-        public async ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            var timer = DelayCoreAsync(duration, token).AsTask(); timers.Add(timer); return new(timer);
+        }
+        public async ValueTask JoinTimersAsync()
+        {
+            foreach (var timer in timers)
+                try { await timer.ConfigureAwait(false); } catch (Exception) { /* provider evidence was queued; obsolete cancellation is expected */ }
+        }
+        private async ValueTask DelayCoreAsync(TimeSpan duration, CancellationToken token)
         {
             var due = Elapsed + duration;
             var hardWake = Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(duration.TotalMilliseconds)), token);
             if (fallback) { await hardWake.ConfigureAwait(false); return; }
-            var providerWake = run.AuthoritativeRealClock.DelayAsync(duration, token).AsTask();
+            Task? providerWake = null;
             try
             {
-                var winner = await Task.WhenAny(providerWake, hardWake).ConfigureAwait(false);
-                if (providerWake.IsFaulted) await providerWake.ConfigureAwait(false);
-                await winner.ConfigureAwait(false);
+                try
+                {
+                    providerWake = run.AuthoritativeRealClock.DelayAsync(duration, token).AsTask();
+                    var winner = await Task.WhenAny(providerWake, hardWake).ConfigureAwait(false);
+                    if (providerWake.IsFaulted) await providerWake.ConfigureAwait(false);
+                    await winner.ConfigureAwait(false);
+                    if (winner == hardWake && !token.IsCancellationRequested) Interlocked.Exchange(ref hardWakeAt, due.Ticks);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+                catch (Exception exception)
+                {
+                    timerFaults.Enqueue(exception);
+                    await hardWake.ConfigureAwait(false);
+                }
                 // The timer never mutates session/issue evidence. The owner validates this hint.
-                if (winner == hardWake && !token.IsCancellationRequested) Interlocked.Exchange(ref hardWakeAt, due.Ticks);
             }
             finally
             {
-                foreach (var task in new[] { providerWake, hardWake })
+                foreach (var task in new[] { providerWake, hardWake }.OfType<Task>())
                     _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             }
         }
@@ -102,11 +124,18 @@ public sealed class OwnedCleanup
             ordered = [new(CleanupStage.PrimarySnapshot, token => confirmPrimary(snapshot, token)), .. ordered];
         }
         var issues = new List<PostProcessingIssue>();
-        realClock = new CleanupClock(run, exception => issues.Add(new(PostProcessingReason.CleanupClockInvalid,
+        bool AddIssue(PostProcessingIssue issue)
+        {
+            if (issues.Count < run.Limits.MaxEvidenceItems - 1) { issues.Add(issue); return true; }
+            if (issues.Count == run.Limits.MaxEvidenceItems - 1) issues.Add(new(PostProcessingReason.EvidenceLimitExceeded));
+            return false;
+        }
+        var cleanupClock = new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
             new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
+        realClock = cleanupClock;
         var origin = realClock.Elapsed;
         var deadline = origin + run.Limits.CleanupTimeout;
-        if (cancellationToken.IsCancellationRequested) issues.Add(new(PostProcessingReason.Cancelled));
+        if (cancellationToken.IsCancellationRequested) AddIssue(new(PostProcessingReason.Cancelled));
         for (var i = 0; i < ordered.Length; i++)
         {
             var step = ordered[i];
@@ -115,7 +144,7 @@ public sealed class OwnedCleanup
             var remaining = deadline - sampledNow;
             if (remaining <= TimeSpan.Zero)
             {
-                issues.Add(new(PostProcessingReason.CleanupTimeout)); issues.Add(new(Failure(step.Stage))); continue;
+                AddIssue(new(PostProcessingReason.CleanupTimeout)); AddIssue(new(Failure(step.Stage))); continue;
             }
             var share = TimeSpan.FromTicks(Math.Max(1, remaining.Ticks / (ordered.Length - i)));
             // Caller cancellation skips diagnostics/artifacts but never skips owned input/resource cleanup.
@@ -125,27 +154,31 @@ public sealed class OwnedCleanup
                 var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, step.Action, token,
                     exception =>
                     {
-                        var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(run.Limits.MaxEvidenceItems) : [exception];
-                        foreach (var fault in faults) issues.Add(new(Failure(step.Stage), new(fault.GetType().FullName ?? fault.GetType().Name, fault.StackTrace)));
+                        if (issues.Count >= run.Limits.MaxEvidenceItems - 1) { AddIssue(new(PostProcessingReason.EvidenceLimitExceeded)); return; }
+                        var allowance = run.Limits.MaxEvidenceItems - issues.Count;
+                        var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(allowance) : [exception];
+                        foreach (var fault in faults)
+                            if (!AddIssue(new(Failure(step.Stage), new(fault.GetType().FullName ?? fault.GetType().Name, fault.StackTrace)))) break;
                     }).ConfigureAwait(false);
-                if (!result) issues.Add(new(Failure(step.Stage)));
+                if (!result) AddIssue(new(Failure(step.Stage)));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
-                issues.Add(new(PostProcessingReason.Cancelled)); issues.Add(new(Failure(step.Stage)));
+                AddIssue(new(PostProcessingReason.Cancelled)); AddIssue(new(Failure(step.Stage)));
             }
             catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception))
             {
-                issues.Add(new(PostProcessingReason.CleanupTimeout)); issues.Add(new(Failure(step.Stage)));
+                AddIssue(new(PostProcessingReason.CleanupTimeout)); AddIssue(new(Failure(step.Stage)));
             }
             catch (Exception exception)
             {
                 var original = exception is ProviderCancellationException ? exception.InnerException! : exception;
-                issues.Add(new(Failure(step.Stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)));
+                AddIssue(new(Failure(step.Stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)));
             }
         }
         if (cancellationToken.IsCancellationRequested && !issues.Any(x => x.Reason == PostProcessingReason.Cancelled))
-            issues.Add(new(PostProcessingReason.Cancelled));
+            AddIssue(new(PostProcessingReason.Cancelled));
+        await cleanupClock.JoinTimersAsync().ConfigureAwait(false);
         _ = realClock.Elapsed; // drain any final safety-wake hint on the owner before freezing issues
         return run.Finish(issues.AsReadOnly());
     }

@@ -23,6 +23,13 @@ public sealed class RunSession
     private bool approvalsClosing;
     private readonly HashSet<RunReason> closingExhaustions = [];
     private bool startCaptureArmed;
+    internal bool IsConfirmingWork { get; private set; }
+    internal void ConfirmMonitoredWork<T>(T value, Action<T> confirm)
+    {
+        if (IsConfirmingWork) throw new InvalidOperationException("WorkConfirmationReentry");
+        IsConfirmingWork = true;
+        try { confirm(value); } finally { IsConfirmingWork = false; }
+    }
     public RunLimits Limits { get; }
     internal IClock AuthoritativeRealClock => realClock;
     internal IClock AuthoritativeConditionClock => conditionClock;
@@ -39,7 +46,7 @@ public sealed class RunSession
     public IReadOnlyList<RunEvent> Events => events.AsReadOnly();
     public IReadOnlyList<ExceptionEvidence> Exceptions => exceptions.AsReadOnly();
     internal bool HasPendingTerminalEvidence => pendingEvents.Count != 0;
-    public bool ActionsClosing => State != ExecutionState.Running || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
+    public bool ActionsClosing => State != ExecutionState.Running || IsConfirmingWork || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     public RunSession(RunLimits limits, IClock realClock, IClock conditionClock,
         PreparedCondition? success = null, PreparedCondition? failure = null,
         CompletionPolicy policy = CompletionPolicy.OnGoal)
@@ -151,12 +158,13 @@ public sealed class RunSession
                 boundary.RealCapturedAt >= preparationOrigin + Limits.PreparationTimeout || boundary.RealCapturedAt > ReadReal())
                 throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
             boundary.Used = true;
+            _ = ReadCondition();
             // Inspect only failure/contract evidence from the certified initial unit. An expired
             // preparation never enters Running, establishes a goal, or authorizes a driver.
             foreach (var pair in new[] { (failure, boundary.InitialObservation.Failure, true), (success, boundary.InitialObservation.Success, false) })
             {
-                var value = pair.Item1?.Start(conditionClock, boundary.InitialObservation.CapturedAt)
-                    .EvaluateAt(pair.Item2, boundary.InitialObservation.CapturedAt);
+                var value = StartCondition(pair.Item1, boundary.InitialObservation.CapturedAt)
+                    ?.EvaluateAt(pair.Item2, boundary.InitialObservation.CapturedAt);
                 if (value?.Evaluation.Error == EvaluationError.InvalidConfiguration)
                     retained.Add(new(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Contract));
                 else if (value?.Evaluation.Error == EvaluationError.ObservationContractViolation)
@@ -168,7 +176,8 @@ public sealed class RunSession
         catch (Exception exception)
         {
             RecordException(exception);
-            retained.Add(new(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract));
+            if (!pendingEvents.Any(x => x.Reason == RunReason.InvalidContract && x.Origin == RunOrigin.Clock))
+                retained.Add(new(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract));
         }
         return retained;
     }
@@ -182,7 +191,7 @@ public sealed class RunSession
         if (operations.Count != 0) return null;
         if (window <= TimeSpan.Zero || window > Limits.WaitTimeout || count < 0) throw new ArgumentOutOfRangeException(nameof(window));
         var now = ReadReal();
-        if (HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
+        if (IsConfirmingWork || HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
             (!finalPlannerPermit && ActionsClosing)) return null;
         var reservation = count == 0 ? null : Budget.Reserve(count);
         if (count > 0 && reservation is null) return null;
@@ -199,11 +208,13 @@ public sealed class RunSession
         private bool consumed;
         internal PlannerPermit(RunSession owner, ApprovedOperation request) { this.owner = owner; this.request = request; }
         public TimeSpan Deadline => request.Deadline;
+        public bool ConfirmResponse() => !consumed && request.ConfirmResult();
         public ApprovedOperation? Approve(int actionCount, TimeSpan observationWindow)
         {
-            if (consumed || !request.IsOpen || owner.ReadReal() >= Deadline || owner.State != ExecutionState.Running) return null;
+            var approvalDeadline = request.NextDeadline;
+            if (owner.IsConfirmingWork || consumed || !request.IsOpen || owner.ReadReal() >= approvalDeadline || owner.State != ExecutionState.Running) return null;
             consumed = true; request.Complete();
-            if (owner.lastReal >= Deadline) return null;
+            if (owner.lastReal >= approvalDeadline) return null;
             return owner.Approve(actionCount, observationWindow, true);
         }
         public void CompleteWithoutOperation() { consumed = true; request.Complete(); }
@@ -213,7 +224,9 @@ public sealed class RunSession
         private readonly RunSession owner;
         public TimeSpan Deadline { get; }
         public TimeSpan ResultDeadline { get; }
-        public TimeSpan NextDeadline => ResultConfirmed ? Deadline : ResultDeadline;
+        private TimeSpan resultConfirmedAt;
+        public TimeSpan NextDeadline => ResultConfirmed ? IsPlanner
+            ? Min(resultConfirmedAt + owner.Limits.WaitTimeout, owner.RunningOrigin!.Value + owner.Limits.MaxDuration) : Deadline : ResultDeadline;
         public ActionReservation? Actions { get; }
         public bool IsOpen { get; private set; } = true;
         public bool ResultConfirmed { get; private set; }
@@ -228,19 +241,22 @@ public sealed class RunSession
             {
                 var unconfirmed = !ResultConfirmed && Actions?.Deliveries.Any(x => x is DeliveryState.Sent or DeliveryState.Uncertain) == true;
                 if (unconfirmed || now >= NextDeadline)
-                    owner.pendingEvents.Add(new(IsPlanner ? RunReason.PlannerTimeout : unconfirmed ? RunReason.ActionUnconfirmed : RunReason.WaitExpired,
-                        RunPhase.Execution, IsPlanner ? RunOrigin.Planner : RunOrigin.Host));
+                    owner.pendingEvents.Add(new(IsPlanner && !ResultConfirmed ? RunReason.PlannerTimeout : unconfirmed ? RunReason.ActionUnconfirmed : RunReason.WaitExpired,
+                        RunPhase.Execution, IsPlanner && !ResultConfirmed ? RunOrigin.Planner : RunOrigin.Host));
             }
             IsOpen = false; Actions?.CancelUnsent();
         }
         public bool ConfirmResult()
         {
-            if (!IsOpen || owner.State != ExecutionState.Running || owner.ReadReal() >= ResultDeadline) return false;
-            ResultConfirmed = true; return true;
+            if (!IsOpen || owner.State != ExecutionState.Running) return false;
+            if (ResultConfirmed) return true;
+            var now = owner.ReadReal();
+            if (now >= ResultDeadline) return false;
+            resultConfirmedAt = now; ResultConfirmed = true; return true;
         }
         public void BeginDispatch(int index)
         {
-            if (!IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || owner.ReadReal() >= ResultDeadline)
+            if (owner.IsConfirmingWork || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || owner.ReadReal() >= ResultDeadline)
                 throw new InvalidOperationException("OperationClosed");
             Actions!.BeginDispatch(index);
         }

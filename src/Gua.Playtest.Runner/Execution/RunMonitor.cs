@@ -23,7 +23,8 @@ public static class RunMonitor
 {
     public static async ValueTask<MonitoredResult<T>> AwaitAsync<T>(RunSession run, IClock realClock,
         IClock conditionClock, IRunObservationFeed feed, Func<CancellationToken, ValueTask<T>> work,
-        Func<T, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default)
+        Func<T, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default,
+        Action<T>? confirmCompletedWork = null)
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
         realClock = run.AuthoritativeRealClock;
@@ -68,6 +69,9 @@ public static class RunMonitor
                 if (mapped.Any(x => x is null || !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) ||
                     !Enum.IsDefined(x.Origin) || x.Reason == RunReason.GoalSatisfied))
                     throw new ArgumentException("RunWorkEventsInvalid");
+                // Serialized owner hook: confirm the existing response/result before fresh
+                // observation spends its window. This never authorizes new work or claims a goal.
+                if (confirmCompletedWork is not null) run.ConfirmMonitoredWork(value, confirmCompletedWork);
                 readyResult = (true, value, mapped);
             }
             catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken) { readyResult = (true, default, []); }
@@ -82,7 +86,7 @@ public static class RunMonitor
         {
             // Registration can synchronously propagate cancellation that arrived after entry.
             var launchAt = run.ReadAuthoritativeReal();
-            if (cancellationToken.IsCancellationRequested || run.HasPendingTerminalEvidence || launchAt >= run.NextRealEvaluationAt)
+            if (cancellationToken.IsCancellationRequested || run.IsConfirmingWork || run.HasPendingTerminalEvidence || launchAt >= run.NextRealEvaluationAt)
             {
                 run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 return new(false, default);

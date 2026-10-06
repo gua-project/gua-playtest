@@ -9,6 +9,125 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void ConfirmedPlannerResponseHasFiniteNonRebasedObservationWindow(bool globalClamp)
+    {
+        var clock = new Clock(); var defaults = Limits(); var limits = new RunLimits(globalClamp ? TimeSpan.FromMilliseconds(1500) : defaults.MaxDuration,
+            defaults.PreparationTimeout, defaults.CleanupTimeout, defaults.PlannerTimeout, defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = new RunSession(limits, clock, clock); run.BeginPreparation(); run.BeginRunning(); var permit = run.RequestPlanner()!;
+        clock.At(900); Assert.True(permit.ConfirmResponse()); var deadline = run.NextRealEvaluationAt;
+        Assert.Equal(TimeSpan.FromMilliseconds(globalClamp ? 1500 : 2900), deadline);
+        clock.At(950); Assert.True(permit.ConfirmResponse()); Assert.Equal(deadline, run.NextRealEvaluationAt);
+        clock.At(globalClamp ? 1500 : 2900); var primary = run.Evaluate()!;
+        Assert.Equal(globalClamp ? RunReason.MaxDuration : RunReason.WaitExpired, primary.Cause.Reason);
+        Assert.DoesNotContain(run.Events, x => x.Reason == RunReason.PlannerTimeout); Assert.Null(permit.Approve(0, TimeSpan.FromSeconds(1)));
+    }
+    private sealed class FaultingDelayClock(bool asynchronous) : IClock
+    {
+        public TaskCompletionSource Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TimeSpan Elapsed => TimeSpan.Zero;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            Called.TrySetResult(); var fault = new IOException("clock timer");
+            if (asynchronous) return ValueTask.FromException(fault); throw fault;
+        }
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CleanupTimerFaultDoesNotCancelCooperativeReleaseEarly(bool asynchronous)
+    {
+        var clock = new FaultingDelayClock(asynchronous); var run = new RunSession(Limits(), clock, clock, Condition());
+        run.BeginPreparation(); run.BeginRunning(); run.Evaluate(Unit(), TimeSpan.Zero);
+        var cleanup = new OwnedCleanup(); var release = new TaskCompletionSource<bool>(); bool earlyCancel = false;
+        cleanup.Register(CleanupStage.ResourceRelease, token =>
+        {
+            token.Register(() => { if (!release.Task.IsCompletedSuccessfully) { earlyCancel = true; release.TrySetCanceled(token); } });
+            return new(release.Task);
+        });
+        var finishing = cleanup.CompleteAsync(run, clock).AsTask(); await clock.Called.Task;
+        Assert.False(finishing.IsCompleted); release.SetResult(true); var outcome = await finishing;
+        Assert.False(earlyCancel); Assert.Equal(11, outcome.ExitCode);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid && x.Exception?.Type == "System.IO.IOException");
+        Assert.DoesNotContain(outcome.PostProcessing, x => x.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+    }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
+    public async Task TimedOutBoundaryRecoveryRetainsClockContractRejection(int kind)
+    {
+        var condition = new LaunchReadClock { Now = TimeSpan.FromMilliseconds(100) };
+        var pending = new TaskCompletionSource<RunStartBoundary>(); RunStartBoundary? certificate = null;
+        var real = new FiniteRaceClock(() =>
+        {
+            if (kind == 3) condition.OnRead = () => condition.OnRead = () => condition.Now = TimeSpan.FromMilliseconds(50);
+            else condition.Now = kind switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue };
+            pending.SetResult(certificate!);
+        });
+        var run = new RunSession(Limits(), real, condition, Condition(), Condition()); bool executed = false;
+        var outcome = await RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (session, _, _) =>
+        {
+            var request = session.ArmRunningBoundary();
+            certificate = request.Certify(request.RequestId, TimeSpan.Zero,
+                new(TimeSpan.FromMilliseconds(100), Unit(), Unit()), "fresh/source", true);
+            return new(pending.Task);
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Clock), outcome.Primary.Cause);
+        Assert.Equal(2, outcome.ExitCode); Assert.False(executed); Assert.False(run.GoalVerified); Assert.Null(run.RunningOrigin);
+        Assert.Contains(outcome.Events, x => x.Reason == RunReason.PreparationTimeout);
+        Assert.DoesNotContain(outcome.Events, x => x.Reason == RunReason.ObservationContractViolation);
+    }
+    [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task OwnerConfirmsOnTimeWorkBeforePostWorkCapture(bool planner, bool late)
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock, planner ? null : Condition());
+        run.BeginPreparation(); run.BeginRunning(); var permit = planner ? run.RequestPlanner() : null;
+        var operation = planner ? null : run.ApproveOperation(1, TimeSpan.FromSeconds(2));
+        if (operation is not null) { operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0); }
+        var old = new TaskCompletionSource<RunObservation>(); var final = new TaskCompletionSource<RunObservation>();
+        var work = new TaskCompletionSource<int>(); var accepted = new TaskCompletionSource(); bool confirmed = false; int captures = 0;
+        var feed = new CallbackCaptureFeed(_ => new(++captures == 1 ? old.Task : final.Task));
+        var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => [],
+            confirmCompletedWork: _ =>
+            {
+                if (planner) Assert.Null(permit!.Approve(0, TimeSpan.FromSeconds(1)));
+                confirmed = planner ? permit!.ConfirmResponse() : operation!.ConfirmResult(); accepted.TrySetResult();
+            }).AsTask();
+        clock.At(late ? 1100 : 900); work.SetResult(1);
+        if (!late)
+        {
+            await accepted.Task.WaitAsync(TimeSpan.FromSeconds(2)); Assert.True(confirmed);
+            clock.At(1200); final.SetResult(new(clock.Elapsed, Unit(planner ? "false" : "true"), Unit("false")));
+        }
+        await monitoring.WaitAsync(TimeSpan.FromSeconds(2));
+        if (late)
+        {
+            Assert.False(confirmed);
+            Assert.Equal(planner ? RunReason.PlannerTimeout : RunReason.ActionUnconfirmed, run.Primary!.Cause.Reason);
+        }
+        else
+        {
+            Assert.DoesNotContain(run.Events, x => x.Reason is RunReason.PlannerTimeout or RunReason.ActionUnconfirmed);
+            if (planner) Assert.NotNull(permit!.Approve(0, TimeSpan.FromSeconds(1)));
+            else Assert.Equal(RunReason.GoalSatisfied, run.Primary!.Cause.Reason);
+        }
+        old.TrySetResult(new(TimeSpan.Zero, Unit("false"), Unit("false"))); final.TrySetResult(new(clock.Elapsed, Unit("false"), Unit("false")));
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CleanupEvidenceLimitIsAggregateAndDoesNotSkipRelease(bool failedPrimary)
+    {
+        var clock = new Clock(); var defaults = Limits();
+        var limits = new RunLimits(defaults.MaxDuration, defaults.PreparationTimeout, defaults.CleanupTimeout, defaults.PlannerTimeout,
+            defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 32);
+        var run = Running(clock, limits: limits); var primary = failedPrimary ? run.Evaluate(candidates: [Event(RunReason.ActionFailed)])! : run.Evaluate(Unit(), TimeSpan.Zero)!;
+        var cleanup = new OwnedCleanup(); int stages = 0; bool released = false;
+        for (int i = 0; i < 40; i++) cleanup.Register(CleanupStage.Diagnostics, token =>
+        {
+            stages++; for (int j = 0; j < 4; j++) token.Register(() => throw new IOException("callback")); return ValueTask.FromResult(true);
+        });
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Same(primary, outcome.Primary); Assert.Equal(failedPrimary ? 1 : 11, outcome.ExitCode);
+        Assert.Equal(40, stages); Assert.True(released); Assert.Equal(32, outcome.PostProcessing.Count);
+        Assert.Single(outcome.PostProcessing, x => x.Reason == PostProcessingReason.EvidenceLimitExceeded);
+        Assert.Contains(outcome.PostProcessing, x => x.Exception?.Type == "System.IO.IOException");
+    }
     [Theory]
     [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)] [InlineData(1, true)]
     [InlineData(2, false)] [InlineData(2, true)] [InlineData(3, false)] [InlineData(3, true)]
