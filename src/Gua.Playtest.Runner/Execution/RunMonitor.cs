@@ -54,20 +54,32 @@ public static class RunMonitor
                     run.Evaluate(candidates: ready.Events, cancelled: cancellationToken.IsCancellationRequested); break;
                 }
                 RunObservation observation;
+                Task<RunObservation>? captureTask = null;
+                void EvaluateInterruptedCapture(IReadOnlyList<RunEvent> readyEvents, bool cancelled)
+                {
+                    if (captureTask?.IsCompletedSuccessfully == true)
+                    {
+                        var captured = captureTask.GetAwaiter().GetResult();
+                        run.Evaluate(captured.Success, captured.CapturedAt, readyEvents, cancelled,
+                            failureUnit: captured.Failure);
+                    }
+                    else run.Evaluate(candidates: readyEvents, cancelled: cancelled);
+                }
                 try
                 {
                     observation = await FiniteOperation.RunAsync(realClock, remaining,
-                        token => feed.CaptureAsync(token), captureCancellation.Token).ConfigureAwait(false);
+                        token => { captureTask = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(captureTask); },
+                        captureCancellation.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     var ready = await ReadyWork().ConfigureAwait(false);
-                    run.Evaluate(candidates: ready.Events, cancelled: true); break;
+                    EvaluateInterruptedCapture(ready.Events, true); break;
                 }
                 catch (TimeoutException)
                 {
                     var ready = await ReadyWork().ConfigureAwait(false);
-                    run.Evaluate(candidates: ready.Events, cancelled: cancellationToken.IsCancellationRequested); break;
+                    EvaluateInterruptedCapture(ready.Events, cancellationToken.IsCancellationRequested); break;
                 }
                 var result = await ReadyWork().ConfigureAwait(false);
                 // All ready observations/events/cancellation/current deadlines go through one arbiter.
@@ -75,7 +87,8 @@ public static class RunMonitor
                     cancellationToken.IsCancellationRequested, failureUnit: observation.Failure);
                 if (result.Completed) return new(run.Primary is null, result.Value);
                 if (run.Primary is not null) break;
-                using var wakeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                using var wakeCancellation = new CancellationTokenSource();
+                using var wakeRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wakeCancellation, run.RecordException));
                 var wakes = new List<Task>();
                 try
                 {

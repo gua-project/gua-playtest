@@ -10,6 +10,51 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Fact]
+    public async Task ThrowingWakeCancellationCallbackCannotEscapeCaller()
+    {
+        var clock = new Clock(); var run = Running(clock); using var cancel = new CancellationTokenSource();
+        var feed = new CallbackWakeFeed(); var pending = new TaskCompletionSource<int>();
+        var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(pending.Task), _ => [], cancel.Token).AsTask();
+        Assert.Null(Record.Exception(cancel.Cancel)); Assert.False((await monitoring).Completed);
+        Assert.Equal(RunReason.Cancelled, run.Primary!.Cause.Reason);
+        Assert.Contains(run.Exceptions, x => x.Type == "System.AggregateException"); pending.SetResult(1);
+    }
+    private sealed class CallbackWakeFeed : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
+            => ValueTask.FromResult(new RunObservation(TimeSpan.Zero, Unit("false"), Unit("false")));
+        public ValueTask WaitForChangeAsync(CancellationToken token)
+        { token.Register(() => throw new IOException("wake callback")); return new(new TaskCompletionSource().Task); }
+    }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task CompletedCaptureRetainsFailureOrViolationDuringInterruption(bool cancelled, bool violation)
+    {
+        var capture = new TaskCompletionSource<RunObservation>(); using var cancel = new CancellationTokenSource();
+        var real = new FiniteRaceClock(() =>
+        {
+            if (cancelled) cancel.Cancel();
+            capture.SetResult(new(TimeSpan.Zero, Unit("false"), Unit(violation ? "1" : "true")));
+        });
+        var condition = new Clock(); var run = new RunSession(Limits(), real, condition, failure: Condition());
+        run.BeginPreparation(); run.BeginRunning(); var never = new TaskCompletionSource<int>();
+        var result = await RunMonitor.AwaitAsync(run, real, condition, new PendingCaptureFeed(capture.Task),
+            _ => new ValueTask<int>(never.Task), _ => [], cancel.Token);
+        Assert.False(result.Completed);
+        Assert.Equal(violation ? RunReason.ObservationContractViolation : RunReason.FailureCondition, run.Primary!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.MaxDuration);
+        if (cancelled) Assert.Contains(run.Events, x => x.Reason == RunReason.Cancelled);
+        never.SetResult(1);
+    }
+    private sealed class PendingCaptureFeed(Task<RunObservation> capture) : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => new(capture);
+        public ValueTask WaitForChangeAsync(CancellationToken token) => throw new NotSupportedException();
+    }
+    [Fact]
     public async Task FalsePreparationRetainsCancellationThatArrivesDuringFinalization()
     {
         var clock = new Clock(); var run = new RunSession(Limits(), clock, clock); using var cancel = new CancellationTokenSource();
