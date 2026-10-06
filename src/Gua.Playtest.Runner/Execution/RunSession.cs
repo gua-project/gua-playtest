@@ -27,6 +27,7 @@ public sealed class RunSession
     internal IClock AuthoritativeRealClock => realClock;
     internal IClock AuthoritativeConditionClock => conditionClock;
     internal TimeSpan ReadAuthoritativeReal() => ReadReal();
+    internal TimeSpan ReadAuthoritativeCondition() => ReadCondition();
     public RunBudget Budget { get; }
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
@@ -403,6 +404,9 @@ public sealed class RunSession
             exceptions.Add(new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace));
         if (exception is RunFailureException or ProviderCancellationException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace));
+        if (exception is AggregateException aggregate)
+            foreach (var inner in aggregate.Flatten().InnerExceptions.Take(Math.Max(0, Limits.MaxEvidenceItems - exceptions.Count)))
+                exceptions.Add(new(inner.GetType().FullName ?? inner.GetType().Name, inner.StackTrace));
     }
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)
     {

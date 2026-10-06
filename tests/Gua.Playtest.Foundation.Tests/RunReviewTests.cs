@@ -9,6 +9,107 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CompletedWorkStartsFreshCaptureWithoutWaitingForOldDelivery(bool failure)
+    {
+        var real = new Clock(); var condition = new Clock(); var run = new RunSession(Limits(), real, condition, Condition(), Condition());
+        run.BeginPreparation(); run.BeginRunning(); var operation = run.ApproveOperation(0, TimeSpan.FromSeconds(1))!;
+        var old = new TaskCompletionSource<RunObservation>(); var work = new TaskCompletionSource<int>(); int captures = 0;
+        var feed = new CallbackCaptureFeed(_ => ++captures == 1 ? new(old.Task) : ValueTask.FromResult(
+            new RunObservation(condition.Elapsed, Unit(), Unit(failure ? "true" : "false"))));
+        var monitoring = RunMonitor.AwaitAsync(run, real, condition, feed, _ => new ValueTask<int>(work.Task), _ => []).AsTask();
+        real.At(900); condition.At(900); work.SetResult(1);
+        await monitoring.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, captures); Assert.False(old.Task.IsCompleted);
+        Assert.True(run.GoalVerified);
+        if (!failure) { operation.Complete(); run.Evaluate(); }
+        Assert.Equal(failure ? RunReason.FailureCondition : RunReason.GoalSatisfied, run.Primary!.Cause.Reason);
+        Assert.DoesNotContain(run.Events, x => x.Reason is RunReason.WaitExpired or RunReason.MaxDuration);
+        var primary = run.Primary; old.SetResult(new(TimeSpan.Zero, Unit("false"), Unit("false")));
+        Assert.Same(primary, run.Primary); Assert.False(operation.IsOpen);
+    }
+    private sealed class WakeActionFeed(Action wake) : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => ValueTask.FromResult(
+            new RunObservation(TimeSpan.FromMilliseconds(100), Unit(time: true), Unit("false")));
+        public ValueTask WaitForChangeAsync(CancellationToken token) { wake(); return new(new TaskCompletionSource().Task); }
+    }
+    [Fact]
+    public async Task ConditionClockRegressionBeforeWakeCannotRecoverSilently()
+    {
+        var real = new Clock(); var condition = new LaunchReadClock { Now = TimeSpan.FromMilliseconds(100) };
+        var node = JsonNode.Parse("""{"kind":"time","forMilliseconds":200,"condition":{"kind":"targets","target":{"source":"world"},"operator":"exists"}}""")!.AsObject();
+        var run = new RunSession(Limits(), real, condition, PreparedCondition.Create(node, new(10, 1000)));
+        run.BeginPreparation(); run.BeginRunning(); var work = new TaskCompletionSource<int>();
+        var feed = new WakeActionFeed(() => condition.OnRead = () =>
+        { condition.Now = TimeSpan.FromMilliseconds(50); condition.OnRead = () => condition.Now = TimeSpan.FromMilliseconds(100); });
+        await RunMonitor.AwaitAsync(run, real, condition, feed, _ => new ValueTask<int>(work.Task), _ => []);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Clock), run.Primary!.Cause);
+        Assert.Equal(2, run.Primary.ExitCode); Assert.False(run.GoalVerified); work.SetResult(1);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CompletedCleanupAndCancellationDoNotInventArtifactFailure(bool cancelFirst)
+    {
+        using var cancel = new CancellationTokenSource(); var completed = new TaskCompletionSource<bool>();
+        var real = new CallbackDelayClock(() =>
+        { if (cancelFirst) cancel.Cancel(); completed.SetResult(true); if (!cancelFirst) cancel.Cancel(); });
+        var condition = new Clock(); var run = new RunSession(Limits(), real, condition, Condition());
+        run.BeginPreparation(); run.BeginRunning(); run.Evaluate(Unit(), TimeSpan.Zero);
+        var cleanup = new OwnedCleanup(); bool released = false;
+        cleanup.Register(CleanupStage.Artifacts, _ => new(completed.Task));
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var outcome = await cleanup.CompleteAsync(run, real, cancel.Token);
+        Assert.Equal(0, outcome.ExitCode); Assert.True(released);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.Cancelled);
+        Assert.DoesNotContain(outcome.PostProcessing, x => x.Reason == PostProcessingReason.ArtifactFailed);
+    }
+    [Theory]
+    [InlineData(0, 0)] [InlineData(0, 1)] [InlineData(0, 2)]
+    [InlineData(1, 0)] [InlineData(1, 1)] [InlineData(1, 2)]
+    [InlineData(2, 0)] [InlineData(2, 1)] [InlineData(2, 2)]
+    [InlineData(3, 0)] [InlineData(3, 1)] [InlineData(3, 2)]
+    public async Task FiniteProviderCallbackFaultsReachOwnerEvidence(int boundary, int ending)
+    {
+        var clock = new Clock(); using var cancel = new CancellationTokenSource(); var pending = new TaskCompletionSource<bool>();
+        var capturePending = new TaskCompletionSource<RunObservation>(); var workPending = new TaskCompletionSource<int>();
+        var run = new RunSession(Limits(), clock, clock); RunOutcome outcome;
+        ValueTask<bool> Provider(CancellationToken token)
+        {
+            token.Register(() => throw new IOException("callback"));
+            return ending == 2 ? ValueTask.FromResult(true) : new(pending.Task);
+        }
+        void Interrupt() { if (ending == 0) cancel.Cancel(); else if (ending == 1) clock.At(boundary == 0 || boundary == 3 ? 1000 : 5000); }
+        if (boundary < 2)
+        {
+            var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(),
+                (_, token) => boundary == 0 ? Provider(token) : ValueTask.FromResult(true), (_, token) => Provider(token), cancel.Token).AsTask();
+            Interrupt(); outcome = await executing;
+        }
+        else if (boundary == 2)
+        {
+            run.BeginPreparation(); run.BeginRunning();
+            var feed = new CallbackCaptureFeed(token =>
+            {
+                token.Register(() => throw new IOException("callback"));
+                return ending == 2 ? ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit("false"), Unit("false"))) : new(capturePending.Task);
+            });
+            var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed,
+                _ => ending == 2 ? ValueTask.FromResult(1) : new(workPending.Task), _ => [], cancel.Token).AsTask();
+            Interrupt(); await monitoring;
+            if (run.Primary is null) run.Evaluate(executionComplete: true);
+            outcome = await new OwnedCleanup().CompleteAsync(run, clock);
+        }
+        else
+        {
+            run = Running(clock); run.Evaluate(Unit(), TimeSpan.Zero); var cleanup = new OwnedCleanup();
+            cleanup.Register(CleanupStage.Diagnostics, Provider);
+            var finishing = cleanup.CompleteAsync(run, clock, cancel.Token).AsTask(); Interrupt(); outcome = await finishing;
+        }
+        if (boundary == 3) Assert.Contains(outcome.PostProcessing, x => x.Exception?.Type == "System.IO.IOException" && x.Exception.StackTrace is not null);
+        else Assert.Contains(outcome.Exceptions, x => x.Type == "System.IO.IOException" && x.StackTrace is not null);
+        Assert.Equal(ExecutionState.Finished, run.State);
+        pending.TrySetResult(true); capturePending.TrySetResult(new(clock.Elapsed, Unit(), Unit())); workPending.TrySetResult(1);
+    }
     [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
     public async Task InvalidRealClockPreventsMonitoredProviderLaunch(int kind)
     {

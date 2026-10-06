@@ -47,7 +47,7 @@ public static class RunExecutor
             try
             {
                 preparation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
-                    token => { preparationTask = prepare(token).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken).ConfigureAwait(false);
+                    token => { preparationTask = prepare(token).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && preparationTask?.IsCompletedSuccessfully == true)
             {
@@ -80,7 +80,7 @@ public static class RunExecutor
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
                     var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
                     var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
-                        token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken).ConfigureAwait(false);
+                        token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
                     run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
                     if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
                         cancelled: cancellationToken.IsCancellationRequested);

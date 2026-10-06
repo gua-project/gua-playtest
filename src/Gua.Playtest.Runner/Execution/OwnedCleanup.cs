@@ -1,5 +1,6 @@
 using Gua.Playtest.Core;
 using Gua.Playtest.Core.Contracts;
+using System.Collections.Concurrent;
 
 namespace Gua.Playtest.Runner.Execution;
 
@@ -58,7 +59,12 @@ public sealed class OwnedCleanup
             var token = step.Stage is CleanupStage.Diagnostics or CleanupStage.Artifacts ? cancellationToken : CancellationToken.None;
             try
             {
-                var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, step.Action, token).ConfigureAwait(false);
+                var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, step.Action, token,
+                    exception =>
+                    {
+                        var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(run.Limits.MaxEvidenceItems) : [exception];
+                        foreach (var fault in faults) issues.Add(new(Failure(step.Stage), new(fault.GetType().FullName ?? fault.GetType().Name, fault.StackTrace)));
+                    }).ConfigureAwait(false);
                 if (!result) issues.Add(new(Failure(step.Stage)));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -106,14 +112,14 @@ public static class FiniteOperation
     }
     internal static bool IsDeadline(Exception exception) => exception is TimeoutException && exception.Data.Contains(deadlineProvenance);
     public static ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
-        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default)
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default, Action<Exception>? recordException = null)
     {
         if (timeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeout));
-        return RunUntilAsync(realClock, realClock.Elapsed + timeout, action, cancellationToken);
+        return RunUntilAsync(realClock, realClock.Elapsed + timeout, action, cancellationToken, recordException);
     }
     /// <summary>Uses the owner's absolute deadline without rebasing a previously computed remainder.</summary>
     public static async ValueTask<T> RunUntilAsync<T>(IClock realClock, TimeSpan deadline,
-        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default)
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default, Action<Exception>? recordException = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var startDeadline = deadline;
@@ -123,8 +129,9 @@ public static class FiniteOperation
         Task<T>? operation = null;
         Task? timer = null;
         var cancelled = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackFaults = new ConcurrentQueue<Exception>();
         using var registration = cancellationToken.Register(() =>
-        { CancelSafely(operationCancellation); cancelled.TrySetCanceled(cancellationToken); });
+        { CancelSafely(operationCancellation, callbackFaults.Enqueue); cancelled.TrySetCanceled(cancellationToken); });
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -137,7 +144,16 @@ public static class FiniteOperation
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
             var winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
-            if (winner == cancelled.Task) await cancelled.Task.ConfigureAwait(false);
+            if (winner == cancelled.Task)
+            {
+                // Cancellation cannot erase a completed successful stage, but cannot extend its deadline.
+                if (operation.IsCompletedSuccessfully)
+                {
+                    if (realClock.Elapsed >= startDeadline) throw DeadlineReached("OperationDeadlineReached");
+                    return operation.GetAwaiter().GetResult();
+                }
+                await cancelled.Task.ConfigureAwait(false);
+            }
             if (winner == timer) await timer.ConfigureAwait(false);
             var expired = winner == timer || realClock.Elapsed >= startDeadline;
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
@@ -146,9 +162,12 @@ public static class FiniteOperation
         }
         finally
         {
-            CancelSafely(operationCancellation); CancelSafely(timerCancellation);
+            registration.Dispose(); // join caller callbacks before draining on the owner continuation
+            CancelSafely(operationCancellation, callbackFaults.Enqueue); CancelSafely(timerCancellation, callbackFaults.Enqueue);
             if (operation is not null) _ = operation.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (timer is not null) _ = timer.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            if (recordException is not null)
+                while (callbackFaults.TryDequeue(out var fault)) recordException(fault);
         }
     }
     internal static Exception NormalizeCancellation(OperationCanceledException exception,

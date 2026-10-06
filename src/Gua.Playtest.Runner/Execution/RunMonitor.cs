@@ -97,8 +97,9 @@ public static class RunMonitor
                     var ready = await ReadyWork().ConfigureAwait(false);
                     run.Evaluate(candidates: ready.Events, cancelled: cancellationToken.IsCancellationRequested); break;
                 }
-                RunObservation observation;
+                RunObservation? observation;
                 Task<RunObservation>? captureTask = null;
+                bool supersededCapture = false;
                 void EvaluateInterruptedCapture(IReadOnlyList<RunEvent> readyEvents, bool cancelled)
                 {
                     if (captureTask?.IsCompletedSuccessfully == true)
@@ -110,9 +111,22 @@ public static class RunMonitor
                 }
                 try
                 {
-                    observation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
+                    var capturing = FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
                         token => { captureTask = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(captureTask); },
-                        captureCancellation.Token).ConfigureAwait(false);
+                        captureCancellation.Token, run.RecordException).AsTask();
+                    if (await Task.WhenAny(capturing, workTask).ConfigureAwait(false) == workTask && !capturing.IsCompleted)
+                    {
+                        supersededCapture = true;
+                        FiniteOperation.CancelSafely(captureCancellation, run.RecordException);
+                    }
+                    observation = await capturing.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (supersededCapture && !cancellationToken.IsCancellationRequested)
+                {
+                    // Stop waiting for old delivery immediately. Keep any unit already completed;
+                    // join the finite owner before requesting the new post-work synchronization.
+                    if (captureTask?.IsFaulted == true) captureTask.GetAwaiter().GetResult();
+                    observation = captureTask?.IsCompletedSuccessfully == true ? captureTask.GetAwaiter().GetResult() : null;
                 }
                 catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == captureCancellation.Token)
                 {
@@ -129,12 +143,13 @@ public static class RunMonitor
                 {
                     // Delivery can lag the first capture boundary. Synchronize once more after
                     // observing completion, retaining both units until the single arbiter runs.
-                    var observations = new List<RunObservation?> { observation };
+                    var observations = new List<RunObservation?>();
+                    if (observation is not null || !supersededCapture) observations.Add(observation);
                     var finalEvents = result.Events.ToList(); Task<RunObservation>? finalCapture = null;
                     try
                     {
                         var final = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt, token =>
-                        { finalCapture = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(finalCapture); }, cancellationToken).ConfigureAwait(false);
+                        { finalCapture = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(finalCapture); }, cancellationToken, run.RecordException).ConfigureAwait(false);
                         observations.Add(final);
                     }
                     catch (Exception exception)
@@ -165,7 +180,7 @@ public static class RunMonitor
                     wakes.Add(feed.WaitForChangeAsync(wakeCancellation.Token).AsTask());
                     wakes.Add(realClock.DelayAsync(Positive(run.NextRealEvaluationAt - run.ReadAuthoritativeReal()), wakeCancellation.Token).AsTask());
                     if (run.NextConditionEvaluationAt is { } conditionWake)
-                        wakes.Add(conditionClock.DelayAsync(Positive(conditionWake - conditionClock.Elapsed), wakeCancellation.Token).AsTask());
+                        wakes.Add(conditionClock.DelayAsync(Positive(conditionWake - run.ReadAuthoritativeCondition()), wakeCancellation.Token).AsTask());
                     var winner = await Task.WhenAny(wakes.Append(workTask)).ConfigureAwait(false);
                     if (winner != workTask) await winner.ConfigureAwait(false);
                 }
