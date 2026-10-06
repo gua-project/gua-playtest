@@ -1,3 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup><ProjectReference Include="../Gua.Playtest.Core/Gua.Playtest.Core.csproj" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Gua.Playtest.Foundation.Tests" /></ItemGroup>
 </Project>
