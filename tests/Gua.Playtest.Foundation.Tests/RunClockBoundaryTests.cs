@@ -24,6 +24,27 @@ public sealed partial class RunTests
     private static PreparedCondition ShortHold()
         => PreparedCondition.Create(JsonNode.Parse("""{"kind":"time","forMilliseconds":50,"condition":{"kind":"targets","target":{"source":"world"},"operator":"exists"}}""")!.AsObject(), new(10, 1000));
     [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task AdvancingCleanupClockIsNotRejectedAtPhysicalBudgetExpiry(bool failedPrimary)
+    {
+        var clock = new Gua.Playtest.Runner.MonotonicClock(); var defaults = Limits();
+        var limits = new RunLimits(defaults.MaxDuration, defaults.PreparationTimeout, TimeSpan.FromMilliseconds(20), defaults.PlannerTimeout,
+            defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = new RunSession(limits, clock, clock, Condition()); run.BeginPreparation(); run.BeginRunning();
+        var primary = failedPrimary ? run.Evaluate(candidates: [Event(RunReason.ActionFailed)])! : run.Evaluate(Unit(), clock.Elapsed)!;
+        var cleanup = new OwnedCleanup(); bool released = false;
+        cleanup.Register(CleanupStage.Diagnostics, _ =>
+        {
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            while (elapsed.Elapsed < TimeSpan.FromMilliseconds(25)) Thread.SpinWait(100);
+            return ValueTask.FromResult(true);
+        });
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.True(released); Assert.Same(primary, outcome.Primary); Assert.Equal(failedPrimary ? 1 : 11, outcome.ExitCode);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+        Assert.DoesNotContain(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
     public async Task MonitorEarlyRealOrConditionWakeDoesNotSpinCaptures(bool conditionFailure)
     {
         var stalled = new EarlyWakeClock(); var advancing = new Gua.Playtest.Runner.MonotonicClock();

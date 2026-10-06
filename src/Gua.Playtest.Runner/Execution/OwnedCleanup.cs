@@ -18,6 +18,7 @@ public sealed class OwnedCleanup
         private readonly Stopwatch safety = Stopwatch.StartNew();
         private TimeSpan last, lastSafety;
         private readonly TimeSpan initial;
+        private readonly TimeSpan initialSafety;
         private long fallbackOffset;
         private bool fallback;
         private long hardWakeAt;
@@ -27,7 +28,7 @@ public sealed class OwnedCleanup
         {
             this.run = run; this.reject = reject;
             initial = last = run.LastValidatedReal;
-            try { initial = last = run.ReadAuthoritativeReal(); }
+            try { initial = last = run.ReadAuthoritativeReal(); initialSafety = safety.Elapsed; }
             catch (Exception exception) { Reject(exception); }
             fallbackOffset = initial.Ticks;
             _ = Elapsed;
@@ -41,8 +42,8 @@ public sealed class OwnedCleanup
                 if (!fallback)
                     try
                     {
+                        var elapsed = safety.Elapsed - initialSafety;
                         var now = run.ReadAuthoritativeReal();
-                        var elapsed = safety.Elapsed;
                         var independent = initial + elapsed;
                         var due = Interlocked.Exchange(ref hardWakeAt, 0);
                         if (due != 0 && now.Ticks < due || elapsed >= run.Limits.CleanupTimeout && now < independent)
@@ -57,7 +58,7 @@ public sealed class OwnedCleanup
                     catch (Exception exception) { Reject(exception); }
                 // The independent safety clock began at cleanup entry. A rejected epoch cannot
                 // rebase its duration or move behind the last good cleanup reading.
-                return last = new TimeSpan(Math.Max(last.Ticks, fallbackOffset + safety.Elapsed.Ticks));
+                return last = new TimeSpan(Math.Max(last.Ticks, fallbackOffset + (safety.Elapsed - initialSafety).Ticks));
             }
         }
         private void Reject(Exception exception)
