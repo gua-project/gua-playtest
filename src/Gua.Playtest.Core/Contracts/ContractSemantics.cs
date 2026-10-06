@@ -138,7 +138,7 @@ internal static class ContractSemantics
             {
                 var offset = input!["offsetMilliseconds"]!.GetValue<long>();
                 if (offset < last || offset > duration) throw new ContractException("SegmentTimingInvalid");
-                if (input["kind"]!.GetValue<int>() == 4 && input["operation"]!.GetValue<int>() == 9) throw new ContractException("ActionForbidden");
+                if (input["kind"]!.GetValue<int>() == 6 || (input["kind"]!.GetValue<int>() == 4 && input["operation"]!.GetValue<int>() == 9)) throw new ContractException("ActionForbidden");
                 last = offset;
             }
         }
@@ -161,6 +161,16 @@ internal static class ContractSemantics
                 if (hasSecret && op is not ("set" or "set_value")) throw new ContractException("ActionShapeInvalid");
                 if (op == "set_checked" && action["value"]?.GetValueKind() != System.Text.Json.JsonValueKind.True && action["value"]?.GetValueKind() != System.Text.Json.JsonValueKind.False)
                     throw new ContractException("TypeMismatch");
+                if (kind == "ui" && hasValue)
+                {
+                    var value = action["value"]!;
+                    if (op is "set_value" or "select" or "press_key"
+                        && (value.GetValueKind() != System.Text.Json.JsonValueKind.String
+                            || (op is "select" or "press_key" && value.GetValue<string>().Length == 0)))
+                        throw new ContractException("TypeMismatch");
+                    if (op == "scroll" && value is not JsonObject)
+                        throw new ContractException("TypeMismatch");
+                }
             }
         }
     }

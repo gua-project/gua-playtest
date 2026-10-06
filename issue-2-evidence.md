@@ -27,6 +27,8 @@ The contract suite uses checked-in `fixtures/contracts/expected.json` codes and 
 Published native-free smoke copies all fixture files into a new stage, changes cwd, removes actual Gua native payloads, runs every committed expected case using the published CLI and confirms `doctor --native` fails. This proves packaged schema parsing without source/native/engine/Planner requirements. The separate #3 archive/Tool smoke validates real package closure and native load; it does not establish gameplay.
 
 ## Acceptance boundaries
+Actual Codex review of `11c3584` completed with four findings. Regression coverage now refuses cleanup/reset in timed decisions, contains nonexistent and real broken-link allowed roots at the CLI boundary, validates every fixed UI payload type (including permitted empty set_value and nonempty select/press_key), and checks the pinned enum-type pattern in Observe, permissions and isEmpty declarations without an expected Value. The schema authoring tool reads that pattern directly from the pinned Gua schema.
+
 
 | Acceptance | Evidence here | Integration still required |
 | --- | --- | --- |

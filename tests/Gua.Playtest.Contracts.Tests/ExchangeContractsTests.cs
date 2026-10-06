@@ -121,6 +121,66 @@ public sealed class ExchangeContractsTests
         }
     }
 
+    [Fact]
+    public async Task TimedCleanupAndResetCannotEscapeRuntimeOwnership()
+    {
+        using var scope = new Scope();
+        foreach (var (kind, operation) in new[] { (6,10), (4,9) })
+        {
+            var segment = new JsonObject { ["schemaVersion"]=1,["durationMilliseconds"]=1,["maxLatenessMilliseconds"]=0,["executionTimeoutMilliseconds"]=1000,["cleanupTimeoutMilliseconds"]=1000,["inputs"]=new JsonArray(new JsonObject { ["offsetMilliseconds"]=0,["kind"]=kind,["operation"]=operation,["target"]="" }) };
+            Assert.Equal("ActionForbidden", (await scope.Validate(Envelope(new() { ["kind"]="execute",["mode"]="timed",["segment"]=segment }))).Code);
+        }
+    }
+
+    [Theory]
+    [InlineData("set_value", "123", false)]
+    [InlineData("set_value", "\"\"", true)]
+    [InlineData("select", "true", false)]
+    [InlineData("select", "\"\"", false)]
+    [InlineData("select", "\"item\"", true)]
+    [InlineData("press_key", "{\"x\":1,\"y\":2}", false)]
+    [InlineData("press_key", "\"\"", false)]
+    [InlineData("press_key", "\"Enter\"", true)]
+    [InlineData("scroll", "2", false)]
+    [InlineData("scroll", "{\"x\":1,\"y\":-2}", true)]
+    [InlineData("set_checked", "\"true\"", false)]
+    [InlineData("set_checked", "false", true)]
+    public async Task UiPayloadMatchesPinnedCommandTypes(string operation, string json, bool valid)
+    {
+        using var scope = new Scope();
+        var action = new JsonObject { ["kind"]="ui",["selector"]=new JsonObject { ["id"]=new JsonObject { ["value"]="fixture" } },["operation"]=operation,["value"]=JsonNode.Parse(json) };
+        var report = await scope.Validate(Envelope(new() { ["kind"]="execute",["mode"]="single",["action"]=action }));
+        Assert.Equal(valid,report.IsValid);
+        if (!valid) Assert.Equal("TypeMismatch",report.Code);
+    }
+
+    [Theory]
+    [InlineData("x", false)]
+    [InlineData("Fixture.", false)]
+    [InlineData("1Fixture.Phase", false)]
+    [InlineData("Fixture.Phase", true)]
+    [InlineData("_Fixture._Phase2", true)]
+    public async Task EnumDeclarationsMatchWirePatternWithoutExpectedValue(string enumType, bool valid)
+    {
+        using var scope = new Scope();
+        foreach (var type in new[] { "enum", "set" })
+        {
+            var valueType = new JsonObject { ["type"]=type,["enumType"]=enumType };
+            if (type=="set") valueType["elementType"]="enum";
+            var read = new JsonObject { ["target"]=new JsonObject { ["source"]="world" },["region"]="property",["name"]="phase",["valueType"]=valueType };
+            Assert.Equal(valid,(await scope.Validate(Envelope(new() { ["kind"]="observe",["reads"]=new JsonArray(read.DeepClone()) }))).IsValid);
+            var environment = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"fixtures","environment.json")))!.AsObject();
+            environment["permissions"]!["reads"]=new JsonArray(read.DeepClone());
+            Assert.Equal(valid,(await scope.Validate(environment)).IsValid);
+            if (type=="set")
+            {
+                var scenario = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"fixtures","scenario.json")))!.AsObject();
+                scenario["goal"]!["success"]=new JsonObject { ["kind"]="assertion",["read"]=read.DeepClone(),["quantifier"]="one",["operator"]="isEmpty" };
+                Assert.Equal(valid,(await scope.Validate(scenario)).IsValid);
+            }
+        }
+    }
+
     private sealed class Scope : IDisposable
     {
         private readonly string root = Directory.CreateTempSubdirectory("gua-exchange-").FullName;

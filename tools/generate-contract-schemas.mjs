@@ -16,7 +16,9 @@ const uiTarget=obj({source:{const:'ui'},selector:gua('selector')});
 const objectTarget=obj({source:{const:'object'},selector:gua('world-selector')});
 const worldTarget=obj({source:{const:'world'}});
 const target={oneOf:[uiTarget,objectTarget,worldTarget]};
-const valueType={oneOf:[obj({type:{enum:['bool','integer','number','string']}}),obj({type:{const:'enum'},enumType:str}),obj({type:{enum:['list','set']},elementType:{enum:['bool','integer','number','string']}}),obj({type:{enum:['list','set']},elementType:{const:'enum'},enumType:str})]};
+// Reuse the pinned wire constraint rather than maintaining a looser declaration.
+const enumType=JSON.parse(fs.readFileSync(new URL('gua-1.1.1/value-v1.schema.json',dir),'utf8')).oneOf.find(branch=>branch.properties?.type?.const==='enum').properties.enumType;
+const valueType={oneOf:[obj({type:{enum:['bool','integer','number','string']}}),obj({type:{const:'enum'},enumType}),obj({type:{enum:['list','set']},elementType:{enum:['bool','integer','number','string']}}),obj({type:{enum:['list','set']},elementType:{const:'enum'},enumType})]};
 const read={oneOf:[
   obj({target:{oneOf:[uiTarget,objectTarget]},region:{const:'standard'},field:str,valueType}),
   obj({target:{oneOf:[uiTarget,objectTarget]},region:{const:'observe'},name:str,valueType}),

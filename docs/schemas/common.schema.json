@@ -84,8 +84,7 @@
                     },
                     "enumType": {
                       "type": "string",
-                      "minLength": 1,
-                      "maxLength": 4096
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
                     }
                   },
                   "required": [
@@ -132,8 +131,7 @@
                     },
                     "enumType": {
                       "type": "string",
-                      "minLength": 1,
-                      "maxLength": 4096
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
                     }
                   },
                   "required": [
@@ -228,8 +226,7 @@
                     },
                     "enumType": {
                       "type": "string",
-                      "minLength": 1,
-                      "maxLength": 4096
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
                     }
                   },
                   "required": [
@@ -276,8 +273,7 @@
                     },
                     "enumType": {
                       "type": "string",
-                      "minLength": 1,
-                      "maxLength": 4096
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
                     }
                   },
                   "required": [
@@ -348,8 +344,7 @@
                     },
                     "enumType": {
                       "type": "string",
-                      "minLength": 1,
-                      "maxLength": 4096
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
                     }
                   },
                   "required": [
@@ -396,8 +391,7 @@
                     },
                     "enumType": {
                       "type": "string",
-                      "minLength": 1,
-                      "maxLength": 4096
+                      "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
                     }
                   },
                   "required": [
@@ -494,8 +488,7 @@
             },
             "enumType": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 4096
+              "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
             }
           },
           "required": [
@@ -542,8 +535,7 @@
             },
             "enumType": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 4096
+              "pattern": "^[A-Za-z_][A-Za-z_0-9]*(?:\\.[A-Za-z_][A-Za-z_0-9]*)+$"
             }
           },
           "required": [
