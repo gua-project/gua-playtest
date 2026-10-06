@@ -194,7 +194,14 @@ public sealed class BridgeObservations : IDisposable
                         if (change.GetProperty("source").GetString() == source &&
                             ids.Contains(change.GetProperty("runtimeId").GetString()!, StringComparer.Ordinal) &&
                             change.GetProperty("name").GetString() == name)
+                        {
+                            // A recovered final snapshot cannot establish the types of prior values.
+                            foreach (string side in new[] { "before", "after" })
+                                if (change.TryGetProperty(side + "Status", out var status) && status.GetString() == "available" &&
+                                    !TypeMatches(change.GetProperty(side), (JsonObject)read["valueType"]!))
+                                    return Failure(ReadAvailability.Unavailable, "value-type-changed");
                             relevantChanges.Add(new(change.Clone(), changeTransport.GetProperty("catalogs")[index].Clone()));
+                        }
                         index++;
                     }
                 }

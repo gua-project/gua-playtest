@@ -200,8 +200,11 @@ public sealed class RealBridgeTests
         var result = bridge.Send("purchase-1", selector, new(GuaActionType.Click), Epoch(runtime), () => true);
         Assert.Equal(1, transactions); Assert.Equal(1, ingress);
         Assert.Equal(ConfirmedActionStage.DispatchAttempted, result.Stage); Assert.Null(result.RequestId);
-        Assert.Equal(ActionAttemptStatus.Failed, result.Status); Assert.Equal("dispatch-unconfirmed", result.Reason);
+        Assert.Equal(ActionAttemptStatus.Pending, result.Status); Assert.Equal("dispatch-unconfirmed", result.Reason);
         Assert.Equal(result, bridge.Send("purchase-1", selector, new(GuaActionType.Click), Epoch(runtime), () => true));
+        var timeout = bridge.EndWait("purchase-1", false);
+        Assert.Equal(ActionAttemptStatus.TimedOut, timeout.Status); Assert.Equal(ConfirmedActionStage.DispatchAttempted, timeout.Stage);
+        Assert.Equal(timeout, bridge.Send("purchase-1", selector, new(GuaActionType.Click), Epoch(runtime), () => true));
         Assert.Equal(1, ingress); Assert.Equal(1, transactions); Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "buy", out _));
     }
 
@@ -219,9 +222,12 @@ public sealed class RealBridgeTests
         var selector = JsonNode.Parse("{\"id\":{\"value\":\"buy\"}}")!.AsObject();
         var attempt = bridge.Send("a", selector, new(GuaActionType.Click), Epoch(runtime), () => true);
         Assert.True(runtime.TryConsumeAction(GuaActionType.Click, "buy", out var request)); runtime.EmitActionResult(request, true);
-        var result = bridge.Poll("a"); Assert.Equal(ActionAttemptStatus.Failed, result.Status);
+        var result = bridge.Poll("a"); Assert.Equal(ActionAttemptStatus.Pending, result.Status);
         Assert.Equal(ConfirmedActionStage.Enqueued, result.Stage); Assert.Equal(attempt.RequestId, result.RequestId);
         Assert.Equal(result, bridge.Poll("a")); Assert.Equal(1, polls);
+        var timeout = bridge.EndWait("a", false); Assert.Equal(ActionAttemptStatus.TimedOut, timeout.Status);
+        Assert.Equal(ConfirmedActionStage.Enqueued, timeout.Stage); Assert.Equal(attempt.RequestId, timeout.RequestId);
+        Assert.Equal(timeout, bridge.Poll("a")); Assert.Equal(1, polls);
     }
 
     [Fact]
@@ -359,5 +365,48 @@ public sealed class RealBridgeTests
         var noTags = Assert.Single(result[1].Reads).Value!.Value;
         Assert.Equal("list", noTags.GetProperty("type").GetString()); Assert.Equal("string", noTags.GetProperty("elementType").GetString());
         Assert.Empty(noTags.GetProperty("value").EnumerateArray());
+    }
+
+    [Fact]
+    public void InvalidUiSelectorIsRejectedBeforeDispatchAndNeverRetried()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "button");
+        using var bridge = new BridgeUiActions(Start(runtime), "invalid-selector", TimeSpan.FromSeconds(2), 10, EnterFixtureLifecycle);
+        var selector = new JsonObject { ["unsupported"] = true };
+        var result = bridge.Send("invalid", selector, new(GuaActionType.Click), Epoch(runtime), () => true);
+        Assert.Equal(ActionAttemptStatus.Rejected, result.Status); Assert.Equal(ConfirmedActionStage.NotSent, result.Stage);
+        Assert.Equal("preflight-rejected", result.Reason);
+        Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "button", out _));
+        Assert.Equal(result, bridge.Send("invalid", selector, new(GuaActionType.Click), Epoch(runtime), () => true));
+    }
+
+    [Fact]
+    public void IntermediateTypeChangeCannotBeHiddenByRestoredFinalType()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        bool changed = false;
+        using var property = owner.Property("phase", () => changed ? GuaValue.String("temporary") : GuaValue.Integer(1));
+        property.Notify(); using var reader = Reader(Start(runtime)); var read = Read("world", "property", "phase");
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability);
+        changed = true; property.Notify(); changed = false; property.Notify();
+        var result = reader.Read(read);
+        Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Equal("value-type-changed", Assert.Single(result.Reads).Reason);
+        Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
+    }
+
+    [Fact]
+    public void PreviousAvailableEventValueMustMatchTheDeclaredReadType()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        bool changed = false;
+        using var property = owner.Property("phase", () => changed ? GuaValue.String("now") : GuaValue.Integer(1));
+        property.Notify(); using var reader = Reader(Start(runtime));
+        Assert.Equal(ReadAvailability.Available, reader.Read(Read("world", "property", "phase")).Availability);
+        changed = true; property.Notify();
+        var result = reader.Read(Read("world", "property", "phase", "string"));
+        Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Equal("value-type-changed", Assert.Single(result.Reads).Reason);
+        Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
     }
 }

@@ -59,7 +59,10 @@ Status and confirmed stage are distinct. Host completion retains original Gua
 error codes. A successful attack input cannot establish damage, a Goal or causal
 observation change. TimedOut/Aborted preserve their enqueued/dispatch stage:
 they are not proof of nonexecution, cancellation or rollback. Unknown receipt or
-consumed completion replies remain unconfirmed and have no resend path. Polling
+consumed completion replies remain Pending and have no resend path. Runner's
+finite deadline calls `EndWait` to record TimedOut/Aborted with the retained stage.
+An uncertain consumed-completion poll is not repeated. Pre-dispatch exceptions
+retain Rejected/NotSent, allowing a corrected action with a new execution ID. Polling
 requires matching request and epoch; UI completion also requires its Runtime ID.
 Terminal feedback is retained. Later evidence does not silently rewrite a timeout.
 

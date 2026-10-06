@@ -5,7 +5,17 @@ Environment: Windows x64, .NET SDK 10.0.401; actual restored Gua.Testing/Gua.Run
 1.1.1 packages and their native runtime. Core remains native-free.
 
 `dotnet test -c Release --no-restore --logger trx --results-directory artifacts/tests`:
-16 bridge tests, 42 contract tests and 16 foundation tests passed, no skips. The later batch/intermediate-change and standard string-list regressions were added after the Windows execution transport disconnected; its execution requires the new-head real CI result.
+Initial validation passed 16 bridge tests, 42 contract tests and 16 foundation
+tests, no skips. After reconnecting, the published HEAD was fast-forwarded without
+losing local WIP (the original patch and stash were retained; comparison proved it
+was already incorporated). The latest local validation passed 21 real bridge
+tests, 42 contract tests and 20 foundation tests, no skips. This includes standard
+typed string lists, intermediate change batches, invalid-selector preflight
+rejection, both before/after intermediate type mismatches, and lost replies that
+remain Pending without resend/re-poll until Runner EndWait. Windows sandbox
+HttpListener startup failed in two fault tests; the same unmodified tests passed
+with approved loopback access. These local results require new-head real CI and
+actual Codex review before merge.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

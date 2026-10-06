@@ -66,14 +66,15 @@ public sealed class BridgeUiActions : IDisposable
                 // Gua's remote EnqueueAction collapses InvalidOperationException into InvalidArgument.
                 // That generic result is ambiguous, rather than proof of remote rejection/nonexecution.
                 if (error != GuaActionError.None)
-                    return Save(attempt with { Status = error == GuaActionError.InvalidArgument ? ActionAttemptStatus.Failed : ActionAttemptStatus.Rejected,
+                    return Save(attempt with { Status = error == GuaActionError.InvalidArgument ? ActionAttemptStatus.Pending : ActionAttemptStatus.Rejected,
                         GuaErrorCode = (int)error, Reason = error == GuaActionError.InvalidArgument ? "dispatch-unconfirmed" : "gua-rejected" });
-                if (id == 0) return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "dispatch-unconfirmed" });
+                if (id == 0) return Save(attempt with { Status = ActionAttemptStatus.Pending, Reason = "dispatch-unconfirmed" });
                 return Save(attempt with { RequestId = id, Stage = ConfirmedActionStage.Enqueued, Reason = "enqueued" });
             }
             catch (OperationCanceledException) { return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "cancelled-unconfirmed" }); }
             catch (Exception e) when (e is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException)
-            { return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "dispatch-unconfirmed" }); }
+            { return Save(attempt with { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Rejected : ActionAttemptStatus.Pending,
+                Reason = attempt.Stage == ConfirmedActionStage.NotSent ? "preflight-rejected" : "dispatch-unconfirmed" }); }
         }
     }
     public ActionAttempt Poll(string executionId)
@@ -83,18 +84,21 @@ public sealed class BridgeUiActions : IDisposable
             ObjectDisposedException.ThrowIf(disposed, this);
             var attempt = attempts[executionId];
             if (attempt.Status != ActionAttemptStatus.Pending || attempt.RequestId is null) return attempt;
+            // A poll may have consumed the remote completion before its reply was lost.
+            // Preserve uncertainty until EndWait; another poll cannot restore that evidence.
+            if (attempt.Reason is "completion-unconfirmed" or "correlation-unconfirmed") return attempt;
             try
             {
                 if (context.GetContextStatus().SessionEpoch != attempt.SessionEpoch)
                     return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "stale-session-unconfirmed" });
                 if (!context.TryPollActionEvent(attempt.RequestId.Value, out var result)) return attempt;
                 if (result.RequestId != attempt.RequestId || result.SessionEpoch != attempt.SessionEpoch || result.NodeId != attempt.RuntimeId)
-                    return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "correlation-unconfirmed" });
+                    return Save(attempt with { Status = ActionAttemptStatus.Pending, Reason = "correlation-unconfirmed" });
                 return Save(attempt with { Status = result.Succeeded ? ActionAttemptStatus.Succeeded : ActionAttemptStatus.Failed,
                     Stage = ConfirmedActionStage.HostCompleted, GuaErrorCode = (int)result.Error, Reason = "host-completed" });
             }
             catch (Exception e) when (e is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
-            { return Save(attempt with { Status = ActionAttemptStatus.Failed, Reason = "completion-unconfirmed" }); }
+            { return Save(attempt with { Status = ActionAttemptStatus.Pending, Reason = "completion-unconfirmed" }); }
         }
     }
     public ActionAttempt EndWait(string executionId, bool cancelled)
