@@ -30,6 +30,10 @@ public sealed class RunArtifactStore
     {
         this.limits = limits; this.redactor = redactor;
         var absoluteRoot = Path.GetFullPath(root);
+        var existing = absoluteRoot;
+        while (!Directory.Exists(existing) && !File.Exists(existing))
+            existing = Path.GetDirectoryName(existing) ?? throw new InvalidDataException("ArtifactRootInvalid");
+        CheckPath(existing);
         Directory.CreateDirectory(absoluteRoot);
         CheckPath(absoluteRoot);
         RunId = Guid.NewGuid().ToString("N");
@@ -63,7 +67,7 @@ public sealed class RunArtifactStore
     /// <summary>Snapshot machine authority at confirmation, before diagnostics or input/resource release.</summary>
     public PersistenceResult ConfirmPrimary(PrimaryResult result, IReadOnlyList<ObservationReference> observations,
         IReadOnlyList<DecisionReference> decisions, IReadOnlyList<ExceptionEvidence> exceptions,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IReadOnlyList<RunEvent>? events = null)
     {
         var saved = Attempt(() =>
         {
@@ -73,7 +77,7 @@ public sealed class RunArtifactStore
             // Freeze in memory even if the disk write fails; persistence never authorizes a replacement result.
             primary = result;
             Publish("primary.json", Encode(new { kind = "playtestPrimaryStorage", storageVersion = 1, runId = RunId,
-                result, observations, decisions, exceptions }), cancellationToken);
+                result, observations, decisions, exceptions, events = events ?? [] }), cancellationToken);
         });
         return saved;
     }

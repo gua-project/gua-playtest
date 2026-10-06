@@ -11,7 +11,9 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed class ArtifactTests : IDisposable
 {
     private const string Secret = "SECRET_MARKER_7f933";
-    private readonly string root = Path.Combine(Path.GetTempPath(), "playtest-artifact-tests-" + Guid.NewGuid().ToString("N"));
+    // macOS's global temp path can include /var -> /private/var. The API deliberately rejects
+    // aliased roots; use a physical directory in the test output on every OS.
+    private readonly string root = Path.Combine(AppContext.BaseDirectory, "playtest-artifact-tests-" + Guid.NewGuid().ToString("N"));
     private static ArtifactLimits Limits => new(65536, 524288, 1000, 16384);
     private RunArtifactStore Store(ArtifactLimits? limits = null) => RunArtifactStore.Create(root, limits ?? Limits,
         new PersistenceRedactor([Secret], ["password"]));
@@ -129,6 +131,59 @@ public sealed class ArtifactTests : IDisposable
         var failed = new PrimaryResult(ResultStatus.Aborted, new(RunReason.Cancelled, RunPhase.Preparation, RunOrigin.User));
         var aborted = Store(); Confirm(aborted, failed);
         Assert.Equal(PersistenceFailure.InvalidEvidence, aborted.Complete(Outcome(failed), Omitted, [], DateTimeOffset.UtcNow).Failure);
+    }
+    [Fact]
+    public async Task Bundle_files_are_bounded_read_back_and_cannot_alias_across_artifact_kinds()
+    {
+        var store = Store(); Assert.True(store.BeginPreparation(Metadata).Saved); Confirm(store);
+        Directory.CreateDirectory(Path.Combine(store.DirectoryPath, "trace"));
+        var bytes = Encoding.UTF8.GetBytes("Gua-owned-bundle-fixture"); var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        File.WriteAllBytes(Path.Combine(store.DirectoryPath, "trace", "manifest.json"), bytes);
+        File.WriteAllBytes(Path.Combine(store.DirectoryPath, "trace", "events.jsonl"), bytes);
+        Assert.True(store.Complete(Outcome(), [new(ArtifactKind.Trace, ArtifactState.Saved, "trace/manifest.json", bytes.Length, hash,
+            [new("trace/events.jsonl", bytes.Length, hash)]), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath + Path.DirectorySeparatorChar, Limits)).State);
+        var alias = Store(); Confirm(alias); File.WriteAllBytes(Path.Combine(alias.DirectoryPath, "trace.gua"), bytes);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, alias.Complete(Outcome(),
+            [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.gua", bytes.Length, hash), new(ArtifactKind.Recording, ArtifactState.Saved, "trace.gua", bytes.Length, hash)], [], DateTimeOffset.UtcNow).Failure);
+    }
+    [Fact]
+    public void Linked_root_is_rejected_before_child_creation_and_linked_artifact_is_rejected()
+    {
+        Directory.CreateDirectory(root);
+        var target = Path.Combine(root, "target"); Directory.CreateDirectory(target);
+        var link = Path.Combine(root, "link");
+        CreateDirectoryLink(link, target);
+        Assert.Throws<InvalidDataException>(() => RunArtifactStore.Create(Path.Combine(link, "must-not-create"), Limits, new([], [])));
+        Assert.False(Directory.Exists(Path.Combine(target, "must-not-create")));
+        var store = Store(); Confirm(store);
+        var source = Path.Combine(target, "source.gua"); File.WriteAllText(source, "fixture");
+        CreateDirectoryLink(Path.Combine(store.DirectoryPath, "linked"), target);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(),
+            [new(ArtifactKind.Trace, ArtifactState.Saved, "linked/source.gua", 7, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("fixture")))),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Failure);
+        // Remove links without traversing targets; test cleanup owns only this temporary tree.
+        Directory.Delete(Path.Combine(store.DirectoryPath, "linked")); Directory.Delete(link);
+    }
+    private static void CreateDirectoryLink(string link, string target)
+    {
+        if (!OperatingSystem.IsWindows()) { Directory.CreateSymbolicLink(link, target); return; }
+        // Directory junctions test the same reparse-point boundary without elevation or Developer Mode.
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in new[] { "/c", "mklink", "/J", link, target }) start.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+    }
+    [Fact]
+    public void Prior_metadata_failure_remains_postprocessing_even_when_final_write_succeeds()
+    {
+        var store = Store();
+        Assert.Equal(PersistenceFailure.Cancelled, store.BeginPreparation(Metadata, new CancellationToken(true)).Failure);
+        Confirm(store);
+        var result = store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(11, result.ExitCode(Outcome()));
+        Assert.DoesNotContain(Secret, File.ReadAllText(Path.Combine(store.DirectoryPath, "primary.json")));
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }

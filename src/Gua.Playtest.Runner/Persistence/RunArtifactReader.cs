@@ -13,7 +13,7 @@ public static class RunArtifactReader
     {
         try
         {
-            var root = Path.GetFullPath(directory);
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
             RunArtifactStore.CheckPath(root);
             var file = Path.Combine(root, "result.json");
             if (!File.Exists(file)) return new(ResultReadState.Missing);
