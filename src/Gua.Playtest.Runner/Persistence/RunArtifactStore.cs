@@ -51,7 +51,8 @@ public sealed class RunArtifactStore
     public PersistenceResult BeginPreparation(RunArtifactMetadata metadata, CancellationToken cancellationToken = default)
         => Attempt(() =>
         {
-            if (File.Exists(Path.Combine(DirectoryPath, "run.json"))) throw new InvalidDataException("RunAlreadyStarted");
+            if (primary is not null || completionAttempted || File.Exists(Path.Combine(DirectoryPath, "run.json")))
+                throw new InvalidDataException("RunAlreadyStarted");
             var inputs = new List<object>();
             if (metadata.Inputs.Count > limits.MaxItems) throw new ArtifactLimitException();
             long inputBytes = 0;
@@ -79,6 +80,8 @@ public sealed class RunArtifactStore
         var saved = Attempt(() =>
         {
             if (primary is not null || completionAttempted) throw new InvalidDataException("PrimaryAlreadyConfirmed");
+            if (result is null || result.Cause is null || !Enum.IsDefined(result.Status) || !Enum.IsDefined(result.Cause.Reason) ||
+                !Enum.IsDefined(result.Cause.Phase) || !Enum.IsDefined(result.Cause.Origin)) throw new InvalidDataException("PrimaryResultInvalid");
             ValidateReferences(observations, decisions);
             if (observations.Any(x => x.Boundary == ObservationBoundary.AfterCleanup)) throw new InvalidDataException("ObservationBoundaryInvalid");
             // Freeze in memory even if the disk write fails; persistence never authorizes a replacement result.
@@ -183,7 +186,11 @@ public sealed class RunArtifactStore
     private JsonNode? SafeNode(object? value, ref int count, int depth = 0)
     {
         if (++count > limits.MaxItems || depth > 32) throw new ArtifactLimitException();
-        if (value is null) return null;
+        if (value is null)
+        {
+            RejectScalarSecret("null"u8);
+            return null;
+        }
         if (value is EffectiveSetting setting)
         {
             var obj = new JsonObject();
@@ -222,6 +229,7 @@ public sealed class RunArtifactStore
                 return SafeNode(element.GetString(), ref count, depth + 1);
             }
             ChargeChars(raw.Length);
+            RejectScalarSecret(raw);
             return JsonNode.Parse(raw);
         }
         if (value is string text)
@@ -251,11 +259,21 @@ public sealed class RunArtifactStore
         }
         if (value.GetType().IsEnum)
         {
+            if (!Enum.IsDefined(value.GetType(), value)) throw new InvalidDataException("EnumValueInvalid");
             if (redactor.Redact(value.ToString()!) != value.ToString()) throw new InvalidDataException("StructuralRedactionCollision");
             return SafeNode(value.ToString(), ref count, depth + 1);
         }
         if (value is DateTimeOffset || value.GetType().IsPrimitive || value is decimal)
-            return JsonSerializer.SerializeToNode(value, value.GetType(), Json);
+        {
+            var generated = JsonSerializer.SerializeToElement(value, value.GetType(), Json);
+            if (generated.ValueKind == JsonValueKind.String)
+            {
+                var generatedText = generated.GetString()!;
+                if (redactor.Redact(generatedText) != generatedText) throw new InvalidDataException("StructuralRedactionCollision");
+            }
+            else RejectScalarSecret(System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(generated));
+            return JsonSerializer.SerializeToNode(generated, Json);
+        }
         var result = new JsonObject();
         foreach (var property in value.GetType().GetProperties())
         {
@@ -276,7 +294,13 @@ public sealed class RunArtifactStore
             value is string structuralText && redactor.Redact(structuralText) != structuralText)
             throw new InvalidDataException("StructuralRedactionCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
-        obj[safeKey] = redactor.Sensitive(key) ? null : SafeNode(value, ref count, depth + 1);
+        obj[safeKey] = SafeNode(redactor.Sensitive(key) ? null : value, ref count, depth + 1);
+    }
+    private void RejectScalarSecret(ReadOnlySpan<byte> token)
+    {
+        // Primitive JSON literals are ASCII. Preserve their exact bytes or fail before hash/publication;
+        // partial deletion would corrupt the scalar or silently change its numeric value.
+        if (redactor.ContainsAsciiSecret(token)) throw new InvalidDataException("ScalarRedactionCollision");
     }
     private void ChargeChars(int count)
     {

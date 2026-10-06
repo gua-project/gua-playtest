@@ -435,5 +435,66 @@ public sealed class ArtifactTests : IDisposable
             [new(ArtifactKind.Trace, ArtifactState.Saved, fileName, 1, hash), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Failure);
         Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "completion.json")));
     }
+    [Theory]
+    [InlineData("true", "true")]
+    [InlineData("false", "false")]
+    [InlineData("1234567890123456789", "1234567890123456789")]
+    [InlineData("1.234567890123456789e-123", "e-123")]
+    [InlineData("null", "null")]
+    public void Scalar_secret_collisions_fail_before_any_input_hash_or_publication(string token, string secret)
+    {
+        using var source = JsonDocument.Parse("{\"credential\":[" + token + "]}");
+        var original = source.RootElement.GetRawText();
+        var store = RunArtifactStore.Create(root, Limits, new([secret], []));
+        var metadata = new RunArtifactMetadata("public", [], new Dictionary<string, string>(), [new("scenario", source.RootElement)]);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(metadata).Failure);
+        Assert.Equal(original, source.RootElement.GetRawText());
+        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(x => Path.GetFileName(x)!).ToArray());
+    }
+    [Fact]
+    public void Safe_scalar_raw_values_are_preserved_and_generated_timestamp_collisions_fail()
+    {
+        using var source = JsonDocument.Parse("{\"number\":1e-3,\"boolean\":false,\"empty\":null}");
+        var store = Store();
+        Assert.True(store.BeginPreparation(new("public", [], new Dictionary<string, string>(), [new("scenario", source.RootElement)])).Saved);
+        using var readback = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        var copy = readback.RootElement.GetProperty("inputs")[0].GetProperty("document");
+        Assert.Equal("1e-3", copy.GetProperty("number").GetRawText());
+        Assert.False(copy.GetProperty("boolean").GetBoolean()); Assert.Equal(JsonValueKind.Null, copy.GetProperty("empty").ValueKind);
+        var timestamp = RunArtifactStore.Create(root, Limits, new(["2097-01"], [])); Confirm(timestamp);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, timestamp.Complete(Outcome(), Omitted, [], new(2097, 1, 2, 3, 4, 5, TimeSpan.Zero)).Failure);
+        Assert.False(File.Exists(Path.Combine(timestamp.DirectoryPath, "result.json")));
+        foreach (var file in Directory.GetFiles(timestamp.DirectoryPath)) Assert.DoesNotContain("2097-01", File.ReadAllText(file));
+    }
+    [Theory]
+    [InlineData("status")]
+    [InlineData("reason")]
+    [InlineData("phase")]
+    [InlineData("origin")]
+    [InlineData("cause")]
+    public void Invalid_primary_enums_are_rejected_before_freezing_the_snapshot(string field)
+    {
+        var store = Store();
+        var invalid = new PrimaryResult(field == "status" ? (ResultStatus)999 : Passed.Status,
+            field == "cause" ? null! : new(field == "reason" ? (RunReason)999 : Passed.Cause.Reason,
+                field == "phase" ? (RunPhase)999 : Passed.Cause.Phase, field == "origin" ? (RunOrigin)999 : Passed.Cause.Origin));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.ConfirmPrimary(invalid, [], [], []).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        Confirm(store); // Invalid evidence must not freeze an invalid primary in memory.
+        Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Preparing_cannot_be_published_after_primary_or_completion(bool complete)
+    {
+        var store = Store(); Confirm(store);
+        if (complete) Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        var before = Directory.GetFiles(store.DirectoryPath).ToDictionary(x => Path.GetFileName(x)!, File.ReadAllBytes);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(Metadata).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(before.Count, Directory.GetFiles(store.DirectoryPath).Length);
+        foreach (var file in before) Assert.Equal(file.Value, File.ReadAllBytes(Path.Combine(store.DirectoryPath, file.Key!)));
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }

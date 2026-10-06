@@ -60,6 +60,17 @@ public sealed class PersistenceRedactor
         }
         return value;
     }
+    internal bool ContainsAsciiSecret(ReadOnlySpan<byte> token)
+    {
+        var state = 0;
+        foreach (var character in token)
+        {
+            while (state != 0 && !nodes[state].Edges.ContainsKey((char)character)) state = nodes[state].Failure;
+            state = nodes[state].Edges.TryGetValue((char)character, out var next) ? next : 0;
+            if (nodes[state].Terminal) return true;
+        }
+        return false;
+    }
     internal bool Sensitive(string name) => fields.Contains(name);
 }
 internal sealed class ArtifactLimitException : Exception;
