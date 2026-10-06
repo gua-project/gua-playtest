@@ -1,0 +1,48 @@
+name: foundation
+on:
+  pull_request:
+  push:
+    branches: [main, 'issue-3-*']
+permissions:
+  contents: read
+jobs:
+  build-test-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-22.04
+            rid: linux-x64
+          - os: macos-15-intel
+            rid: osx-x64
+          - os: macos-15
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.301
+      - name: Dependency boundaries
+        shell: pwsh
+        run: ./scripts/check-boundaries.ps1
+      - run: dotnet restore --locked-mode
+      - run: dotnet build --no-restore -c Release
+      - run: dotnet test --no-build --no-restore -c Release --logger "trx;LogFileName=foundation.trx" --results-directory artifacts/tests
+      - name: Actual archive and tool smoke
+        shell: pwsh
+        run: ./scripts/package-smoke.ps1 -Rid '${{ matrix.rid }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: foundation-${{ matrix.rid }}-${{ github.sha }}
+          path: |
+            artifacts/tests/*.trx
+            artifacts/smoke-*/evidence.json
+            artifacts/smoke-*/*.zip
+            artifacts/smoke-*/feed/*.nupkg
+            **/packages.lock.json
+          if-no-files-found: error

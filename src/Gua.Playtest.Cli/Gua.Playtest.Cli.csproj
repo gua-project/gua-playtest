@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>gua-playtest</ToolCommandName>
+    <PackageId>Gua.Playtest.Cli</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <ProjectReference Include="../Gua.Playtest.Runner/Gua.Playtest.Runner.csproj" />
+    <ProjectReference Include="../Gua.Playtest.GuaIntegration/Gua.Playtest.GuaIntegration.csproj" />
+    <ProjectReference Include="../Gua.Playtest.Planners.Codex/Gua.Playtest.Planners.Codex.csproj" />
+  </ItemGroup>
+</Project>

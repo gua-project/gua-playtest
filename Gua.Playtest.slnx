@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Gua.Playtest.Cli/Gua.Playtest.Cli.csproj" />
+    <Project Path="src/Gua.Playtest.Core/Gua.Playtest.Core.csproj" />
+    <Project Path="src/Gua.Playtest.GuaIntegration/Gua.Playtest.GuaIntegration.csproj" />
+    <Project Path="src/Gua.Playtest.Planners.Codex/Gua.Playtest.Planners.Codex.csproj" />
+    <Project Path="src/Gua.Playtest.Runner/Gua.Playtest.Runner.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Gua.Playtest.Foundation.Tests/Gua.Playtest.Foundation.Tests.csproj" />
+  </Folder>
+</Solution>
