@@ -1,0 +1,211 @@
+using Gua.Playtest.Core;
+using Gua.Playtest.Runner.Execution;
+
+namespace Gua.Playtest.Runner.Preparation;
+
+/// <summary>One trusted serialized owner. Compose PrepareAsync into RunExecutor's preparation callback.
+/// Returned boundary has no dispatch authority until the execution owner establishes Running and evaluates it.</summary>
+public sealed class HostPreparation
+{
+    private static readonly object LeaseLock = new();
+    private static readonly HashSet<string> ActiveEndpoints = new(StringComparer.Ordinal);
+    private readonly PreparationPolicy policy;
+    private readonly IClock clock;
+    private readonly IProcessLauncher launcher;
+    private readonly IPreparationConnector connector;
+    private readonly IPreparationTrace trace;
+    private bool used;
+    private int pendingReleases;
+    public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
+        IPreparationConnector connector, IPreparationTrace trace)
+    {
+        ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(launcher); ArgumentNullException.ThrowIfNull(connector); ArgumentNullException.ThrowIfNull(trace);
+        if (!Enum.IsDefined(policy.HostMode) || !Enum.IsDefined(policy.PlayMode) || !policy.Endpoint.IsAbsoluteUri ||
+            policy.Endpoint.Scheme is not ("ws" or "wss") || policy.Endpoint.Port <= 0 ||
+            !System.Text.RegularExpressions.Regex.IsMatch(policy.Endpoint.OriginalString, @"^wss?://(?:\[[^\]]+\]|[^/:]+):[0-9]+(?:/|$)") || !string.IsNullOrEmpty(policy.Endpoint.UserInfo) ||
+            string.IsNullOrWhiteSpace(policy.ExpectedBuildId) || string.IsNullOrWhiteSpace(policy.RequiredProtocol) ||
+            policy.Profile is not ("Player" or "Testing" or "Debug") || string.IsNullOrWhiteSpace(policy.Clock) ||
+            policy.Capabilities is null || policy.Capabilities.Any(string.IsNullOrWhiteSpace) ||
+            (policy.HostMode == HostMode.Launch) != (policy.Launch is not null) || policy.ConnectAttempts is < 1 or > 100)
+            throw new ArgumentException("PreparationPolicyInvalid", nameof(policy));
+        foreach (var duration in new[] { policy.OperationTimeout, policy.RetryDelay, policy.ShutdownTimeout })
+            if (duration <= TimeSpan.Zero || duration > TimeSpan.FromDays(1)) throw new ArgumentException("PreparationLimitInvalid", nameof(policy));
+        this.policy = policy with { Capabilities = policy.Capabilities.ToArray(),
+            Launch = policy.Launch is null ? null : policy.Launch with { Arguments = policy.Launch.Arguments.ToArray() } };
+        this.clock = clock; this.launcher = launcher; this.connector = connector; this.trace = trace;
+    }
+
+    public async ValueTask<InitialBoundary> PrepareAsync(OwnedCleanup cleanup, TimeSpan preparationDeadline,
+        IApprovedSetup? setup, IPreparationPlannerCheck? planner, CancellationToken cancellationToken = default)
+    {
+        if (used) throw new InvalidOperationException("PreparationAlreadyUsed");
+        used = true;
+        trace.Record(new(PreparationStage.Started, PreparationCode.Started));
+        // This prevents collisions in this Runner process only, never claims a host/manual-input lifecycle lock.
+        var key = policy.Endpoint.AbsoluteUri;
+        lock (LeaseLock)
+        {
+            if (!ActiveEndpoints.Add(key)) Fail(PreparationStage.Ownership, PreparationCode.Busy);
+        }
+        try
+        {
+        IOwnedProcess? process = null;
+        if (policy.HostMode == HostMode.Launch)
+        {
+            cancellationToken.ThrowIfCancellationRequested(); CheckDeadline(preparationDeadline);
+            try { process = launcher.Launch(policy.Launch!); }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            { Fail(PreparationStage.Launch, PreparationCode.LaunchFailed); }
+            var owned = process!;
+            try
+            {
+                RegisterRelease(cleanup, token => FiniteOperation.RunAsync(clock,
+                    policy.ShutdownTimeout, owned.ShutdownAsync, token));
+            }
+            catch
+            {
+                await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, owned.ShutdownAsync).ConfigureAwait(false);
+                throw;
+            }
+            trace.Record(new(PreparationStage.Launch, PreparationCode.Completed));
+        }
+        IPreparationConnection? connection = null;
+        for (var attempt = 0; attempt < policy.ConnectAttempts; attempt++)
+        {
+            if (process?.HasExited == true) Fail(PreparationStage.Launch, PreparationCode.ProcessExited);
+            try
+            {
+                connection = await Step(PreparationStage.Connect, preparationDeadline, async token =>
+                {
+                    var acquired = await connector.ConnectAsync(policy.Endpoint, token).ConfigureAwait(false);
+                    if (token.IsCancellationRequested)
+                    {
+                        await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, acquired.ReleaseAsync).ConfigureAwait(false);
+                        token.ThrowIfCancellationRequested();
+                    }
+                    try { RegisterRelease(cleanup, acquired.ReleaseAsync); }
+                    catch
+                    {
+                        await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, acquired.ReleaseAsync).ConfigureAwait(false);
+                        throw;
+                    }
+                    return acquired;
+                }, cancellationToken).ConfigureAwait(false);
+                break;
+            }
+            catch (ConnectionNotReadyException) when (attempt + 1 < policy.ConnectAttempts)
+            {
+                await Step(PreparationStage.Connect, preparationDeadline, async token =>
+                { await clock.DelayAsync(policy.RetryDelay, token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (ConnectionNotReadyException) { Fail(PreparationStage.Connect, PreparationCode.ConnectionFailed); }
+        }
+        var connected = connection!;
+        var identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
+        ValidateIdentity(identity);
+        if (setup is not null)
+        {
+            if (!setup.IsAuthorized(policy.HostMode)) Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
+            var operations = setup.OperationIds.ToArray();
+            if (setup.MaximumOperations is < 1 or > 1000 || operations.Length > setup.MaximumOperations ||
+                setup.Timeout <= TimeSpan.Zero || setup.Timeout > TimeSpan.FromDays(1) ||
+                operations.Any(id => string.IsNullOrWhiteSpace(id) || !setup.AllowedOperationIds.Contains(id)))
+                Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
+            var setupDeadline = Min(preparationDeadline, clock.Elapsed + setup.Timeout);
+            for (var index = 0; index < operations.Length; index++)
+            {
+                if (!setup.IsAuthorized(policy.HostMode) || setup.OperationIds.Count != operations.Length ||
+                    setup.OperationIds[index] != operations[index] || !setup.AllowedOperationIds.Contains(operations[index]))
+                    Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
+                var receipt = await Step(PreparationStage.Setup, setupDeadline,
+                    token => setup.ExecuteOperationAsync(index, connected, token), cancellationToken).ConfigureAwait(false);
+                if (receipt != SetupReceipt.Confirmed)
+                    Fail(PreparationStage.Setup, receipt == SetupReceipt.Failed ? PreparationCode.SetupFailed : PreparationCode.SetupUnconfirmed);
+            }
+            // Approved scene/save setup can establish a new epoch. Verify it rather than assuming old identity survived.
+            identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
+            ValidateIdentity(identity);
+        }
+        if (policy.PlayMode == PlayMode.Explore)
+        {
+            if (planner is null || !await Step(PreparationStage.Planner, preparationDeadline, planner.CheckAsync, cancellationToken).ConfigureAwait(false))
+                Fail(PreparationStage.Planner, PreparationCode.PlannerUnavailable);
+        }
+        var boundary = await Step(PreparationStage.Synchronize, preparationDeadline, connected.SynchronizeAsync, cancellationToken).ConfigureAwait(false);
+        ValidateIdentity(boundary.CapturedIdentity);
+        if (!boundary.Continuous || boundary.CapturedIdentity.SourceId != identity.SourceId || boundary.CapturedIdentity.Epoch != identity.Epoch)
+            Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation);
+        if (!boundary.PreconditionsSatisfied) Fail(PreparationStage.Preconditions, PreparationCode.PreconditionsUnsatisfied);
+        if (process?.HasExited == true) Fail(PreparationStage.Launch, PreparationCode.ProcessExited);
+        CheckDeadline(preparationDeadline); cancellationToken.ThrowIfCancellationRequested();
+        trace.Record(new(PreparationStage.Ready, PreparationCode.Completed));
+        return process is null ? boundary : boundary with { Feed = new ProcessObservationFeed(boundary.Feed, process, trace) };
+        }
+        finally
+        {
+            // Register last even on partial preparation failure: no second Run enters during resource shutdown.
+            try { cleanup.Register(CleanupStage.ResourceRelease, _ =>
+            {
+                // Unknown release preserves the local exclusion; a new Run cannot reclaim an uncertain owner.
+                if (Volatile.Read(ref pendingReleases) != 0) return ValueTask.FromResult(false);
+                lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
+            }); }
+            catch { lock (LeaseLock) ActiveEndpoints.Remove(key); throw; }
+        }
+    }
+
+    private void ValidateIdentity(HostIdentity identity)
+    {
+        if (identity.Protocol != policy.RequiredProtocol || identity.Profile != policy.Profile || identity.Clock != policy.Clock ||
+            string.IsNullOrWhiteSpace(identity.SourceId) || string.IsNullOrWhiteSpace(identity.Epoch) ||
+            (policy.RequireBuildAttestation && identity.AttestedGameBuildId is null) ||
+            (identity.AttestedGameBuildId is not null && identity.AttestedGameBuildId != policy.ExpectedBuildId))
+            Fail(PreparationStage.Identity, PreparationCode.IdentityMismatch);
+        if (!policy.Capabilities.All(identity.Capabilities.Contains)) Fail(PreparationStage.Identity, PreparationCode.CapabilityUnavailable);
+        // Do not clear/reset pending input to conceal an invalid Strict start.
+        if (policy.StrictStart && identity.HasOutstandingRequests) Fail(PreparationStage.Identity, PreparationCode.OutstandingRequests);
+    }
+
+    private void RegisterRelease(OwnedCleanup cleanup, Func<CancellationToken, ValueTask<bool>> release)
+    {
+        Interlocked.Increment(ref pendingReleases);
+        try { cleanup.Register(CleanupStage.ResourceRelease, async token =>
+        {
+            var confirmed = await release(token).ConfigureAwait(false);
+            if (confirmed) Interlocked.Decrement(ref pendingReleases);
+            return confirmed;
+        }); }
+        catch { Interlocked.Decrement(ref pendingReleases); throw; }
+    }
+
+    private async ValueTask<T> Step<T>(PreparationStage stage, TimeSpan deadline,
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken)
+    {
+        CheckDeadline(deadline);
+        try
+        {
+            var result = await FiniteOperation.RunAsync(clock, Min(policy.OperationTimeout, deadline - clock.Elapsed), action, cancellationToken).ConfigureAwait(false);
+            trace.Record(new(stage, PreparationCode.Completed)); return result;
+        }
+        catch (TimeoutException) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
+        catch (OperationCanceledException) { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
+        catch (ConnectionNotReadyException) { throw; }
+        catch (Exception)
+        {
+            trace.Record(new(stage, stage switch
+            {
+                PreparationStage.Connect => PreparationCode.ConnectionFailed,
+                PreparationStage.Identity => PreparationCode.IdentityUnavailable,
+                PreparationStage.Planner => PreparationCode.PlannerUnavailable,
+                PreparationStage.Synchronize => PreparationCode.SynchronizationFailed,
+                _ => PreparationCode.SetupFailed
+            })); throw;
+        }
+    }
+    private void CheckDeadline(TimeSpan deadline)
+    { if (clock.Elapsed >= deadline) { trace.Record(new(PreparationStage.Started, PreparationCode.Timeout)); throw new TimeoutException("PreparationDeadlineReached"); } }
+    private void Fail(PreparationStage stage, PreparationCode code)
+    { trace.Record(new(stage, code)); throw new PreparationException(stage, code); }
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
+}
