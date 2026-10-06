@@ -73,7 +73,10 @@ public sealed class RunSession
     {
         var now = realClock.Elapsed;
         if (now < TimeSpan.Zero || now < lastReal || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+        {
+            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
             throw new InvalidOperationException("RunClockInvalid");
+        }
         return lastReal = now;
     }
     public void BeginPreparation()
@@ -273,7 +276,11 @@ public sealed class RunSession
         catch (InvalidOperationException exception)
         {
             RecordException(exception); now = lastReal;
-            cycle.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
+            // Keep any evidence queued during the read, including the rejecting clock itself.
+            cycle.AddRange(pendingEvents);
+            pendingEvents.Clear();
+            if (!cycle.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
+                cycle.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
         }
         if (cycle.Count > Limits.MaxEvidenceItems)
         {

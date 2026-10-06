@@ -9,6 +9,51 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData(0, 0)] [InlineData(0, 1)] [InlineData(0, 2)]
+    [InlineData(1, 0)] [InlineData(1, 1)] [InlineData(1, 2)]
+    [InlineData(2, 0)] [InlineData(2, 1)] [InlineData(2, 2)]
+    [InlineData(3, 0)] [InlineData(3, 1)] [InlineData(3, 2)]
+    public async Task RecoveredRealClockCannotEraseOutsideEvaluateContractRejection(int boundary, int invalidKind)
+    {
+        var good = TimeSpan.FromMilliseconds(100); var real = new LaunchReadClock { Now = good }; var condition = new Clock();
+        var run = new RunSession(Limits(), real, condition); var cleanup = new OwnedCleanup(); bool released = false, executed = false;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        void Transient(int reads)
+        {
+            void Read()
+            {
+                if (--reads != 0) { real.OnRead = Read; return; }
+                real.Now = invalidKind switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue };
+                real.OnRead = () => real.Now = good;
+            }
+            real.OnRead = Read;
+        }
+        RunOutcome outcome;
+        if (boundary is 0 or 3)
+            outcome = await RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) =>
+            {
+                // Finite completion reads twice, preparation Evaluate once, then BeginRunning.
+                if (boundary == 0) Transient(4); return ValueTask.FromResult(true);
+            }, (session, _) =>
+            {
+                executed = true; Transient(1); session.RequestPlanner(); return ValueTask.FromResult(true);
+            });
+        else
+            outcome = await RunExecutor.ExecuteAsync(run, real, cleanup, (session, _, _) =>
+            {
+                if (boundary == 1) Transient(1);
+                var request = session.ArmRunningBoundary();
+                if (boundary == 2) Transient(1);
+                return ValueTask.FromResult(request.Certify(request.RequestId, good,
+                    new(TimeSpan.Zero, Unit(), Unit("false")), "fresh/source/epoch", true));
+            }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.Equal(2, outcome.ExitCode);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, boundary == 3 ? RunPhase.Execution : RunPhase.Preparation, RunOrigin.Clock), outcome.Primary.Cause);
+        Assert.Equal(boundary == 3, executed); Assert.True(released); Assert.False(run.GoalVerified);
+        Assert.Equal(ExecutionState.Finished, run.State); Assert.Equal(good, real.Now);
+        Assert.Contains(outcome.Exceptions, x => x.Type == "System.InvalidOperationException");
+    }
     [Fact]
     public async Task FalseExecutionFallbackRetainsCancellationAfterFirstEvaluationSample()
     {
