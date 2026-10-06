@@ -24,10 +24,12 @@ public sealed partial class RunTests
     }
     private sealed class FaultingDelayClock(bool asynchronous) : IClock
     {
+        public bool Enabled = true;
         public TaskCompletionSource Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TimeSpan Elapsed => TimeSpan.Zero;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
         {
+            if (!Enabled) return new(Task.Delay(duration, token));
             Called.TrySetResult(); var fault = new IOException("clock timer");
             if (asynchronous) return ValueTask.FromException(fault); throw fault;
         }

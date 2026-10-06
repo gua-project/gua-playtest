@@ -66,7 +66,10 @@ public sealed partial class RunTests
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task PrematureTimerWakeIsClockFailureAndStillCleansUp(bool execution)
     {
-        var clock = new EarlyWakeClock(); var run = new RunSession(Limits(), clock, new Clock());
+        var clock = new EarlyWakeClock(); var defaults = Limits();
+        var limits = new RunLimits(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(20), defaults.CleanupTimeout,
+            defaults.PlannerTimeout, defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = new RunSession(limits, clock, new Clock());
         bool released = false; var cleanup = new OwnedCleanup(); var pending = new TaskCompletionSource<bool>();
         var result = await RunExecutor.ExecuteAsync(run, clock, cleanup, (owned, _) =>
         {
@@ -92,5 +95,75 @@ public sealed partial class RunTests
         var finishing = cleanup.CompleteAsync(run, clock).AsTask(); await clock.Called.Task;
         Assert.False(finishing.IsCompleted); release.SetResult(true); var result = await finishing;
         Assert.False(cancelledEarly); Assert.DoesNotContain(result.PostProcessing, x => x.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+    }
+    [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task AuthoritativeDelayFaultRetainsClockCauseAndOriginalException(bool execution, bool asynchronous)
+    {
+        var clock = new FaultingDelayClock(asynchronous) { Enabled = !execution }; var run = new RunSession(Limits(), clock, new Clock());
+        bool released = false; var pending = new TaskCompletionSource<bool>();
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (owned, _) =>
+        {
+            owned.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+            return execution ? ValueTask.FromResult(true) : new ValueTask<bool>(pending.Task);
+        }, (_, _) => { clock.Enabled = true; return new ValueTask<bool>(pending.Task); });
+        Assert.True(released); Assert.Equal(2, outcome.ExitCode);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, execution ? RunPhase.Execution : RunPhase.Preparation, RunOrigin.Clock), outcome.Primary.Cause);
+        Assert.Contains(outcome.Exceptions, x => x.Type == "System.IO.IOException"); pending.SetResult(true);
+    }
+    [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task MonitorRealAndConditionDelayFaultsRetainClockCause(bool conditionFailure, bool asynchronous)
+    {
+        var broken = new FaultingDelayClock(asynchronous); var valid = new Clock();
+        IClock real = conditionFailure ? valid : broken; IClock condition = conditionFailure ? broken : valid;
+        var run = new RunSession(Limits(), real, condition, Condition(time: true)); run.BeginPreparation(); run.BeginRunning();
+        var feed = new Feed(() => new(TimeSpan.Zero, Unit("false", time: true), Unit("false")));
+        var pending = new TaskCompletionSource<int>();
+        var result = await RunMonitor.AwaitAsync(run, real, condition, feed, _ => new ValueTask<int>(pending.Task), _ => []);
+        Assert.False(result.Completed); Assert.Equal(2, run.Primary!.ExitCode);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Clock), run.Primary.Cause);
+        Assert.Contains(run.Exceptions, x => x.Type == "System.IO.IOException"); pending.SetResult(1);
+    }
+    private sealed class AdvancingEarlyWakeClock : IClock
+    {
+        private readonly System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+        public TaskCompletionSource Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TimeSpan Elapsed => elapsed.Elapsed;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) { Called.TrySetResult(); return ValueTask.CompletedTask; }
+    }
+    [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task ExpiredCleanupStillAttemptsOwnedReleaseWithoutNewWait(bool input, bool pending)
+    {
+        var clock = new Clock(); var run = Running(clock); run.Evaluate(Unit(), TimeSpan.Zero);
+        var cleanup = new OwnedCleanup(); var completion = new TaskCompletionSource<bool>(); bool invoked = false, cancelled = false;
+        var stage = input ? CleanupStage.InputRelease : CleanupStage.ResourceRelease;
+        cleanup.Register(CleanupStage.Diagnostics, _ => { clock.At(1000); return ValueTask.FromResult(true); });
+        cleanup.Register(stage, token =>
+        {
+            Assert.False(token.IsCancellationRequested); invoked = true;
+            token.Register(() => cancelled = true);
+            return pending ? new ValueTask<bool>(completion.Task) : ValueTask.FromResult(true);
+        });
+        var finishing = cleanup.CompleteAsync(run, clock).AsTask();
+        Assert.True(finishing.IsCompletedSuccessfully); var outcome = await finishing;
+        Assert.True(invoked); Assert.True(cancelled); Assert.Equal(11, outcome.ExitCode);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+        Assert.Equal(pending, outcome.PostProcessing.Any(x => x.Reason == (input ? PostProcessingReason.InputReleaseUnconfirmed : PostProcessingReason.ResourceReleaseUnconfirmed)));
+        completion.SetResult(true); Assert.Equal(11, outcome.ExitCode);
+    }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task EarlyNativeStyleWakeReschedulesAndKeepsWorkAndCancellationResponsive(int completion)
+    {
+        var clock = new AdvancingEarlyWakeClock(); var pending = new TaskCompletionSource<int>(); using var cancel = new CancellationTokenSource();
+        var deadline = clock.Elapsed + TimeSpan.FromMilliseconds(50);
+        var waiting = FiniteOperation.RunUntilAsync(clock, deadline, _ => new ValueTask<int>(pending.Task), cancel.Token).AsTask();
+        await clock.Called.Task; Assert.False(waiting.IsCompleted);
+        if (completion == 0)
+        {
+            var exception = await Assert.ThrowsAsync<TimeoutException>(() => waiting);
+            Assert.Equal("OperationDeadlineReached", exception.Message); Assert.True(clock.Elapsed >= deadline);
+        }
+        else if (completion == 1) { pending.SetResult(7); Assert.Equal(7, await waiting); }
+        else { cancel.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting); }
+        if (!pending.Task.IsCompleted) pending.SetResult(1);
     }
 }

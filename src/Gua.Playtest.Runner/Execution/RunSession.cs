@@ -12,8 +12,12 @@ public sealed class RunSession
     private sealed class ValidatedClock(RunSession owner, bool condition) : IClock
     {
         public TimeSpan Elapsed => condition ? owner.ReadCondition() : owner.ReadReal();
-        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
-            => (condition ? owner.conditionClock : owner.realClock).DelayAsync(duration, token);
+        public async ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            try { await (condition ? owner.conditionClock : owner.realClock).DelayAsync(duration, token).ConfigureAwait(false); }
+            catch (OperationCanceledException exception) when (token.IsCancellationRequested && exception.CancellationToken == token) { throw; }
+            catch (Exception exception) { throw new ClockProviderException(exception); }
+        }
     }
     private sealed record CapturedUnit(ConditionObservationUnit? Success, TimeSpan At, ConditionObservationUnit? Failure);
     private readonly IClock realClock, conditionClock;
@@ -444,7 +448,7 @@ public sealed class RunSession
         if (exception is ClockProviderException) QueueClockRejection();
         if (exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace));
-        if (exception is RunFailureException or ProviderCancellationException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
+        if (exception is RunFailureException or ProviderCancellationException or ClockProviderException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace));
         if (exception is AggregateException aggregate)
             foreach (var inner in aggregate.Flatten().InnerExceptions.Take(Math.Max(0, Limits.MaxEvidenceItems - exceptions.Count)))

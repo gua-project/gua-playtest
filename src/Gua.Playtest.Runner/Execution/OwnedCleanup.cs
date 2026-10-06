@@ -51,7 +51,7 @@ public sealed class OwnedCleanup
         {
             fallback = true;
             fallbackOffset = last.Ticks - lastSafety.Ticks;
-            reject(exception);
+            reject(exception is ClockProviderException { InnerException: { } original } ? original : exception);
         }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
         {
@@ -140,6 +140,17 @@ public sealed class OwnedCleanup
             if (issues.Count == run.Limits.MaxEvidenceItems - 1) issues.Add(new(PostProcessingReason.EvidenceLimitExceeded));
             return false;
         }
+        void RecordStageFault(CleanupStage stage, Exception exception)
+        {
+            if (issues.Count >= run.Limits.MaxEvidenceItems - 1) { AddIssue(new(PostProcessingReason.EvidenceLimitExceeded)); return; }
+            var allowance = run.Limits.MaxEvidenceItems - issues.Count;
+            var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(allowance) : [exception];
+            foreach (var fault in faults)
+            {
+                var original = fault is ProviderCancellationException ? fault.InnerException! : fault;
+                if (!AddIssue(new(Failure(stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)))) break;
+            }
+        }
         var cleanupClock = new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
             new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
         realClock = cleanupClock;
@@ -154,7 +165,25 @@ public sealed class OwnedCleanup
             var remaining = deadline - sampledNow;
             if (remaining <= TimeSpan.Zero)
             {
-                AddIssue(new(PostProcessingReason.CleanupTimeout)); AddIssue(new(Failure(step.Stage))); continue;
+                AddIssue(new(PostProcessingReason.CleanupTimeout));
+                if (step.Stage is not (CleanupStage.InputRelease or CleanupStage.ResourceRelease))
+                { AddIssue(new(Failure(step.Stage))); continue; }
+                // An expired observation budget still owes a release attempt. Invoke once,
+                // accept only already-completed confirmation, and grant no additional wait.
+                using var releaseCancellation = new CancellationTokenSource();
+                Task<bool>? release = null;
+                try
+                {
+                    release = step.Action(releaseCancellation.Token).AsTask();
+                    if (!release.IsCompleted || !release.GetAwaiter().GetResult()) AddIssue(new(Failure(step.Stage)));
+                }
+                catch (Exception exception) { RecordStageFault(step.Stage, exception); }
+                finally
+                {
+                    FiniteOperation.CancelSafely(releaseCancellation, exception => RecordStageFault(step.Stage, exception));
+                    if (release is not null) _ = release.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                }
+                continue;
             }
             var share = TimeSpan.FromTicks(Math.Max(1, remaining.Ticks / (ordered.Length - i)));
             // Caller cancellation skips diagnostics/artifacts but never skips owned input/resource cleanup.
@@ -162,14 +191,7 @@ public sealed class OwnedCleanup
             try
             {
                 var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, step.Action, token,
-                    exception =>
-                    {
-                        if (issues.Count >= run.Limits.MaxEvidenceItems - 1) { AddIssue(new(PostProcessingReason.EvidenceLimitExceeded)); return; }
-                        var allowance = run.Limits.MaxEvidenceItems - issues.Count;
-                        var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(allowance) : [exception];
-                        foreach (var fault in faults)
-                            if (!AddIssue(new(Failure(step.Stage), new(fault.GetType().FullName ?? fault.GetType().Name, fault.StackTrace)))) break;
-                    }).ConfigureAwait(false);
+                    exception => RecordStageFault(step.Stage, exception)).ConfigureAwait(false);
                 if (!result) AddIssue(new(Failure(step.Stage)));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -207,7 +229,7 @@ public sealed class OwnedCleanup
 /// Late results never acquire Run authority. A real clock must advance independently of simulation.</summary>
 internal sealed class ProviderCancellationException(OperationCanceledException original)
     : Exception("ProviderCancellation", original);
-internal sealed class ClockProviderException() : Exception("ClockTimerWokeBeforeDeadline");
+internal sealed class ClockProviderException(Exception? original = null) : Exception("ClockProviderFailure", original);
 
 public static class FiniteOperation
 {
@@ -250,7 +272,28 @@ public static class FiniteOperation
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             if (remaining <= TimeSpan.Zero) throw DeadlineReached("OperationDeadlineReached");
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
-            var winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
+            var independentWake = false;
+            Task winner;
+            while (true)
+            {
+                winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
+                if (operation.IsFaulted || operation.IsCanceled)
+                {
+                    if (timer.IsFaulted && recordException is not null)
+                        foreach (var fault in timer.Exception!.InnerExceptions) recordException(fault);
+                    return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+                }
+                if (timer.IsFaulted) await timer.ConfigureAwait(false);
+                if (winner != timer) break;
+                await timer.ConfigureAwait(false);
+                var remainder = startDeadline - realClock.Elapsed;
+                if (remainder <= TimeSpan.Zero) break;
+                // Ordinary native timers can wake early. Reschedule without reading session
+                // clocks on helper continuations, and keep work/caller cancellation in the race.
+                if (independentWake) throw new ClockProviderException();
+                independentWake = true;
+                timer = DelayIndependentAsync(remainder, timerCancellation.Token);
+            }
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             if (winner == cancelled.Task)
             {
@@ -278,6 +321,12 @@ public static class FiniteOperation
             if (recordException is not null)
                 while (callbackFaults.TryDequeue(out var fault)) recordException(fault);
         }
+    }
+    private static async Task DelayIndependentAsync(TimeSpan duration, CancellationToken token)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (duration - elapsed.Elapsed is var remaining && remaining > TimeSpan.Zero)
+            await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(remaining.TotalMilliseconds)), token).ConfigureAwait(false);
     }
     internal static Exception NormalizeCancellation(OperationCanceledException exception,
         CancellationToken providerToken, CancellationToken callerToken)
