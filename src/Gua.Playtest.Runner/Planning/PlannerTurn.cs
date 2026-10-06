@@ -33,11 +33,20 @@ public static class PlannerTurn
                 {
                     var reply = result.Value!;
                     adoption = gate.Adopt(request, reply.CompletedJson ?? []);
-                    if (adoption.TerminalEvent is not { } terminal) return new(adoption, false, true);
-                    // Recapture current conditions and arbitrate a noncontinuable invalid output with all
-                    // ready machine failure/cancel/deadline evidence, rather than assigning a primary here.
-                    await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
-                        _ => new ValueTask<RunEvent>(terminal), e => [e], cancellationToken).ConfigureAwait(false);
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        // Cancellation can arrive after the monitor's final unit or during
+                        // current authority checks. Retain a ready adoption failure too.
+                        run.Evaluate(candidates: adoption.TerminalEvent is { } ready ? [ready] : [], cancelled: true);
+                    }
+                    else
+                    {
+                        if (adoption.TerminalEvent is not { } terminal) return new(adoption, false, true);
+                        // Recapture current conditions and arbitrate a noncontinuable invalid output with all
+                        // ready machine failure/cancel/deadline evidence, rather than assigning a primary here.
+                        await RunMonitor.AwaitAsync(run, realClock, conditionClock, feed,
+                            _ => new ValueTask<RunEvent>(terminal), e => [e], cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
             catch (Exception exception)

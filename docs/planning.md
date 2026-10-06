@@ -103,6 +103,10 @@ Expired active adoption closes the permit and carries PlannerTimeout or confirme
 WaitExpired to arbitration. Adoption faults also arbitrate pending clock/contract
 evidence before release. Only the release attempt uses a fresh physical monotonic
 cleanup clock, so an invalid execution clock cannot skip or extend cleanup.
+Cancellation arriving after the final monitor unit or during adoption checks is
+arbitrated before returning operation authority. Any ready terminal adoption
+failure retains its priority over cancellation; approved unsent work is revoked
+before the same finite input-release/backend-interruption sequence.
 Cancellation callback faults are contained and recorded without replacing the
 primary outcome or owned-input-release evidence.
 The returned release flag must enter the driver's mandatory cleanup/postprocessing

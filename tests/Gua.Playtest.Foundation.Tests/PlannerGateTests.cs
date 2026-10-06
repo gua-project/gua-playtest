@@ -487,6 +487,29 @@ public sealed class PlannerGateTests
         public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
     }
 
+    [Theory]
+    [InlineData(true, 5, RunReason.Cancelled)]
+    [InlineData(false, 1, RunReason.PlannerOutputInvalid)]
+    public async Task CancellationDuringAdoptionRevokesAuthorityAndReleasesBeforeInterrupt(bool permission, long decisions, RunReason reason)
+    {
+        var s = new Setup(decisions: decisions); var r = s.Begin(); var order = new List<string>();
+        using var caller = new CancellationTokenSource();
+        s.Authority.Permission = permission;
+        s.Authority.BeforePermissionCheck = caller.Cancel;
+        var result = await PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(),
+            new CompletedRecordingPlanner(Response(r, Single()), order), _ =>
+            {
+                Assert.Equal(ExecutionState.Completing, s.Run.State);
+                order.Add("release-inputs"); return new(true);
+            }, caller.Token);
+        Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
+        Assert.Equal(reason, s.Run.Primary!.Cause.Reason);
+        Assert.Equal(new[] { "release-inputs", "cancel-planner" }, order);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+        if (permission) Assert.Equal(PlannerFeedbackCode.ResponseClosed, result.Adoption!.Approved!.BeginDispatch(0));
+        else { Assert.Null(result.Adoption!.Approved); Assert.False(result.Adoption.RetryAllowed); }
+    }
+
     [Fact]
     public async Task CompletedReplyJoinsOldCaptureThenAdoptsAfterOriginalPlannerDeadline()
     {
