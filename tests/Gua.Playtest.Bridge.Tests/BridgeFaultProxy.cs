@@ -15,7 +15,8 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
     private readonly CancellationTokenSource shutdown = new(TimeSpan.FromSeconds(15));
     private readonly Task server;
     public string Endpoint { get; }
-    public BridgeFaultProxy(string upstream, Func<JsonElement, JsonElement, bool> dropReply)
+    public BridgeFaultProxy(string upstream, Func<JsonElement, JsonElement, bool> dropReply,
+        Func<JsonElement, JsonElement, byte[]?>? rewriteReply = null)
     {
         using var port = new TcpListener(IPAddress.Loopback, 0); port.Start();
         int number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
@@ -48,7 +49,10 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
                             // Close after host commit. No fabricated Gua response or success.
                             downstream.Abort(); return;
                         }
-                        await downstream.SendAsync(reply.AsMemory(), WebSocketMessageType.Text, true, shutdown.Token);
+                        // Interoperability faults modify only the real host's response; they never
+                        // fabricate host execution or a successful action result.
+                        byte[] output = rewriteReply?.Invoke(commandDoc.RootElement, response.RootElement) ?? reply;
+                        await downstream.SendAsync(output.AsMemory(), WebSocketMessageType.Text, true, shutdown.Token);
                     }
                 }
             }

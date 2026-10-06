@@ -409,4 +409,147 @@ public sealed class RealBridgeTests
         Assert.Equal("value-type-changed", Assert.Single(result.Reads).Reason);
         Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
     }
+
+    [Fact]
+    public async Task SnapshotNewerThanPollCannotHideAnIntermediateViolation()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        bool value = true, armed = false; int injected = 0;
+        using var property = owner.Property("ready", () => GuaValue.Bool(value)); property.Notify();
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (command, response) =>
+        {
+            if (armed && command.GetProperty("type").GetString() == "poll_observations")
+            {
+                Assert.True(response.GetProperty("ok").GetBoolean());
+                value = false; property.Notify(); value = true; property.Notify(); armed = false; injected++;
+            }
+            return false;
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("world", "property", "ready", "bool");
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); armed = true;
+        var stale = reader.Read(read); Assert.Equal(1, injected);
+        Assert.Equal(ReadAvailability.Stale, stale.Availability); Assert.Equal("changed-since-poll", Assert.Single(stale.Reads).Reason);
+        Assert.Null(Assert.Single(stale.Reads).Value); Assert.Null(stale.Changes);
+        var next = reader.Read(read); Assert.Equal(ReadAvailability.Available, next.Availability);
+        Assert.Equal(2, next.Changes!.Count);
+        Assert.False(next.Changes[0].Event.GetProperty("after").GetProperty("value").GetBoolean());
+    }
+
+    [Fact]
+    public void DuplicateSelectorsShareOneBatchNodeBudget()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "one", "two"); using var reader = Reader(Start(runtime), nodes: 4);
+        var read = Read("ui", "standard", "visible", "bool", "one");
+        read["target"]!["selector"] = new JsonObject { ["role"] = new JsonObject { ["value"] = "button" } };
+        var result = reader.ReadBatch([read, read, read]);
+        Assert.All(result, item => Assert.Equal(ReadAvailability.Truncated, item.Availability));
+        Assert.All(result, item => Assert.Null(Assert.Single(item.Reads).Value));
+    }
+
+    [Fact]
+    public void DuplicateChangesShareOneBatchNodeBudget()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        int value = 0; using var property = owner.Property("count", () => GuaValue.Integer(value)); property.Notify();
+        using var reader = Reader(Start(runtime), nodes: 4); var read = Read("world", "property", "count");
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); value++; property.Notify();
+        Assert.All(reader.ReadBatch([read, read, read]), item => Assert.Equal(ReadAvailability.Truncated, item.Availability));
+    }
+
+    [Fact]
+    public void DuplicateValuesShareOneBatchByteBudget()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        using var property = owner.Property("text", () => GuaValue.String(new string('x', 4000))); property.Notify();
+        using var reader = Reader(Start(runtime), bytes: 10000); var read = Read("world", "property", "text", "string");
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability);
+        Assert.All(reader.ReadBatch([read, read, read]), item => Assert.Equal(ReadAvailability.Truncated, item.Availability));
+    }
+
+    [Fact]
+    public async Task CompliantUiTreeWithoutOptionalEpochStillReadsStandardFields()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "one"); int omitted = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != "get_ui_tree") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var tree = root["result"]!.AsObject();
+            Assert.True(tree.Remove("sessionEpoch")); omitted++;
+            Assert.True(GuaDistribution.ValidateJson("ui-tree.schema.json", tree.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var result = reader.Read(Read("ui", "standard", "visible", "bool", "one"));
+        Assert.Equal(1, omitted); Assert.Equal(ReadAvailability.Available, result.Availability);
+        Assert.True(Assert.Single(result.Reads).Value!.Value.GetProperty("value").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("enum", "valid")]
+    [InlineData("list", "valid")]
+    [InlineData("set", "valid")]
+    [InlineData("enum", "missing")]
+    [InlineData("list", "missing")]
+    [InlineData("set", "missing")]
+    [InlineData("enum", "identity")]
+    [InlineData("list", "identity")]
+    [InlineData("set", "identity")]
+    [InlineData("enum", "members")]
+    [InlineData("list", "members")]
+    [InlineData("set", "members")]
+    public async Task EnumSnapshotRequiresItsMatchingMembershipCatalog(string kind, string fault)
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        using var catalog = new GuaEnumCatalog(); catalog.Register("game.Phase", "Alive", "Dead");
+        string json = kind == "enum" ? "{\"type\":\"enum\",\"enumType\":\"game.Phase\",\"value\":\"Alive\"}" :
+            "{\"type\":\"" + kind + "\",\"elementType\":\"enum\",\"enumType\":\"game.Phase\",\"value\":[\"Alive\"]}";
+        using var property = owner.Property("phase", () => GuaValue.FromJson(json, catalog)); property.Notify(); int rewrites = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (fault == "valid" || command.GetProperty("type").GetString() != "get_observe_snapshot") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var transport = root["result"]!.AsObject();
+            CorruptCatalog(transport["catalogs"]![0]!.AsObject(), "value", fault); rewrites++;
+            Assert.True(GuaDistribution.ValidateJson("observe-transport-v1.schema.json", transport.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("world", "property", "phase", kind);
+        read["valueType"]!["enumType"] = "game.Phase"; if (kind != "enum") read["valueType"]!["elementType"] = "enum";
+        var result = reader.Read(read);
+        Assert.Equal(fault == "valid" ? ReadAvailability.Available : ReadAvailability.Unavailable, result.Availability);
+        if (fault != "valid") { Assert.Equal(1, rewrites); Assert.Equal("enum-catalog-unavailable", Assert.Single(result.Reads).Reason); Assert.Null(Assert.Single(result.Reads).Value); }
+    }
+
+    [Theory]
+    [InlineData("before", "missing")]
+    [InlineData("after", "missing")]
+    [InlineData("before", "identity")]
+    [InlineData("after", "identity")]
+    [InlineData("before", "members")]
+    [InlineData("after", "members")]
+    public async Task EnumChangeRequiresBothPairedMembershipCatalogs(string side, string fault)
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        using var catalog = new GuaEnumCatalog(); catalog.Register("game.Phase", "Alive", "Dead");
+        string member = "Alive"; using var property = owner.Property("phase", () => GuaValue.Enum("game.Phase", member, catalog)); property.Notify();
+        bool armed = false; int rewrites = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (!armed || command.GetProperty("type").GetString() != "poll_observations") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var transport = root["result"]!.AsObject();
+            CorruptCatalog(transport["catalogs"]![0]!.AsObject(), side, fault); rewrites++;
+            Assert.True(GuaDistribution.ValidateJson("observe-transport-v1.schema.json", transport.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("world", "property", "phase", "enum"); read["valueType"]!["enumType"] = "game.Phase";
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); armed = true; member = "Dead"; property.Notify();
+        var result = reader.Read(read); Assert.Equal(1, rewrites); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Equal("enum-catalog-unavailable", Assert.Single(result.Reads).Reason); Assert.Null(result.Changes);
+    }
+
+    private static void CorruptCatalog(JsonObject catalogs, string side, string fault)
+    {
+        if (fault == "missing") { Assert.True(catalogs.Remove(side)); return; }
+        var definition = catalogs[side]!["enums"]![0]!;
+        if (fault == "identity") definition["enumType"] = "game.Other";
+        else definition["members"] = new JsonArray("Unknown");
+    }
 }

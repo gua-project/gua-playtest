@@ -78,7 +78,16 @@ public sealed class BridgeObservations : IDisposable
             {
                 if (subscription is null) Resubscribe();
                 var changes = ParseTransport(subscription!.PollJson());
-                return Array.AsReadOnly(reads.Select(read => ReadCore(read, changes)).ToArray());
+                var budget = new ObservationBudget(maxNodes, maxBytes);
+                var results = new List<BridgeReadCollection>();
+                foreach (var read in reads)
+                {
+                    budget.TakeNodes(1);
+                    var result = ReadCore(read, changes, budget);
+                    budget.TakeBytes(JsonSerializer.Serialize(result));
+                    results.Add(result);
+                }
+                return results.AsReadOnly();
             }
             catch (ObservationLimitException)
             { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Truncated, "observation-limit")).ToArray()); }
@@ -87,7 +96,7 @@ public sealed class BridgeObservations : IDisposable
         }
     }
 
-    private BridgeReadCollection ReadCore(JsonObject read, JsonElement changeTransport)
+    private BridgeReadCollection ReadCore(JsonObject read, JsonElement changeTransport, ObservationBudget budget)
     {
         lock (gate)
         {
@@ -109,6 +118,8 @@ public sealed class BridgeObservations : IDisposable
                     return Failure(ReadAvailability.Stale, "stale-source");
                 if (snapshot.GetProperty("sessionEpoch").GetUInt64() != before.SessionEpoch)
                     return Failure(ReadAvailability.Stale, "stale-session");
+                if (snapshot.GetProperty("revision").GetUInt64() != changes.GetProperty("revision").GetUInt64())
+                    return Failure(ReadAvailability.Stale, "changed-since-poll");
                 string source = read["target"]!["source"]!.GetValue<string>();
                 string region = read["region"]!.GetValue<string>();
                 var ids = new List<string>();
@@ -131,13 +142,14 @@ public sealed class BridgeObservations : IDisposable
                 else if (source == "world") ids.Add("");
                 else return Failure(ReadAvailability.Unavailable, "invalid-read");
                 if (ids.Count > maxNodes) return Failure(ReadAvailability.Truncated, "node-limit");
+                budget.TakeNodes(Math.Max(0, ids.Count - 1));
                 var after = context.GetContextStatus();
                 if (before.SessionEpoch != after.SessionEpoch || before.Revision != after.Revision ||
                     before.WorldRevision != after.WorldRevision ||
                     snapshot.GetProperty("uiRevision").GetUInt64() != after.Revision ||
                     snapshot.GetProperty("worldRevision").GetUInt64() != after.WorldRevision)
                     return Failure(ReadAvailability.Stale, "changed-during-read");
-                if (source != "world" && tree.GetProperty("sessionEpoch").GetUInt64() != after.SessionEpoch)
+                if (source != "world" && tree.TryGetProperty("sessionEpoch", out var treeEpoch) && treeEpoch.GetUInt64() != after.SessionEpoch)
                     return Failure(ReadAvailability.Stale, "stale-session");
                 var reads = new List<BridgeRead>();
                 foreach (string id in ids)
@@ -161,6 +173,7 @@ public sealed class BridgeObservations : IDisposable
                         var value = entry.GetProperty("value").Clone();
                         identity = identity with { ValueTypeIdentity = read["valueType"]!.ToJsonString() };
                         JsonElement? catalog = transport.GetProperty("catalogs")[entries[0].i].TryGetProperty("value", out var c) ? c.Clone() : null;
+                        if (!CatalogMatches(value, catalog)) return Failure(ReadAvailability.Unavailable, "enum-catalog-unavailable");
                         reads.Add(TypeMatches(value, (JsonObject)read["valueType"]!)
                             ? new(ReadAvailability.Available, "available", identity, value, catalog)
                             : new(ReadAvailability.Unavailable, "value-type-changed", identity));
@@ -200,6 +213,11 @@ public sealed class BridgeObservations : IDisposable
                                 if (change.TryGetProperty(side + "Status", out var status) && status.GetString() == "available" &&
                                     !TypeMatches(change.GetProperty(side), (JsonObject)read["valueType"]!))
                                     return Failure(ReadAvailability.Unavailable, "value-type-changed");
+                            foreach (string side in new[] { "before", "after" })
+                                if (change.TryGetProperty(side + "Status", out var status) && status.GetString() == "available" &&
+                                    !CatalogMatches(change.GetProperty(side), changeTransport.GetProperty("catalogs")[index].TryGetProperty(side, out var paired) ? paired : null))
+                                    return Failure(ReadAvailability.Unavailable, "enum-catalog-unavailable");
+                            budget.TakeNodes(1);
                             relevantChanges.Add(new(change.Clone(), changeTransport.GetProperty("catalogs")[index].Clone()));
                         }
                         index++;
@@ -208,7 +226,6 @@ public sealed class BridgeObservations : IDisposable
                 return new(DateTimeOffset.UtcNow, reads.All(r => r.Availability == ReadAvailability.Available)
                     ? ReadAvailability.Available : ReadAvailability.Unavailable, reads.AsReadOnly(), relevantChanges.AsReadOnly());
             }
-            catch (ObservationLimitException) { return Failure(ReadAvailability.Truncated, "observation-limit"); }
             catch (Exception error) when (error is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
             { return Failure(ReadAvailability.Unavailable, "observation-unconfirmed"); }
         }
@@ -241,6 +258,17 @@ public sealed class BridgeObservations : IDisposable
     private static bool TypeMatches(JsonElement value, JsonObject type) =>
         new[] { "type", "elementType", "enumType" }.All(k => type[k] is null ? !value.TryGetProperty(k, out _) :
             value.TryGetProperty(k, out var actual) && actual.GetString() == type[k]!.GetValue<string>());
+    private static bool CatalogMatches(JsonElement value, JsonElement? catalog)
+    {
+        if (!value.TryGetProperty("enumType", out var enumType)) return true;
+        if (catalog is null) return false;
+        var definitions = catalog.Value.GetProperty("enums");
+        if (definitions.GetArrayLength() != 1 || definitions[0].GetProperty("enumType").GetString() != enumType.GetString()) return false;
+        var members = definitions[0].GetProperty("members").EnumerateArray().Select(m => m.GetString()!).ToHashSet(StringComparer.Ordinal);
+        var payload = value.GetProperty("value");
+        return value.GetProperty("type").GetString() == "enum" ? members.Contains(payload.GetString()!) :
+            payload.EnumerateArray().All(m => members.Contains(m.GetString()!));
+    }
     private static JsonElement? Scalar(JsonElement field, JsonObject type)
     {
         string kind = type["type"]!.GetValue<string>();
@@ -268,4 +296,12 @@ public sealed class BridgeObservations : IDisposable
         }
     }
     private sealed class ObservationLimitException : Exception;
+    private sealed class ObservationBudget(int nodes, int bytes)
+    {
+        private int remainingNodes = nodes, remainingBytes = bytes;
+        public void TakeNodes(int count)
+        { if (count > remainingNodes) throw new ObservationLimitException(); remainingNodes -= count; }
+        public void TakeBytes(string json)
+        { int count = Encoding.UTF8.GetByteCount(json); if (count > remainingBytes) throw new ObservationLimitException(); remainingBytes -= count; }
+    }
 }

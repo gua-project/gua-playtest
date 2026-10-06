@@ -16,6 +16,15 @@ remain Pending without resend/re-poll until Runner EndWait. Windows sandbox
 HttpListener startup failed in two fault tests; the same unmodified tests passed
 with approved loopback access. These local results require new-head real CI and
 actual Codex review before merge.
+
+Subsequent real Codex findings added poll/snapshot Observe revision alignment,
+shared batch node/event/serialized-byte budgets, optional UI-tree epoch support,
+and exact enum identity/member validation for snapshots and both event sides.
+The real native bridge tests include a post-poll Notify race, duplicate selector/
+event/value ceiling checks, and schema-valid interoperability faults applied to
+the actual host responses. No fabricated host execution or successful action
+result is used. The expanded bridge suite passed 44 tests, no skips; final-head CI
+and Codex re-review must validate these later changes.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

@@ -40,6 +40,15 @@ managed client buffers a remote response before this adapter can inspect its
 length: these are returned-document limits, not a total transport-memory ceiling.
 A hard preallocation transport ceiling remains an upstream/integration obligation.
 
+Observe snapshot revision must equal the shared poll revision; a newer snapshot
+is Stale/changed-since-poll and cannot hide an intervening violation. Every
+available enum snapshot and before/after event requires a catalog for its exact
+enumType containing its members. Schema-valid missing/mismatched catalogs are
+Unavailable. Optional UI-tree epoch is compared when present; context and Observe
+epochs remain mandatory. One ReadBatch shares a node/event and serialized-byte
+budget, including repeated selectors, changes and values. Aggregate overflow
+truncates the entire pass, discarding partially collected values/history.
+
 The existing connection-owned Snapshot/cursor API supplies continuity. Gap and
 stale_session remain explicit and sticky until `Resubscribe()` is invoked.
 Resubscribing creates a new boundary, never reconstructs missed history. #5 must
