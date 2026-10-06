@@ -52,6 +52,11 @@ epochs remain mandatory. UI/world trees are validated against their respective
 pinned schemas, so world-object epoch cannot be omitted. Every polled event's
 sourceId/sessionEpoch/profile must match its document identity, including events
 not ultimately selected for a read; a foreign event invalidates the pass.
+Selected tree revision must match the bracketed context source revision; a
+schema-valid cached tree from the same epoch is Stale/stale-tree. Counters that
+cannot fit the native UInt64 representation fail closed rather than escaping.
+Matched IDs, snapshot entries and standard nodes are indexed before iteration;
+broad selector/change filtering does not scan all targets for each event.
 One ReadBatch shares a node/event and serialized-byte
 budget, including repeated selectors, changes and values. Aggregate overflow
 truncates the entire pass, discarding partially collected values/history.

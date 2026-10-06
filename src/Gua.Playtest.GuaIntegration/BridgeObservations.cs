@@ -91,7 +91,7 @@ public sealed class BridgeObservations : IDisposable
             }
             catch (ObservationLimitException)
             { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Truncated, "observation-limit")).ToArray()); }
-            catch (Exception error) when (error is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
+            catch (Exception error) when (error is InvalidOperationException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
             { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Unavailable, "observation-unconfirmed")).ToArray()); }
         }
     }
@@ -151,6 +151,13 @@ public sealed class BridgeObservations : IDisposable
                     return Failure(ReadAvailability.Stale, "changed-during-read");
                 if (source != "world" && tree.TryGetProperty("sessionEpoch", out var treeEpoch) && treeEpoch.GetUInt64() != after.SessionEpoch)
                     return Failure(ReadAvailability.Stale, "stale-session");
+                if (source != "world" && tree.GetProperty("revision").GetUInt64() != (source == "ui" ? after.Revision : after.WorldRevision))
+                    return Failure(ReadAvailability.Stale, "stale-tree");
+                var entriesByKey = region is "observe" or "property" ? snapshot.GetProperty("entries").EnumerateArray()
+                    .Select((e, i) => (e, i)).ToLookup(pair => (pair.e.GetProperty("source").GetString(),
+                        pair.e.GetProperty("runtimeId").GetString(), pair.e.GetProperty("name").GetString())) : null;
+                var nodesById = region == "standard" && source != "world" ? tree.GetProperty(source == "ui" ? "nodes" : "objects")
+                    .EnumerateArray().ToLookup(n => n.GetProperty("id").GetString()!, StringComparer.Ordinal) : null;
                 var reads = new List<BridgeRead>();
                 foreach (string id in ids)
                 {
@@ -160,9 +167,7 @@ public sealed class BridgeObservations : IDisposable
                     if (region is "observe" or "property")
                     {
                         string name = read["name"]!.GetValue<string>();
-                        var entries = snapshot.GetProperty("entries").EnumerateArray().Select((e, i) => (e, i))
-                            .Where(pair => pair.e.GetProperty("source").GetString() == source &&
-                                pair.e.GetProperty("runtimeId").GetString() == id && pair.e.GetProperty("name").GetString() == name).ToArray();
+                        var entries = entriesByKey![(source, id, name)].ToArray();
                         if (entries.Length != 1) { reads.Add(new(ReadAvailability.Unavailable, "read-unavailable", identity)); continue; }
                         var entry = entries[0].e;
                         identity = identity with { OwnerId = entry.GetProperty("ownerId").GetUInt64(), RegistrationId = entry.GetProperty("registrationId").GetUInt64(),
@@ -180,8 +185,7 @@ public sealed class BridgeObservations : IDisposable
                     }
                     else if (region == "standard" && source != "world")
                     {
-                        var node = tree.GetProperty(source == "ui" ? "nodes" : "objects").EnumerateArray()
-                            .Where(n => n.GetProperty("id").GetString() == id).ToArray();
+                        var node = nodesById![id].ToArray();
                         if (node.Length != 1) { reads.Add(new(ReadAvailability.Stale, "target-changed", identity)); continue; }
                         JsonElement field = node[0];
                         bool found = true;
@@ -201,11 +205,12 @@ public sealed class BridgeObservations : IDisposable
                 if (region is "observe" or "property")
                 {
                     string name = read["name"]!.GetValue<string>();
+                    var matchedIds = ids.ToHashSet(StringComparer.Ordinal);
                     int index = 0;
                     foreach (var change in changes.GetProperty("events").EnumerateArray())
                     {
                         if (change.GetProperty("source").GetString() == source &&
-                            ids.Contains(change.GetProperty("runtimeId").GetString()!, StringComparer.Ordinal) &&
+                            matchedIds.Contains(change.GetProperty("runtimeId").GetString()!) &&
                             change.GetProperty("name").GetString() == name)
                         {
                             // A recovered final snapshot cannot establish the types of prior values.
@@ -226,7 +231,7 @@ public sealed class BridgeObservations : IDisposable
                 return new(DateTimeOffset.UtcNow, reads.All(r => r.Availability == ReadAvailability.Available)
                     ? ReadAvailability.Available : ReadAvailability.Unavailable, reads.AsReadOnly(), relevantChanges.AsReadOnly());
             }
-            catch (Exception error) when (error is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
+            catch (Exception error) when (error is InvalidOperationException or JsonException or FormatException or OverflowException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
             { return Failure(ReadAvailability.Unavailable, "observation-unconfirmed"); }
         }
     }

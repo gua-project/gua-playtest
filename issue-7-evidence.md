@@ -35,6 +35,15 @@ to its enclosing cursor document/profile. Added actual native response fault
 tests for a world tree missing required epoch and schema-valid foreign event
 source/epoch/Debug profile on a Player bridge. Latest bridge48 passed, skip0,
 and boundaries passed. New final-head real CI and actual review remain mandatory.
+
+Further actual review findings added tree revision/context alignment, bounded
+failure handling for counters outside UInt64, and ordinal lookup indexes for
+matched IDs/entries/nodes. Real cached UI/world trees from earlier revisions of
+the same live epoch now produce Stale. Schema-valid overflow faults exercise
+subscribe/snapshot/poll and epoch/revision/frame/owner/registration counters.
+A real broad UI selector preserves all 50 targets and 50 changes. Bridge58 passed
+locally, skip0, boundaries passed; previous merged Core suites passed contracts528
+and foundation22. New final-head CI and Codex review are required.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

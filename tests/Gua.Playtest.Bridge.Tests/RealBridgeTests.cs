@@ -604,4 +604,88 @@ public sealed class RealBridgeTests
         var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
         Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
     }
+
+    [Theory]
+    [InlineData("ui")]
+    [InlineData("object")]
+    public async Task CachedTreeFromTheSameEpochCannotReturnStaleStandardValues(string source)
+    {
+        using var runtime = new GuaRuntime(); string cached;
+        if (source == "ui")
+        {
+            Ui(runtime, "one"); cached = runtime.GetUiTreeJson();
+            runtime.BeginFrame("shop"); runtime.RegisterNode(new("one", "button", "Buy", new(0, 0, 10, 10), Checked: true)); runtime.EndFrame();
+        }
+        else
+        {
+            World(runtime, "one"); cached = runtime.GetWorldObjectTreeJson();
+            runtime.BeginWorldFrame("shop"); runtime.RegisterWorldObject(new("one", "enemy", "New", GuaWorldSpace.World2D, new(3, 4), VisibleToPlayer: true)); runtime.EndWorldFrame();
+        }
+        int delivered = 0; string commandType = source == "ui" ? "get_ui_tree" : "get_world_object_tree";
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != commandType) return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var old = JsonNode.Parse(cached)!.AsObject();
+            Assert.True(root["result"]!["revision"]!.GetValue<ulong>() > old["revision"]!.GetValue<ulong>());
+            Assert.Equal(root["result"]!["sessionEpoch"]!.GetValue<ulong>(), old["sessionEpoch"]!.GetValue<ulong>());
+            Assert.True(GuaDistribution.ValidateJson(source == "ui" ? "ui-tree.schema.json" : "world-object-tree.schema.json", old.ToJsonString()));
+            root["result"] = old; delivered++; return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint);
+        var read = Read(source, "standard", source == "ui" ? "state.checked" : "label", source == "ui" ? "bool" : "string", "one");
+        var result = reader.Read(read); Assert.Equal(1, delivered); Assert.Equal(ReadAvailability.Stale, result.Availability);
+        Assert.Equal("stale-tree", Assert.Single(result.Reads).Reason); Assert.Null(Assert.Single(result.Reads).Value);
+    }
+
+    [Theory]
+    [InlineData("snapshot", "sessionEpoch")]
+    [InlineData("snapshot", "revision")]
+    [InlineData("snapshot", "worldFrame")]
+    [InlineData("snapshot", "ownerId")]
+    [InlineData("snapshot", "registrationId")]
+    [InlineData("subscribe", "sessionEpoch")]
+    [InlineData("poll", "sessionEpoch")]
+    public async Task SchemaValidOversizedCountersBecomeUnavailable(string mode, string field)
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        int value = 0; using var property = owner.Property("count", () => GuaValue.Integer(value)); property.Notify();
+        bool armed = mode != "poll"; int injected = 0;
+        string commandType = mode == "snapshot" ? "get_observe_snapshot" : mode == "subscribe" ? "subscribe_observations" : "poll_observations";
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (!armed || command.GetProperty("type").GetString() != commandType) return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject();
+            var transport = (mode == "subscribe" ? root["result"]!["snapshot"] : root["result"])!.AsObject();
+            JsonNode destination = mode == "poll" ? transport["document"]!["events"]![0]! :
+                field is "ownerId" or "registrationId" ? transport["document"]!["entries"]![0]! : transport["document"]!;
+            destination[field] = JsonNode.Parse("18446744073709551616"); injected++;
+            Assert.True(GuaDistribution.ValidateJson("observe-transport-v1.schema.json", transport.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("world", "property", "count");
+        if (mode == "poll") { Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); value++; property.Notify(); armed = true; }
+        var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
+    }
+
+    [Fact]
+    public void BroadSelectorPreservesEveryMatchedValueAndChange()
+    {
+        using var runtime = new GuaRuntime(); var ids = Enumerable.Range(0, 50).Select(i => "node-" + i).ToArray(); Ui(runtime, ids);
+        int[] values = Enumerable.Range(0, 50).ToArray();
+        var owners = ids.Select(id => runtime.CreateObserveOwner(GuaObserveSource.Ui, id)).ToArray();
+        var registrations = owners.Select((owner, index) => owner.Observe("hp", () => GuaValue.Integer(values[index]))).ToArray();
+        try
+        {
+            Ui(runtime, ids); using var reader = Reader(Start(runtime), nodes: 200); var read = Read("ui", "observe", "hp", "integer", "unused");
+            read["target"]!["selector"] = new JsonObject { ["role"] = new JsonObject { ["value"] = "button" } };
+            Assert.Equal(50, reader.Read(read).Reads.Count);
+            for (int i = 0; i < values.Length; i++) values[i]++;
+            Ui(runtime, ids); var result = reader.Read(read); Assert.Equal(ReadAvailability.Available, result.Availability);
+            Assert.Equal(50, result.Reads.Count); Assert.Equal(50, result.Changes!.Count);
+            Assert.Equal(ids.Order(StringComparer.Ordinal), result.Changes.Select(c => c.Event.GetProperty("runtimeId").GetString()!).Order(StringComparer.Ordinal));
+            Assert.All(result.Changes, c => Assert.Equal(c.Event.GetProperty("before").GetProperty("value").GetInt32() + 1, c.Event.GetProperty("after").GetProperty("value").GetInt32()));
+        }
+        finally { foreach (var registration in registrations) registration.Dispose(); foreach (var owner in owners) owner.Dispose(); }
+    }
 }
