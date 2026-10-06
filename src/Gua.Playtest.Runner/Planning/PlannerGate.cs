@@ -124,6 +124,7 @@ public sealed class PlannerGate
             if (!authority.CheckInputBoundary(Clone(decision))) return PlannerFeedbackCode.InputBoundaryInvalid;
             if (decision["segment"] is JsonObject segment &&
                 (segment["durationMilliseconds"]!.GetValue<long>() > limits.MaxSegmentMilliseconds ||
+                segment["durationMilliseconds"]!.GetValue<long>() > segment["executionTimeoutMilliseconds"]!.GetValue<long>() ||
                 segment["maxLatenessMilliseconds"]!.GetValue<long>() > limits.MaxLatenessMilliseconds ||
                 segment["executionTimeoutMilliseconds"]!.GetValue<long>() > run.Limits.ActionTimeout.TotalMilliseconds ||
                 segment["cleanupTimeoutMilliseconds"]!.GetValue<long>() > run.Limits.CleanupTimeout.TotalMilliseconds))
@@ -195,7 +196,8 @@ public sealed class ApprovedDecision
         var sent = deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain);
         var code = sent == 0 && deliveries.Count != 0 ? PlannerFeedbackCode.NotSent :
             sent != 0 && sent < deliveries.Count ? PlannerFeedbackCode.PartialExecution :
-            sent != 0 && !operation.ResultConfirmed ? PlannerFeedbackCode.SentUnconfirmed : PlannerFeedbackCode.Confirmed;
+            sent != 0 && !operation.ResultConfirmed ? PlannerFeedbackCode.SentUnconfirmed :
+            operation.ResultConfirmed ? PlannerFeedbackCode.Confirmed : PlannerFeedbackCode.NotSent;
         operation.Complete(); completion = code;
         if (code is PlannerFeedbackCode.SentUnconfirmed or PlannerFeedbackCode.PartialExecution) gate.StopAfterUnconfirmedDispatch();
         gate.Record(Reference with { Code = code }); return code;

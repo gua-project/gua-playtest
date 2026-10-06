@@ -297,4 +297,51 @@ public sealed class PlannerGateTests
         state = State("gap"); state.Observation["reads"]![0]!["value"] = new JsonObject { ["type"] = "bool", ["value"] = true };
         Assert.Throws<ArgumentException>(() => s.Gate.Begin(state));
     }
+
+    [Fact]
+    public void RevisionChangeAloneDoesNotRejectRelevantValidPrerequisites()
+    {
+        var s = new Setup(); var state = State(); var request = s.Gate.Begin(state)!;
+        state.ActionDefinitions["revision"] = 2;
+        state.Observation["sources"]![0]!["revision"] = 2;
+        // The authority's current relevant-context/target/definition checks still pass.
+        Assert.Equal(PlannerFeedbackCode.Approved, s.Gate.Adopt(request, Response(request, Single())).Code);
+    }
+
+    [Fact]
+    public void ApprovedPublicObserveAndExistingWaitHaveFiniteAuthority()
+    {
+        var s = new Setup(); var r = s.Begin();
+        var observed = s.Gate.Adopt(r, Response(r, new() { ["kind"] = "observe", ["reads"] = new JsonArray(Read()) })).Approved!;
+        Assert.Empty(observed.Deliveries); Assert.True(observed.ConfirmResult()); observed.Complete();
+        var condition = new JsonObject { ["kind"] = "assertion", ["read"] = Read(), ["quantifier"] = "one", ["operator"] = "equals", ["expected"] = new JsonObject { ["type"] = "bool", ["value"] = true } };
+        r = s.Gate.Begin(State() with { PublicWaitConditions = [condition] })!;
+        var wait = s.Gate.Adopt(r, Response(r, new() { ["kind"] = "wait", ["condition"] = condition, ["timeoutMilliseconds"] = 100 })).Approved!;
+        Assert.Equal(TimeSpan.FromMilliseconds(100), wait.Deadline);
+        Assert.False(s.Run.GoalVerified);
+        Assert.Equal(PlannerFeedbackCode.NotSent, wait.Complete()); // no invented confirmation
+    }
+
+    [Theory]
+    [InlineData("durationMilliseconds", 1001)]
+    [InlineData("maxLatenessMilliseconds", 1)]
+    [InlineData("executionTimeoutMilliseconds", 1001)]
+    [InlineData("cleanupTimeoutMilliseconds", 1001)]
+    public void TimedProposalCannotRaiseEffectiveCeilings(string field, int value)
+    {
+        var s = new Setup(); var r = s.Begin(); var proposal = Timed(); proposal["segment"]![field] = value;
+        Assert.Equal(PlannerFeedbackCode.BudgetDenied, s.Gate.Adopt(r, Response(r, proposal)).Code);
+        Assert.Equal(0, s.Run.Budget.Snapshot.ReservedActions);
+    }
+
+    [Theory]
+    [InlineData(6, 10, "")]
+    [InlineData(4, 9, "")]
+    public void InternalRawOperationsRemainUnsent(int kind, int operation, string target)
+    {
+        var s = new Setup(); var r = s.Begin(); var proposal = new JsonObject { ["kind"] = "execute", ["mode"] = "single",
+            ["action"] = new JsonObject { ["kind"] = "raw", ["input"] = new JsonObject { ["offsetMilliseconds"] = 0, ["kind"] = kind, ["operation"] = operation, ["target"] = target } } };
+        Assert.Equal(PlannerFeedbackCode.OutputInvalid, s.Gate.Adopt(r, Response(r, proposal)).Code);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
 }
