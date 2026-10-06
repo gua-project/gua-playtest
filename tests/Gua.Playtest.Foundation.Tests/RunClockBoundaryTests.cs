@@ -27,6 +27,13 @@ public sealed partial class RunTests
             using var registration = token.Register(() => Cancelled.TrySetResult());
             Started.TrySetResult();
             try { return ignoreCancellation ? await First.Task : await First.Task.WaitAsync(token); }
+            catch (OperationCanceledException exception) when (token.IsCancellationRequested && exception.CancellationToken == token)
+            {
+                // WaitAsync's cancellation continuation may dispose our older registration
+                // before that callback runs. The observed requested cancellation is definitive.
+                Cancelled.TrySetResult();
+                throw;
+            }
             finally { Ended = true; Joined.TrySetResult(); }
         }
         public ValueTask WaitForChangeAsync(CancellationToken token) => throw new InvalidOperationException("unexpected wait");
