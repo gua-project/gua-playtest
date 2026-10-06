@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Gua.Playtest.Core.Contracts;
 using Gua.Playtest.Runner.Execution;
 
@@ -150,10 +149,10 @@ public sealed class RunArtifactStore
         if (reference.FileName is null || reference.FileName.Length > 8 * 128 + 7 ||
             reference.FileName.AsSpan().Count('/') > 7) throw new InvalidDataException("ArtifactReceiptInvalid");
         var segments = reference.FileName.Split('/');
-        if (segments.Length > 8 || segments.Any(x => !Regex.IsMatch(x, "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?$", RegexOptions.CultureInvariant)) ||
+        if (segments.Length > 8 || segments.Any(x => !FileSegment(x)) ||
             new[] { "run.json", "primary.json", "completion.json", "result.json" }.Contains(segments[0], StringComparer.OrdinalIgnoreCase) ||
             reference.Bytes <= 0 || reference.Bytes > limits.MaxFileBytes || reference.Sha256 is null ||
-            !Regex.IsMatch(reference.Sha256, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant) ||
+            reference.Sha256.Length != 64 || reference.Sha256.Any(x => !(x is >= '0' and <= '9' or >= 'a' and <= 'f')) ||
             !associated.Add(reference.FileName)) throw new InvalidDataException("ArtifactReceiptInvalid");
         if (associated.Count > limits.MaxItems) throw new ArtifactLimitException();
         var path = Path.Combine(DirectoryPath, Path.Combine(segments));
@@ -316,7 +315,9 @@ public sealed class RunArtifactStore
         for (var current = Path.GetFullPath(path); current is not null; current = Path.GetDirectoryName(current))
             if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("LinkedArtifactPath");
     }
-    private static bool Token(string value) => value is not null && Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant);
+    private static bool Token(string value) => value is not null && value.Length is >= 1 and <= 128 &&
+        char.IsAsciiLetterOrDigit(value[0]) && value.All(x => char.IsAsciiLetterOrDigit(x) || x is '.' or '_' or '-');
+    private static bool FileSegment(string value) => Token(value) && value[^1] != '.';
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private sealed class LimitedBuffer(int maximum) : MemoryStream
     {

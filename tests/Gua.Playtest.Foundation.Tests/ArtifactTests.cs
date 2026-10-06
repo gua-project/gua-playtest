@@ -402,5 +402,38 @@ public sealed class ArtifactTests : IDisposable
             Assert.InRange(allocated, 0, 32768);
         }
     }
+    [Theory]
+    [InlineData("observation")]
+    [InlineData("decision")]
+    [InlineData("basedOn")]
+    [InlineData("action")]
+    [InlineData("reason")]
+    public void Newline_reference_tokens_are_invalid_before_snapshot_publication(string field)
+    {
+        var store = Store();
+        var decision = new DecisionReference(field == "decision" ? "decision\n" : "decision",
+            field == "basedOn" ? "observation\n" : "observation", field == "action" ? "action\n" : "action",
+            field == "reason" ? "Approved\n" : "Approved");
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.ConfirmPrimary(Passed,
+            [new(ObservationBoundary.PrimaryDecision, field == "observation" ? "observation\n" : "observation")], [decision], []).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Newline_receipt_names_and_hashes_are_rejected_even_when_source_file_exists(bool name)
+    {
+        var store = Store(); Confirm(store); byte[] bytes = [1];
+        var fileName = name ? "trace.gua\n" : "trace.gua";
+        if (!OperatingSystem.IsWindows() || !name)
+        {
+            File.WriteAllBytes(Path.Combine(store.DirectoryPath, fileName), bytes);
+            Assert.True(File.Exists(Path.Combine(store.DirectoryPath, fileName)));
+        }
+        var hash = Convert.ToHexStringLower(SHA256.HashData(bytes)) + (name ? "" : "\n");
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.Complete(Outcome(),
+            [new(ArtifactKind.Trace, ArtifactState.Saved, fileName, 1, hash), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "completion.json")));
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }
