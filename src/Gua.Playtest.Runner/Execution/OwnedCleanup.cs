@@ -3,7 +3,7 @@ using Gua.Playtest.Core.Contracts;
 
 namespace Gua.Playtest.Runner.Execution;
 
-public enum CleanupStage { Diagnostics, Artifacts, InputRelease, ResourceRelease }
+public enum CleanupStage { PrimarySnapshot, Diagnostics, Artifacts, InputRelease, ResourceRelease }
 
 /// <summary>Register only acquired owner-scoped resources, immediately after acquisition.
 /// Diagnostics precede release; each resource release gets an attempt even after artifact/cancellation failure.</summary>
@@ -11,22 +11,36 @@ public sealed class OwnedCleanup
 {
     private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action);
     private readonly List<Step> steps = [];
+    private readonly object registrationGate = new();
     private bool closed;
     public void Register(CleanupStage stage, Func<CancellationToken, ValueTask<bool>> action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        if (closed || !Enum.IsDefined(stage)) throw new InvalidOperationException("CleanupRegistrationClosed");
-        if (steps.Count >= 1000) throw new InvalidOperationException("CleanupResourceLimit");
-        steps.Add(new(stage, action));
+        lock (registrationGate)
+        {
+            if (closed || !Enum.IsDefined(stage)) throw new InvalidOperationException("CleanupRegistrationClosed");
+            if (steps.Count >= 1000) throw new InvalidOperationException("CleanupResourceLimit");
+            steps.Add(new(stage, action));
+        }
     }
-    public async ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken = default)
+    public async ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken = default,
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
     {
-        if (closed || run.State != ExecutionState.Completing) throw new InvalidOperationException("CleanupStateInvalid");
-        closed = true;
+        Step[] ordered;
+        lock (registrationGate)
+        {
+            if (closed || run.State != ExecutionState.Completing) throw new InvalidOperationException("CleanupStateInvalid");
+            closed = true;
+            ordered = steps.OrderBy(x => x.Stage).ToArray();
+        }
+        if (confirmPrimary is not null)
+        {
+            var snapshot = run.CapturePrimary();
+            ordered = [new(CleanupStage.PrimarySnapshot, token => confirmPrimary(snapshot, token)), .. ordered];
+        }
         var issues = new List<PostProcessingIssue>();
         var origin = realClock.Elapsed;
         var deadline = origin + run.Limits.CleanupTimeout;
-        var ordered = steps.OrderBy(x => x.Stage).ToArray();
         if (cancellationToken.IsCancellationRequested) issues.Add(new(PostProcessingReason.Cancelled));
         for (var i = 0; i < ordered.Length; i++)
         {
@@ -39,13 +53,13 @@ public sealed class OwnedCleanup
             }
             var share = TimeSpan.FromTicks(Math.Max(1, remaining.Ticks / (ordered.Length - i)));
             // Caller cancellation skips diagnostics/artifacts but never skips owned input/resource cleanup.
-            var token = step.Stage < CleanupStage.InputRelease ? cancellationToken : CancellationToken.None;
+            var token = step.Stage is CleanupStage.Diagnostics or CleanupStage.Artifacts ? cancellationToken : CancellationToken.None;
             try
             {
                 var result = await FiniteOperation.RunAsync(realClock, share, step.Action, token).ConfigureAwait(false);
                 if (!result) issues.Add(new(Failure(step.Stage)));
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 issues.Add(new(PostProcessingReason.Cancelled)); issues.Add(new(Failure(step.Stage)));
             }
@@ -64,6 +78,7 @@ public sealed class OwnedCleanup
     }
     private static PostProcessingReason Failure(CleanupStage stage) => stage switch
     {
+        CleanupStage.PrimarySnapshot => PostProcessingReason.PrimarySnapshotFailed,
         CleanupStage.Diagnostics => PostProcessingReason.DiagnosticsFailed,
         CleanupStage.Artifacts => PostProcessingReason.ArtifactFailed,
         CleanupStage.InputRelease => PostProcessingReason.InputReleaseUnconfirmed,
@@ -84,12 +99,17 @@ public static class FiniteOperation
         var startDeadline = realClock.Elapsed + timeout;
         using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var timerCancellation = new CancellationTokenSource();
-        var operation = action(operationCancellation.Token).AsTask();
-        var timer = realClock.DelayAsync(timeout, timerCancellation.Token).AsTask();
+        Task<T>? operation = null;
+        Task? timer = null;
         var cancelled = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var registration = cancellationToken.Register(() => cancelled.TrySetCanceled(cancellationToken));
         try
         {
+            operation = action(operationCancellation.Token).AsTask();
+            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
+            var remaining = startDeadline - realClock.Elapsed;
+            if (remaining <= TimeSpan.Zero) throw new TimeoutException("OperationDeadlineReached");
+            timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
             var winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
             if (winner == cancelled.Task) await cancelled.Task.ConfigureAwait(false);
             if (winner == timer) await timer.ConfigureAwait(false);
@@ -99,8 +119,8 @@ public static class FiniteOperation
         finally
         {
             operationCancellation.Cancel(); timerCancellation.Cancel();
-            _ = operation.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-            _ = timer.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            if (operation is not null) _ = operation.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            if (timer is not null) _ = timer.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
     }
 }

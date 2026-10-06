@@ -24,14 +24,34 @@ public static class RunMonitor
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
         using var workCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var workTask = work(workCancellation.Token).AsTask();
+        Task<T>? workTask = null;
+        async ValueTask<(bool Completed, T? Value, IReadOnlyList<RunEvent> Events)> ReadyWork()
+        {
+            if (workTask is null || !workTask.IsCompleted) return (false, default, []);
+            try
+            {
+                var value = await workTask.ConfigureAwait(false);
+                return (true, value, resultEvents(value));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return (true, default, []); }
+            catch (Exception exception)
+            {
+                run.RecordException(exception);
+                return (true, default, [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
+            }
+        }
         try
         {
+            workTask = work(workCancellation.Token).AsTask();
             while (run.Primary is null)
             {
                 using var captureCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var remaining = run.NextRealEvaluationAt - realClock.Elapsed;
-                if (remaining <= TimeSpan.Zero) { run.Evaluate(cancelled: cancellationToken.IsCancellationRequested); break; }
+                if (remaining <= TimeSpan.Zero)
+                {
+                    var ready = await ReadyWork().ConfigureAwait(false);
+                    run.Evaluate(candidates: ready.Events, cancelled: cancellationToken.IsCancellationRequested); break;
+                }
                 RunObservation observation;
                 try
                 {
@@ -39,25 +59,20 @@ public static class RunMonitor
                         token => feed.CaptureAsync(token), captureCancellation.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                { run.Evaluate(cancelled: true); break; }
-                catch (TimeoutException) { run.Evaluate(); break; }
-                var cycle = new List<RunEvent>();
-                T? value = default;
-                var completed = workTask.IsCompleted;
-                if (completed)
                 {
-                    try { value = await workTask.ConfigureAwait(false); cycle.AddRange(resultEvents(value)); }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-                    catch (Exception exception)
-                    {
-                        run.RecordException(exception);
-                        cycle.Add(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner));
-                    }
+                    var ready = await ReadyWork().ConfigureAwait(false);
+                    run.Evaluate(candidates: ready.Events, cancelled: true); break;
                 }
+                catch (TimeoutException)
+                {
+                    var ready = await ReadyWork().ConfigureAwait(false);
+                    run.Evaluate(candidates: ready.Events, cancelled: cancellationToken.IsCancellationRequested); break;
+                }
+                var result = await ReadyWork().ConfigureAwait(false);
                 // All ready observations/events/cancellation/current deadlines go through one arbiter.
-                run.Evaluate(observation.Success, observation.CapturedAt, cycle,
+                run.Evaluate(observation.Success, observation.CapturedAt, result.Events,
                     cancellationToken.IsCancellationRequested, failureUnit: observation.Failure);
-                if (completed) return new(run.Primary is null, value);
+                if (result.Completed) return new(run.Primary is null, result.Value);
                 if (run.Primary is not null) break;
                 using var wakeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var wakes = new List<Task>();
@@ -83,11 +98,12 @@ public static class RunMonitor
         catch (Exception exception)
         {
             run.RecordException(exception);
-            run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
+            run.Evaluate(candidates: exception is OperationCanceledException && cancellationToken.IsCancellationRequested
+                ? [] : [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
                 cancelled: cancellationToken.IsCancellationRequested);
             return new(false, default);
         }
-        finally { workCancellation.Cancel(); ObserveFault(workTask); }
+        finally { workCancellation.Cancel(); if (workTask is not null) ObserveFault(workTask); }
     }
     private static TimeSpan Positive(TimeSpan duration) => duration > TimeSpan.Zero ? duration : TimeSpan.Zero;
     private static void ObserveFault(Task task) => _ = task.ContinueWith(t => _ = t.Exception,

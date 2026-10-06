@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
 
-public sealed class RunTests
+public sealed partial class RunTests
 {
     private sealed class Clock : IClock
     {
@@ -398,5 +398,20 @@ public sealed class RunTests
         var clock = new Clock(); var run = Running(clock); var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(2))!;
         clock.At(1000); Assert.Throws<InvalidOperationException>(() => operation.BeginDispatch(0));
         Assert.Equal(DeliveryState.Reserved, operation.Actions!.Deliveries[0]);
+    }
+    private sealed class BlockedFeed : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => new(new TaskCompletionSource<RunObservation>().Task);
+        public ValueTask WaitForChangeAsync(CancellationToken token) => throw new InvalidOperationException("unreachable");
+    }
+    [Fact]
+    public async Task ReadyWorkFailureIsNotHiddenByBlockedCaptureAndGlobalDeadline()
+    {
+        var clock = new Clock(); var run = Running(clock);
+        var monitoring = RunMonitor.AwaitAsync(run, clock, clock, new BlockedFeed(),
+            _ => ValueTask.FromResult(1), _ => [Event(RunReason.ActionFailed)]).AsTask();
+        clock.At(5000); Assert.False((await monitoring).Completed);
+        Assert.Equal(RunReason.ActionFailed, run.Primary!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.MaxDuration);
     }
 }
