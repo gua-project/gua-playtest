@@ -54,6 +54,15 @@ public sealed class BridgeUiActions : IDisposable
                 // Never select the first of multiple matches or disclose candidate IDs in feedback.
                 if (!resolution.Valid || resolution.Matches.Count != 1)
                     return Save(attempt with { Reason = "target-unavailable" });
+                string treeJson = context.GetUiTreeJson();
+                if (!GuaDistribution.ValidateJson("ui-tree.schema.json", treeJson))
+                    return Save(attempt with { Reason = "tree-unconfirmed" });
+                using var treeDocument = JsonDocument.Parse(treeJson);
+                var tree = treeDocument.RootElement;
+                if (tree.GetProperty("revision").GetUInt64() != before.Revision ||
+                    tree.TryGetProperty("sessionEpoch", out var treeEpoch) && treeEpoch.GetUInt64() != expectedEpoch ||
+                    !BridgeSelectors.UiMatchesTree(selector, tree, resolution.Matches.Select(m => m.Id)))
+                    return Save(attempt with { Reason = "stale-query" });
                 var after = context.GetContextStatus();
                 if (before.SessionEpoch != after.SessionEpoch || before.Revision != after.Revision)
                     return Save(attempt with { Reason = "changed-during-resolution" });
@@ -71,7 +80,9 @@ public sealed class BridgeUiActions : IDisposable
                 if (id == 0) return Save(attempt with { Status = ActionAttemptStatus.Pending, Reason = "dispatch-unconfirmed" });
                 return Save(attempt with { RequestId = id, Stage = ConfirmedActionStage.Enqueued, Reason = "enqueued" });
             }
-            catch (OperationCanceledException) { return Save(attempt with { Status = ActionAttemptStatus.Aborted, Reason = "cancelled-unconfirmed" }); }
+            catch (OperationCanceledException) { return Save(attempt with
+                { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Aborted : ActionAttemptStatus.Pending,
+                    Reason = attempt.Stage == ConfirmedActionStage.NotSent ? "cancelled-before-dispatch" : "dispatch-unconfirmed" }); }
             catch (Exception e) when (e is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException)
             { return Save(attempt with { Status = attempt.Stage == ConfirmedActionStage.NotSent ? ActionAttemptStatus.Rejected : ActionAttemptStatus.Pending,
                 Reason = attempt.Stage == ConfirmedActionStage.NotSent ? "preflight-rejected" : "dispatch-unconfirmed" }); }

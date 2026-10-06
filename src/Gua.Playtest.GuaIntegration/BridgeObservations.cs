@@ -160,6 +160,13 @@ public sealed class BridgeObservations : IDisposable
                     return Failure(ReadAvailability.Stale, "stale-session");
                 if (source != "world" && tree.GetProperty("revision").GetUInt64() != (source == "ui" ? after.Revision : after.WorldRevision))
                     return Failure(ReadAvailability.Stale, "stale-tree");
+                if (source == "ui")
+                {
+                    var currentIds = tree.GetProperty("nodes").EnumerateArray().ToLookup(n => n.GetProperty("id").GetString()!, StringComparer.Ordinal);
+                    if (ids.Any(id => currentIds[id].Count() != 1)) return Failure(ReadAvailability.Stale, "target-changed") with { Changes = Array.Empty<BridgeChange>() };
+                    if (!BridgeSelectors.UiMatchesTree((JsonObject)read["target"]!["selector"]!, tree, ids))
+                        return Failure(ReadAvailability.Stale, "stale-query");
+                }
                 var entriesByKey = region is "observe" or "property" ? snapshot.GetProperty("entries").EnumerateArray()
                     .Select((e, i) => (e, i)).ToLookup(pair => (pair.e.GetProperty("source").GetString(),
                         pair.e.GetProperty("runtimeId").GetString(), pair.e.GetProperty("name").GetString())) : null;
@@ -275,9 +282,18 @@ public sealed class BridgeObservations : IDisposable
         if (root.GetProperty("document").TryGetProperty("events", out events))
         {
             var document = root.GetProperty("document");
+            var previous = new Dictionary<string, ulong>(StringComparer.Ordinal);
             foreach (var change in events.EnumerateArray())
             {
                 ValidateCounters(change);
+                foreach (string counter in new[] { "sequence", "revision", "uiFrame", "uiRevision", "worldFrame", "worldRevision" })
+                {
+                    ulong current = change.GetProperty(counter).GetUInt64();
+                    if (current > document.GetProperty(counter).GetUInt64() ||
+                        previous.TryGetValue(counter, out ulong prior) && (current < prior || counter == "sequence" && current == prior))
+                        throw new InvalidOperationException("Observe event boundary mismatch.");
+                    previous[counter] = current;
+                }
                 if (change.GetProperty("sourceId").GetString() != document.GetProperty("sourceId").GetString() ||
                     change.GetProperty("sessionEpoch").GetUInt64() != document.GetProperty("sessionEpoch").GetUInt64() ||
                     change.GetProperty("profile").GetString() != ProfileName)

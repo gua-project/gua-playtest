@@ -16,7 +16,8 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
     private readonly Task server;
     public string Endpoint { get; }
     public BridgeFaultProxy(string upstream, Func<JsonElement, JsonElement, bool> dropReply,
-        Func<JsonElement, JsonElement, byte[]?>? rewriteReply = null)
+        Func<JsonElement, JsonElement, byte[]?>? rewriteReply = null,
+        Func<JsonElement, JsonElement, TimeSpan>? delayReply = null)
     {
         using var port = new TcpListener(IPAddress.Loopback, 0); port.Start();
         int number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
@@ -52,6 +53,7 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
                         // Interoperability faults modify only the real host's response; they never
                         // fabricate host execution or a successful action result.
                         byte[] output = rewriteReply?.Invoke(commandDoc.RootElement, response.RootElement) ?? reply;
+                        if (delayReply is not null) await Task.Delay(delayReply(commandDoc.RootElement, response.RootElement), shutdown.Token);
                         await downstream.SendAsync(output.AsMemory(), WebSocketMessageType.Text, true, shutdown.Token);
                     }
                 }

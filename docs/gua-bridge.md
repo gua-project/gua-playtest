@@ -153,3 +153,18 @@ Game build identity is not inferred from GuaVersion.BuildId. Approved fixture/
 host attestation remains #8/#16 integration work. Real Godot/Unity, secret input,
 external guarded dispatch, bounded preallocation and downstream Runner integration
 remain unverified. Issue #7 stays open until its full acceptance is established.
+
+Latest actual Codex review corrections: UI query responses have no revision, so
+both reads and leased actions re-run the published native selector engine over
+a schema-validated, revision-bound current tree and compare complete ID sets.
+The temporary local GuaContext is disposed and never dispatches to the game.
+Exact/contains/regex and direct-parent scope are exercised on actual native trees.
+Cached same-ID role/name changes cannot supply standard/Observe Values or enqueue.
+Real host action commit followed by delayed receipt exceeds response timeout:
+post-dispatch cancellation remains Pending/DispatchAttempted until EndWait,
+while known pre-dispatch caller cancellation stays Aborted/NotSent.
+Every poll event counter must be bounded by its enclosing document and
+non-regressing in event order; sequence is strictly increasing. Schema-valid
+forward/regressing sequence/revision/UI/world frame/revision faults expose no
+snapshot/history. Native bridge122 passed with skip0; existing stale-target
+reason and empty-history regression assertions remain intact.

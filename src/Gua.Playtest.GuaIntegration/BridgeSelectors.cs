@@ -9,6 +9,26 @@ namespace Gua.Playtest.GuaIntegration;
 
 internal static class BridgeSelectors
 {
+    // Re-run the published native selector engine over the revision-bound tree. UI query
+    // responses carry no revision, so their IDs alone cannot establish current membership.
+    public static bool UiMatchesTree(JsonObject selector, JsonElement tree, IEnumerable<string> remoteIds)
+    {
+        var nodes = tree.GetProperty("nodes").EnumerateArray().ToArray();
+        if (nodes.Select(n => n.GetProperty("id").GetString()).Distinct(StringComparer.Ordinal).Count() != nodes.Length) return false;
+        using var local = new GuaContext();
+        local.BeginFrame(tree.GetProperty("screen").GetString()!);
+        foreach (var node in nodes)
+            local.RegisterNode(new GuaNodeDescriptor(node.GetProperty("id").GetString()!, node.GetProperty("role").GetString()!,
+                node.TryGetProperty("label", out var label) ? label.GetString()! : "", new(0, 0, 0, 0),
+                Visible: node.GetProperty("visible").GetBoolean(), Enabled: node.GetProperty("enabled").GetBoolean(),
+                ParentId: node.TryGetProperty("parentId", out var parent) ? parent.GetString() : null,
+                Text: node.TryGetProperty("text", out var text) ? text.GetString() : null));
+        local.EndFrame();
+        var result = local.Query(Ui(selector));
+        var ids = remoteIds.ToArray();
+        return result.Valid && ids.Length == ids.Distinct(StringComparer.Ordinal).Count() &&
+            ids.ToHashSet(StringComparer.Ordinal).SetEquals(result.Matches.Select(m => m.Id));
+    }
     private static string? Text(JsonObject s, string key) => s[key]?["value"]?.GetValue<string>();
     private static GuaMatchMode Match(JsonObject s, string key) => s[key]?["match"]?.GetValue<string>() switch
     { "contains" => GuaMatchMode.Contains, "regex" => GuaMatchMode.Regex, _ => GuaMatchMode.Exact };

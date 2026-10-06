@@ -13,6 +13,105 @@ namespace Gua.Playtest.Bridge.Tests;
 
 public sealed class RealBridgeTests
 {
+    [Theory]
+    [InlineData("exact", "Buy")]
+    [InlineData("contains", "uy")]
+    [InlineData("regex", "^B.y$")]
+    public void CurrentUiTreeUsesPublishedSelectorSemanticsIncludingScope(string match, string pattern)
+    {
+        using var runtime = new GuaRuntime(); runtime.BeginFrame("shop");
+        runtime.RegisterNode(new("parent", "panel", "Panel", new(0, 0, 10, 10)));
+        runtime.RegisterNode(new("child", "button", "Buy", new(0, 0, 10, 10), ParentId: "parent")); runtime.EndFrame();
+        using var reader = Reader(Start(runtime)); var read = Read("ui", "standard", "visible", "bool", "child");
+        read["target"]!["selector"] = new JsonObject { ["name"] = new JsonObject { ["value"] = pattern, ["match"] = match },
+            ["scope"] = new JsonObject { ["parentId"] = "parent", ["directChild"] = true }, ["visible"] = true, ["enabled"] = true };
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability);
+    }
+
+    [Fact]
+    public void CallerCancellationBeforeUiDispatchIsAbortedAndNotSent()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy");
+        using var bridge = new BridgeUiActions(Start(runtime), "cancel", TimeSpan.FromSeconds(2), 10, EnterFixtureLifecycle);
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        var selector = JsonNode.Parse("{\"id\":{\"value\":\"buy\"}}")!.AsObject();
+        var result = bridge.Send("once", selector, new(GuaActionType.Click), Epoch(runtime), () => true, cancellation.Token);
+        Assert.Equal(ConfirmedActionStage.NotSent, result.Stage); Assert.Equal(ActionAttemptStatus.Aborted, result.Status);
+        Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "buy", out _));
+    }
+    [Theory]
+    [InlineData("standard")]
+    [InlineData("observe")]
+    [InlineData("action")]
+    public async Task CachedUiQueryCannotMatchChangedNodeWithSameId(string operation)
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "one");
+        using var owner = runtime.CreateObserveOwner(GuaObserveSource.Ui, "one");
+        using var observed = owner.Observe("count", () => GuaValue.Integer(1)); Ui(runtime, "one");
+        string? cached = null; bool armed = false; int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != "query_nodes") return null;
+            if (!armed) { cached = response.GetProperty("result").GetRawText(); return null; }
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject();
+            Assert.Empty(root["result"]!["matches"]!.AsArray()); root["result"] = JsonNode.Parse(cached!); injected++;
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        var selector = JsonNode.Parse("{\"role\":{\"value\":\"button\"},\"name\":{\"value\":\"Buy\"}}")!.AsObject();
+        using var reader = operation == "action" ? null : Reader(proxy.Endpoint);
+        using var actions = operation == "action" ? new BridgeUiActions(proxy.Endpoint, "cached", TimeSpan.FromSeconds(2), 10, EnterFixtureLifecycle) : null;
+        var read = Read("ui", operation == "observe" ? "observe" : "standard", operation == "observe" ? "count" : "visible", operation == "observe" ? "integer" : "bool", "one");
+        read["target"]!["selector"] = selector.DeepClone();
+        if (reader is not null) Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability);
+        else { Assert.Equal(ConfirmedActionStage.Enqueued, actions!.Send("first", selector, new(GuaActionType.Click), Epoch(runtime), () => true).Stage); Assert.True(runtime.TryConsumeAction(GuaActionType.Click, "one", out _)); }
+        runtime.BeginFrame("shop"); runtime.RegisterNode(new("one", "text", "Other", new(0, 0, 10, 10))); runtime.EndFrame(); armed = true;
+        if (reader is not null) { var result = reader.Read(read); Assert.Equal(ReadAvailability.Stale, result.Availability); Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes); }
+        else { var result = actions!.Send("second", selector, new(GuaActionType.Click), Epoch(runtime), () => true); Assert.Equal(ConfirmedActionStage.NotSent, result.Stage); Assert.Equal(ActionAttemptStatus.Rejected, result.Status); Assert.Equal("stale-query", result.Reason); Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "one", out _)); }
+        Assert.Equal(1, injected);
+    }
+
+    [Fact]
+    public async Task ActualUiReceiptTimeoutRemainsPendingUntilEndWait()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy"); int committed = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, delayReply: (command, _) =>
+        {
+            if (command.GetProperty("type").GetString() != "click_node") return TimeSpan.Zero;
+            Assert.True(runtime.TryConsumeAction(GuaActionType.Click, "buy", out var request)); committed++; runtime.EmitActionResult(request, true);
+            return TimeSpan.FromSeconds(1);
+        });
+        using var bridge = new BridgeUiActions(proxy.Endpoint, "timeout", TimeSpan.FromMilliseconds(250), 10, EnterFixtureLifecycle);
+        var selector = JsonNode.Parse("{\"id\":{\"value\":\"buy\"}}")!.AsObject();
+        var result = bridge.Send("once", selector, new(GuaActionType.Click), Epoch(runtime), () => true);
+        Assert.Equal(1, committed); Assert.Equal(ConfirmedActionStage.DispatchAttempted, result.Stage); Assert.Equal(ActionAttemptStatus.Pending, result.Status);
+        Assert.Equal(result, bridge.Send("once", selector, new(GuaActionType.Click), Epoch(runtime), () => true)); Assert.Equal(result, bridge.Poll("once"));
+        Assert.Equal(ActionAttemptStatus.TimedOut, bridge.EndWait("once", false).Status); Assert.Equal(1, committed);
+    }
+
+    [Theory]
+    [InlineData("sequence", false)] [InlineData("revision", false)] [InlineData("uiFrame", false)]
+    [InlineData("uiRevision", false)] [InlineData("worldFrame", false)] [InlineData("worldRevision", false)]
+    [InlineData("sequence", true)] [InlineData("revision", true)] [InlineData("uiFrame", true)]
+    [InlineData("uiRevision", true)] [InlineData("worldFrame", true)] [InlineData("worldRevision", true)]
+    public async Task EventCountersCannotExceedPollOrRegress(string counter, bool regress)
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "one"); World(runtime);
+        using var owner = runtime.CreateObserveOwner(GuaObserveSource.World); int value = 0;
+        using var property = owner.Property("count", () => GuaValue.Integer(value)); property.Notify(); bool armed = false; int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (!armed || command.GetProperty("type").GetString() != "poll_observations") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var transport = root["result"]!.AsObject(); var document = transport["document"]!;
+            var events = document["events"]!.AsArray(); Assert.Equal(2, events.Count);
+            if (regress) { Assert.True(document[counter]!.GetValue<ulong>() > 0); events[0]![counter] = document[counter]!.DeepClone(); events[1]![counter] = 0UL; }
+            else events[0]![counter] = document[counter]!.GetValue<ulong>() + 1;
+            Assert.True(GuaDistribution.ValidateJson("observe-transport-v1.schema.json", transport.ToJsonString())); injected++;
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var read = Read("world", "property", "count"); Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability);
+        value++; property.Notify(); value++; property.Notify(); armed = true;
+        var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Unavailable, result.Availability); Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
+    }
     private static readonly object LifecycleGate = new();
     // The test host's frame writers share the actual lock acquired around UI dispatch.
     // Production external bridges cannot manufacture a lock in the remote host.

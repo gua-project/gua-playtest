@@ -101,3 +101,18 @@ External guarded input/UI is a real upstream API blocker detailed in
 [docs/gua-bridge.md](docs/gua-bridge.md). No local success is presented as external
 Godot/Unity acceptance. This PR is partial issue #7 progress and has no closing
 keyword. Full scope and outstanding acceptance remain on issue #7.
+
+Latest actual Codex review corrections: UI query responses have no revision, so
+both reads and leased actions re-run the published native selector engine over
+a schema-validated, revision-bound current tree and compare complete ID sets.
+The temporary local GuaContext is disposed and never dispatches to the game.
+Exact/contains/regex and direct-parent scope are exercised on actual native trees.
+Cached same-ID role/name changes cannot supply standard/Observe Values or enqueue.
+Real host action commit followed by delayed receipt exceeds response timeout:
+post-dispatch cancellation remains Pending/DispatchAttempted until EndWait,
+while known pre-dispatch caller cancellation stays Aborted/NotSent.
+Every poll event counter must be bounded by its enclosing document and
+non-regressing in event order; sequence is strictly increasing. Schema-valid
+forward/regressing sequence/revision/UI/world frame/revision faults expose no
+snapshot/history. Native bridge122 passed with skip0; existing stale-target
+reason and empty-history regression assertions remain intact.
