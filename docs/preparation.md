@@ -62,7 +62,12 @@ change epoch, so identity and strict requests are rechecked after Setup.
 Planner. Runner validates the entire operation ID allowlist/count before dispatch,
 checks authorization again at each operation, and enforces both the whole Setup
 deadline and per-operation/whole-Preparing deadlines. Maximum operations is explicit
-and bounded at 1000. Receipt failure and unknown outcome terminate without retry;
+and bounded at 1000.
+Metadata properties, collection Count/index/Contains and authorization checks are
+pure worker-safe reads, isolated within the same bounded Step as asynchronous work.
+A blocking read cannot prevent the owner timer/cancellation; late reads cannot dispatch
+or mutate Run/cleanup/Trace. The Setup deadline includes metadata acquisition time.
+Receipt failure and unknown outcome terminate without retry;
 successful Setup alone does not prove the start preconditions. Attach needs explicit
 fixture authorization and never implies reset consent. The fixture must implement
 only its declared operation mapping; it cannot substitute arbitrary shell/internal
@@ -84,6 +89,8 @@ release, including resources registered later by execution. It is skipped if any
 preceding resource release is unconfirmed, even when diagnostic evidence is full.
 Registration failure also preserves exclusion because a closed cleanup registry
 cannot prove that all other resources were released.
+Its callback is registered immediately after lease acquisition, before any await;
+preparation expiry therefore cannot omit ownership from the cleanup snapshot.
 
 Only `Launch` acquires an `IOwnedProcess`. Shutdown targets the exact `Process`
 handle created by `Process.Start`, never a process name, discovered PID, another

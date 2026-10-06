@@ -66,8 +66,12 @@ public sealed class HostPreparation
         {
             if (!ActiveEndpoints.Add(key)) Fail(PreparationStage.Ownership, PreparationCode.Busy);
         }
-        try
+        // Acquire cleanup authority before the first await can race the executor deadline.
+        cleanup.Register(CleanupStage.OwnershipRelease, _ =>
         {
+            if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0) return ValueTask.FromResult(false);
+            lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
+        });
         IOwnedProcess? process = null;
         if (policy.HostMode == HostMode.Launch)
         {
@@ -138,27 +142,15 @@ public sealed class HostPreparation
         ValidateIdentity(identity);
         if (setup is not null)
         {
-            if (!setup.IsAuthorized(policy.HostMode)) Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
-            var sourceOperations = setup.OperationIds;
-            var allowedOperations = setup.AllowedOperationIds;
-            if (sourceOperations is null || allowedOperations is null || setup.MaximumOperations is < 1 or > 1000 || sourceOperations.Count > setup.MaximumOperations ||
-                setup.Timeout <= TimeSpan.Zero || setup.Timeout > TimeSpan.FromDays(1) ||
-                sourceOperations.Count < 0)
-                Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
-            var operations = new string[sourceOperations.Count];
+            var setupStartedAt = preparationClock.Elapsed;
+            var authority = await ReadSetupAsync(setup, preparationDeadline, cancellationToken).ConfigureAwait(false);
+            var operations = authority.Operations;
+            var setupDeadline = Min(preparationDeadline, setupStartedAt + authority.Timeout);
             for (var index = 0; index < operations.Length; index++)
             {
-                var id = sourceOperations[index];
-                if (string.IsNullOrWhiteSpace(id) || id.Length > 128 || !allowedOperations.Contains(id))
-                    Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
-                operations[index] = id;
-            }
-            var setupDeadline = Min(preparationDeadline, preparationClock.Elapsed + setup.Timeout);
-            for (var index = 0; index < operations.Length; index++)
-            {
-                var currentOperations = setup.OperationIds; var currentAllowed = setup.AllowedOperationIds;
-                if (!setup.IsAuthorized(policy.HostMode) || currentOperations is null || currentAllowed is null || currentOperations.Count != operations.Length ||
-                    currentOperations[index] != operations[index] || !currentAllowed.Contains(operations[index]))
+                var current = await ReadSetupAsync(setup, setupDeadline, cancellationToken).ConfigureAwait(false);
+                setupDeadline = Min(setupDeadline, setupStartedAt + current.Timeout);
+                if (current.Operations.Length != operations.Length || current.Operations[index] != operations[index])
                     Fail(PreparationStage.Setup, PreparationCode.SetupForbidden);
                 var receipt = await Step(PreparationStage.Setup, setupDeadline,
                     token => setup.ExecuteOperationAsync(index, connected, token), cancellationToken).ConfigureAwait(false);
@@ -195,25 +187,34 @@ public sealed class HostPreparation
         trace.Record(new(PreparationStage.Ready, PreparationCode.Completed));
         var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, trace);
         return new(certificate, feed, boundary.CurrentRestorable);
-        }
-        finally
-        {
-            // This terminal stage also follows resources acquired by the execution driver.
-            // OwnedCleanup invokes it only after every preceding release was confirmed.
-            try { cleanup.Register(CleanupStage.OwnershipRelease, _ =>
-            {
-                // Unknown release preserves the local exclusion; a new Run cannot reclaim an uncertain owner.
-                if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0) return ValueTask.FromResult(false);
-                lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
-            }); }
-            catch
-            {
-                // A closed registry cannot prove that all other owner resources were released.
-                // Preserve exclusion instead of reclaiming an uncertain endpoint.
-                throw;
-            }
-        }
     }
+
+    private sealed record SetupAuthority(string[] Operations, TimeSpan Timeout);
+    private ValueTask<SetupAuthority> ReadSetupAsync(IApprovedSetup setup, TimeSpan deadline, CancellationToken cancellationToken)
+        => Step<SetupAuthority>(PreparationStage.Setup, deadline, token => new(Task.Run(() =>
+        {
+            // Pure adapter metadata is isolated from the owner continuation. Even a
+            // blocking getter cannot prevent its original timer/cancellation from running.
+            // A late worker may finish reading, but has no Run, cleanup or dispatch authority.
+            if (!setup.IsAuthorized(policy.HostMode)) throw new PreparationException(PreparationStage.Setup, PreparationCode.SetupForbidden);
+            var source = setup.OperationIds; var allowed = setup.AllowedOperationIds;
+            var maximum = setup.MaximumOperations; var timeout = setup.Timeout;
+            if (source is null || allowed is null || maximum is < 1 or > 1000 ||
+                timeout <= TimeSpan.Zero || timeout > TimeSpan.FromDays(1))
+                throw new PreparationException(PreparationStage.Setup, PreparationCode.SetupForbidden);
+            var count = source.Count;
+            if (count < 0 || count > maximum) throw new PreparationException(PreparationStage.Setup, PreparationCode.SetupForbidden);
+            var operations = new string[count];
+            for (var index = 0; index < count; index++)
+            {
+                token.ThrowIfCancellationRequested();
+                var id = source[index];
+                if (string.IsNullOrWhiteSpace(id) || id.Length > 128 || !allowed.Contains(id))
+                    throw new PreparationException(PreparationStage.Setup, PreparationCode.SetupForbidden);
+                operations[index] = id;
+            }
+            return new SetupAuthority(operations, timeout);
+        }, token)), cancellationToken);
 
     private void ValidateIdentity(HostIdentity identity)
     {
@@ -268,7 +269,7 @@ public sealed class HostPreparation
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken)
         { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
         catch (ConnectionNotReadyException) when (stage == PreparationStage.Connect) { throw; }
-        catch (PreparationException) { throw; }
+        catch (PreparationException exception) { trace.Record(new(exception.Stage, exception.Code)); throw; }
         catch (ClockProviderException) { throw; }
         catch (Exception exception)
         {

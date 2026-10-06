@@ -51,6 +51,11 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             // each ready fault and use the Run owner's normative priority for the cause.
             // Inspect before cancelling losers: cancellation cannot invent a competing cause.
             var ready = new List<Exception> { exception };
+            if (exited?.IsCompletedSuccessfully == true)
+            {
+                trace.Record(new(PreparationStage.Launch, PreparationCode.ProcessExited));
+                ready.Insert(0, new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution));
+            }
             foreach (var task in new Task?[] { changed, exited })
                 if (task?.IsFaulted == true || task?.IsCanceled == true)
                     try { task.GetAwaiter().GetResult(); }

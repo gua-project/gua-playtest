@@ -29,6 +29,9 @@ public enum SetupReceipt { Confirmed, Failed, Unconfirmed }
 /// The fixture internally enforces its explicit time/operation/permission ceilings before every dispatch.</summary>
 public interface IApprovedSetup
 {
+    // Metadata reads are pure and safe from a worker thread. They may not dispatch,
+    // touch Run/cleanup authority or require the engine thread; operation execution
+    // remains the explicit async port below. Runner bounds and discards late reads.
     bool IsAuthorized(HostMode mode);
     IReadOnlyList<string> OperationIds { get; }
     IReadOnlySet<string> AllowedOperationIds { get; }

@@ -129,17 +129,23 @@ public sealed class PreparationTests
     }
     private sealed class Setup : IApprovedSetup
     {
+        public Action? BeforeAuthorization { get; set; }
+        public Func<IReadOnlySet<string>>? ReadAllowed { get; set; }
+        public Func<int>? ReadMaximum { get; set; }
+        public Func<TimeSpan>? ReadTimeout { get; set; }
         public bool Authorized { get; set; } = true;
         private IReadOnlyList<string> operationIds = ["scene"];
         public Func<IReadOnlyList<string>>? ReadOperations { get; set; }
         public IReadOnlyList<string> OperationIds { get => ReadOperations is null ? operationIds : ReadOperations(); set => operationIds = value; }
-        public IReadOnlySet<string> AllowedOperationIds { get; set; } = new HashSet<string> { "scene" };
+        private IReadOnlySet<string> allowedOperationIds = new HashSet<string> { "scene" };
+        public IReadOnlySet<string> AllowedOperationIds { get => ReadAllowed is null ? allowedOperationIds : ReadAllowed(); set => allowedOperationIds = value; }
         public Exception? OperationFailure { get; set; }
-        public int MaximumOperations { get; set; } = 1;
-        public TimeSpan Timeout => TimeSpan.FromSeconds(1);
+        private int maximumOperations = 1;
+        public int MaximumOperations { get => ReadMaximum is null ? maximumOperations : ReadMaximum(); set => maximumOperations = value; }
+        public TimeSpan Timeout => ReadTimeout is null ? TimeSpan.FromSeconds(1) : ReadTimeout();
         public int Calls { get; private set; }
         public SetupReceipt Receipt { get; set; } = SetupReceipt.Confirmed;
-        public bool IsAuthorized(HostMode mode) => Authorized;
+        public bool IsAuthorized(HostMode mode) { BeforeAuthorization?.Invoke(); return Authorized; }
         public ValueTask<SetupReceipt> ExecuteOperationAsync(int index, IPreparationConnection connection, CancellationToken token)
         { Calls++; if (OperationFailure is not null) throw OperationFailure; return ValueTask.FromResult(Receipt); }
     }
@@ -441,7 +447,7 @@ public sealed class PreparationTests
         var pending = preparation.PrepareAsync(run, cleanup, null, null).AsTask();
         run.Evaluate(cancelled: true); await cleanup.CompleteAsync(run, clock);
         clock.Advance(1000);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => pending);
+        await Assert.ThrowsAsync<TimeoutException>(() => pending);
         var laterTrace = new Trace(); await Execute(new(policy, clock, new Launcher(), new Connector(new()), laterTrace), clock);
         Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), laterTrace.Events);
         var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -861,5 +867,85 @@ public sealed class PreparationTests
         var connector = new Connector(new()); var trace = new Trace();
         await Execute(new(policy, clock, new Launcher(), connector, trace), clock);
         Assert.Equal(0, connector.Calls); Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), trace.Events);
+    }
+
+    private sealed class MetadataCountList(Action read) : IReadOnlyList<string>
+    {
+        public int Count { get { read(); return 1; } }
+        public string this[int index] => "scene";
+        public IEnumerator<string> GetEnumerator() => ((IEnumerable<string>)["scene"]).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, false)] [InlineData(2, false)]
+    [InlineData(3, false)] [InlineData(4, false)] [InlineData(5, false)]
+    [InlineData(0, true)] [InlineData(1, true)] [InlineData(2, true)]
+    [InlineData(3, true)] [InlineData(4, true)] [InlineData(5, true)]
+    public async Task BlockingSetupMetadataCannotSuppressOwnerDeadlineOrCancellation(int member, bool cancel)
+    {
+        using var releaseRead = new ManualResetEventSlim(); using var cancellation = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Block() { entered.TrySetResult(); try { releaseRead.Wait(); } finally { returned.TrySetResult(); } }
+        var clock = new Clock(); var setup = new Setup(); var connection = new Connection(); var policy = Policy();
+        switch (member)
+        {
+            case 0: setup.BeforeAuthorization = Block; break;
+            case 1: setup.ReadOperations = () => { Block(); return ["scene"]; }; break;
+            case 2: setup.ReadAllowed = () => { Block(); return new HashSet<string> { "scene" }; }; break;
+            case 3: setup.OperationIds = new MetadataCountList(Block); break;
+            case 4: setup.ReadMaximum = () => { Block(); return 1; }; break;
+            case 5: setup.ReadTimeout = () => { Block(); return TimeSpan.FromSeconds(1); }; break;
+        }
+        try
+        {
+            var pending = RunExecutor.ExecuteAsync(Run(clock), clock, new OwnedCleanup(), async (session, cleanup, token) =>
+            { return (await new HostPreparation(policy, clock, new Launcher(), new Connector(connection), new Trace())
+                .PrepareAsync(session, cleanup, setup, null, token)).Boundary; }, (_, _) => ValueTask.FromResult(true), cancellation.Token).AsTask();
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (cancel) cancellation.Cancel(); else clock.Advance(1000);
+            var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(cancel ? ResultStatus.Aborted : ResultStatus.Failed, outcome.Primary.Status);
+            Assert.Equal(cancel ? RunReason.Cancelled : RunReason.PreparationTimeout, outcome.Primary.Cause.Reason);
+            Assert.Equal(0, setup.Calls); Assert.Equal(1, connection.Releases); Assert.True(outcome.PostProcessingComplete);
+            // The still-blocked pure metadata worker owns no endpoint resource or dispatch authority.
+            var connector = new Connector(new()); await Execute(new(policy, clock, new Launcher(), connector, new Trace()), clock);
+            Assert.Equal(1, connector.Calls);
+        }
+        finally { releaseRead.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+        Assert.Equal(0, setup.Calls);
+    }
+
+    [Fact]
+    public async Task WholePreparationDeadlineCannotOmitOwnershipReleaseDuringRetryDelay()
+    {
+        var clock = new Clock(); var policy = Policy() with { RetryDelay = TimeSpan.FromSeconds(2) };
+        var first = new Connector(new()) { NotReadyCount = 1 }; var trace = new Trace();
+        var pending = Execute(new(policy, clock, new Launcher(), first, trace), clock);
+        Assert.Equal(1, first.Calls); clock.Advance(2000);
+        var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason); Assert.True(outcome.PostProcessingComplete);
+        var second = new Connector(new()); var secondTrace = new Trace();
+        await Execute(new(policy, clock, new Launcher(), second, secondTrace), clock);
+        Assert.Equal(1, second.Calls); Assert.DoesNotContain(new(PreparationStage.Ownership, PreparationCode.Busy), secondTrace.Events);
+    }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task SuccessfulProcessExitWatchCannotBeLostToFaultedOrCancelledCapture(bool cancel)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var trace = new Trace();
+        using var cancellation = new CancellationTokenSource();
+        connection.OnCapture = token =>
+        { launcher.Process.Exit(); if (cancel) cancellation.Cancel(); connection.CaptureFailure = cancel ? new OperationCanceledException(token) : new IOException(); };
+        PreparedHost? prepared = null;
+        var outcome = await RunExecutor.ExecuteAsync(Run(clock), clock, new OwnedCleanup(), async (session, cleanup, token) =>
+        { prepared = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), trace)
+            .PrepareAsync(session, cleanup, null, null, token); return prepared.Boundary; },
+            async (_, token) => { await prepared!.Feed.CaptureAsync(token); return true; }, cancellation.Token);
+        Assert.Equal(1, outcome.ExitCode); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Equal(RunPhase.Execution, outcome.Primary.Cause.Phase);
+        Assert.Contains(new(PreparationStage.Launch, PreparationCode.ProcessExited), trace.Events);
+        Assert.Contains(outcome.Exceptions, item => item.Type == (cancel ? typeof(OperationCanceledException) : typeof(IOException)).FullName);
+        Assert.Equal(1, launcher.Process.Shutdowns);
     }
 }
