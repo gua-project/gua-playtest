@@ -318,4 +318,24 @@ public sealed class RealBridgeTests
         Assert.Equal(ReadAvailability.Unavailable, result.Availability); Assert.Null(result.Value);
         Assert.Equal("value-type-changed", result.Reason);
     }
+
+    [Fact]
+    public void BatchPreservesIntermediateChangesForEveryActiveReadEvenWhenFinalValueReturns()
+    {
+        using var runtime = new GuaRuntime(); using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        int first = 0, second = 0;
+        using var one = owner.Property("first", () => GuaValue.Integer(first));
+        using var two = owner.Property("second", () => GuaValue.Integer(second));
+        one.Notify(); two.Notify(); using var reader = Reader(Start(runtime));
+        var a = Read("world", "property", "first"); var b = Read("world", "property", "second");
+        var initial = reader.ReadBatch([a, b]); Assert.All(initial, r => Assert.Equal(ReadAvailability.Available, r.Availability));
+        first = 1; one.Notify(); second = 2; two.Notify(); first = 0; one.Notify();
+        var result = reader.ReadBatch([a, b]);
+        Assert.Equal(0, Assert.Single(result[0].Reads).Value!.Value.GetProperty("value").GetInt32());
+        Assert.Equal(2, result[0].Changes!.Count);
+        Assert.Equal(1, result[0].Changes![0].Event.GetProperty("after").GetProperty("value").GetInt32());
+        Assert.Equal(0, result[0].Changes![1].Event.GetProperty("after").GetProperty("value").GetInt32());
+        Assert.Equal(2, Assert.Single(result[1].Changes!).Event.GetProperty("after").GetProperty("value").GetInt32());
+        Assert.All(reader.ReadBatch([a, b]), r => Assert.Empty(r.Changes!));
+    }
 }

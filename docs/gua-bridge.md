@@ -15,12 +15,12 @@ a profile parameter but do not send it to the bridge; the connection/host ceilin
 is authoritative. Do not connect a Planner to a Debug endpoint and filter its
 result afterward. No profile escalation or credential resolution happens here.
 
-`Read(JsonObject)` accepts a validated `common.read`. It reuses Gua UI/World
+`Read(JsonObject)` accepts a validated `common.read`; `ReadBatch` polls once for all active reads in a temporal evaluation pass. It reuses Gua UI/World
 queries and resolves every selector afresh. Returned `BridgeReadCollection` has
 the actual collection time, completeness and immutable result list. Each read
 has an explicit availability/reason, source/session/profile/runtime identity,
 independent source revision/frame and Observe owner/registration/type identity.
-No empty-success, zero-value or first-match fallback is used. Quantifiers and
+No empty-success, zero-value or first-match fallback is used. Matching intermediate Observe events and paired before/after enum catalogs are returned even when the final value returns to its old value. Temporal consumers must batch every active read each pass; sequential independent calls share one cursor and cannot recover notifications consumed by the earlier call. Standard reads are snapshots only and do not prove uninterrupted state between reads. Quantifiers and
 condition evaluation remain with #4/#5. One assertion with multiple returned
 targets must be rejected by the quantifier consumer, never reduced to index 0.
 

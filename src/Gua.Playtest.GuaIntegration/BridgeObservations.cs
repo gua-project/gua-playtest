@@ -12,8 +12,9 @@ public sealed record ObservationIdentity(string SourceId, ulong SessionEpoch, st
     ulong? OwnerId = null, ulong? RegistrationId = null, string? ValueTypeIdentity = null);
 public sealed record BridgeRead(ReadAvailability Availability, string Reason,
     ObservationIdentity? Identity = null, JsonElement? Value = null, JsonElement? EnumCatalog = null);
+public sealed record BridgeChange(JsonElement Event, JsonElement Catalogs);
 public sealed record BridgeReadCollection(DateTimeOffset ObservedAt, ReadAvailability Availability,
-    IReadOnlyList<BridgeRead> Reads);
+    IReadOnlyList<BridgeRead> Reads, IReadOnlyList<BridgeChange>? Changes = null);
 
 /// <summary>A connection and cursor owned by one Run. Construct a separate instance against
 /// the host's Player/PublicAgent bridge for Planner reads. A caller-supplied profile cannot
@@ -62,7 +63,31 @@ public sealed class BridgeObservations : IDisposable
 
     /// <summary>Accepts a schema-validated common.read. Failure never carries arbitrary remote
     /// errors, selector candidates or values from another profile.</summary>
-    public BridgeReadCollection Read(JsonObject read)
+    public BridgeReadCollection Read(JsonObject read) => ReadBatch([read])[0];
+
+    /// <summary>Polls once for all active reads. Temporal consumers use this batch API so one
+    /// read cannot consume another read's intervening notifications. Standard fields have
+    /// snapshot-only evidence; Observe notifications do not imply continuous standard state.</summary>
+    public IReadOnlyList<BridgeReadCollection> ReadBatch(IReadOnlyList<JsonObject> reads)
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (reads.Count == 0 || reads.Count > maxNodes) throw new ArgumentOutOfRangeException(nameof(reads));
+            try
+            {
+                if (subscription is null) Resubscribe();
+                var changes = ParseTransport(subscription!.PollJson());
+                return Array.AsReadOnly(reads.Select(read => ReadCore(read, changes)).ToArray());
+            }
+            catch (ObservationLimitException)
+            { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Truncated, "observation-limit")).ToArray()); }
+            catch (Exception error) when (error is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
+            { return Array.AsReadOnly(reads.Select(_ => Failure(ReadAvailability.Unavailable, "observation-unconfirmed")).ToArray()); }
+        }
+    }
+
+    private BridgeReadCollection ReadCore(JsonObject read, JsonElement changeTransport)
     {
         lock (gate)
         {
@@ -70,7 +95,7 @@ public sealed class BridgeObservations : IDisposable
             try
             {
                 if (subscription is null) Resubscribe();
-                var changes = ParseTransport(subscription!.PollJson()).GetProperty("document");
+                var changes = changeTransport.GetProperty("document");
                 if (changes.GetProperty("status").GetString() is "gap") return Failure(ReadAvailability.Gap, "observation-gap");
                 if (changes.GetProperty("status").GetString() is "stale_session") return Failure(ReadAvailability.Stale, "stale-session");
                 if (changes.GetProperty("sourceId").GetString() != cursorSourceId ||
@@ -159,8 +184,22 @@ public sealed class BridgeObservations : IDisposable
                 }
                 // Hidden and nonexistent targets deliberately share this shape.
                 if (reads.Count == 0) return Failure(ReadAvailability.Unavailable, "target-unavailable");
+                var relevantChanges = new List<BridgeChange>();
+                if (region is "observe" or "property")
+                {
+                    string name = read["name"]!.GetValue<string>();
+                    int index = 0;
+                    foreach (var change in changes.GetProperty("events").EnumerateArray())
+                    {
+                        if (change.GetProperty("source").GetString() == source &&
+                            ids.Contains(change.GetProperty("runtimeId").GetString()!, StringComparer.Ordinal) &&
+                            change.GetProperty("name").GetString() == name)
+                            relevantChanges.Add(new(change.Clone(), changeTransport.GetProperty("catalogs")[index].Clone()));
+                        index++;
+                    }
+                }
                 return new(DateTimeOffset.UtcNow, reads.All(r => r.Availability == ReadAvailability.Available)
-                    ? ReadAvailability.Available : ReadAvailability.Unavailable, reads.AsReadOnly());
+                    ? ReadAvailability.Available : ReadAvailability.Unavailable, reads.AsReadOnly(), relevantChanges.AsReadOnly());
             }
             catch (ObservationLimitException) { return Failure(ReadAvailability.Truncated, "observation-limit"); }
             catch (Exception error) when (error is InvalidOperationException or JsonException or System.Net.WebSockets.WebSocketException or OperationCanceledException)
@@ -179,6 +218,9 @@ public sealed class BridgeObservations : IDisposable
         if (root.GetProperty("document").TryGetProperty("entries", out var entries) &&
             entries.GetArrayLength() != root.GetProperty("catalogs").GetArrayLength())
             throw new InvalidOperationException("Unpaired Observe catalogs.");
+        if (root.GetProperty("document").TryGetProperty("events", out var events) &&
+            events.GetArrayLength() != root.GetProperty("catalogs").GetArrayLength())
+            throw new InvalidOperationException("Unpaired Observe change catalogs.");
         return root;
     }
     private JsonElement ParseBounded(string json)
