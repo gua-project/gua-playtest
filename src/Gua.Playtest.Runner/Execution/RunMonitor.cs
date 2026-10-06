@@ -23,7 +23,8 @@ public static class RunMonitor
         Func<T, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default)
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
-        using var workCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var workCancellation = new CancellationTokenSource();
+        using var workRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(workCancellation, run.RecordException));
         Task<T>? workTask = null;
         async ValueTask<(bool Completed, T? Value, IReadOnlyList<RunEvent> Events)> ReadyWork()
         {
@@ -92,7 +93,7 @@ public static class RunMonitor
                 }
                 finally
                 {
-                    wakeCancellation.Cancel();
+                    FiniteOperation.CancelSafely(wakeCancellation, run.RecordException);
                     foreach (var task in wakes) ObserveFault(task);
                 }
             }
@@ -101,12 +102,14 @@ public static class RunMonitor
         catch (Exception exception)
         {
             run.RecordException(exception);
-            run.Evaluate(candidates: exception is OperationCanceledException && cancellationToken.IsCancellationRequested
-                ? [] : [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
+            var ready = await ReadyWork().ConfigureAwait(false);
+            var faultEvents = exception is OperationCanceledException && cancellationToken.IsCancellationRequested
+                ? Array.Empty<RunEvent>() : [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)];
+            run.Evaluate(candidates: ready.Events.Concat(faultEvents),
                 cancelled: cancellationToken.IsCancellationRequested);
             return new(false, default);
         }
-        finally { workCancellation.Cancel(); if (workTask is not null) ObserveFault(workTask); }
+        finally { FiniteOperation.CancelSafely(workCancellation, run.RecordException); if (workTask is not null) ObserveFault(workTask); }
     }
     private static TimeSpan Positive(TimeSpan duration) => duration > TimeSpan.Zero ? duration : TimeSpan.Zero;
     private static void ObserveFault(Task task) => _ = task.ContinueWith(t => _ = t.Exception,

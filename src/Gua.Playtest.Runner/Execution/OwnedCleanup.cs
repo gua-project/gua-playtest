@@ -97,30 +97,40 @@ public static class FiniteOperation
         if (timeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeout));
         cancellationToken.ThrowIfCancellationRequested();
         var startDeadline = realClock.Elapsed + timeout;
-        using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var operationCancellation = new CancellationTokenSource();
         using var timerCancellation = new CancellationTokenSource();
         Task<T>? operation = null;
         Task? timer = null;
         var cancelled = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var registration = cancellationToken.Register(() => cancelled.TrySetCanceled(cancellationToken));
+        using var registration = cancellationToken.Register(() =>
+        { CancelSafely(operationCancellation); cancelled.TrySetCanceled(cancellationToken); });
         try
         {
             operation = action(operationCancellation.Token).AsTask();
             if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
             var remaining = startDeadline - realClock.Elapsed;
+            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
             if (remaining <= TimeSpan.Zero) throw new TimeoutException("OperationDeadlineReached");
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
             var winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
             if (winner == cancelled.Task) await cancelled.Task.ConfigureAwait(false);
             if (winner == timer) await timer.ConfigureAwait(false);
-            if (winner == timer || realClock.Elapsed >= startDeadline) throw new TimeoutException("OperationDeadlineReached");
+            var expired = winner == timer || realClock.Elapsed >= startDeadline;
+            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
+            if (expired) throw new TimeoutException("OperationDeadlineReached");
             return await operation.ConfigureAwait(false);
         }
         finally
         {
-            operationCancellation.Cancel(); timerCancellation.Cancel();
+            CancelSafely(operationCancellation); CancelSafely(timerCancellation);
             if (operation is not null) _ = operation.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (timer is not null) _ = timer.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
+    }
+    internal static void CancelSafely(CancellationTokenSource source, Action<Exception>? record = null)
+    {
+        try { source.Cancel(); }
+        catch (AggregateException exception) { record?.Invoke(exception); }
     }
 }

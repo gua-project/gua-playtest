@@ -40,7 +40,8 @@ public static class RunExecutor
             run.BeginPreparation();
             var prepared = await FiniteOperation.RunAsync(realClock, run.Limits.PreparationTimeout,
                 prepare, cancellationToken).ConfigureAwait(false);
-            if (!prepared.Ready) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)]);
+            if (!prepared.Ready) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)],
+                cancelled: cancellationToken.IsCancellationRequested);
             else
             {
                 if (prepared.Boundary is { } boundary)
@@ -54,6 +55,7 @@ public static class RunExecutor
                 {
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
                     var remaining = run.RunningOrigin!.Value + run.Limits.MaxDuration - realClock.Elapsed;
+                    if (remaining <= TimeSpan.Zero) throw new TimeoutException("RunDeadlineReached");
                     var complete = await FiniteOperation.RunAsync(realClock, remaining,
                         token => execute(run, token), cancellationToken).ConfigureAwait(false);
                     run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
