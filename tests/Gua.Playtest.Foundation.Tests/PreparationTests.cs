@@ -455,13 +455,16 @@ public sealed class PreparationTests
         public TimeSpan Elapsed => throw new InvalidOperationException("NotSessionClock");
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => throw new InvalidOperationException("NotSessionClock");
     }
-    [Fact]
-    public async Task PreparationUsesSessionClockRatherThanUnrelatedConstructorClock()
+    [Theory]
+    [InlineData(HostMode.Attach)]
+    [InlineData(HostMode.Launch)]
+    public async Task PreparationUsesSessionClockRatherThanUnrelatedConstructorClock(HostMode mode)
     {
-        var clock = new Clock();
-        var outcome = await Execute(new(Policy(), new UnrelatedClock(), new Launcher(), new Connector(new()), new Trace()), clock);
+        var clock = new Clock(); var launcher = new Launcher();
+        var outcome = await Execute(new(Policy(mode), new UnrelatedClock(), launcher, new Connector(new()), new Trace()), clock);
         Assert.Equal(ResultStatus.Unverified, outcome.Primary.Status);
         Assert.True(outcome.PostProcessingComplete);
+        Assert.Equal(mode == HostMode.Launch ? 1 : 0, launcher.Process.Shutdowns);
     }
 
     [Fact]
@@ -499,5 +502,28 @@ public sealed class PreparationTests
         Assert.Contains(evidence.Flatten().InnerExceptions, item => item is IOException);
         run.Evaluate(candidates: [failure.Cause]); await cleanup.CompleteAsync(run, clock);
         connection.BlockedCapture.SetResult(new(TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([])));
+    }
+
+    private sealed class BlockedShutdownProcess : IOwnedProcess
+    {
+        public bool HasExited => false;
+        public TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask WaitForExitAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
+        public ValueTask<bool> ShutdownAsync(CancellationToken token)
+        { token.Register(() => Cancelled.TrySetResult()); return new(pending.Task); }
+    }
+    [Fact]
+    public async Task LateProcessShutdownRemainsBoundedAfterRunClockStops()
+    {
+        var clock = new Clock(); var launcher = new DelayedLauncher();
+        var policy = Policy(HostMode.Launch) with { ShutdownTimeout = TimeSpan.FromMilliseconds(20) };
+        var run = Execute(new(policy, clock, launcher, new Connector(new()), new Trace()), clock);
+        clock.Advance(1000); var outcome = await run;
+        Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason);
+        var late = new BlockedShutdownProcess(); launcher.Completion.SetResult(late);
+        // No further Run-clock advance: the real release ceiling must still cancel this provider.
+        await late.Cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(outcome.PostProcessingComplete);
     }
 }

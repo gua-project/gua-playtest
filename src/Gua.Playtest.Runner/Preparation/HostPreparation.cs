@@ -10,7 +10,14 @@ public sealed class HostPreparation
     private static readonly object LeaseLock = new();
     private static readonly HashSet<string> ActiveEndpoints = new(StringComparer.Ordinal);
     private readonly PreparationPolicy policy;
-    private readonly IClock clock;
+    private sealed class ReleaseClock : IClock
+    {
+        private readonly System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+        public TimeSpan Elapsed => elapsed.Elapsed;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => new(FiniteOperation.DelayIndependentAsync(duration, token));
+    }
+    // Late self-release must neither read a frozen Run clock nor mutate its evidence from a provider continuation.
+    private readonly IClock releaseClock = new ReleaseClock();
     private IClock preparationClock = null!;
     private Action<Exception>? recordException;
     private readonly IProcessLauncher launcher;
@@ -38,7 +45,7 @@ public sealed class HostPreparation
             if (duration <= TimeSpan.Zero || duration > TimeSpan.FromDays(1)) throw new ArgumentException("PreparationLimitInvalid", nameof(policy));
         this.policy = policy with { Capabilities = policy.Capabilities.ToArray(),
             Launch = policy.Launch is null ? null : policy.Launch with { Arguments = policy.Launch.Arguments.ToArray() } };
-        this.clock = clock; this.launcher = launcher; this.connector = connector; this.trace = trace;
+        this.launcher = launcher; this.connector = connector; this.trace = trace;
     }
 
     public async ValueTask<PreparedHost> PrepareAsync(RunSession run, OwnedCleanup cleanup,
@@ -71,7 +78,7 @@ public sealed class HostPreparation
                     await ReleaseUnregisteredAsync(owned.ShutdownAsync).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
                 }
-                try { RegisterRelease(cleanup, releaseToken => FiniteOperation.RunAsync(clock,
+                try { RegisterRelease(cleanup, releaseToken => FiniteOperation.RunAsync(releaseClock,
                     policy.ShutdownTimeout, owned.ShutdownAsync, releaseToken)); }
                 catch
                 {
@@ -219,7 +226,7 @@ public sealed class HostPreparation
     {
         // A failed self-release is still an owned outstanding resource, even though cleanup registration closed.
         Interlocked.Increment(ref pendingReleases);
-        if (await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, release).ConfigureAwait(false))
+        if (await FiniteOperation.RunAsync(releaseClock, policy.ShutdownTimeout, release).ConfigureAwait(false))
             Interlocked.Decrement(ref pendingReleases);
     }
 

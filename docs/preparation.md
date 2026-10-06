@@ -40,6 +40,9 @@ Retries share the original whole-Preparing deadline. Async providers return
 promptly, honor cancellation, and release acquisitions returned after cancellation.
 The coordinator also releases late returned connections with a finite independent
 shutdown ceiling, and registers each on-time acquisition immediately.
+Shutdown ceilings use an independent physical clock, including late self-release
+after the Run has finished; they do not consult a frozen or failed Run clock.
+Registered cleanup remains governed by #6's overall deadline and release ordering.
 
 `HostIdentity.AttestedGameBuildId` is actual approved game-host/fixture evidence,
 never the Gua package's BuildId or a port-match inference. Protocol/profile/clock
