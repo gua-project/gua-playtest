@@ -1,5 +1,10 @@
 # Gua Playtest
 
+変更・push前の検証と独立サブエージェント監査は [AGENTS.md](AGENTS.md) と
+[$playtest-bug-hunt](.agents/skills/playtest-bug-hunt/SKILL.md) に従う。
+通常最大2回、意図的なPR全体監査は総計最大4回。ローカル監査は最終HEADの
+実CI・実Codex GitHub AI reviewの代替ではない。
+
 C#/.NET 10 のゲーム外 Playtest 基盤。現在は五つの project、抽象窓口、静的検証の共通 Runner、CLI 骨格、CI と配布 smoke を実装する。
 
 ```powershell
