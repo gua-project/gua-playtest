@@ -16,6 +16,8 @@ recovering)` consumes #6's one active `PlannerPermit`; the request ID is generat
 by the Run owner. `CopyInput()` returns a defensive copy of objective, real limits,
 remaining duration/actions/decisions after this request, bounded structured
 feedback, approved public observation and original Gua action definitions.
+Recovery request/retry decision remainder is clamped to the recovery allowance,
+including the current request; it never advertises the larger general budget.
 
 The trusted projection must come from #7's independently configured Planner
 observation profile, never by filtering a Debug connection after a read. Its
@@ -40,6 +42,8 @@ Each recovery permanently consumes that budget. No retry revives a cancelled
 permit, and the final valid request can still approve its operation. Recovery
 classification is sticky through rejected retries, even when the caller omits
 the recovering flag on the next request; only confirmed approved work ends it.
+Approval failure always closes the request permit. Expiry during validation is
+PlannerTimeout, with no advertised retry; timeout evidence stays in the arbiter.
 
 The pinned schema has exactly execute(single/timed), observe, finite wait or
 finish. Unknown fields, multiple kinds, internal commands, confirmed/owner,
@@ -67,7 +71,10 @@ checks for the entire approved proposal before #6 marks that request Uncertain.
 It requires the next ordered input index and refuses duplicates/reordering. It does not require neutral input between requests
 of the same approved segment, allowing the approved release. New decisions always
 require neutral input. `ConfirmSent` changes evidence without charging twice;
-`ConfirmResult` checks #6's finite result deadline. `Complete` distinguishes
+`ConfirmResult` checks #6's finite result deadline. The operation-level result
+cannot be confirmed until every reserved input has
+crossed dispatch, preserving ActionUnconfirmed when a segment stops partially.
+`Complete` distinguishes
 NotSent, SentUnconfirmed, PartialExecution and Confirmed. Uncertain/partial work
 closes new Planner requests even before the arbiter receives ActionUnconfirmed;
 there is no automatic resend. Only reserved requests can be refunded.
@@ -95,7 +102,7 @@ by a task deadline and are not conforming adapters.
 failure and invalid output, without leaking exception text. `PlannerTurn.Events`
 maps these to #6's canonical PlannerUsageLimit/PlannerConnectionFailure/
 PlannerOutputInvalid with Planner origin, never Scenario invalid. Those canonical
-reasons come from #6 integration commit 39ba68d; this module does not redefine
+reasons come from #6 (latest integration 985c9b4); this module does not redefine
 their priority. A noncontinuable rejected proposal exposes `TerminalEvent`.
 PlannerTurn recaptures current machine conditions and sends that event through
 RunMonitor before cleanup. Exhausted invalid-output retries terminate as

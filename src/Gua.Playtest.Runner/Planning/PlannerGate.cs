@@ -47,10 +47,14 @@ public sealed class PlannerGate
             throw new ArgumentException("ObservationOutsidePublicScope");
         var requestId = "decision-" + checked(++sequence).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var budget = run.Budget.Snapshot;
+        recovering |= recoveryRetry;
+        var decisionsRemaining = Math.Max(0, run.Limits.MaxDecisions - budget.Decisions - 1);
+        if (recovering) decisionsRemaining = Math.Min(decisionsRemaining,
+            Math.Max(0, run.Limits.RecoveryDecisions - budget.RecoveryDecisions - 1));
         var remaining = new JsonObject
         {
             ["actions"] = Math.Max(0, run.Limits.MaxActions - budget.Actions - budget.ReservedActions),
-            ["decisions"] = Math.Max(0, run.Limits.MaxDecisions - budget.Decisions - 1),
+            ["decisions"] = decisionsRemaining,
             ["durationMilliseconds"] = Math.Max(0, (long)(run.RunningOrigin!.Value + run.Limits.MaxDuration - clock.Elapsed).TotalMilliseconds)
         };
         var input = new PlannerInputDocument(runId, requestId, basis.ObservationId, objective, limits,
@@ -58,7 +62,6 @@ public sealed class PlannerGate
             { ["code"] = x.Code.ToString(), ["relatedDecisionRequestId"] = x.DecisionRequestId }).ToArray());
         if (!PlannerExchange.Validate(Encoding.UTF8.GetBytes(ContractJson.Serialize(input)), "plannerInput").IsValid)
             throw new ArgumentException("ProjectedPlannerInputInvalid");
-        recovering |= recoveryRetry;
         var permit = run.RequestPlanner(recovering);
         if (permit is null) return null;
         recoveryRetry = recovering;
@@ -87,10 +90,11 @@ public sealed class PlannerGate
         var window = Window(decision);
         if (window > run.Limits.WaitTimeout || window <= TimeSpan.Zero)
             return Reject(request, PlannerFeedbackCode.BudgetDenied);
-        request.Closed = true;
         // Even finish takes an approved finite final observation opportunity; it never establishes success.
         var operation = request.Permit.Approve(count, window);
-        if (operation is null) return Reject(request, PlannerFeedbackCode.BudgetDenied);
+        if (operation is null) return Reject(request, clock.Elapsed >= request.Deadline
+            ? PlannerFeedbackCode.PlannerTimeout : PlannerFeedbackCode.BudgetDenied);
+        request.Closed = true;
         var reference = Record(request, PlannerFeedbackCode.Approved);
         return new(PlannerFeedbackCode.Approved, new(this, operation, decision, request.Basis, reference));
     }
@@ -103,10 +107,13 @@ public sealed class PlannerGate
 
     private PlannerAdoption Reject(PlannerRequest request, PlannerFeedbackCode code)
     {
+        if (clock.Elapsed >= request.Deadline) code = PlannerFeedbackCode.PlannerTimeout;
         Cancel(request); Record(request, code);
+        if (code == PlannerFeedbackCode.PlannerTimeout) unsafeToContinue = true;
         var retry = !unsafeToContinue && run.State == ExecutionState.Running && !run.ActionsClosing;
         return new(code, RetryAllowed: retry, TerminalEvent: retry ? null :
-            new(RunReason.PlannerOutputInvalid, RunPhase.Execution, RunOrigin.Planner));
+            new(code == PlannerFeedbackCode.PlannerTimeout ? RunReason.PlannerTimeout : RunReason.PlannerOutputInvalid,
+                RunPhase.Execution, RunOrigin.Planner));
     }
 
     internal PlannerFeedbackCode Validate(JsonObject decision, ProjectedPlannerState basis, bool requireNeutral = true)
@@ -195,7 +202,8 @@ public sealed class ApprovedDecision
         gate.Record(Reference with { Code = code }); return code;
     }
     public void ConfirmSent(int index) => operation.Actions!.ConfirmSent(index);
-    public bool ConfirmResult() => operation.ConfirmResult();
+    public bool ConfirmResult() => Deliveries.All(x => x is DeliveryState.Sent or DeliveryState.Uncertain)
+        && operation.ConfirmResult();
     public PlannerFeedbackCode Complete()
     {
         if (completion.HasValue) return completion.Value;

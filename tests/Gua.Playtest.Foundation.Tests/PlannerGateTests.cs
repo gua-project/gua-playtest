@@ -32,7 +32,8 @@ public sealed class PlannerGateTests
         public bool RequiresResynchronization { get; set; }
         public bool Permission = true, Definition = true, Context = true, Target = true, Timing = true, Boundary = true;
         public bool Mutate;
-        public bool CheckPermissions(JsonObject proposal) { if (Mutate) proposal["kind"] = "finish"; return Permission; }
+        public Action? BeforePermissionCheck;
+        public bool CheckPermissions(JsonObject proposal) { BeforePermissionCheck?.Invoke(); if (Mutate) proposal["kind"] = "finish"; return Permission; }
         public bool CheckDefinitions(JsonObject proposal) => Definition;
         public bool CheckContext(JsonObject proposal, ProjectedPlannerState basis) => Context;
         public bool CheckTargets(JsonObject proposal, ProjectedPlannerState basis) => Target;
@@ -440,5 +441,48 @@ public sealed class PlannerGateTests
         Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
         Assert.Equal(RunReason.PlannerTimeout, s.Run.Primary!.Cause.Reason);
         Assert.Single(s.Run.Exceptions); Assert.DoesNotContain("PRIVATE_CANCEL_EXCEPTION", s.Run.Exceptions.Single().ToString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ApprovalExpiringDuringAuthorityChecksClosesPermitAndPreservesTimeout(bool permission)
+    {
+        var s = new Setup(); var r = s.Begin();
+        s.Authority.Permission = permission;
+        s.Authority.BeforePermissionCheck = () => s.Clock.Elapsed = r.Deadline;
+        var result = s.Gate.Adopt(r, Response(r, Single()));
+        Assert.Equal(PlannerFeedbackCode.PlannerTimeout, result.Code); Assert.False(result.RetryAllowed);
+        Assert.Equal(RunReason.PlannerTimeout, result.TerminalEvent!.Reason);
+        Assert.Equal(TimeSpan.FromSeconds(5), s.Run.NextRealEvaluationAt); // expired planner operation closed
+        Assert.Null(s.Gate.Begin(State()));
+        Assert.Equal(RunReason.PlannerTimeout, s.Run.Evaluate()!.Cause.Reason);
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+    }
+
+    [Fact]
+    public void RecoveryProjectionIncludesOnlyTheEffectiveRemainingDecisions()
+    {
+        var s = new Setup(decisions: 5); var r = s.Gate.Begin(State(), recovering: true)!;
+        Assert.Equal(1, r.CopyInput().Remaining["decisions"]!.GetValue<long>());
+        s.Gate.Adopt(r, Encoding.UTF8.GetBytes("{\"partial\":"));
+        r = s.Begin(); Assert.True(r.Recovering);
+        Assert.Equal(0, r.CopyInput().Remaining["decisions"]!.GetValue<long>());
+        Assert.NotNull(s.Gate.Adopt(r, Response(r, Single())).Approved); // last request still approves work
+        var normal = new Setup(); Assert.Equal(4, normal.Begin().CopyInput().Remaining["decisions"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public void PartialTimedDispatchCannotConfirmOrSuppressTerminalFailure()
+    {
+        var s = new Setup(); var r = s.Begin(); var approved = s.Gate.Adopt(r, Response(r, Timed())).Approved!;
+        Assert.False(approved.ConfirmResult()); approved.BeginDispatch(0); approved.ConfirmSent(0);
+        Assert.False(approved.ConfirmResult());
+        Assert.Equal(PlannerFeedbackCode.PartialExecution, approved.Complete());
+        Assert.False(approved.ConfirmResult()); Assert.Null(s.Gate.Begin(State()));
+        Assert.Equal(RunReason.ActionUnconfirmed, s.Run.Evaluate()!.Cause.Reason);
+        var full = new Setup(); r = full.Begin(); approved = full.Gate.Adopt(r, Response(r, Timed())).Approved!;
+        approved.BeginDispatch(0); approved.BeginDispatch(1);
+        Assert.True(approved.ConfirmResult()); Assert.Equal(PlannerFeedbackCode.Confirmed, approved.Complete());
     }
 }
