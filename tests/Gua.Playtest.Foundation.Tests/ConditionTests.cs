@@ -476,6 +476,43 @@ public sealed class ConditionTests
         Assert.Equal(ConditionCompletion.Pending, session.EvaluateAt(Unit(("$/condition", Observe("T", continuous: true))), TimeSpan.FromMilliseconds(6499)).Completion);
         Assert.Equal(ConditionCompletion.Satisfied, session.EvaluateAt(Unit(("$/condition", Observe("T", continuous: true))), TimeSpan.FromMilliseconds(6500)).Completion);
     }
+
+    [Theory]
+    [InlineData(200,ConditionCompletion.Pending)]
+    [InlineData(500,ConditionCompletion.Pending)]
+    [InlineData(501,ConditionCompletion.Expired)]
+    [InlineData(600,ConditionCompletion.Expired)]
+    public void ObservationViolationRetainsErrorAndStillAdvancesInclusiveDeadline(int errorAt, ConditionCompletion expected)
+    {
+        var clock = new Clock(); var session = Prepare(Time(Assertion(), 500, 1000)).Start(clock);
+        Evaluate(session, "$/condition", "T"); clock.At(errorAt);
+        var violation = Evaluate(session, "$/condition", "!", true);
+        Assert.Equal(EvaluationError.ObservationContractViolation, violation.Evaluation.Error);
+        Assert.Equal(TruthValue.Unknown, violation.Evaluation.Truth);
+        Assert.Equal(expected, violation.Completion);
+        Assert.Equal(expected == ConditionCompletion.Pending ? TimeSpan.FromMilliseconds(500) + TimeSpan.FromTicks(1) : (TimeSpan?)null, violation.NextEvaluationAt);
+        clock.At(700); var recovered = Evaluate(session, "$/condition", "T", true);
+        Assert.Equal(ConditionCompletion.Expired, recovered.Completion);
+        Assert.Equal(TruthValue.False, recovered.Evaluation.Truth);
+    }
+
+    [Fact]
+    public void ViolationsDoNotEraseEstablishedTemporalFactsOrHideExpiredChildState()
+    {
+        var clock = new Clock(); var session = Prepare(Time(Assertion(), 500)).Start(clock);
+        Assert.Equal(ConditionCompletion.Satisfied, Evaluate(session, "$/condition", "T").Completion);
+        clock.At(600); var violation = Evaluate(session, "$/condition", "!");
+        Assert.Equal(ConditionCompletion.Satisfied, violation.Completion);
+        Assert.Equal(EvaluationError.ObservationContractViolation, violation.Evaluation.Error);
+        Assert.Null(violation.NextEvaluationAt);
+        Assert.Equal(TruthValue.True, Evaluate(session, "$/condition", "?").Evaluation.Truth);
+        clock.At(0); var group = Prepare(Group("all", Time(Assertion(), 500, 1000), Assertion())).Start(clock);
+        clock.At(600);
+        var failed = group.Evaluate(Unit(("$/conditions/0/condition", Observe("!")), ("$/conditions/1", Observe("T"))));
+        Assert.Equal(ConditionCompletion.Expired, failed.Completion);
+        Assert.Equal(EvaluationError.ObservationContractViolation, failed.Evaluation.Error);
+        Assert.Equal(TruthValue.Unknown, failed.Evaluation.Truth);
+    }
 }
 
 internal static class ConditionTestJson

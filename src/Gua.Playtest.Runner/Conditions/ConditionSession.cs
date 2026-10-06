@@ -69,8 +69,7 @@ public sealed class ConditionSession
                     : children.All(c => c.Completion == ConditionCompletion.Satisfied) ? ConditionCompletion.Satisfied : ConditionCompletion.Open
                 : children.Any(c => c.Completion == ConditionCompletion.Satisfied) ? ConditionCompletion.Satisfied
                     : children.All(c => c.Completion == ConditionCompletion.Expired) ? ConditionCompletion.Expired : ConditionCompletion.Open;
-            if (value.Error != EvaluationError.None) completion = ConditionCompletion.Open;
-            else if (completion == ConditionCompletion.Open && children.Any(c => c.Completion == ConditionCompletion.Pending)
+            if (completion == ConditionCompletion.Open && children.Any(c => c.Completion == ConditionCompletion.Pending)
                 && children.All(c => c.Completion != ConditionCompletion.Open)) completion = ConditionCompletion.Pending;
             var witnesses = all ? children : children.Where(c => Effective(c).Truth == TruthValue.True).ToArray();
             var witness = value.Truth == TruthValue.True ? Join(witnesses.Select(c => c.Witness ?? "")) : null;
@@ -86,16 +85,21 @@ public sealed class ConditionSession
     private Sample Time(PreparedCondition.Node node, Sample child, TimeSpan now)
     {
         if (!states.TryGetValue(node.Path, out var state)) states[node.Path] = state = new();
+        TimeSpan? deadline = node.Within is { } within ? origin + within : null;
         // Broken required monitoring is not hidden by a previously established fact.
         if (child.Value.Error != EvaluationError.None)
         {
             state.Started = null;
             state.Witness = null;
-            return new(child.Value, ConditionCompletion.Pending, null, false, child.Next);
+            if (!state.Satisfied && (state.Expired || child.Completion == ConditionCompletion.Expired || (deadline is not null && now > deadline)))
+                state.Expired = true;
+            var completion = state.Satisfied ? ConditionCompletion.Satisfied : state.Expired ? ConditionCompletion.Expired : ConditionCompletion.Pending;
+            var next = completion is ConditionCompletion.Satisfied or ConditionCompletion.Expired ? null
+                : Earliest(new[] { child.Next, deadline is { } errorDeadline ? errorDeadline + TimeSpan.FromTicks(1) : (TimeSpan?)null });
+            return new(child.Value, completion, null, false, next);
         }
         if (state.Satisfied) return new(EvaluationResult.Known(true), ConditionCompletion.Satisfied, node.Path, true, null);
         if (state.Expired) return new(child.Value.Truth == TruthValue.Unknown ? child.Value : EvaluationResult.Known(false), ConditionCompletion.Expired, null, false, null);
-        TimeSpan? deadline = node.Within is { } within ? origin + within : null;
         var actual = Effective(child);
         bool trueNow = actual.Truth == TruthValue.True;
         bool keep = trueNow && child.Continuous && child.Witness is not null && child.Witness == state.Witness;

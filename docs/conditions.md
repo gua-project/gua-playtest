@@ -41,6 +41,8 @@ Errors in returned comparisons override this table. Unknown is preserved by nega
 
 An all with any Expired child propagates impossibility. An any is Expired only if every child is Expired. Ordinary children stay Open, and another branch can still become True after a sibling expires. Expiry of a failure condition is not evidence that failure occurred. Mandatory monitoring violations cannot be hidden by a retained success fact. #6 decides terminal outcomes from success/failure conditions and global deadlines; this module never converts Expired into Scenario failure/timeout.
 
+An observation violation preserves its error/Unknown truth while still advancing temporal state independently: it resets an unfinished hold, keeps the inclusive deadline wake before/at the boundary, and latches Expired after it. Established Satisfied/Expired state is not erased by an error. Parent completion propagation still runs, but an error always prevents a truth result from establishing success or failure. The canonical OPEN-05 entry in `03-open-decisions.md` records this condition-level resolution and distinguishes downstream Run/bridge acceptance still pending.
+
 `tests/fixtures/playtest/condition-state-table.json` fixes every ordered pair of Open/Pending/Satisfied/Expired with independent all/any expectations. The complete nine-pair ordinary three-valued table, quantifier table, and count table are literal test data. Existing `temporal-golden.json` expectations are unchanged.
 
 ## within/for state machine and continuity
