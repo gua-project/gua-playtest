@@ -12,6 +12,21 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed class FoundationTests
 {
     [Fact]
+    public async Task ClockRejectsInfiniteDelayAndHonorsCancellation()
+    {
+        var clock = new MonotonicClock();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await clock.DelayAsync(Timeout.InfiniteTimeSpan, CancellationToken.None));
+        var fake = new FakeClock();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await fake.DelayAsync(Timeout.InfiniteTimeSpan, CancellationToken.None));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await clock.DelayAsync(TimeSpan.FromSeconds(1), cancelled.Token));
+    }
+
+    [Fact]
     public void PublicNativePackagesMatchPinnedCompatibility()
     {
         PackageCompatibility.CheckNative();
