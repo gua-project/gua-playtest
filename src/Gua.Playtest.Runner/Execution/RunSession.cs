@@ -486,7 +486,7 @@ public sealed class RunSession
     private RunPhase Phase => State is ExecutionState.Created or ExecutionState.Preparing ? RunPhase.Preparation : RunPhase.Execution;
     private void Require(ExecutionState expected) { if (State != expected) throw new InvalidOperationException("RunStateInvalid"); }
     private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
-    private static int Priority(RunReason reason) => reason switch
+    internal static int Priority(RunReason reason) => reason switch
     {
         RunReason.InvalidContract or RunReason.ObservationContractViolation => 0,
         RunReason.FailureCondition or RunReason.PreparationTimeout or RunReason.ActionFailed or RunReason.ActionUnconfirmed or RunReason.PlannerTimeout or RunReason.ExecutionError

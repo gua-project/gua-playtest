@@ -45,7 +45,27 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             CheckAlive();
             result = await changed.ConfigureAwait(false);
         }
-        catch (Exception exception) { failure = exception; }
+        catch (Exception exception)
+        {
+            // WhenAny can pick the source even when both tasks already failed. Retain
+            // each ready fault and use the Run owner's normative priority for the cause.
+            // Inspect before cancelling losers: cancellation cannot invent a competing cause.
+            var ready = new List<Exception> { exception };
+            foreach (var task in new Task?[] { changed, exited })
+                if (task?.IsFaulted == true || task?.IsCanceled == true)
+                    try { task.GetAwaiter().GetResult(); }
+                    catch (Exception original)
+                    { if (!ready.Any(item => ReferenceEquals(item, original))) ready.Add(original); }
+            RunEvent Cause(Exception item) => item is RunFailureException typed ? typed.Cause :
+                item is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
+                    (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken)
+                    ? new(RunReason.Cancelled, RunPhase.Execution, RunOrigin.User)
+                    : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host);
+            failure = ready.OrderBy(item => RunSession.Priority(Cause(item).Reason))
+                .ThenBy(item => Cause(item).Reason).ThenBy(item => Cause(item).Phase).ThenBy(item => Cause(item).Origin).First();
+            foreach (var original in ready)
+                if (!ReferenceEquals(original, failure)) faults.Enqueue(original);
+        }
         finally
         {
             registration.Dispose();

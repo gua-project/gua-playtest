@@ -198,8 +198,9 @@ public sealed class HostPreparation
         }
         finally
         {
-            // Register last even on partial preparation failure: no second Run enters during resource shutdown.
-            try { cleanup.Register(CleanupStage.ResourceRelease, _ =>
+            // This terminal stage also follows resources acquired by the execution driver.
+            // OwnedCleanup invokes it only after every preceding release was confirmed.
+            try { cleanup.Register(CleanupStage.OwnershipRelease, _ =>
             {
                 // Unknown release preserves the local exclusion; a new Run cannot reclaim an uncertain owner.
                 if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0) return ValueTask.FromResult(false);
@@ -207,8 +208,8 @@ public sealed class HostPreparation
             }); }
             catch
             {
-                if (Volatile.Read(ref pendingReleases) == 0 && Volatile.Read(ref pendingAcquisitions) == 0)
-                { lock (LeaseLock) ActiveEndpoints.Remove(key); }
+                // A closed registry cannot prove that all other owner resources were released.
+                // Preserve exclusion instead of reclaiming an uncertain endpoint.
                 throw;
             }
         }

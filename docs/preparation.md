@@ -79,6 +79,11 @@ unguarded external dispatch. Hosts must supply actual exclusive ownership/guard
 evidence for stronger guarantees. Input owner separation does not mean game-state
 isolation. A lease is released after every acquired obligation confirms release;
 unknown release leaves local exclusion closed rather than authorizing a new Run.
+The terminal `OwnedCleanup.OwnershipRelease` stage follows every input/resource
+release, including resources registered later by execution. It is skipped if any
+preceding resource release is unconfirmed, even when diagnostic evidence is full.
+Registration failure also preserves exclusion because a closed cleanup registry
+cannot prove that all other resources were released.
 
 Only `Launch` acquires an `IOwnedProcess`. Shutdown targets the exact `Process`
 handle created by `Process.Start`, never a process name, discovered PID, another

@@ -61,6 +61,13 @@ Real and condition clock instances are supplied by the trusted execution policy,
 
 ## Certified initial Running boundary (START-005)
 
+Endpoint exclusion uses the terminal `OwnershipRelease` cleanup stage after all
+`InputRelease` and `ResourceRelease` obligations, regardless of registration time.
+The owner skips this stage if any preceding resource release is unconfirmed;
+that flag remains fail closed even after the diagnostic evidence limit is reached.
+Ownership callbacks otherwise share the original cleanup deadline and receive the
+same immediate bounded attempt after expiry. Failure maps to `ResourceReleaseUnconfirmed`.
+
 The approved ledger requires the same evaluation observation for prerequisites, Running boundary and initial success/failure. An arbitrary preparation snapshot cannot be reused by backdating only the condition clock. The production executor overload takes `prepare(RunSession, OwnedCleanup, CancellationToken) -> ValueTask<RunStartBoundary>` and evaluates the exact certificate's initial maps before the execution callback or any Planner request. A null certificate fails closed and cannot downgrade to the bool preparation path.
 
 After Setup, identity, compatibility and mode availability are ready, #8 calls `run.ArmRunningBoundary()` once. This creates a session-owned `RunStartCapture` capability and a unique RequestId with current real/condition readiness floors. #7/#8 must correlate a **new synchronized subscription/capture** to this request. `capture.Certify(captureRequestId, capturedRealAt, initialRunObservation, synchronizationEvidence, preconditionsSatisfied)` checks matching request, true prerequisite confirmation, nonempty bounded synchronization evidence, timestamps at/after readiness and at/before current clocks, and preparation capture deadline. It retains the exact immutable initial evidence unit. False prerequisites, an earlier preparation snapshot, mismatched request, future/regressing clocks and cross-Run reuse are rejected. Arming is a trusted controller assertion of completed Setup/compatibility, not a Planner permission or a string-based proof of host capabilities. Only the actual adapter can establish source/epoch/cursor synchronization and compare prerequisites in that same unit; a fabricated evidence ID is not source continuity.

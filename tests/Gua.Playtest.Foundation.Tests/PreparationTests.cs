@@ -789,4 +789,55 @@ public sealed class PreparationTests
         Assert.Single(outcome.Exceptions, item => item.Type == typeof(FormatException).FullName);
         Assert.Equal(nesting == 0 ? 3 : 4, outcome.Exceptions.Count);
     }
+
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task SimultaneouslyFaultedCaptureAndProcessWatchKeepBothOriginalsAndNormativeCause(int sourceKind)
+    {
+        var clock = new Clock(); var run = Run(clock); var launcher = new Launcher();
+        var contract = new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Contract);
+        var hostFailure = new RunEvent(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host);
+        var source = sourceKind == 0 ? (Exception)new IOException() :
+            new RunFailureException(sourceKind == 2 ? contract : hostFailure, new IOException());
+        var exit = new RunFailureException(sourceKind == 2 ? hostFailure : contract, new FormatException());
+        var connection = new Connection { CaptureFailure = source };
+        launcher.Process.ExitWaitFailure = exit;
+        PreparedHost? prepared = null;
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, cleanup, token) =>
+        { prepared = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(session, cleanup, null, null, token); return prepared.Boundary; },
+            async (_, token) => { await prepared!.Feed.CaptureAsync(token); return true; });
+        Assert.Equal(contract, outcome.Primary.Cause); Assert.Equal(2, outcome.ExitCode);
+        Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName);
+        Assert.Contains(outcome.Exceptions, item => item.Type == typeof(FormatException).FullName);
+        Assert.Equal(1, launcher.Process.Shutdowns); Assert.Equal(1, connection.Releases);
+    }
+
+    [Theory]
+    [InlineData(CleanupStage.InputRelease, false)] [InlineData(CleanupStage.InputRelease, true)]
+    [InlineData(CleanupStage.ResourceRelease, false)] [InlineData(CleanupStage.ResourceRelease, true)]
+    public async Task EndpointLeaseOutlivesExecutionResourcesAndOnlyConfirmedReleaseAllowsReentry(CleanupStage stage, bool confirmed)
+    {
+        var clock = new Clock(); var policy = Policy(); var cleanup = new OwnedCleanup(); var during = new Trace();
+        var duringConnector = new Connector(new()); var lateCalls = 0;
+        var outcome = await RunExecutor.ExecuteAsync(Run(clock), clock, cleanup, async (session, owned, token) =>
+        { return (await new HostPreparation(policy, clock, new Launcher(), new Connector(new()), new Trace())
+            .PrepareAsync(session, owned, null, null, token)).Boundary; }, (_, _) =>
+        {
+            cleanup.Register(stage, async _ =>
+            {
+                lateCalls++;
+                await Execute(new(policy, clock, new Launcher(), duringConnector, during), clock);
+                return confirmed;
+            });
+            return ValueTask.FromResult(true);
+        });
+        Assert.Equal(1, lateCalls); Assert.Equal(0, duringConnector.Calls);
+        Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), during.Events);
+        Assert.Equal(confirmed, outcome.PostProcessingComplete);
+        var after = new Trace(); var afterConnector = new Connector(new());
+        await Execute(new(policy, clock, new Launcher(), afterConnector, after), clock);
+        Assert.Equal(confirmed ? 1 : 0, afterConnector.Calls);
+        Assert.Equal(!confirmed, after.Events.Contains(new(PreparationStage.Ownership, PreparationCode.Busy)));
+    }
 }

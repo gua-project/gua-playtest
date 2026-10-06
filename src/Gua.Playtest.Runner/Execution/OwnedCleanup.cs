@@ -5,7 +5,7 @@ using System.Diagnostics;
 
 namespace Gua.Playtest.Runner.Execution;
 
-public enum CleanupStage { PrimarySnapshot, Diagnostics, Artifacts, InputRelease, ResourceRelease }
+public enum CleanupStage { PrimarySnapshot, Diagnostics, Artifacts, InputRelease, ResourceRelease, OwnershipRelease }
 
 /// <summary>Register only acquired owner-scoped resources, immediately after acquisition.
 /// Diagnostics precede release; each resource release gets an attempt even after artifact/cancellation failure.</summary>
@@ -148,8 +148,11 @@ public sealed class OwnedCleanup
             ordered = [new(CleanupStage.PrimarySnapshot, token => confirmPrimary(snapshot, token)), .. ordered];
         }
         var issues = new List<PostProcessingIssue>();
+        var resourcesConfirmed = true;
         bool AddIssue(PostProcessingIssue issue)
         {
+            if (issue.Reason is PostProcessingReason.InputReleaseUnconfirmed or PostProcessingReason.ResourceReleaseUnconfirmed)
+                resourcesConfirmed = false;
             if (issues.Count < run.Limits.MaxEvidenceItems - 1) { issues.Add(issue); return true; }
             if (issues.Count == run.Limits.MaxEvidenceItems - 1) issues.Add(new(PostProcessingReason.EvidenceLimitExceeded));
             return false;
@@ -174,13 +177,18 @@ public sealed class OwnedCleanup
         for (var i = 0; i < ordered.Length; i++)
         {
             var step = ordered[i];
+            // Ownership exclusion outlives every release registered before cleanup closes,
+            // including execution resources registered after preparation. Unknown releases
+            // keep the exclusion even if diagnostic evidence has reached its bounded limit.
+            if (step.Stage == CleanupStage.OwnershipRelease && !resourcesConfirmed)
+            { AddIssue(new(PostProcessingReason.ResourceReleaseUnconfirmed)); continue; }
             // Share remaining time fairly: a noncooperative early task cannot consume all later release attempts.
             var sampledNow = realClock.Elapsed;
             var remaining = deadline - sampledNow;
             if (remaining <= TimeSpan.Zero)
             {
                 AddIssue(new(PostProcessingReason.CleanupTimeout));
-                if (step.Stage is not (CleanupStage.InputRelease or CleanupStage.ResourceRelease))
+                if (step.Stage is not (CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease))
                 { AddIssue(new(Failure(step.Stage))); continue; }
                 // An expired observation budget still owes a release attempt. Invoke once,
                 // accept only already-completed confirmation, and grant no additional wait.
@@ -235,6 +243,7 @@ public sealed class OwnedCleanup
         CleanupStage.Artifacts => PostProcessingReason.ArtifactFailed,
         CleanupStage.InputRelease => PostProcessingReason.InputReleaseUnconfirmed,
         CleanupStage.ResourceRelease => PostProcessingReason.ResourceReleaseUnconfirmed,
+        CleanupStage.OwnershipRelease => PostProcessingReason.ResourceReleaseUnconfirmed,
         _ => throw new ArgumentOutOfRangeException(nameof(stage))
     };
 }
