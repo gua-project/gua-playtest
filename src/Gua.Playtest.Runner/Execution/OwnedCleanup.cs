@@ -65,7 +65,7 @@ public sealed class OwnedCleanup
         private async ValueTask DelayCoreAsync(TimeSpan duration, CancellationToken token)
         {
             var due = Elapsed + duration;
-            var hardWake = Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(duration.TotalMilliseconds)), token);
+            var hardWake = DelayHardUntilAsync(safety.Elapsed + duration, token);
             if (fallback) { await hardWake.ConfigureAwait(false); return; }
             Task? providerWake = null;
             try
@@ -94,6 +94,13 @@ public sealed class OwnedCleanup
                 foreach (var task in new[] { providerWake, hardWake }.OfType<Task>())
                     _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             }
+        }
+        private async Task DelayHardUntilAsync(TimeSpan deadline, CancellationToken token)
+        {
+            // Native timers may wake before their requested duration on some platforms.
+            // Verify independent elapsed time too; never promote a wake hint to expiry.
+            while (deadline - safety.Elapsed is var remaining && remaining > TimeSpan.Zero)
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(remaining.TotalMilliseconds)), token).ConfigureAwait(false);
         }
     }
     private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action);
