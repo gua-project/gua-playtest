@@ -79,6 +79,8 @@ Trusted adapters can throw `RunFailureException(RunEvent cause, Exception? inner
 
 ## Acceptance boundaries: keep issue #6 open
 
+Clock authority also covers the reads inside condition Start/EvaluateAt and finite operation timing: both receive session validation proxies. Arbitrary Elapsed provider exceptions queue InvalidContract/Clock before propagating their original exception evidence; repeated failure during fault-path evaluation still freezes the primary result and reaches cleanup. A successful timer wake is a hint and must be followed by a current validated Elapsed read. A wake before the absolute deadline fails closed as a clock provider failure, rather than inventing PreparationTimeout/MaxDuration. Cleanup keeps the independent hard share alive after a provider wake and validates clock progress on the owner, so a premature provider timer cannot cancel a cooperative owned release early. Planner approval carries its specific response/observation deadline through the final clock read that reserves the operation; crossing that boundary creates no action reservation.
+
 RunTests supplies deterministic fake-clock state/priority/budget/condition integration, failure injection during preparation/report/release, noncooperative task deadlines, paused simulation and live failure monitoring during a blocked Planner. No sleeps or relaxed existing assertions are used. This resolves the controller contract portions of AT-GOAL-002, AT-TIME-004, AT-RUN-001/002/003/005/006, AT-BUDGET-001/002/003, AT-CLOCK-002 and OPEN-06/10.
 
 Remaining real acceptance:

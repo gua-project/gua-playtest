@@ -9,8 +9,15 @@ namespace Gua.Playtest.Runner.Execution;
 /// Evaluate receives a complete same-cycle event set and reads real time once.</summary>
 public sealed class RunSession
 {
+    private sealed class ValidatedClock(RunSession owner, bool condition) : IClock
+    {
+        public TimeSpan Elapsed => condition ? owner.ReadCondition() : owner.ReadReal();
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+            => (condition ? owner.conditionClock : owner.realClock).DelayAsync(duration, token);
+    }
     private sealed record CapturedUnit(ConditionObservationUnit? Success, TimeSpan At, ConditionObservationUnit? Failure);
     private readonly IClock realClock, conditionClock;
+    private readonly IClock validatedRealClock, validatedConditionClock;
     private readonly PreparedCondition? success, failure;
     private readonly CompletionPolicy policy;
     private ConditionSession? successSession, failureSession;
@@ -31,8 +38,8 @@ public sealed class RunSession
         try { confirm(value); } finally { IsConfirmingWork = false; }
     }
     public RunLimits Limits { get; }
-    internal IClock AuthoritativeRealClock => realClock;
-    internal IClock AuthoritativeConditionClock => conditionClock;
+    internal IClock AuthoritativeRealClock => validatedRealClock;
+    internal IClock AuthoritativeConditionClock => validatedConditionClock;
     internal TimeSpan ReadAuthoritativeReal() => ReadReal();
     internal TimeSpan ReadAuthoritativeCondition() => ReadCondition();
     internal TimeSpan LastValidatedReal => lastReal;
@@ -55,40 +62,48 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(conditionClock);
         if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
         Limits = limits; Budget = new(limits); this.realClock = realClock; this.conditionClock = conditionClock;
+        validatedRealClock = new ValidatedClock(this, false); validatedConditionClock = new ValidatedClock(this, true);
         this.success = success; this.failure = failure; this.policy = policy;
         lastReal = ReadReal();
         lastCondition = ReadCondition();
     }
     private TimeSpan ReadCondition()
     {
-        var now = conditionClock.Elapsed;
-        if (now < lastCondition || now < TimeSpan.Zero || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+        try
         {
-            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
-            throw new InvalidOperationException("ConditionClockInvalid");
+            var now = conditionClock.Elapsed;
+            if (now < lastCondition || now < TimeSpan.Zero || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+                throw new InvalidOperationException("ConditionClockInvalid");
+            return lastCondition = now;
         }
-        return lastCondition = now;
+        catch (Exception) { QueueClockRejection(); throw; }
+    }
+    private void QueueClockRejection()
+    {
+        if (!pendingEvents.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
+            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
     }
     private ConditionSession? StartCondition(PreparedCondition? prepared, TimeSpan origin)
     {
-        try { return prepared?.Start(conditionClock, origin); }
+        try { return prepared?.Start(validatedConditionClock, origin); }
         catch (ArgumentOutOfRangeException)
         {
             // A clock can reset between the shared-origin read and either condition's start.
             // Keep typed contract evidence before rethrowing the unchanged provider exception.
-            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
+            QueueClockRejection();
             throw;
         }
     }
     private TimeSpan ReadReal()
     {
-        var now = realClock.Elapsed;
-        if (now < TimeSpan.Zero || now < lastReal || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+        try
         {
-            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
-            throw new InvalidOperationException("RunClockInvalid");
+            var now = realClock.Elapsed;
+            if (now < TimeSpan.Zero || now < lastReal || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+                throw new InvalidOperationException("RunClockInvalid");
+            return lastReal = now;
         }
-        return lastReal = now;
+        catch (Exception) { QueueClockRejection(); throw; }
     }
     public void BeginPreparation()
     {
@@ -184,13 +199,18 @@ public sealed class RunSession
     /// <summary>Replay/approved non-Planner work. The complete segment reserves before any transport.</summary>
     public ApprovedOperation? ApproveOperation(int actionCount, TimeSpan observationWindow)
         => Approve(actionCount, observationWindow, false);
-    private ApprovedOperation? Approve(int count, TimeSpan window, bool finalPlannerPermit)
+    private ApprovedOperation? Approve(int count, TimeSpan window, bool finalPlannerPermit, TimeSpan? authorityDeadline = null, RunEvent? expiryCause = null)
     {
         Require(ExecutionState.Running);
         operations.RemoveAll(x => !x.IsOpen);
         if (operations.Count != 0) return null;
         if (window <= TimeSpan.Zero || window > Limits.WaitTimeout || count < 0) throw new ArgumentOutOfRangeException(nameof(window));
         var now = ReadReal();
+        if (authorityDeadline is { } boundary && now >= boundary)
+        {
+            if (expiryCause is not null) pendingEvents.Add(expiryCause);
+            return null;
+        }
         if (IsConfirmingWork || HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
             (!finalPlannerPermit && ActionsClosing)) return null;
         var reservation = count == 0 ? null : Budget.Reserve(count);
@@ -215,7 +235,9 @@ public sealed class RunSession
             if (owner.IsConfirmingWork || consumed || !request.IsOpen || owner.ReadReal() >= approvalDeadline || owner.State != ExecutionState.Running) return null;
             consumed = true; request.Complete();
             if (owner.lastReal >= approvalDeadline) return null;
-            return owner.Approve(actionCount, observationWindow, true);
+            return owner.Approve(actionCount, observationWindow, true, approvalDeadline,
+                new(request.ResultConfirmed ? RunReason.WaitExpired : RunReason.PlannerTimeout, RunPhase.Execution,
+                    request.ResultConfirmed ? RunOrigin.Host : RunOrigin.Planner));
         }
         public void CompleteWithoutOperation() { consumed = true; request.Complete(); }
     }
@@ -295,7 +317,7 @@ public sealed class RunSession
         cycle.AddRange(pendingEvents); pendingEvents.Clear();
         TimeSpan now;
         try { now = ReadReal(); }
-        catch (InvalidOperationException exception)
+        catch (Exception exception)
         {
             RecordException(exception); now = lastReal;
             // Keep any evidence queued during the read, including the rejecting clock itself.
@@ -325,7 +347,7 @@ public sealed class RunSession
                         throw new InvalidOperationException("ConditionObservationTimeInvalid");
                     validCapture = true;
                 }
-                catch (InvalidOperationException exception) { RecordException(exception); validCapture = false; }
+                catch (Exception exception) { RecordException(exception); validCapture = false; }
                 if (!validCapture)
                 {
                     cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
@@ -337,7 +359,7 @@ public sealed class RunSession
                 ConditionEvaluation? EvaluateCondition(ConditionSession? session, ConditionObservationUnit? evidence)
                 {
                     try { return session?.EvaluateAt(evidence ?? new ConditionObservationUnit([]), captured.At); }
-                    catch (InvalidOperationException exception)
+                    catch (Exception exception)
                     {
                         RecordException(exception);
                         cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
@@ -419,6 +441,7 @@ public sealed class RunSession
     public void RecordException(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        if (exception is ClockProviderException) QueueClockRejection();
         if (exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace));
         if (exception is RunFailureException or ProviderCancellationException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)

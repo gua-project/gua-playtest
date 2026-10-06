@@ -76,7 +76,10 @@ public sealed class OwnedCleanup
                     var winner = await Task.WhenAny(providerWake, hardWake).ConfigureAwait(false);
                     if (providerWake.IsFaulted) await providerWake.ConfigureAwait(false);
                     await winner.ConfigureAwait(false);
-                    if (winner == hardWake && !token.IsCancellationRequested) Interlocked.Exchange(ref hardWakeAt, due.Ticks);
+                    // A provider wake is only a hint. Keep the independent finite share alive
+                    // until its deadline; the owner checks clock progress before cancellation.
+                    await hardWake.ConfigureAwait(false);
+                    if (!token.IsCancellationRequested) Interlocked.Exchange(ref hardWakeAt, due.Ticks);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
                 catch (Exception exception)
@@ -197,6 +200,7 @@ public sealed class OwnedCleanup
 /// Late results never acquire Run authority. A real clock must advance independently of simulation.</summary>
 internal sealed class ProviderCancellationException(OperationCanceledException original)
     : Exception("ProviderCancellation", original);
+internal sealed class ClockProviderException() : Exception("ClockTimerWokeBeforeDeadline");
 
 public static class FiniteOperation
 {
@@ -252,7 +256,8 @@ public static class FiniteOperation
                 await cancelled.Task.ConfigureAwait(false);
             }
             if (winner == timer) await timer.ConfigureAwait(false);
-            var expired = winner == timer || realClock.Elapsed >= startDeadline;
+            var expired = realClock.Elapsed >= startDeadline;
+            if (winner == timer && !expired) throw new ClockProviderException();
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             if (expired) throw DeadlineReached("OperationDeadlineReached");
             return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
