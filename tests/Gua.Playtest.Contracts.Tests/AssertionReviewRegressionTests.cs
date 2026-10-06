@@ -46,6 +46,39 @@ public sealed class AssertionReviewRegressionTests
         };
 
     [Fact]
+    public void LargeEnumCatalogValidatesLinearlyWithoutMaskingInvalidMembers()
+    {
+        const int count = 18000;
+        var catalog = new JsonObject
+        {
+            ["schemaVersion"] = 1, ["enums"] = new JsonArray(new JsonObject
+            {
+                ["enumType"] = "Game.State",
+                ["members"] = new JsonArray(Enumerable.Range(0, count).Select(i => (JsonNode?)JsonValue.Create($"member{i}")).ToArray())
+            })
+        };
+        var original = catalog.ToJsonString();
+        var clock = Stopwatch.StartNew();
+        var snapshot = EnumCatalogSnapshot.Create(catalog);
+        var expected = new JsonObject { ["type"] = "enum", ["enumType"] = "Game.State", ["value"] = "member17999" };
+        Assert.Equal(EvaluationResult.Known(true), PreparedAssertion.Create(Assertion(expected, "equals"), new(10, 100), snapshot).Evaluate(expected, snapshot));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"Enum catalog budget exceeded: {clock.Elapsed}.");
+        Assert.Equal(original, catalog.ToJsonString());
+        var members = catalog["enums"]![0]!["members"]!.AsArray();
+        members.Add("member0");
+        Assert.Equal("EnumDuplicate", Assert.Throws<AssertionConfigurationException>(() => EnumCatalogSnapshot.Create(catalog)).Code);
+        members.RemoveAt(count);
+        foreach (JsonNode? invalid in new JsonNode?[] { null, JsonValue.Create(1), JsonValue.Create(""), JsonValue.Create("\uD800") })
+        {
+            members[0] = invalid;
+            Assert.Throws<AssertionConfigurationException>(() => EnumCatalogSnapshot.Create(catalog));
+        }
+        members[0] = "member0";
+        catalog["enums"]![0]!["unexpected"] = true;
+        Assert.Throws<AssertionConfigurationException>(() => EnumCatalogSnapshot.Create(catalog));
+    }
+
+    [Fact]
     public void LargeMembershipAndRepeatedSequenceComparisonsStayWithinPredeclaredBudget()
     {
         // These fixed sizes fit the 50000-node decoder and previously required hundreds of millions

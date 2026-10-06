@@ -14,21 +14,31 @@ public sealed class EnumCatalogSnapshot
         ArgumentNullException.ThrowIfNull(catalog);
         try
         {
-            ContractSchemas.Validate("enum-catalog-v1.schema.json", catalog);
+            var structural = catalog.DeepClone().AsObject();
+            if (structural["enums"] is not JsonArray entries) throw new ContractException("EnumCatalogInvalid");
             var definitions = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            foreach (var definition in catalog["enums"]!.AsArray())
+            foreach (var entry in entries)
             {
-                var name = definition!["enumType"]!.GetValue<string>();
+                if (entry is not JsonObject definition || definition["enumType"] is not JsonValue nameValue
+                    || definition["members"] is not JsonArray memberArray || memberArray.Count == 0)
+                    throw new ContractException("EnumCatalogInvalid");
+                var name = nameValue.GetValue<string>();
                 var members = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var member in definition["members"]!.AsArray())
+                foreach (var member in memberArray)
                 {
-                    var text = member!.GetValue<string>();
+                    if (member is not JsonValue memberValue) throw new ContractException("EnumCatalogInvalid");
+                    var text = memberValue.GetValue<string>();
+                    if (text.Length == 0) throw new ContractException("EnumCatalogInvalid");
                     ValueReader.CheckUnicode(text);
                     if (!members.Add(text)) throw new ContractException("EnumDuplicate");
                 }
                 if (definitions.TryGetValue(name, out var prior) && !prior.SetEquals(members)) throw new ContractException("EnumConflict");
                 definitions.TryAdd(name, members);
+                // Every member and uniqueness were validated linearly above. Keep minItems and all
+                // object/name constraints in the schema without its quadratic uniqueItems scan.
+                definition["members"] = new JsonArray("validated-member");
             }
+            ContractSchemas.Validate("enum-catalog-v1.schema.json", structural);
             return new(definitions);
         }
         catch (Exception ex) when (ValueReader.IsValueException(ex))
