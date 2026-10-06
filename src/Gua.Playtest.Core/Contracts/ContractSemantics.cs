@@ -62,7 +62,7 @@ internal static class ContractSemantics
         else if (node is JsonArray list) foreach (var child in list) if (child is not null) Walk(child);
     }
 
-    private static void CheckRead(JsonObject read)
+    internal static void CheckRead(JsonObject read)
     {
         if (Text(read, "region") != "standard") return;
         var source = Text(read["target"]!, "source"); var field = Text(read, "field");
@@ -89,7 +89,7 @@ internal static class ContractSemantics
         if (actual is null && declared is not ("bool" or "integer" or "number" or "string")) throw new ContractException("TypeMismatch");
     }
 
-    private static void CheckAssertion(JsonObject assertion)
+    internal static void CheckAssertion(JsonObject assertion)
     {
         var type = assertion["read"]!["valueType"]!;
         var expected = assertion["expected"];
@@ -117,7 +117,7 @@ internal static class ContractSemantics
         else if (Text(expected, "type") != requiredKind) throw new ContractException("TypeMismatch");
         if (op.StartsWith("count", StringComparison.Ordinal))
         {
-            if (expected["value"]!.GetValue<long>() < 0) throw new ContractException("TypeMismatch");
+            if (Assertions.ValueReader.ExactInteger(expected["value"]!.ToJsonString()) < 0) throw new ContractException("TypeMismatch");
         }
         else
         {

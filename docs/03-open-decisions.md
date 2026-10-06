@@ -16,6 +16,8 @@
 
 ## OPEN-02 Value・演算子の細部とenum境界
 
+P-03の比較契約は [assertions.md](assertions.md) で確定。Gua1.1.1 Value仕様を再利用し、containsAll/Any、連続sequence、絶対許容差、.NET regexと明示的上限を具体化。実providerのenum metadata/identityはP-07で接続する。
+
 enumTypeの名前衝突・定義更新、flags/alias/未定義数値の扱い、stringの比較/Unicode、setの等価・正規化と-0、collection containsAllの重複と空の意味、integer/number境界、regex方言と実行上限。型・許可集合は再議論せず具体例へ固定する。
 
 **担当案:** G-01 P-03
@@ -45,6 +47,8 @@ visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、
 **状態:** Target/readのsource/region/selectorと同一性cacheはcontracts.mdで確定。比較/時間意味は#4/#5、runtime解決は#7。
 
 ## OPEN-05 条件評価の完全な状態表
+
+P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](assertions.md) で確定。時間/quantifier/Pending/Expired/終端伝播の状態表はP-04/P-05の未完了範囲として維持する。
 
 承認済みの三値・通常all・時間成立履歴・within/forを維持しつつ、任意のネスト、Unknown中の期限切れ、対象数変化とforの継続、観測errorとPending/Expired、同時観測境界を真理値表・状態機械へ落とす。
 
