@@ -13,6 +13,25 @@ namespace Gua.Playtest.Bridge.Tests;
 
 public sealed class RealBridgeTests
 {
+    [Fact]
+    public async Task FaultProxyDisposalJoinsCancelledUnacceptedConnection()
+    {
+        var proxy = new BridgeFaultProxy("ws://127.0.0.1:1/", (_, _) => false);
+        await proxy.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task FaultProxyDisposalPreservesUnexpectedForwardingFault()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy");
+        var expected = new InvalidOperationException("Injected forwarding fault.");
+        var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => throw expected);
+        using var reader = Reader(proxy.Endpoint);
+        reader.Read(Read("ui", "standard", "visible", "bool", "buy"));
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.DisposeAsync().AsTask());
+        Assert.Same(expected, actual);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

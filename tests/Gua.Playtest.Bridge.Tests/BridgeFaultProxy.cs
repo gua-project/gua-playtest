@@ -74,5 +74,17 @@ internal sealed class BridgeFaultProxy : IAsyncDisposable
         }
     }
     public async ValueTask DisposeAsync()
-    { shutdown.Cancel(); listener.Close(); await server; shutdown.Dispose(); }
+    {
+        shutdown.Cancel();
+        try { await server; }
+        finally
+        {
+            // Join the forwarding loop before disposing its listener. On Unix a peer
+            // timeout can already have disposed the upgraded connection's stream;
+            // HttpListener.Close then encounters that disposed stream while cleaning up.
+            try { listener.Close(); }
+            catch (ObjectDisposedException) { }
+            finally { shutdown.Dispose(); }
+        }
+    }
 }
