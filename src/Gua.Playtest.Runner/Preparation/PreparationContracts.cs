@@ -18,6 +18,7 @@ public sealed record PreparationPolicy(HostMode HostMode, PlayMode PlayMode, Uri
     string RequiredProtocol, string Profile, string Clock, IReadOnlyList<string> Capabilities, bool RequireBuildAttestation,
     bool StrictStart, LaunchCommand? Launch, TimeSpan OperationTimeout, TimeSpan RetryDelay, int ConnectAttempts,
     TimeSpan ShutdownTimeout);
+// Returned metadata, including capability membership, is pure and worker-safe.
 public sealed record HostIdentity(string? AttestedGameBuildId, string Protocol, string Profile, string Clock,
     IReadOnlySet<string> Capabilities, string SourceId, string Epoch, bool HasOutstandingRequests);
 public sealed record InitialBoundary(HostIdentity CapturedIdentity, bool Continuous, bool PreconditionsSatisfied,

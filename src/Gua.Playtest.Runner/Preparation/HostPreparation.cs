@@ -23,10 +23,11 @@ public sealed class HostPreparation
     private readonly IProcessLauncher launcher;
     private readonly IPreparationConnector connector;
     private readonly IPreparationTrace trace;
-    private bool used;
+    private int used;
     private int pendingReleases;
     private int pendingAcquisitions;
     private int pendingMetadata;
+    private bool ownershipClosed;
     public HostPreparation(PreparationPolicy policy, IClock clock, IProcessLauncher launcher,
         IPreparationConnector connector, IPreparationTrace trace)
     {
@@ -55,25 +56,33 @@ public sealed class HostPreparation
     {
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(cleanup);
         if (run.State != Gua.Playtest.Core.Contracts.ExecutionState.Preparing) throw new InvalidOperationException("PreparationStateInvalid");
+        if (Interlocked.Exchange(ref used, 1) != 0) throw new InvalidOperationException("PreparationAlreadyUsed");
         var preparationDeadline = run.NextRealEvaluationAt;
-        if (used) throw new InvalidOperationException("PreparationAlreadyUsed");
-        used = true;
         preparationClock = run.AuthoritativeRealClock;
         recordException = run.RecordException;
         trace.Record(new(PreparationStage.Started, PreparationCode.Started));
         // This prevents collisions in this Runner process only, never claims a host/manual-input lifecycle lock.
         var key = policy.Endpoint.AbsoluteUri;
-        lock (LeaseLock)
-        {
-            if (!ActiveEndpoints.Add(key)) Fail(PreparationStage.Ownership, PreparationCode.Busy);
-        }
+        bool acquiredLease;
+        lock (LeaseLock) acquiredLease = ActiveEndpoints.Add(key);
+        if (!acquiredLease) Fail(PreparationStage.Ownership, PreparationCode.Busy);
         // Acquire cleanup authority before the first await can race the executor deadline.
-        cleanup.Register(CleanupStage.OwnershipRelease, _ =>
+        try { cleanup.Register(CleanupStage.OwnershipRelease, _ =>
         {
-            if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0 || Volatile.Read(ref pendingMetadata) != 0)
-                return ValueTask.FromResult(false);
-            lock (LeaseLock) ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
-        });
+            lock (LeaseLock)
+            {
+                ownershipClosed = true;
+                if (Volatile.Read(ref pendingReleases) != 0 || Volatile.Read(ref pendingAcquisitions) != 0 || Volatile.Read(ref pendingMetadata) != 0)
+                    return ValueTask.FromResult(false);
+                ActiveEndpoints.Remove(key); return ValueTask.FromResult(true);
+            }
+        }); }
+        catch
+        {
+            // No host/provider work can have started before this initial registration.
+            lock (LeaseLock) { ownershipClosed = true; ActiveEndpoints.Remove(key); }
+            throw;
+        }
         IOwnedProcess? process = null;
         if (policy.HostMode == HostMode.Launch)
         {
@@ -141,7 +150,7 @@ public sealed class HostPreparation
         }
         var connected = connection!;
         var identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
-        ValidateIdentity(identity);
+        await ValidateIdentityAsync(identity, preparationDeadline, cancellationToken).ConfigureAwait(false);
         if (setup is not null)
         {
             var setupStartedAt = preparationClock.Elapsed;
@@ -161,7 +170,7 @@ public sealed class HostPreparation
             }
             // Approved scene/save setup can establish a new epoch. Verify it rather than assuming old identity survived.
             identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
-            ValidateIdentity(identity);
+            await ValidateIdentityAsync(identity, preparationDeadline, cancellationToken).ConfigureAwait(false);
         }
         if (policy.PlayMode == PlayMode.Explore)
         {
@@ -173,7 +182,7 @@ public sealed class HostPreparation
         var boundary = await Step(PreparationStage.Synchronize, preparationDeadline,
             token => connected.SynchronizeAsync(capture.RequestId, token), cancellationToken).ConfigureAwait(false);
         if (boundary is null || boundary.Feed is null) Fail(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed);
-        ValidateIdentity(boundary.CapturedIdentity);
+        await ValidateIdentityAsync(boundary.CapturedIdentity, preparationDeadline, cancellationToken).ConfigureAwait(false);
         if (!boundary.Continuous || boundary.CapturedIdentity.SourceId != identity.SourceId || boundary.CapturedIdentity.Epoch != identity.Epoch)
             Fail(PreparationStage.Synchronize, PreparationCode.StaleObservation);
         if (!boundary.PreconditionsSatisfied) Fail(PreparationStage.Preconditions, PreparationCode.PreconditionsUnsatisfied);
@@ -193,11 +202,8 @@ public sealed class HostPreparation
 
     private sealed record SetupAuthority(string[] Operations, TimeSpan Timeout);
     private ValueTask<SetupAuthority> ReadSetupAsync(IApprovedSetup setup, TimeSpan deadline, CancellationToken cancellationToken)
-        => Step<SetupAuthority>(PreparationStage.Setup, deadline, async token =>
+        => ReadPureAsync(PreparationStage.Setup, deadline, token =>
         {
-            Interlocked.Increment(ref pendingMetadata);
-            try { return await Task.Run(() =>
-            {
             // Pure adapter metadata is isolated from the owner continuation. Even a
             // blocking getter cannot prevent its original timer/cancellation from running.
             // A late worker may finish reading, but has no Run, cleanup or dispatch authority.
@@ -219,20 +225,47 @@ public sealed class HostPreparation
                 operations[index] = id;
             }
             return new SetupAuthority(operations, timeout);
-            }, token).ConfigureAwait(false); }
-            finally { Interlocked.Decrement(ref pendingMetadata); }
         }, cancellationToken);
 
-    private void ValidateIdentity(HostIdentity identity)
+    private ValueTask<bool> ValidateIdentityAsync(HostIdentity identity, TimeSpan deadline, CancellationToken cancellationToken)
+        => ReadPureAsync(PreparationStage.Identity, deadline, token =>
     {
         if (identity is null || identity.Protocol != policy.RequiredProtocol || identity.Profile != policy.Profile || identity.Clock != policy.Clock ||
             string.IsNullOrWhiteSpace(identity.SourceId) || string.IsNullOrWhiteSpace(identity.Epoch) ||
             (policy.RequireBuildAttestation && identity.AttestedGameBuildId is null) ||
             (identity.AttestedGameBuildId is not null && identity.AttestedGameBuildId != policy.ExpectedBuildId))
-            Fail(PreparationStage.Identity, PreparationCode.IdentityMismatch);
-        if (identity.Capabilities is null || !policy.Capabilities.All(identity.Capabilities.Contains)) Fail(PreparationStage.Identity, PreparationCode.CapabilityUnavailable);
+            throw new PreparationException(PreparationStage.Identity, PreparationCode.IdentityMismatch);
+        if (identity.Capabilities is null) throw new PreparationException(PreparationStage.Identity, PreparationCode.CapabilityUnavailable);
+        foreach (var capability in policy.Capabilities)
+        {
+            token.ThrowIfCancellationRequested();
+            if (!identity.Capabilities.Contains(capability)) throw new PreparationException(PreparationStage.Identity, PreparationCode.CapabilityUnavailable);
+        }
         // Do not clear/reset pending input to conceal an invalid Strict start.
-        if (policy.StrictStart && identity.HasOutstandingRequests) Fail(PreparationStage.Identity, PreparationCode.OutstandingRequests);
+        if (policy.StrictStart && identity.HasOutstandingRequests) throw new PreparationException(PreparationStage.Identity, PreparationCode.OutstandingRequests);
+        return true;
+    }, cancellationToken);
+
+    private ValueTask<T> ReadPureAsync<T>(PreparationStage stage, TimeSpan deadline,
+        Func<CancellationToken, T> read, CancellationToken cancellationToken)
+        => Step<T>(stage, deadline, async token =>
+    {
+        BeginOwnedWork(false, token);
+        try { return await Task.Run(() => read(token), token).ConfigureAwait(false); }
+        finally { Interlocked.Decrement(ref pendingMetadata); }
+    }, cancellationToken);
+
+    private void BeginOwnedWork(bool acquisition, CancellationToken token)
+    {
+        // No external callbacks inside the lease gate. A terminal confirmation and
+        // a provider start are mutually exclusive even if cancellation arrives in between.
+        lock (LeaseLock)
+        {
+            token.ThrowIfCancellationRequested();
+            if (ownershipClosed) throw new InvalidOperationException("PreparationOwnershipClosed");
+            if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
+            else Interlocked.Increment(ref pendingMetadata);
+        }
     }
 
     private void RegisterRelease(OwnedCleanup cleanup, Func<CancellationToken, ValueTask<bool>> release,
@@ -266,7 +299,7 @@ public sealed class HostPreparation
             var result = await FiniteOperation.RunUntilAsync(preparationClock, operationDeadline, async token =>
             {
                 if (preparationClock.Elapsed >= deadline) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
-                if (acquisition) Interlocked.Increment(ref pendingAcquisitions);
+                if (acquisition) BeginOwnedWork(true, token);
                 try { return await action(token).ConfigureAwait(false); }
                 finally { if (acquisition) Interlocked.Decrement(ref pendingAcquisitions); }
             }, cancellationToken, recordException).ConfigureAwait(false);

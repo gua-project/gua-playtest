@@ -54,6 +54,9 @@ never the Gua package's BuildId or a port-match inference. Protocol/profile/cloc
 and every required capability must match.
 Missing identity, capability collection, synchronized boundary or feed fails with
 fixed stage-specific Host evidence before Running or dispatch.
+Capability membership checks on initial and captured identities use the same
+bounded pure-worker path as Setup metadata; blocking or throwing collection code
+cannot stall the owner or bypass identity-stage diagnostics.
 A strict start rejects outstanding requests before any Setup; it never resets
 to conceal them. Scene/save Setup can
 change epoch, so identity and strict requests are rechecked after Setup.
@@ -94,6 +97,10 @@ Registration failure also preserves exclusion because a closed cleanup registry
 cannot prove that all other resources were released.
 Its callback is registered immediately after lease acquisition, before any await;
 preparation expiry therefore cannot omit ownership from the cleanup snapshot.
+Provider work start and terminal lease confirmation share a closed gate under the
+lease lock. Counters cannot be sampled as zero just before late acquisition starts.
+Initial registration failure rolls back the lease before any provider can start;
+Busy tracing and all provider callbacks run outside the global lease lock.
 
 Only `Launch` acquires an `IOwnedProcess`. Shutdown targets the exact `Process`
 handle created by `Process.Start`, never a process name, discovered PID, another
