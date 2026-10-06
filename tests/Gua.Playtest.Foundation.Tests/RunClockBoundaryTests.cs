@@ -14,6 +14,7 @@ public sealed partial class RunTests
         public int Captures; public bool Ended;
         public TaskCompletionSource<RunObservation> First { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Joined { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         {
@@ -24,6 +25,7 @@ public sealed partial class RunTests
         private async Task<RunObservation> InitialAsync(CancellationToken token)
         {
             using var registration = token.Register(() => Cancelled.TrySetResult());
+            Started.TrySetResult();
             try { return ignoreCancellation ? await First.Task : await First.Task.WaitAsync(token); }
             finally { Ended = true; Joined.TrySetResult(); }
         }
@@ -35,7 +37,8 @@ public sealed partial class RunTests
         var clock = new Clock(); var run = Running(clock, failure: true); var feed = new SerializedCaptureFeed(ignoreCancellation, failure);
         var work = new TaskCompletionSource<int>();
         var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => []).AsTask();
-        work.SetResult(1); await feed.Cancelled.Task;
+        await feed.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        work.SetResult(1); await feed.Cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
         if (ignoreCancellation)
         {
             Assert.Equal(1, feed.Captures); Assert.False(monitoring.IsCompleted);
@@ -52,10 +55,11 @@ public sealed partial class RunTests
         var clock = new Clock(); var run = Running(clock); var feed = new SerializedCaptureFeed(true, false);
         var work = new TaskCompletionSource<int>();
         var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => []).AsTask();
-        work.SetResult(1); await feed.Cancelled.Task; clock.At(5000);
+        await feed.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        work.SetResult(1); await feed.Cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2)); clock.At(5000);
         await monitoring.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(1, feed.Captures); Assert.False(feed.Ended); Assert.Equal(RunReason.MaxDuration, run.Primary!.Cause.Reason);
-        var primary = run.Primary; feed.First.SetResult(new(TimeSpan.Zero, Unit(), Unit())); await feed.Joined.Task;
+        var primary = run.Primary; feed.First.SetResult(new(TimeSpan.Zero, Unit(), Unit())); await feed.Joined.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Same(primary, run.Primary); Assert.False(run.GoalVerified);
     }
     [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
