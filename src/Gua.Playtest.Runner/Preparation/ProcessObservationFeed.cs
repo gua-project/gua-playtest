@@ -6,26 +6,15 @@ namespace Gua.Playtest.Runner.Preparation;
 internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess process, IPreparationTrace trace) : IRunObservationFeed
 {
     private readonly SemaphoreSlim captureOwner = new(1);
-    private Task<RunObservation>? underlyingCapture;
     public async ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken)
     {
         await captureOwner.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             CheckAlive();
-            // A cancelled wrapper is not proof the provider stopped. Join its actual request
-            // before creating another capture; the monitor bounds this join by its original deadline.
-            if (underlyingCapture is { } previous)
-            {
-                await WatchAsync(_ => previous, cancellationToken).ConfigureAwait(false);
-                underlyingCapture = null;
-            }
-            CheckAlive();
-            return await WatchAsync(token =>
-            {
-                underlyingCapture = feed.CaptureAsync(token).AsTask();
-                return underlyingCapture;
-            }, cancellationToken).ConfigureAwait(false);
+            // Keep this task alive until the actual capture ends, even after supersession.
+            // RunMonitor joins this task and retains its observation before a fresh capture.
+            return await WatchAsync(token => feed.CaptureAsync(token).AsTask(), cancellationToken).ConfigureAwait(false);
         }
         finally { captureOwner.Release(); }
     }
@@ -36,14 +25,19 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
     {
         CheckAlive(); cancellationToken.ThrowIfCancellationRequested();
         using var wait = new CancellationTokenSource();
+        using var exitWait = new CancellationTokenSource();
         var faults = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
-        using var registration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wait, faults.Enqueue));
+        // This token belongs to the finite owner. Let its guarded cancellation collect
+        // callback faults without converting a completed observation into a provider failure.
+        using var registration = cancellationToken.Register(wait.Cancel);
         Task<T>? changed = null; Task? exited = null;
         Exception? failure = null; T result = default!;
         try
         {
             changed = request(wait.Token);
-            exited = process.WaitForExitAsync(wait.Token).AsTask();
+            // Supersession cancels the source, not the process-exit watch: ending the wrapper
+            // early here would hide a late authoritative observation from the monitor's join.
+            exited = process.WaitForExitAsync(exitWait.Token).AsTask();
             var winner = await Task.WhenAny(changed, exited).ConfigureAwait(false);
             await winner.ConfigureAwait(false);
             CheckAlive();
@@ -53,19 +47,23 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         finally
         {
             registration.Dispose();
-            FiniteOperation.CancelSafely(wait, faults.Enqueue);
+            if (changed?.IsCompleted != true) FiniteOperation.CancelSafely(wait, faults.Enqueue);
+            FiniteOperation.CancelSafely(exitWait, faults.Enqueue);
             if (changed is not null) _ = changed.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (exited is not null) _ = exited.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
+        var requestedCancellation = failure is OperationCanceledException cancelled && cancellationToken.IsCancellationRequested &&
+            (cancelled.CancellationToken == wait.Token || cancelled.CancellationToken == cancellationToken);
         if (!faults.IsEmpty)
         {
             var evidence = new AggregateException(failure is null ? faults : faults.Prepend(failure));
-            if (failure is OperationCanceledException && cancellationToken.IsCancellationRequested)
+            if (requestedCancellation)
                 throw new OperationCanceledException("CaptureCancelled", evidence, cancellationToken);
             if (failure is PreparationException preparation)
                 throw new PreparationException(preparation.Stage, preparation.Code, evidence, preparation.Cause.Phase);
             throw new PreparationException(PreparationStage.Synchronize, PreparationCode.SynchronizationFailed, evidence, RunPhase.Execution);
         }
+        if (requestedCancellation) throw new OperationCanceledException("CaptureCancelled", failure, cancellationToken);
         if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
         return result;
     }

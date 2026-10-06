@@ -88,9 +88,12 @@ external host. `ReleaseAsync` must return authoritative evidence and cannot clai
 lease expiry as confirmed input release. Launched process exit remains visible
 through the returned observation feed during both a blocked capture and a blocked
 Planner/action/change wait.
-This wrapper retains the actual underlying capture task after cancellation and
-joins it before a fresh request. It does not advertise independent capture scopes.
-Process exit interrupts both capture and that join; cancellation callback failures
+This wrapper remains pending until its actual underlying capture ends after
+supersession, so #6 can join it and retain the old authoritative unit together with
+the fresh post-work capture. Cancellation is translated to the wrapper's caller
+token. It does not advertise independent capture scopes. Its process-exit watch
+has a separate lifetime from source cancellation. Process exit interrupts both
+capture and the monitor's join; cancellation callback failures
 are retained as inner evidence without replacing the selected Host exit cause.
 
 ## Initial synchronized observation

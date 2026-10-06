@@ -68,6 +68,7 @@ public sealed class PreparationTests
         public bool Preconditions { get; set; } = true;
         public bool WrongRequest { get; set; }
         public RunObservation? InitialObservation { get; set; }
+        public RunObservation? CurrentObservation { get; set; }
         public TaskCompletionSource<RunObservation>? BlockedCapture { get; set; }
         public int Captures { get; private set; }
         public Action<CancellationToken>? OnCapture { get; set; }
@@ -79,7 +80,7 @@ public sealed class PreparationTests
         public ValueTask<InitialBoundary> SynchronizeAsync(string captureRequestId, CancellationToken token)
         { Synchronizations++; return ValueTask.FromResult(new InitialBoundary(Identity with { Epoch = Stale ? "old" : Identity.Epoch }, true, Preconditions,
             WrongRequest ? "previous-request" : captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero, "subscription-cursor-1", InitialObservation ?? Observation(), this, false)); }
-        private RunObservation Observation() => new(Clock?.Elapsed ?? TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([]));
+        private RunObservation Observation() => CurrentObservation ?? new(Clock?.Elapsed ?? TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([]));
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { Captures++; OnCapture?.Invoke(token); return BlockedCapture is null ? ValueTask.FromResult(Observation()) : new(BlockedCapture.Task); }
         public ValueTask WaitForChangeAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
@@ -477,11 +478,12 @@ public sealed class PreparationTests
         run.BeginRunning(host.Boundary);
         using var cancellation = new CancellationTokenSource();
         var old = host.Feed.CaptureAsync(cancellation.Token).AsTask(); cancellation.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => old);
+        Assert.False(old.IsCompleted);
         var fresh = host.Feed.CaptureAsync(CancellationToken.None).AsTask();
         Assert.Equal(1, connection.Captures); Assert.False(fresh.IsCompleted);
         var previous = connection.BlockedCapture; connection.BlockedCapture = null;
         previous.SetResult(new(TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([])));
+        await old;
         await fresh;
         Assert.Equal(2, connection.Captures);
         run.Evaluate(cancelled: true); await cleanup.CompleteAsync(run, clock);
@@ -525,5 +527,49 @@ public sealed class PreparationTests
         // No further Run-clock advance: the real release ceiling must still cancel this provider.
         await late.Cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.False(outcome.PostProcessingComplete);
+    }
+
+    private static PreparedCondition BooleanCondition() => PreparedCondition.Create(JsonNode.Parse("""{"kind":"assertion","read":{"region":"standard","target":{"source":"ui","selector":{"role":{"value":"button"}}},"field":"visible","valueType":{"type":"bool"}},"quantifier":"one","operator":"equals","expected":{"type":"bool","value":true}}""")!.AsObject(), new(10, 1000));
+    private static ConditionObservationUnit BooleanUnit(bool value) => new([KeyValuePair.Create("$", new ConditionLeafObservation("scope", true,
+        [new ConditionTargetObservation("target", value ? "{\"type\":\"bool\",\"value\":true}" : "{\"type\":\"bool\",\"value\":false}")]))]);
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(true, true, true)]
+    public async Task LaunchedMonitorSupersessionRetainsOldFailureAndGetsFreshCapture(bool ignoresCancellation, bool oldFailure, bool callbackFault)
+    {
+        var clock = new Clock(); var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition());
+        var old = new TaskCompletionSource<RunObservation>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var work = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)),
+            CurrentObservation = new(TimeSpan.Zero, BooleanUnit(true), BooleanUnit(false)), BlockedCapture = old,
+            OnCapture = token => token.Register(() => { if (!ignoresCancellation) old.TrySetCanceled(token); cancelled.TrySetResult();
+                if (callbackFault) throw new IOException("capture-supersession"); }) };
+        var preparation = new HostPreparation(Policy(HostMode.Launch), clock, new Launcher(), new Connector(connection), new Trace());
+        PreparedHost? host = null;
+        var pending = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, cleanup, token) =>
+        { host = await preparation.PrepareAsync(session, cleanup, null, null, token); return host.Boundary; },
+            async (session, token) => (await RunMonitor.AwaitAsync(session, clock, clock, host!.Feed,
+                _ => new ValueTask<int>(work.Task), _ => [], token)).Completed).AsTask();
+        Assert.Equal(1, connection.Captures);
+        connection.BlockedCapture = null;
+        work.SetResult(1); await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        if (ignoresCancellation)
+        {
+            Assert.Equal(1, connection.Captures); Assert.False(pending.IsCompleted);
+            old.SetResult(new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(oldFailure)));
+        }
+        var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, connection.Captures);
+        Assert.Equal(oldFailure ? RunReason.FailureCondition : RunReason.GoalSatisfied, outcome.Primary.Cause.Reason);
+        Assert.Equal(oldFailure ? ResultStatus.Failed : ResultStatus.Passed, outcome.Primary.Status);
+        Assert.Contains(outcome.Events, item => item.Reason == RunReason.GoalSatisfied);
+        Assert.DoesNotContain(outcome.Events, item => item.Reason == RunReason.ExecutionError);
+        Assert.True(outcome.PostProcessingComplete);
+        if (callbackFault) Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName);
     }
 }
