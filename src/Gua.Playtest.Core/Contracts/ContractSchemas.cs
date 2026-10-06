@@ -4,11 +4,14 @@ using Json.Schema;
 
 namespace Gua.Playtest.Core.Contracts;
 
-/// <summary>Immutable pinned schema set. No URI retrieval or native runtime use.</summary>
+/// <summary>Pinned offline schemas with serialized access to the evaluator's mutable caches.</summary>
 public static class ContractSchemas
 {
     private static readonly Assembly Assembly = typeof(ContractSchemas).Assembly;
     private const string Prefix = "Gua.Playtest.Schemas.";
+    // JsonSchema.Net 7.3.4 mutates BaseUri/constraint caches during registration/evaluation.
+    // A reference graph spans multiple schemas, so per-root locks would not protect its children.
+    private static readonly object EvaluationGate = new();
     private static readonly IReadOnlyDictionary<string, JsonSchema> Schemas = Load();
     private static readonly IReadOnlyDictionary<string, string> KindNames = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -37,19 +40,24 @@ public static class ContractSchemas
 
     internal static void Validate(string schemaName, JsonNode document)
     {
-        var options = new EvaluationOptions { RequireFormatValidation = true };
-        options.SchemaRegistry.Fetch = _ => throw new ContractException("SchemaReferenceMissing");
-        foreach (var schema in Schemas.Values) options.SchemaRegistry.Register(schema);
-        if (!Schemas[schemaName].Evaluate(document, options).IsValid) throw new ContractException("SchemaInvalid");
+        lock (EvaluationGate) Evaluate(Schemas[schemaName], document);
     }
 
     internal static void ValidateCondition(JsonObject condition)
     {
+        lock (EvaluationGate)
+        {
+            var conditionSchema = JsonSchema.FromText("{\"$ref\":\"https://gua-playtest.dev/schema/common.schema.json#/$defs/condition\"}");
+            Evaluate(conditionSchema, condition);
+        }
+    }
+
+    private static void Evaluate(JsonSchema root, JsonNode document)
+    {
         var options = new EvaluationOptions { RequireFormatValidation = true };
         options.SchemaRegistry.Fetch = _ => throw new ContractException("SchemaReferenceMissing");
         foreach (var schema in Schemas.Values) options.SchemaRegistry.Register(schema);
-        var conditionSchema = JsonSchema.FromText("{\"$ref\":\"https://gua-playtest.dev/schema/common.schema.json#/$defs/condition\"}");
-        if (!conditionSchema.Evaluate(condition, options).IsValid) throw new ContractException("SchemaInvalid");
+        if (!root.Evaluate(document, options).IsValid) throw new ContractException("SchemaInvalid");
     }
 
     private static IReadOnlyDictionary<string, JsonSchema> Load()
