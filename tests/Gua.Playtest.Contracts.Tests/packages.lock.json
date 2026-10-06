@@ -29,28 +29,6 @@
         "resolved": "3.1.4",
         "contentHash": "5mj99LvCqrq3CNi06xYdyIAXOEh+5b33F2nErCzI5zWiDdLHXiPXEWFSUAF8zlIv0ZWqjZNCwHTQeAPYbF3pCg=="
       },
-      "Gua.Core": {
-        "type": "Transitive",
-        "resolved": "1.1.1",
-        "contentHash": "0/Bh1HtwvAq13e6diY8u47yOwQj7OzYwCyQP6RjTgXZExp3UyGipv7mPOotNY0lE88AIubiQrFQEa7gImRjdvw=="
-      },
-      "Gua.Runtime": {
-        "type": "Transitive",
-        "resolved": "1.1.1",
-        "contentHash": "rq1ei+GaP6nwM141+Ulej026b8DILKv+I9P/8PwpQBNADl38zlAyd04p+1x3aeLPXt9X8F6y0gvuoBBJVBs1yQ==",
-        "dependencies": {
-          "Gua.Core": "1.1.1"
-        }
-      },
-      "Gua.Testing": {
-        "type": "Transitive",
-        "resolved": "1.1.1",
-        "contentHash": "X/FdakJLCTke0vT3QVkRZb2JJSa0w+yFwWsNw+8uYmQPZPn5VYy94Y4oKpBbyleUTuVlkXYC5yX0o+TyXpCvQA==",
-        "dependencies": {
-          "Gua.Core": "1.1.1",
-          "JsonSchema.Net": "7.3.4"
-        }
-      },
       "Humanizer.Core": {
         "type": "Transitive",
         "resolved": "2.14.1",
@@ -147,39 +125,11 @@
         "resolved": "16.3.0",
         "contentHash": "SgMOdxbz8X65z8hraIs6hOEdnkH6hESTAIUa7viEngHOYaH+6q5XJmwr1+yb9vJpNQ19hCQY69xbFsLtXpobQA=="
       },
-      "gua.playtest.cli": {
-        "type": "Project",
-        "dependencies": {
-          "Gua.Playtest.GuaIntegration": "[0.1.0-dev, )",
-          "Gua.Playtest.Planners.Codex": "[0.1.0-dev, )",
-          "Gua.Playtest.Runner": "[0.1.0-dev, )"
-        }
-      },
       "gua.playtest.core": {
         "type": "Project",
         "dependencies": {
           "JsonSchema.Net": "[7.3.4, 7.3.4]",
           "YamlDotNet": "[16.3.0, 16.3.0]"
-        }
-      },
-      "gua.playtest.guaintegration": {
-        "type": "Project",
-        "dependencies": {
-          "Gua.Playtest.Core": "[0.1.0-dev, )",
-          "Gua.Runtime": "[1.1.1, 1.1.1]",
-          "Gua.Testing": "[1.1.1, 1.1.1]"
-        }
-      },
-      "gua.playtest.planners.codex": {
-        "type": "Project",
-        "dependencies": {
-          "Gua.Playtest.Core": "[0.1.0-dev, )"
-        }
-      },
-      "gua.playtest.runner": {
-        "type": "Project",
-        "dependencies": {
-          "Gua.Playtest.Core": "[0.1.0-dev, )"
         }
       }
     }

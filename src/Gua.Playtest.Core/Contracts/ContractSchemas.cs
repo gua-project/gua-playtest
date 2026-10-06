@@ -21,7 +21,7 @@ public static class ContractSchemas
     public static string ReadSchema(string name)
     {
         var resource = Assembly.GetManifestResourceNames().SingleOrDefault(n => n.StartsWith(Prefix, StringComparison.Ordinal)
-            && n.EndsWith("." + name, StringComparison.Ordinal));
+            && (n.EndsWith("." + name, StringComparison.Ordinal) || n.EndsWith("/" + name, StringComparison.Ordinal) || n.EndsWith("\\" + name, StringComparison.Ordinal)));
         if (resource is null) throw new ArgumentException("Unknown packaged schema.", nameof(name));
         using var stream = Assembly.GetManifestResourceStream(resource)!;
         using var reader = new StreamReader(stream);

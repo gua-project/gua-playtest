@@ -43,11 +43,11 @@ public sealed class FoundationTests
     }
 
     [Fact]
-    public async Task ScenarioValidatorIsNeverSuccessfulStub()
+    public async Task ScenarioValidationRequiresExplicitAllowedRoot()
     {
         using var output = new StringWriter();
         Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "scenario.json"], output));
-        Assert.Contains("scenario-validator-not-implemented", output.ToString());
+        Assert.Contains("explicit-validation-arguments-required", output.ToString());
     }
 
     [Fact]

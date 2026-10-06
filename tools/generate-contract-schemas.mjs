@@ -21,7 +21,7 @@ const read={oneOf:[
   obj({target:{oneOf:[uiTarget,objectTarget]},region:{const:'standard'},field:str,valueType}),
   obj({target:{oneOf:[uiTarget,objectTarget]},region:{const:'observe'},name:str,valueType}),
   obj({target:worldTarget,region:{const:'property'},name:str,valueType})]};
-const assertion=obj({kind:{const:'assertion'},read:def('read'),quantifier:{enum:['one','any','all','none']},operator:{enum:['equals','notEquals','greaterThan','greaterThanOrEqual','lessThan','lessThanOrEqual','approximatelyEquals','contains','startsWith','endsWith','matches','notContains','containsAll','containsAny','isEmpty','isNotEmpty','countEquals','countNotEquals','countGreaterThan','countGreaterThanOrEqual','countLessThan','countLessThanOrEqual','sequenceEquals','startsWithSequence','endsWithSequence','containsSequence']},expected:gua('value-v1'),tolerance:{type:'number',minimum:0,maximum:1e100}},['kind','read','quantifier','operator']);
+const assertion=obj({kind:{const:'assertion'},read:def('read'),quantifier:{enum:['one','any','all','none']},operator:{enum:['equals','notEquals','greaterThan','greaterThanOrEqual','lessThan','lessThanOrEqual','approximatelyEquals','contains','startsWith','endsWith','matches','notContains','containsAll','containsAny','isEmpty','isNotEmpty','countEquals','countNotEquals','countGreaterThan','countGreaterThanOrEqual','countLessThan','countLessThanOrEqual','sequenceEquals','startsWithSequence','endsWithSequence','containsSequence']},expected:gua('value-v1'),tolerance:{type:'number',minimum:0}},['kind','read','quantifier','operator']);
 const condition={oneOf:[assertion,
   obj({kind:{const:'targets'},target,operator:{enum:['exists','notExists','countEquals','countNotEquals','countGreaterThan','countGreaterThanOrEqual','countLessThan','countLessThanOrEqual']},count:integer()},['kind','target','operator']),
   obj({kind:{enum:['all','any']},conditions:arr(def('condition'),1,100)}),
@@ -31,7 +31,7 @@ const limits=obj(Object.fromEntries(['maxDurationMilliseconds','maxActions','max
 limits.properties.traceRecentSteps=integer(1,100000); limits.properties.traceRecentSteps.default=100;
 limits.properties.maxLatenessMilliseconds=integer(0,60000);
 const secret=obj({secretKey:id});
-const value={oneOf:[{type:'boolean'},{type:'number',minimum:-1e100,maximum:1e100},{type:'string',maxLength:4096},obj({x:{type:'number',minimum:-1e100,maximum:1e100},y:{type:'number',minimum:-1e100,maximum:1e100}})]};
+const value={oneOf:[{type:'boolean'},{type:'number'},{type:'string',maxLength:4096},obj({x:{type:'number'},y:{type:'number'}})]};
 const action={oneOf:[
   obj({kind:{const:'ui'},selector:gua('selector'),operation:{enum:['click','focus','set_value','set_checked','select','scroll','press_key']},value,secret},['kind','selector','operation']),
   obj({kind:{const:'semantic'},actionId:id,operation:{enum:['press','set','release']},value,secret},['kind','actionId','operation']),

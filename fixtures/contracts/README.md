@@ -1,0 +1,7 @@
+# Static contract fixture expectations
+
+`expected.json` contains independently specified result codes. The normal Scenario JSON and YAML share a single Goal; the Plan pins exact JSON bytes and the registry pins its stable identity. Gua Recording v1 is a static UI file example, not executed gameplay.
+
+Environment values are deliberately finite, modest test inputs: 30s overall, 50 actions/decisions, 1s preparation/cleanup/Planner/wait and segment ceilings, 1MiB observation/attachment, 8MiB Trace, 10000 events, 1024 queued events, 1000 observation nodes, 100ms/1024-character regex limits, and 12/4/2 stagnation/repetition/recovery ceilings. These are fixture choices, not recommended production defaults or timing guarantees; the host and Runner apply stricter effective limits. Trace recentSteps uses the agreed 100 default.
+
+Generation is an authoring convenience (`node tools/generate-contract-schemas.mjs` then `node tools/generate-contract-fixtures.mjs`). Test expectations are checked-in constants, not obtained from the validator. The unit suite adds cwd changes, separate outside/sibling roots, a real Windows junction or Unix symlink, retained bytes after replacement, registry identity errors, checkpoint range/wait conflicts, cancellation and secret markers. Native-free published CLI smoke runs the committed cases from another cwd and verifies the native doctor fails as its negative control.
