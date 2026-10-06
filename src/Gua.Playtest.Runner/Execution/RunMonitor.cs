@@ -37,7 +37,7 @@ public static class RunMonitor
             catch (Exception exception)
             {
                 run.RecordException(exception);
-                return (true, default, [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
+                return (true, default, [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
             }
         }
         try
@@ -86,7 +86,10 @@ public static class RunMonitor
                     if (winner != workTask) await winner.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                { run.Evaluate(cancelled: true); }
+                {
+                    var ready = await ReadyWork().ConfigureAwait(false);
+                    run.Evaluate(candidates: ready.Events, cancelled: true);
+                }
                 finally
                 {
                     wakeCancellation.Cancel();
@@ -99,7 +102,7 @@ public static class RunMonitor
         {
             run.RecordException(exception);
             run.Evaluate(candidates: exception is OperationCanceledException && cancellationToken.IsCancellationRequested
-                ? [] : [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
+                ? [] : [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
                 cancelled: cancellationToken.IsCancellationRequested);
             return new(false, default);
         }

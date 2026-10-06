@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Gua.Playtest.Core;
 using Gua.Playtest.Core.Contracts;
 using Gua.Playtest.Runner.Conditions;
 using Gua.Playtest.Runner.Execution;
@@ -8,6 +9,72 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Fact]
+    public async Task ReadyFailureWinsCancellationDuringWake()
+    {
+        var clock = new Clock(); var run = Running(clock); using var cancel = new CancellationTokenSource();
+        var work = new TaskCompletionSource<int>();
+        var feed = new CancelWakeFeed(() => { cancel.Cancel(); work.SetResult(1); });
+        var result = await RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task),
+            _ => [Event(RunReason.ActionFailed)], cancel.Token);
+        Assert.False(result.Completed); Assert.Equal(RunReason.ActionFailed, run.Primary!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.Cancelled);
+    }
+    private sealed class CancelWakeFeed(Action onWake) : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
+            => ValueTask.FromResult(new RunObservation(TimeSpan.Zero, Unit("false"), Unit("false")));
+        public ValueTask WaitForChangeAsync(CancellationToken token)
+        { onWake(); return ValueTask.FromCanceled(token); }
+    }
+    [Fact]
+    public async Task NullProductionBoundaryFailsClosedAndReleasesOwnedResource()
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock); var cleanup = new OwnedCleanup();
+        var released = false; var executed = false;
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, cleanup, (_, owned, _) =>
+        {
+            owned.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+            return ValueTask.FromResult<RunStartBoundary>(null!);
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.False(executed); Assert.True(released); Assert.Null(run.RunningOrigin);
+        Assert.Equal(RunReason.ExecutionError, outcome.Primary.Cause.Reason); Assert.Equal(10, outcome.ExitCode);
+        Assert.Equal(ExecutionState.Finished, run.State);
+    }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void RefundedFinalReservationRetainsClosingReasonAndFinalGoalOpportunity(bool cancelUnsent, bool goal)
+    {
+        var clock = new Clock(); var run = Running(clock, limits: Limits(actions: 1));
+        var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+        if (cancelUnsent) operation.Actions!.CancelUnsent(); else operation.Actions!.ConfirmNotSent(0);
+        Assert.Null(run.Evaluate(Unit("false"), clock.Elapsed));
+        operation.Complete(); Assert.Equal(0, run.Budget.Snapshot.Actions); Assert.Equal(0, run.Budget.Snapshot.ReservedActions);
+        Assert.Null(run.RequestPlanner()); Assert.Null(run.ApproveOperation(0, TimeSpan.FromSeconds(1)));
+        Assert.Equal(goal ? RunReason.GoalSatisfied : RunReason.ActionsExhausted,
+            run.Evaluate(Unit(goal ? "true" : "false"), clock.Elapsed)!.Cause.Reason);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.ActionsExhausted);
+    }
+    [Fact]
+    public void PlannerCompletionAtDeadlineCannotAuthorizeTransport()
+    {
+        var clock = new ReadSequenceClock(); var run = new RunSession(Limits(decisions: 1), clock, clock);
+        run.BeginPreparation(); run.BeginRunning(); var permit = run.RequestPlanner()!;
+        clock.Reads.Enqueue(TimeSpan.FromMilliseconds(999)); clock.Reads.Enqueue(TimeSpan.FromMilliseconds(1000));
+        clock.Reads.Enqueue(TimeSpan.FromMilliseconds(1001));
+        Assert.Null(permit.Approve(1, TimeSpan.FromSeconds(1))); Assert.Equal(0, run.Budget.Snapshot.ReservedActions);
+        Assert.Equal(RunReason.PlannerTimeout, run.Evaluate()!.Cause.Reason); Assert.Equal(ExecutionState.Completing, run.State);
+    }
+    private sealed class ReadSequenceClock : IClock
+    {
+        public Queue<TimeSpan> Reads { get; } = new();
+        private TimeSpan current;
+        public TimeSpan Elapsed => Reads.Count == 0 ? current : current = Reads.Dequeue();
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => throw new NotSupportedException();
+    }
     [Fact]
     public async Task SynchronousMonitorWorkFaultIsArbitratedAndPreserved()
     {
@@ -188,5 +255,17 @@ public sealed partial class RunTests
         var result = await new OwnedCleanup().CompleteAsync(run, clock, cancel.Token);
         Assert.Contains(result.PostProcessing, x => x.Reason == PostProcessingReason.Cancelled);
         Assert.True(result.PostProcessingComplete); Assert.Equal(0, result.ExitCode);
+    }
+    [Fact]
+    public async Task TypedHostPreparationFailurePreservesClassificationAndOriginalEvidence()
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock);
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) =>
+        {
+            try { throw new IOException("private host detail"); }
+            catch (IOException exception) { throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host), exception); }
+        }, (_, _) => throw new InvalidOperationException("execute must not run"));
+        Assert.Equal(ResultStatus.Failed, outcome.Primary.Status); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Equal(1, outcome.ExitCode); Assert.Contains(outcome.Exceptions, x => x.Type == "System.IO.IOException" && x.StackTrace is not null);
     }
 }

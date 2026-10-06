@@ -25,7 +25,8 @@ public static class RunExecutor
         CancellationToken cancellationToken = default,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
         => await ExecuteCoreAsync(run, realClock, cleanup,
-            async token => new PreparedRun(true, await prepare(run, cleanup, token).ConfigureAwait(false)), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
+            async token => new PreparedRun(true, await prepare(run, cleanup, token).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("RunningBoundaryCertificateRequired")), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
 
     private static async ValueTask<RunOutcome> ExecuteCoreAsync(RunSession run, IClock realClock,
         OwnedCleanup cleanup, Func<CancellationToken, ValueTask<PreparedRun>> prepare,
@@ -71,7 +72,8 @@ public static class RunExecutor
                 TimeoutException => RunReason.MaxDuration,
                 _ => RunReason.ExecutionError
             };
-            run.Evaluate(candidates: [new(reason, phase, RunOrigin.Runner)], cancelled: cancellationToken.IsCancellationRequested);
+            run.Evaluate(candidates: [exception is RunFailureException failure ? failure.Cause : new(reason, phase, RunOrigin.Runner)],
+                cancelled: cancellationToken.IsCancellationRequested);
         }
         // Input/resource releases have fresh bounded tokens; main result is already immutable.
         return await cleanup.CompleteAsync(run, realClock, cancellationToken, confirmPrimary).ConfigureAwait(false);
