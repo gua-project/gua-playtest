@@ -3,7 +3,7 @@
   "created_at": "2026-09-16",
   "source_commit": "10a8ef71713fe491633cf2b5649c76007cfd4767",
   "scope_note": "Original 126 design requirements plus #26 dashboard requirements. Static implementation evidence is separate from runtime acceptance.",
-  "github_writes_performed": false,
+  "github_writes_performed": true,
   "requirements": [
     {
       "id": "BOUND-001",
@@ -2240,7 +2240,7 @@
       "scope": "bool/integer/number/string/enum/list/set、型情報、enum型定義、禁止値、言語間の正常・異常データを定義する。",
       "out_of_scope": "PlaytestのGoal、ゲーム固有の固定状態モデル。",
       "completion_gate": "schema・生成データ・各実装の読み取りを照合し、既存Gua値を無断で破壊しない。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "VALUE-001",
@@ -2269,7 +2269,7 @@
       "scope": "読み取り専用の登録、重複名、追加・変更・削除、Objectの寿命、購読境界、取得不能を扱う。",
       "out_of_scope": "状態書換え、GuaからのGoal評価、ゲーム内部全状態の同期。",
       "completion_gate": "同種の敵を複数登録し、破棄・再生成・取得例外・中間変化を契約どおり検証する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "OBS-001",
@@ -2297,7 +2297,7 @@
       "scope": "C ABI、C++/.NET、Godot/Unity、wire、Inspector等の公開・取得経路を接続する。既存のWorld stateとの重複を解消する。",
       "out_of_scope": "新しいPlaytest専用Game Stateレジストリ。",
       "completion_gate": "対応表で宣言した経路ごとに、実際の生成・通知・読取・秘密値非混入を確認する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "OBS-002"
@@ -2323,7 +2323,7 @@
       "scope": "valueSchema・examplesの定義、登録、検索結果、Inspector/MCP等への伝達と入力検証を整える。",
       "out_of_scope": "descriptionの重複新設、任意ゲーム内部コマンド、Playtest独自Capability。",
       "completion_gate": "既存button/axis1d/vector2/textを壊さず、入力例とschemaが一致し、旧クライアントとの扱いが明示される。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "INPUT-001",
@@ -2347,7 +2347,7 @@
       "scope": "区間開始＋offsetによる予定、結果待ちとの分離、順序、保持解除、遅延停止、clock能力、記録参照を扱う。",
       "out_of_scope": "AIによる経路修復、エンジン全体の決定論の無条件保証。",
       "completion_gate": "遅い応答で解除予定を延ばさず、許容外遅延でまとめ打ちせず、未対応の時間保証を拒否する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "ACTION-005",
@@ -2382,7 +2382,7 @@
       "scope": "既存パッケージの不足分だけを整備し、schema/native/生成済みViewerを版固定して再利用可能にする。",
       "out_of_scope": "PlaytestへGuaのソースやViewer実装を複製すること。",
       "completion_gate": "Guaソースcheckoutなしの利用側テストで、各対応RIDと表示資産を検証する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [],
       "collaborating_requirements": [
@@ -2407,7 +2407,7 @@
       "scope": "Session/Step/Event、recent/streaming、onFailure/always、有限容量、追記保存、部分読取、manifestを実装する。",
       "out_of_scope": "Goal採点、全frameの無制限保存、秘密値保護の後回し。",
       "completion_gate": "保持範囲・欠損・中断を区別し、容量上限と不完全な末尾を正常な完全記録と偽らない。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "TRACE-003",
@@ -2436,7 +2436,7 @@
       "scope": "client stepとnative処理段階、UI/Game Input/Raw Input、保持開始解除、source locationを関連付ける。",
       "out_of_scope": "同じ要求の二重計上、結果キューの先取り、未観測の適用時刻の推定。",
       "completion_gate": "同一requestIdが別接続・epochにあっても混ざらず、結果待ちクライアントを妨げない。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "TRACE-002",
@@ -2464,7 +2464,7 @@
       "scope": "redaction後のcontent hash、観測時点分離、前後と中間Change、欠損・不在・古い値を保存する。",
       "out_of_scope": "baseline正規化の無条件適用、因果関係の自動断定。",
       "completion_gate": "同じ内容の別時点観測とFirst→Second→Thirdを保持し、欠損後のSnapshotで履歴を捏造しない。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "TRACE-004",
@@ -2496,7 +2496,7 @@
       "scope": "framework非依存のStep/mark/評価経過/添付/flush、名前空間付きmetadataと型付き値を提供する。",
       "out_of_scope": "GuaがPlaytestを参照すること、Goal/Planner型の導入。",
       "completion_gate": "Guaだけに依存する小さな外部writerで、未知の注釈を含むTraceを保存・読取できる。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "TRACE-001"
@@ -2520,7 +2520,7 @@
       "scope": "Inspector部品の共有、Timeline、保持解除、差分、欠損、成功Run、静的HTMLと配布アセットを整える。",
       "out_of_scope": "Viewerからゲーム操作・Replay実行、Playtest専用Viewer。",
       "completion_gate": "悪意ある文字列や添付パスが実行・外部取得されず、未知metadataも汎用表示される。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [
         "TRACE-011"
@@ -2544,7 +2544,7 @@
       "scope": "既存診断、lint、snapshot comparison、Recording参照、並列分離、保存失敗と元例外の分離を通す。",
       "out_of_scope": "lint自動実行、baseline自動更新、Traceによるテスト成否決定。",
       "completion_gate": "成功・失敗・中断fixtureと静的reportで改訂#109の受け入れ条件を通す。",
-      "issue_status": "draft-not-created",
+      "issue_status": "closed-as-of-gua-1.1.1",
       "verification_status": "not-executed",
       "owned_requirements": [],
       "collaborating_requirements": [
@@ -2566,7 +2566,7 @@
       "scope": "Scenario/Environment/Plan/Input/Decision/Run/Result、型とschemaの対応、静的解析、正常異常データを管理する。",
       "out_of_scope": "ゲーム起動、外部コードの実行、暗黙の最新schema取得。",
       "completion_gate": "形式検証と実行時確認項目を区別し、秘密値や任意設定上書きの入口を作らない。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "BOUND-005",
@@ -2604,7 +2604,7 @@
       "scope": "一方向の依存、clock/observation/planner/hostの窓口、Fake、ビルド、配布物の早期起動試験を整える。",
       "out_of_scope": "二系統のRunner、Fakeの製品代替、動的な未承認pluginロード。",
       "completion_gate": "Coreにエンジン・Codex依存がなく、CLIへ成否規則を埋め込まずテストできる。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "BOUND-001",
@@ -2632,7 +2632,7 @@
       "scope": "Target/Value/Operator、scalar/collection演算、enumType、True/False/Unknown、不正と取得不能を区別する。",
       "out_of_scope": "独自Selector言語、未知をfalseに変換すること。",
       "completion_gate": "正常・不正・不明を独立した期待値で検証し、別のany分岐で不正条件を隠さない。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "ASSERT-001",
@@ -2666,7 +2666,7 @@
       "scope": "within/for、通常allと時間成立履歴、quantifier、0件・打切り、各分岐の期限、評価タイマーを実装する。",
       "out_of_scope": "pollingで消えた中間状態の復元、全分岐一律Timeout失敗。",
       "completion_gate": "別時点A/B、any片方期限切れ、failure期限切れ、空all、for欠損を検証する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "ASSERT-004",
@@ -2703,7 +2703,7 @@
       "scope": "CreatedからFinished、一度だけの主結果確定、同一評価単位の優先、予算予約、後処理を扱う。",
       "out_of_scope": "CompletingのCancelによる主結果上書き、送信不明操作の自動再送。",
       "completion_gate": "競合結果、最後の操作、区間予算不足、必須cleanup失敗とexit 11を確認する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "GOAL-002",
@@ -2753,7 +2753,7 @@
       "scope": "承認済みEnvironment、専有・所有、Setupとreset分離、準備期限、初期観測と監視開始を整える。",
       "out_of_scope": "任意shell、PlannerへのSetup公開、attach先の無断reset/kill。",
       "completion_gate": "接続だけでは開始せず、初期success/failureと古いepoch・Setup失敗を正しく扱う。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "GOAL-003",
@@ -2785,7 +2785,7 @@
       "scope": "観測集約、Selector再解決、既存操作の送信と相関、保持owner、公開profile、未確認状態を扱う。",
       "out_of_scope": "別のGua機能再実装、Worldへの内部コマンド、万能command tunnel。",
       "completion_gate": "実bridgeで取得/操作/公開制限と要求非二重化を確認する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "BOUND-003",
@@ -2828,7 +2828,7 @@
       "scope": "Preparingからの記録、run/result、設定・入力hash、観測/操作/判断参照、保存状態分離を実装する。",
       "out_of_scope": "独自Trace writer/Viewer、秘密値入り設定の丸ごと複製。",
       "completion_gate": "成功Trace省略と未実行を区別し、中断・記録失敗でも元の結果を維持する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "FILE-007"
@@ -2863,7 +2863,7 @@
       "scope": "参照固定、区間、条件同期/記録時刻、初期/中間/Goal、onGoal/afterPlanを接続する。",
       "out_of_scope": "AI修復、Trace Snapshot書戻し、操作完走だけでPASS。",
       "completion_gate": "遅延、部分実行、hash変更、Goal先行、Plan未完了をAIなしで検証する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "RUN-004",
@@ -2900,7 +2900,7 @@
       "scope": "一要求一Decision、execute/observe/wait/finish、stale/重複排除、時計・権限・予算再検証を実装する。",
       "out_of_scope": "AIへの採点権、confirmed/ownerの自己申告、区間外保持、任意ファイル問い合わせ。",
       "completion_gate": "台本型Plannerで未送信拒否/送信不明/部分実行のfeedbackが分離される。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "ACTION-004",
@@ -2942,7 +2942,7 @@
       "scope": "Milestone/Metric、最良値、比較可能な反復、回復判断予算、終了理由のoriginを実装する。",
       "out_of_scope": "ゲーム攻略不能の断定、Replay中の回復、自動再起動・内部状態書換え。",
       "completion_gate": "正常な攻撃反復/往復、観測不明、回復予算非復活、秘密進捗の非漏えいを検証する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "STALL-001",
@@ -2974,7 +2974,7 @@
       "scope": "stdio、thread/turn、構造化完了応答、中断、利用量、隔離、認証参照を専用moduleへ実装する。",
       "out_of_scope": "Codexの自動更新・認証同梱、開発権限の丸渡し、隠れた思考全文の必須保存。",
       "completion_gate": "遅延/切断/無効応答と実接続で、Runner迂回や元データ・非公開値へのアクセスを防ぐ。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "PLANNER-008",
@@ -3014,7 +3014,7 @@
       "scope": "validate/explore/replay/plan/report、設定優先、非対話、JSON出力、Gua Viewer呼出しを実装する。",
       "out_of_scope": "CLIへの成否実装重複、任意--set、ReplayからExploreへの自動切替。",
       "completion_gate": "各コマンドと終了コード、静的validate無起動、AIなしReplayを実配布に近い形で検証する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "BOUND-004",
@@ -3055,7 +3055,7 @@
       "scope": "plan create/acceptの処理、管理先コピー、推定条件の区別、試験Runとの照合を実装する。",
       "out_of_scope": "バグ状態を自動期待値化、無断上書き、候補実行による安全制限解除。",
       "completion_gate": "変更済みPlanの古い採用を拒否し、同じ内容の完走試験と明示採用を関連付ける。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "REPLAY-005",
@@ -3086,7 +3086,7 @@
       "scope": "ショップ・移動・敵の小場面、Godot/Unity変種、台本Planner、故障ハーネスとケース定義を用意する。",
       "out_of_scope": "第二の製品Trace、Plannerに故障解除APIを公開、既存Gua低層テストの丸写し。",
       "completion_gate": "故障なしの正常性と故障の実発火を独立に確認する。全製品E2E完了はP-16で統合判定する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "FIX-001",
@@ -3118,7 +3118,7 @@
       "scope": "self-contained/.NET Tool/NuGet、native/schema/Viewer、RID、AIあり探索→候補→採用→AIなし再生を検証する。",
       "out_of_scope": "skipを成功と扱うこと、全AI結果を決定的テストへ混ぜること。",
       "completion_gate": "全要件に実行証拠があり、clean環境の配布物のみで一連の利用が成立する。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "BOUND-002",
@@ -3152,7 +3152,7 @@
       "scope": "導入、profile、Setup、失敗理由、採用、秘密値、保存、対応範囲とGuaとの境界を文書化する。",
       "out_of_scope": "未検証経路の対応済み表記、fault注入経路の通常サンプル公開。",
       "completion_gate": "正常サンプルの操作手順を実行し、動作前提と制限を配布物に添える。",
-      "issue_status": "draft-not-created",
+      "issue_status": "open",
       "verification_status": "not-executed",
       "owned_requirements": [
         "PACK-006"
@@ -3249,7 +3249,8 @@
       ],
       "details": "追加観測値とInputAction metadataを既存schemaへどう載せるか、旧clientのadditionalProperties制約、version negotiation、公開package/ABIの改版単位。既存descriptionは新設しない。",
       "resolve_before": "破壊的なprotocol変更・型生成・全client実装に入る前。契約済みのFake/プロジェクト作業は継続可能。",
-      "status": "open"
+      "status": "contract-defined",
+      "resolution": "See docs/contracts.md; runtime evidence and collaborator-specific remaining contracts retain their owning Issues."
     },
     {
       "id": "OPEN-02",
@@ -3272,7 +3273,8 @@
       ],
       "details": "getter型登録の変化をいつ検出するか、公開frame/tickか明示通知か、登録解除/同名再登録/collectionのin-place変更、getter例外、購読とSnapshotの連続性、欠損通知。任意の内部変数代入が自動で観測できるとは仮定しない。",
       "resolve_before": "G-02のnative/binding API実装前。最初に閉じる契約課題。",
-      "status": "open"
+      "status": "contract-defined",
+      "resolution": "See docs/contracts.md; runtime evidence and collaborator-specific remaining contracts retain their owning Issues."
     },
     {
       "id": "OPEN-04",
@@ -3285,7 +3287,8 @@
       ],
       "details": "visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、UI/world selectorの正式対応、取得不能なproperty/複数一致/対象差替え、同一性とschemaキャッシュの境界。",
       "resolve_before": "正式Target schemaとselector変換を固定する前。",
-      "status": "open"
+      "status": "contract-defined",
+      "resolution": "See docs/contracts.md; runtime evidence and collaborator-specific remaining contracts retain their owning Issues."
     },
     {
       "id": "OPEN-05",
@@ -3331,7 +3334,8 @@
       ],
       "details": "固定bytes SHA-256は承認済み。Plan本体と採用証拠の格納場所/hash対象、自己参照hashの回避、Recording範囲の完全カバレッジ・飛ばす操作、既存waitとの競合、候補試験の完走条件を固定する。",
       "resolve_before": "plan create/acceptのファイル形式を公開する前。",
-      "status": "open"
+      "status": "contract-defined",
+      "resolution": "See docs/contracts.md; runtime evidence and collaborator-specific remaining contracts retain their owning Issues."
     },
     {
       "id": "OPEN-09",
@@ -3355,7 +3359,8 @@
       ],
       "details": "Trace byte/event/queue/attachment上限、準備/cleanup/Planner/waitの既定期限、区間時間とmaxLateness、観測打切り、regex上限、停滞初期値の格納場所。100stepは確定、8行動/3反復/3回復や20msは提案値/説明用値として区別する。",
       "resolve_before": "無制限動作を残さず、その機能の公開・本番fixture実行前に有限値を固定する。",
-      "status": "open"
+      "status": "contract-defined",
+      "resolution": "See docs/contracts.md; runtime evidence and collaborator-specific remaining contracts retain their owning Issues."
     },
     {
       "id": "OPEN-11",
@@ -3380,7 +3385,8 @@
       ],
       "details": "仮のフィールド/インターフェース/Package ID/Reason名と、既存APIの命名の対応。今回のG-/T-/P-IDは起票用仮IDであり実GitHub番号ではない。移管後のURLは実際の移管結果で更新する。",
       "resolve_before": "公開API・NuGet登録・GitHub起票前。",
-      "status": "open"
+      "status": "contract-defined",
+      "resolution": "See docs/contracts.md; runtime evidence and collaborator-specific remaining contracts retain their owning Issues."
     }
   ],
   "corrections": [
@@ -3508,7 +3514,8 @@
     "P-13",
     "P-15",
     "P-17",
-    "P-16"
+    "P-16",
+    "P-26"
   ],
   "authorization_history": [
     {
@@ -3551,5 +3558,7 @@
     "T-05": "https://github.com/gua-project/gua/issues/127",
     "T-06": "https://github.com/gua-project/gua/issues/128",
     "P-26": "https://github.com/gua-project/gua-playtest/issues/26"
-  }
+  },
+  "current_gua_source_commit": "88f5dca4aa97c5d5187ab66ea4416377f3affc96",
+  "original_ledger_github_writes_performed": false
 }

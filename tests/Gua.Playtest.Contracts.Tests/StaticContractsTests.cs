@@ -68,7 +68,7 @@ public sealed class StaticContractsTests
         var validator = new StaticContractValidator([scope.Root]);
         var result = await validator.ValidateFileAsync(Path.Combine(scope.Root, "plan.json"));
         Assert.True(result.IsValid, result.Code);
-        var file = result.Files[Path.Combine(scope.Root, "scenario.json")]; var original = file.CopyBytes();
+        var file = Assert.Single(result.Files.Values, v => Path.GetFileName(v.Path) == "scenario.json"); var original = file.CopyBytes();
         await File.AppendAllTextAsync(file.Path, " \n");
         Assert.Equal(original, file.CopyBytes());
         var mutableCopy = file.CopyBytes(); mutableCopy[0] ^= 1; Assert.Equal(original, file.CopyBytes());

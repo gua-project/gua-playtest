@@ -15,7 +15,7 @@ public sealed class AllowedPaths
     public string Resolve(string path, string baseDirectory)
     {
         var resolved = Canonical(Path.GetFullPath(path, baseDirectory));
-        if (!roots.Any(root => resolved.Equals(root, Comparison) || resolved.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, Comparison)))
+        if (!roots.Any(root => resolved.Equals(root, Comparison) || resolved.StartsWith(Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, Comparison)))
             throw new ContractException("PathOutsideAllowedRoots");
         return resolved;
     }
