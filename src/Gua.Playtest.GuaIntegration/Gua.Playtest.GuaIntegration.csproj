@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Gua.Playtest.Core/Gua.Playtest.Core.csproj" />
+    <PackageReference Include="Gua.Testing" Version="[1.1.1]" />
+    <PackageReference Include="Gua.Runtime" Version="[1.1.1]" />
+  </ItemGroup>
+</Project>
