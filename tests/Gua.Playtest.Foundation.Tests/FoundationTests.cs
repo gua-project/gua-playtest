@@ -95,7 +95,11 @@ public sealed class FoundationTests
         }
         finally
         {
-            if (new DirectoryInfo(broken).LinkTarget is not null) Directory.Delete(broken);
+            if (new DirectoryInfo(broken).LinkTarget is not null)
+            {
+                if (OperatingSystem.IsWindows()) Directory.Delete(broken);
+                else File.Delete(broken);
+            }
             scope.Delete(true);
         }
     }
