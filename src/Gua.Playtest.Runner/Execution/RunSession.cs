@@ -412,19 +412,19 @@ public sealed class RunSession
             cycle.AddRange(pendingEvents); pendingEvents.Clear();
             CollectCompletionEvidence();
         }
+        // Sample the exact lifecycle watch after observation/clock processing,
+        // before terminal operation closure collects abandoned delivery evidence.
+        if (initialLifecycleFailure is { } lifecycle)
+        {
+            if (lifecycle() is { } failure)
+            { initialLifecycleFailure = null; RecordException(failure); cycle.Add(failure.Cause); }
+        }
         if (cycle.Count != 0 && State == ExecutionState.Running)
         {
             // A terminal unit abandons outstanding results. Include that uncertainty before choosing/fixing primary.
             foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
             cycle.AddRange(pendingEvents); pendingEvents.Clear();
             CollectCompletionEvidence();
-        }
-        // Keep the armed exact lifecycle watch through initial observation/clock
-        // processing, including initial goal success that skips the driver/feed.
-        if (initialLifecycleFailure is { } lifecycle)
-        {
-            if (lifecycle() is { } failure)
-            { initialLifecycleFailure = null; RecordException(failure); cycle.Add(failure.Cause); }
         }
         if (cycle.Count != 0)
         {

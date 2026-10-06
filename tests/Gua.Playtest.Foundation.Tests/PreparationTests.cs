@@ -983,7 +983,13 @@ public sealed class PreparationTests
         await retryStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(1, first.Calls); clock.Advance(2000);
         var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason); Assert.True(outcome.PostProcessingComplete);
+        Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason);
+        // The outer owner may enter cleanup before preparation finishes unwinding.
+        // Diagnostics then remains unconfirmed, but certified no-effect backoff
+        // must not leave the endpoint's resource ownership unreleased.
+        Assert.DoesNotContain(outcome.PostProcessing, item => item.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+        if (!outcome.PostProcessingComplete)
+            Assert.Contains(outcome.PostProcessing, item => item.Reason == PostProcessingReason.DiagnosticsFailed);
         var second = new Connector(new()); var secondTrace = new Trace();
         await Execute(new(policy, clock, new Launcher(), second, secondTrace), clock);
         Assert.Equal(1, second.Calls); Assert.DoesNotContain(new(PreparationStage.Ownership, PreparationCode.Busy), secondTrace.Events);
@@ -1493,10 +1499,13 @@ public sealed class PreparationTests
             .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
         launcher.Process.DirectExitWatch = true;
         var armed = false; launcher.Process.OnExitWait = _ => armed = true;
-        connection.OnCapture = _ => { Assert.True(armed); launcher.Process.ConfirmExitWithStaleStatus(); throw new IOException(); };
-        var failure = await Assert.ThrowsAsync<PreparationException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask());
-        Assert.Equal(PreparationCode.ProcessExited, failure.Code);
-        run.RecordException(failure); run.Evaluate(candidates: [failure.Cause]); var result = await cleanup.CompleteAsync(run, clock);
+        connection.OnCapture = _ => { Assert.True(armed); throw new IOException(); };
+        // Establish the thrown source evidence before signalling exit. Signalling
+        // first would allow authoritative exit to win before the throw is ready.
+        var failure = await Assert.ThrowsAsync<IOException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask());
+        Assert.True(armed); launcher.Process.ConfirmExitWithStaleStatus();
+        run.RecordException(failure); run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
+        var result = await cleanup.CompleteAsync(run, clock);
         Assert.Equal(1, result.ExitCode); Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
         Assert.Contains(result.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
     }
@@ -1649,6 +1658,27 @@ public sealed class PreparationTests
         Assert.Equal(1, reads); Assert.Equal(1, connection.Captures);
         run.Evaluate(observation.Success, observation.CapturedAt, failureUnit: observation.Failure);
         var result = await cleanup.CompleteAsync(run, clock); Assert.Equal(ResultStatus.Passed, result.Primary.Status);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task LifecycleOnlyFailureCollectsOutstandingDeliveryBeforePrimary(bool sent)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = Run(clock); run.BeginPreparation(); var cleanup = new OwnedCleanup();
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(new()), new Trace())
+            .PrepareAsync(run, cleanup, null, null);
+        run.BeginRunning(host.Boundary); run.Evaluate(); Assert.Null(run.Primary);
+        var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+        operation.BeginDispatch(0); if (sent) operation.Actions!.ConfirmSent(0);
+        launcher.Process.ConfirmExitWithStaleStatus(); run.Evaluate();
+        Assert.Contains(run.Events, item => item.Reason == RunReason.ActionUnconfirmed && item.Origin == RunOrigin.Host);
+        Assert.Contains(run.Events, item => item.Reason == RunReason.ExecutionError && item.Origin == RunOrigin.Host);
+        Assert.Equal(RunReason.ActionUnconfirmed, run.Primary!.Cause.Reason);
+        Assert.False(operation.IsOpen); Assert.False(operation.ConfirmResult());
+        Assert.Equal(sent ? DeliveryState.Sent : DeliveryState.Uncertain, operation.Actions!.Deliveries[0]);
+        Assert.Equal(1, run.Budget.Snapshot.Actions);
+        var result = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(1, result.ExitCode); Assert.Equal(1, launcher.Process.Shutdowns);
+        Assert.Contains(result.Events, item => item.Reason == RunReason.ActionUnconfirmed);
     }
     [Fact]
     public async Task ContinuousOwnerLifecycleCheckSurvivesTheFirstNonterminalEvaluation()

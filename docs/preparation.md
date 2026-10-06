@@ -214,6 +214,9 @@ the initial and subsequent Running observation/clock processing. The serialized
 owner keeps sampling it in every arbitration unit until a lifecycle failure is
 consumed or the primary is confirmed, so an already-known exit outranks a goal
 even when the driver/feed is skipped. Cleanup cancels only that owned watch.
+Lifecycle evidence enters the owner cycle before terminal operation closure, so
+abandoned sent/uncertain delivery evidence and newly eligible completion/budget
+events are collected while Running, before the existing priority fixes primary.
 The completed-preparation/deadline path samples that same watch while retaining
 Preparing phase; it records failure/trace evidence without starting Running or
 crediting the initial goal. Whole-Setup metadata deadlines also apply to an empty
