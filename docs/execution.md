@@ -96,3 +96,15 @@ Certified start must also be consumed before the current real preparation deadli
 A terminal unit closes active operations while the session is still Running, collecting abandoned sent/uncertain delivery evidence before choosing the immutable primary. Already-cancelled monitor entry closes the run before invoking work. Completed work event projection is validated once and cached; rejected public events become an adapter ExecutionError instead of being retried during fault finalization.
 
 Preparation preserves already-completed provider evidence when caller cancellation wins, including false readiness and the certified initial failure unit. Owner preparation, execution, capture and cleanup shares use absolute deadlines through FiniteOperation.RunUntilAsync; an elapsed remainder is never rebased onto a later start. Independent failed or internally cancelled wake tasks already complete before obsolete-wait cancellation join ready work in arbitration.
+
+The asynchronous boundaries follow one evidence policy:
+
+| Boundary | Before invocation | Completed evidence when interrupted | Failure arbitration |
+| --- | --- | --- | --- |
+| Preparation | Absolute preparation deadline and caller token rechecked after registration | False readiness and certified initial failure/contract evidence survive cancel and timer; expired preparation never enters Running or claims a goal | Same terminal priority table, with PreparationTimeout/cancellation retained |
+| Driver | Absolute Running deadline and caller token rechecked after registration | Completed driver declaration survives cancel/timer; false completion remains ExecutionError | Ready declaration, provider failure, cancellation and deadline share Evaluate |
+| Live capture | Absolute next evaluation deadline, guarded cancellation | Completed maps/time survive cancel/timer and both maps are required | Ready work and captured conditions share Evaluate |
+| Monitored work | Caller cancellation/current deadline rechecked after registration | Work projection is bounded, validated and cached once | Completed fault and independent losing-wake fault are retained |
+| Terminal closure | No new approvals/dispatch after closure | Abandoned sent/uncertain results plus newly eligible budget/goal/completion evidence are collected | One immutable primary selection after collection |
+
+FiniteOperation and RunMonitor use shared provider-cancellation normalization: an exception carrying the cancelled supplied token (or the caller token) is caller interruption only while that caller is cancelled; an unrelated or absent token remains provider failure, even with concurrent caller cancellation. Original internal-cancellation type/stack remain evidence. Callback threads only propagate guarded cancellation and enqueue faults; the serialized owner evaluates them. The literal 12-row preparation/driver/capture/work cancellation-provenance table and synchronous/asynchronous fault cases complement the independent priority/state tables. Synchronous providers and cancellation callbacks must return promptly; these finite waits cannot preempt blocking synchronous code.

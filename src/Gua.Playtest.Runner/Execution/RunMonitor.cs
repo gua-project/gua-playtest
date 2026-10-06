@@ -58,7 +58,7 @@ public static class RunMonitor
             if (workTask is null || !workTask.IsCompleted) return (false, default, []);
             try
             {
-                var value = await workTask.ConfigureAwait(false);
+                var value = await FiniteOperation.AwaitProviderAsync(workTask, workCancellation.Token, cancellationToken).ConfigureAwait(false);
                 var mapped = resultEvents(value)?.Take(run.Limits.MaxEvidenceItems + 1).ToArray()
                     ?? throw new ArgumentException("RunWorkEventsInvalid");
                 if (mapped.Any(x => x is null || !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) ||
@@ -66,7 +66,7 @@ public static class RunMonitor
                     throw new ArgumentException("RunWorkEventsInvalid");
                 readyResult = (true, value, mapped);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { readyResult = (true, default, []); }
+            catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == cancellationToken) { readyResult = (true, default, []); }
             catch (Exception exception)
             {
                 run.RecordException(exception);
@@ -76,6 +76,13 @@ public static class RunMonitor
         }
         try
         {
+            // Registration can synchronously propagate cancellation that arrived after entry.
+            var launchAt = realClock.Elapsed;
+            if (cancellationToken.IsCancellationRequested || launchAt >= run.NextRealEvaluationAt)
+            {
+                run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
+                return new(false, default);
+            }
             workTask = work(workCancellation.Token).AsTask();
             while (run.Primary is null)
             {
@@ -103,7 +110,7 @@ public static class RunMonitor
                         token => { captureTask = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(captureTask); },
                         captureCancellation.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested && exception.CancellationToken == captureCancellation.Token)
                 {
                     var ready = await ReadyWork().ConfigureAwait(false);
                     EvaluateInterruptedCapture(ready.Events, true); break;
@@ -132,11 +139,16 @@ public static class RunMonitor
                     var winner = await Task.WhenAny(wakes.Append(workTask)).ConfigureAwait(false);
                     if (winner != workTask) await winner.ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested &&
+                    (exception.CancellationToken == wakeCancellation.Token || exception.CancellationToken == cancellationToken))
                 {
                     wakeCancelled = true;
                 }
-                catch (Exception exception) { wakeFaults.Add(exception); }
+                catch (Exception exception)
+                {
+                    wakeFaults.Add(exception is OperationCanceledException cancelled
+                        ? FiniteOperation.NormalizeCancellation(cancelled, wakeCancellation.Token, cancellationToken) : exception);
+                }
                 finally
                 {
                     // Snapshot independent failures before cancelling obsolete waits. A losing
@@ -144,10 +156,13 @@ public static class RunMonitor
                     foreach (var task in wakes.Where(x => x.IsFaulted))
                         foreach (var exception in task.Exception!.InnerExceptions)
                             if (!wakeFaults.Contains(exception)) wakeFaults.Add(exception);
-                    if (!cancellationToken.IsCancellationRequested)
-                        foreach (var task in wakes.Where(x => x.IsCanceled))
-                            try { task.GetAwaiter().GetResult(); }
-                            catch (OperationCanceledException exception) { wakeFaults.Add(exception); }
+                    foreach (var task in wakes.Where(x => x.IsCanceled))
+                        try { task.GetAwaiter().GetResult(); }
+                        catch (OperationCanceledException exception)
+                        {
+                            var cause = FiniteOperation.NormalizeCancellation(exception, wakeCancellation.Token, cancellationToken);
+                            if (cause is ProviderCancellationException) wakeFaults.Add(cause);
+                        }
                     FiniteOperation.CancelSafely(wakeCancellation, run.RecordException);
                     foreach (var task in wakes) ObserveFault(task);
                 }
@@ -164,9 +179,11 @@ public static class RunMonitor
         }
         catch (Exception exception)
         {
+            if (exception is OperationCanceledException cancelled)
+                exception = FiniteOperation.NormalizeCancellation(cancelled, workCancellation.Token, cancellationToken);
             run.RecordException(exception);
             var ready = await ReadyWork().ConfigureAwait(false);
-            var faultEvents = exception is OperationCanceledException && cancellationToken.IsCancellationRequested
+            var faultEvents = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested && interrupted.CancellationToken == cancellationToken
                 ? Array.Empty<RunEvent>() : [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)];
             run.Evaluate(candidates: ready.Events.Concat(faultEvents),
                 cancelled: cancellationToken.IsCancellationRequested);

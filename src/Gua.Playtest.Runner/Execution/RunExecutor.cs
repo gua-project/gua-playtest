@@ -35,6 +35,9 @@ public static class RunExecutor
     {
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(cleanup); ArgumentNullException.ThrowIfNull(prepare); ArgumentNullException.ThrowIfNull(execute);
+        RunStartBoundary? completedBoundary = null;
+        IReadOnlyList<RunEvent> completedPreparationEvents = [];
+        Task<bool>? executionTask = null;
         try
         {
             run.BeginPreparation();
@@ -51,7 +54,15 @@ public static class RunExecutor
                 // A certified initial failure outranks cancellation; no driver starts after cancellation.
                 preparation = preparationTask.GetAwaiter().GetResult();
             }
+            catch (TimeoutException) when (preparationTask?.IsCompletedSuccessfully == true)
+            {
+                var completed = mapPreparation(preparationTask.GetAwaiter().GetResult());
+                completedBoundary = completed.Boundary;
+                if (!completed.Ready) completedPreparationEvents = [new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)];
+                throw;
+            }
             var prepared = mapPreparation(preparation);
+            completedBoundary = prepared.Boundary;
             if (!prepared.Ready) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)],
                 cancelled: cancellationToken.IsCancellationRequested);
             else
@@ -68,7 +79,7 @@ public static class RunExecutor
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
                     var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
                     var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
-                        token => execute(run, token), cancellationToken).ConfigureAwait(false);
+                        token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken).ConfigureAwait(false);
                     run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
                     if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
                 }
@@ -80,13 +91,19 @@ public static class RunExecutor
             var phase = run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation;
             var reason = exception switch
             {
-                OperationCanceledException when cancellationToken.IsCancellationRequested => RunReason.Cancelled,
+                OperationCanceledException cancelled when cancellationToken.IsCancellationRequested && cancelled.CancellationToken == cancellationToken => RunReason.Cancelled,
                 TimeoutException when phase == RunPhase.Preparation => RunReason.PreparationTimeout,
                 TimeoutException => RunReason.MaxDuration,
                 _ => RunReason.ExecutionError
             };
-            run.Evaluate(candidates: [exception is RunFailureException failure ? failure.Cause : new(reason, phase, RunOrigin.Runner)],
-                cancelled: cancellationToken.IsCancellationRequested);
+            var retained = exception is TimeoutException && phase == RunPhase.Preparation && completedBoundary is not null
+                ? run.InterruptedBoundaryFailureEvents(completedBoundary) : completedPreparationEvents;
+            bool? completedExecution = phase == RunPhase.Execution && executionTask?.IsCompletedSuccessfully == true
+                ? executionTask.GetAwaiter().GetResult() : null;
+            if (completedExecution == false)
+                retained = retained.Append(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)).ToArray();
+            run.Evaluate(candidates: retained.Append(exception is RunFailureException failure ? failure.Cause : new(reason, phase, RunOrigin.Runner)),
+                cancelled: cancellationToken.IsCancellationRequested, executionComplete: completedExecution == true);
         }
         // Input/resource releases have fresh bounded tokens; main result is already immutable.
         return await cleanup.CompleteAsync(run, realClock, cancellationToken, confirmPrimary).ConfigureAwait(false);

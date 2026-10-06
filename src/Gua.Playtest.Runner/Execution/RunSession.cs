@@ -114,6 +114,37 @@ public sealed class RunSession
         if (Budget.Exhaustion is { } exhausted) { approvalsClosing = true; closingExhaustion ??= exhausted; }
         return new PlannerPermit(this, operation);
     }
+    internal IReadOnlyList<RunEvent> InterruptedBoundaryFailureEvents(RunStartBoundary boundary)
+    {
+        var retained = new List<RunEvent>();
+        try
+        {
+            Require(ExecutionState.Preparing);
+            if (boundary.Owner != this || boundary.Used || boundary.RealCapturedAt < preparationOrigin ||
+                boundary.RealCapturedAt >= preparationOrigin + Limits.PreparationTimeout || boundary.RealCapturedAt > ReadReal())
+                throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
+            boundary.Used = true;
+            // Inspect only failure/contract evidence from the certified initial unit. An expired
+            // preparation never enters Running, establishes a goal, or authorizes a driver.
+            foreach (var pair in new[] { (failure, boundary.InitialObservation.Failure, true), (success, boundary.InitialObservation.Success, false) })
+            {
+                var value = pair.Item1?.Start(conditionClock, boundary.InitialObservation.CapturedAt)
+                    .EvaluateAt(pair.Item2, boundary.InitialObservation.CapturedAt);
+                if (value?.Evaluation.Error == EvaluationError.InvalidConfiguration)
+                    retained.Add(new(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Contract));
+                else if (value?.Evaluation.Error == EvaluationError.ObservationContractViolation)
+                    retained.Add(new(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract));
+                if (pair.Item3 && IsTrue(value))
+                    retained.Add(new(RunReason.FailureCondition, RunPhase.Preparation, RunOrigin.Condition));
+            }
+        }
+        catch (Exception exception)
+        {
+            RecordException(exception);
+            retained.Add(new(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract));
+        }
+        return retained;
+    }
     /// <summary>Replay/approved non-Planner work. The complete segment reserves before any transport.</summary>
     public ApprovedOperation? ApproveOperation(int actionCount, TimeSpan observationWindow)
         => Approve(actionCount, observationWindow, false);
@@ -248,18 +279,14 @@ public sealed class RunSession
                 operation.CompleteAt(now);
             }
             cycle.AddRange(pendingEvents); pendingEvents.Clear();
-            var pending = operations.Any(x => x.IsOpen);
-            if ((closingExhaustion ?? Budget.Exhaustion) is { } exhausted && !pending) cycle.Add(new(exhausted, Phase, RunOrigin.Budget));
-            if (executionComplete && !pending && !goalVerified)
-                cycle.Add(new(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, Phase, RunOrigin.Runner));
-            if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete) && !pending)
-                cycle.Add(new(RunReason.GoalSatisfied, Phase, RunOrigin.Condition));
+            CollectCompletionEvidence();
         }
         if (cycle.Count != 0 && State == ExecutionState.Running)
         {
             // A terminal unit abandons outstanding results. Include that uncertainty before choosing/fixing primary.
             foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
             cycle.AddRange(pendingEvents); pendingEvents.Clear();
+            CollectCompletionEvidence();
         }
         // Budget exhaustion is terminal only after the final approved result/observation opportunity.
         // A verified success in that final unit wins over mere exhaustion; errors/cancel/deadline still win.
@@ -282,6 +309,18 @@ public sealed class RunSession
         }
         return Primary;
 
+        void CollectCompletionEvidence()
+        {
+            if (operations.Any(x => x.IsOpen)) return;
+            void Add(RunReason reason, RunOrigin origin)
+            {
+                if (!cycle.Any(x => x.Reason == reason && x.Phase == Phase && x.Origin == origin))
+                    cycle.Add(new(reason, Phase, origin));
+            }
+            if ((closingExhaustion ?? Budget.Exhaustion) is { } exhausted) Add(exhausted, RunOrigin.Budget);
+            if (executionComplete && !goalVerified) Add(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, RunOrigin.Runner);
+            if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete)) Add(RunReason.GoalSatisfied, RunOrigin.Condition);
+        }
         void AddError(ConditionEvaluation? value)
         {
             if (value?.Evaluation.Error is EvaluationError.InvalidConfiguration)
@@ -298,7 +337,7 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(exception);
         if (exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace));
-        if (exception is RunFailureException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
+        if (exception is RunFailureException or ProviderCancellationException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace));
     }
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)

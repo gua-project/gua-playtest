@@ -70,7 +70,8 @@ public sealed class OwnedCleanup
             }
             catch (Exception exception)
             {
-                issues.Add(new(Failure(step.Stage), new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace)));
+                var original = exception is ProviderCancellationException ? exception.InnerException! : exception;
+                issues.Add(new(Failure(step.Stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)));
             }
         }
         if (cancellationToken.IsCancellationRequested && !issues.Any(x => x.Reason == PostProcessingReason.Cancelled))
@@ -90,6 +91,9 @@ public sealed class OwnedCleanup
 
 /// <summary>Finite real-time wait, including cancellation of a provider that ignores cancellation.
 /// Late results never acquire Run authority. A real clock must advance independently of simulation.</summary>
+internal sealed class ProviderCancellationException(OperationCanceledException original)
+    : Exception("ProviderCancellation", original);
+
 public static class FiniteOperation
 {
     public static ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
@@ -114,20 +118,22 @@ public static class FiniteOperation
         { CancelSafely(operationCancellation); cancelled.TrySetCanceled(cancellationToken); });
         try
         {
-            operation = action(operationCancellation.Token).AsTask();
-            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            try { operation = action(operationCancellation.Token).AsTask(); }
+            catch (OperationCanceledException exception) { throw NormalizeCancellation(exception, operationCancellation.Token, cancellationToken); }
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             var remaining = startDeadline - realClock.Elapsed;
-            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             if (remaining <= TimeSpan.Zero) throw new TimeoutException("OperationDeadlineReached");
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
             var winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
-            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             if (winner == cancelled.Task) await cancelled.Task.ConfigureAwait(false);
             if (winner == timer) await timer.ConfigureAwait(false);
             var expired = winner == timer || realClock.Elapsed >= startDeadline;
-            if (operation.IsFaulted || operation.IsCanceled) return await operation.ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             if (expired) throw new TimeoutException("OperationDeadlineReached");
-            return await operation.ConfigureAwait(false);
+            return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -135,6 +141,17 @@ public static class FiniteOperation
             if (operation is not null) _ = operation.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (timer is not null) _ = timer.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
+    }
+    internal static Exception NormalizeCancellation(OperationCanceledException exception,
+        CancellationToken providerToken, CancellationToken callerToken)
+        => callerToken.IsCancellationRequested && (exception.CancellationToken == callerToken ||
+            providerToken.IsCancellationRequested && exception.CancellationToken == providerToken)
+            ? new OperationCanceledException("CallerInterruptedOperation", exception, callerToken)
+            : new ProviderCancellationException(exception);
+    internal static async ValueTask<T> AwaitProviderAsync<T>(Task<T> task, CancellationToken providerToken, CancellationToken callerToken)
+    {
+        try { return await task.ConfigureAwait(false); }
+        catch (OperationCanceledException exception) { throw NormalizeCancellation(exception, providerToken, callerToken); }
     }
     internal static void CancelSafely(CancellationTokenSource source, Action<Exception>? record = null)
     {

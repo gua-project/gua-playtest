@@ -10,6 +10,158 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory]
+    [InlineData(false, 10)]
+    [InlineData(true, 3)]
+    public async Task CompletedDriverEvidenceSurvivesDeadlineWithoutExtendingAuthority(bool completed, int expectedExit)
+    {
+        var pending = new TaskCompletionSource<bool>(); var clock = new DriverDeadlineClock(() => pending.SetResult(completed));
+        var condition = new Clock(); var run = new RunSession(Limits(), clock, condition, Condition(), policy: CompletionPolicy.AfterPlan);
+        var result = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true),
+            (session, _) => { Assert.Null(session.Evaluate(Unit(), condition.Elapsed)); return new(pending.Task); });
+        Assert.Equal(expectedExit, result.ExitCode); Assert.Contains(result.Events, x => x.Reason == RunReason.MaxDuration);
+        if (completed) Assert.Contains(result.Events, x => x.Reason == RunReason.GoalSatisfied);
+        else Assert.Contains(result.Events, x => x.Reason == RunReason.ExecutionError);
+    }
+    private sealed class DriverDeadlineClock(Action finish) : IClock
+    {
+        private int delays; public TimeSpan Elapsed { get; private set; }
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            if (++delays == 2) { Elapsed += duration; finish(); return ValueTask.CompletedTask; }
+            return new(new TaskCompletionSource().Task);
+        }
+    }
+    [Fact]
+    public async Task CompletedFalsePreparationRetainsHostFailureAlongsideTimeout()
+    {
+        var pending = new TaskCompletionSource<bool>(); var clock = new FiniteRaceClock(() => pending.TrySetResult(false));
+        var condition = new Clock(); var run = new RunSession(Limits(), clock, condition);
+        var result = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => new(pending.Task),
+            (_, _) => throw new InvalidOperationException("no driver"));
+        Assert.Equal(RunReason.PreparationTimeout, result.Primary.Cause.Reason);
+        Assert.Contains(result.Events, x => x.Reason == RunReason.ExecutionError && x.Origin == RunOrigin.Host);
+    }
+    // Literal expected exit codes across preparation/execution/observation/work boundaries.
+    [Theory]
+    [InlineData(0, 0, 1)] [InlineData(0, 1, 4)] [InlineData(0, 2, 10)]
+    [InlineData(1, 0, 1)] [InlineData(1, 1, 4)] [InlineData(1, 2, 10)]
+    [InlineData(2, 0, 1)] [InlineData(2, 1, 4)] [InlineData(2, 2, 10)]
+    [InlineData(3, 0, 1)] [InlineData(3, 1, 4)] [InlineData(3, 2, 10)]
+    public async Task ProviderBoundaryCancellationProvenanceTable(int boundary, int interruption, int expectedExit)
+    {
+        var clock = new Clock(); using var caller = new CancellationTokenSource();
+        using var provider = new CancellationTokenSource(); provider.Cancel();
+        var run = new RunSession(Limits(), clock, clock); var cleanup = new OwnedCleanup(); bool released = false;
+        cleanup.Register(CleanupStage.InputRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        ValueTask<T> Result<T>(CancellationToken supplied)
+        {
+            caller.Cancel();
+            if (interruption == 0) return ValueTask.FromException<T>(new RunFailureException(
+                new(RunReason.ActionFailed, boundary == 0 ? RunPhase.Preparation : RunPhase.Execution, RunOrigin.Host)));
+            return ValueTask.FromCanceled<T>(interruption == 1 ? supplied : provider.Token);
+        }
+        RunOutcome outcome;
+        if (boundary <= 1)
+            outcome = await RunExecutor.ExecuteAsync(run, clock, cleanup,
+                (_, token) => boundary == 0 ? Result<bool>(token) : ValueTask.FromResult(true), (_, token) => Result<bool>(token), caller.Token);
+        else
+        {
+            run.BeginPreparation(); run.BeginRunning(); var pending = new TaskCompletionSource<int>();
+            var feed = new CallbackCaptureFeed(token => boundary == 2 ? Result<RunObservation>(token)
+                : ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit("false"), Unit("false"))));
+            await RunMonitor.AwaitAsync(run, clock, clock, feed,
+                token => boundary == 3 ? Result<int>(token) : new ValueTask<int>(pending.Task), _ => [], caller.Token);
+            outcome = await cleanup.CompleteAsync(run, clock, caller.Token); pending.SetResult(1);
+        }
+        Assert.True(released); Assert.Equal(expectedExit, outcome.ExitCode); Assert.Equal(ExecutionState.Finished, run.State);
+        Assert.Contains(outcome.Events, x => x.Reason == RunReason.Cancelled);
+        if (interruption == 2) Assert.Contains(outcome.Exceptions, x => x.Type == "System.Threading.Tasks.TaskCanceledException");
+    }
+    private sealed class CallbackCaptureFeed(Func<CancellationToken, ValueTask<RunObservation>> capture) : IRunObservationFeed
+    {
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => capture(token);
+        public ValueTask WaitForChangeAsync(CancellationToken token) => throw new InvalidOperationException("unexpected wait");
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LaunchGuardRechecksCancellationAndAbsoluteDeadlineAfterRegistration(bool cancelled)
+    {
+        var clock = new LaunchReadClock(); var condition = new Clock(); using var cancel = new CancellationTokenSource();
+        var run = new RunSession(Limits(), clock, condition); run.BeginPreparation(); run.BeginRunning(); bool invoked = false;
+        clock.OnRead = () => { if (cancelled) cancel.Cancel(); else clock.Now = TimeSpan.FromSeconds(5); };
+        var result = await RunMonitor.AwaitAsync(run, clock, condition, new Feed(() => throw new InvalidOperationException()),
+            _ => { invoked = true; return ValueTask.FromResult(1); }, _ => [], cancel.Token);
+        Assert.False(invoked); Assert.False(result.Completed);
+        Assert.Equal(cancelled ? RunReason.Cancelled : RunReason.MaxDuration, run.Primary!.Cause.Reason);
+        if (!cancelled) Assert.DoesNotContain(run.Events, x => x.Reason == RunReason.Cancelled);
+    }
+    private sealed class LaunchReadClock : IClock
+    {
+        public Action? OnRead; public TimeSpan Now;
+        public TimeSpan Elapsed { get { var callback = OnRead; OnRead = null; callback?.Invoke(); return Now; } }
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => new(new TaskCompletionSource().Task);
+    }
+    [Theory]
+    [InlineData("true", RunReason.FailureCondition)]
+    [InlineData("1", RunReason.ObservationContractViolation)]
+    [InlineData("false", RunReason.PreparationTimeout)]
+    public async Task CompletedTimedOutCertificateRetainsOnlyFailureEvidenceWithoutRunning(string failureValue, RunReason expected)
+    {
+        var pending = new TaskCompletionSource<RunStartBoundary>(); var condition = new Clock(); RunStartBoundary? boundary = null;
+        var clock = new FiniteRaceClock(() => pending.SetResult(boundary!)); var sameCondition = Condition();
+        var run = new RunSession(Limits(), clock, condition, sameCondition, sameCondition); bool executed = false, released = false;
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var result = await RunExecutor.ExecuteAsync(run, clock, cleanup, (session, _, _) =>
+        {
+            var request = session.ArmRunningBoundary();
+            boundary = request.Certify(request.RequestId, clock.Elapsed, new(condition.Elapsed, Unit(), Unit(failureValue)), "live", true);
+            return new(pending.Task);
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.False(executed); Assert.True(released); Assert.Null(run.RunningOrigin); Assert.False(run.GoalVerified);
+        Assert.Equal(expected, result.Primary.Cause.Reason); Assert.Contains(result.Events, x => x.Reason == RunReason.PreparationTimeout);
+        Assert.DoesNotContain(result.Events, x => x.Reason == RunReason.GoalSatisfied);
+    }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ProviderInternalCancellationRacingCallerRemainsFailure(bool execution, bool asynchronous)
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock); using var cancel = new CancellationTokenSource();
+        using var internalCancel = new CancellationTokenSource(); internalCancel.Cancel(); bool released = false;
+        ValueTask<bool> Fault()
+        {
+            cancel.Cancel();
+            if (asynchronous) return new(Task.FromCanceled<bool>(internalCancel.Token));
+            throw new OperationCanceledException(internalCancel.Token);
+        }
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.InputRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var result = await RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => execution ? ValueTask.FromResult(true) : Fault(),
+            (_, _) => Fault(), cancel.Token);
+        Assert.True(released); Assert.Equal(10, result.ExitCode); Assert.Equal(RunReason.ExecutionError, result.Primary.Cause.Reason);
+        Assert.Equal(execution ? RunPhase.Execution : RunPhase.Preparation, result.Primary.Cause.Phase);
+        Assert.Contains(result.Events, x => x.Reason == RunReason.Cancelled);
+        Assert.Contains(result.Exceptions, x => x.Type == (asynchronous ? "System.Threading.Tasks.TaskCanceledException" : "System.OperationCanceledException"));
+    }
+    [Theory]
+    [InlineData(RunReason.ActionsExhausted)]
+    [InlineData(RunReason.DecisionsExhausted)]
+    [InlineData(RunReason.RecoveryExhausted)]
+    public void TerminalClosureMakesRetainedBudgetCauseEligibleBeforeArbitration(RunReason expected)
+    {
+        var clock = new Clock(); var run = Running(clock, success: false,
+            limits: Limits(actions: expected == RunReason.ActionsExhausted ? 1 : 3,
+                decisions: expected == RunReason.DecisionsExhausted ? 1 : 3, recovery: 1));
+        if (expected == RunReason.ActionsExhausted) Assert.NotNull(run.ApproveOperation(1, TimeSpan.FromSeconds(1)));
+        else Assert.NotNull(run.RequestPlanner(recovering: expected == RunReason.RecoveryExhausted));
+        var result = run.Evaluate(candidates: [Event(RunReason.WaitExpired)]);
+        Assert.Equal(expected, result!.Cause.Reason); Assert.Equal(ResultStatus.Unverified, result.Status);
+        Assert.Contains(run.Events, x => x.Reason == RunReason.WaitExpired);
+        Assert.Single(run.Events, x => x.Reason == expected);
+    }
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CompletedPreparationEvidenceSurvivesCallerCancellation(bool certified)
