@@ -35,6 +35,7 @@ public static class RunExecutor
     {
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(cleanup); ArgumentNullException.ThrowIfNull(prepare); ArgumentNullException.ThrowIfNull(execute);
+        realClock = run.AuthoritativeRealClock;
         RunStartBoundary? completedBoundary = null;
         IReadOnlyList<RunEvent> completedPreparationEvents = [];
         Task<bool>? executionTask = null;

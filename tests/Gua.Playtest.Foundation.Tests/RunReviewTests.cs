@@ -10,6 +10,61 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecutorUsesSessionTimebaseDespiteForeignClockEpoch(bool execution)
+    {
+        var owner = new Clock(); owner.At(10000); var foreign = new Clock();
+        var run = new RunSession(Limits(), owner, owner); var pending = new TaskCompletionSource<bool>(); bool released = false;
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, foreign, cleanup, (_, _) => execution ? ValueTask.FromResult(true) : new(pending.Task),
+            (_, _) => new(pending.Task)).AsTask();
+        owner.At(execution ? 15000 : 11000);
+        var result = await executing; Assert.True(released);
+        Assert.Equal(execution ? RunReason.MaxDuration : RunReason.PreparationTimeout, result.Primary.Cause.Reason);
+        Assert.Equal(TimeSpan.Zero, foreign.Elapsed); pending.SetResult(true);
+    }
+    [Fact]
+    public async Task MonitorUsesSessionDeadlineWithForeignClockArguments()
+    {
+        var owner = new Clock(); owner.At(10000); var foreign = new Clock();
+        var run = Running(owner, success: false); var pending = new TaskCompletionSource<int>();
+        var monitoring = RunMonitor.AwaitAsync(run, foreign, foreign,
+            new Feed(() => new(owner.Elapsed, Unit("false"), Unit("false"))), _ => new ValueTask<int>(pending.Task), _ => []).AsTask();
+        owner.At(15000); Assert.False((await monitoring).Completed);
+        Assert.Equal(RunReason.MaxDuration, run.Primary!.Cause.Reason); Assert.Equal(TimeSpan.Zero, foreign.Elapsed); pending.SetResult(1);
+    }
+    [Fact]
+    public async Task CleanupUsesSessionDeadlineAndStillAttemptsLaterRelease()
+    {
+        var owner = new Clock(); owner.At(10000); var foreign = new Clock(); var run = Running(owner);
+        run.Evaluate(candidates: [Event(RunReason.ActionFailed)]); var pending = new TaskCompletionSource<bool>(); bool released = false;
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.Artifacts, _ => new(pending.Task));
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        var finishing = cleanup.CompleteAsync(run, foreign).AsTask(); owner.At(10500); var result = await finishing;
+        Assert.True(released); Assert.Contains(result.PostProcessing, x => x.Reason == PostProcessingReason.ArtifactFailed);
+        Assert.DoesNotContain(result.PostProcessing, x => x.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+        Assert.Equal(TimeSpan.Zero, foreign.Elapsed); pending.SetResult(true);
+    }
+    [Theory]
+    [InlineData(1, 2, false, false, "ActionsExhausted,DecisionsExhausted")]
+    [InlineData(1, 2, false, true, "ActionsExhausted,DecisionsExhausted")]
+    [InlineData(3, 1, true, false, "ActionsExhausted,RecoveryExhausted")]
+    [InlineData(3, 1, true, true, "ActionsExhausted,RecoveryExhausted")]
+    [InlineData(1, 1, true, false, "ActionsExhausted,DecisionsExhausted,RecoveryExhausted")]
+    [InlineData(1, 1, true, true, "ActionsExhausted,DecisionsExhausted,RecoveryExhausted")]
+    public void FinalPermitRetainsEveryExhaustedCeilingEvenAfterRefund(long decisions, long recovery, bool recovering, bool sent, string expected)
+    {
+        var clock = new Clock(); var run = Running(clock, success: false, limits: Limits(actions: 1, decisions: decisions, recovery: recovery));
+        var permit = run.RequestPlanner(recovering)!; var operation = permit.Approve(1, TimeSpan.FromSeconds(1))!;
+        if (sent) { operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0); Assert.True(operation.ConfirmResult()); }
+        else operation.Actions!.ConfirmNotSent(0);
+        operation.Complete(); var result = run.Evaluate(candidates: [Event(RunReason.WaitExpired)]);
+        Assert.Equal(RunReason.ActionsExhausted, result!.Cause.Reason); Assert.Equal(ResultStatus.Unverified, result.Status);
+        Assert.Equal(expected, string.Join(',', run.Events.Where(x => x.Origin == RunOrigin.Budget).Select(x => x.Reason)));
+        Assert.Equal(sent ? 1 : 0, run.Budget.Snapshot.Actions);
+    }
+    [Theory]
     [InlineData(false, 10)]
     [InlineData(true, 3)]
     public async Task CompletedDriverEvidenceSurvivesDeadlineWithoutExtendingAuthority(bool completed, int expectedExit)

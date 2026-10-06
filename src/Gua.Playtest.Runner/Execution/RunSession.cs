@@ -20,9 +20,11 @@ public sealed class RunSession
     private TimeSpan lastReal, lastCondition, preparationOrigin;
     private bool goalVerified;
     private bool approvalsClosing;
-    private RunReason? closingExhaustion;
+    private readonly HashSet<RunReason> closingExhaustions = [];
     private bool startCaptureArmed;
     public RunLimits Limits { get; }
+    internal IClock AuthoritativeRealClock => realClock;
+    internal IClock AuthoritativeConditionClock => conditionClock;
     public RunBudget Budget { get; }
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
@@ -111,7 +113,7 @@ public sealed class RunSession
         if (ActionsClosing || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
         var operation = new ApprovedOperation(this, Min(now + Limits.PlannerTimeout, RunningOrigin.Value + Limits.MaxDuration), null, planner: true);
         operations.Add(operation);
-        if (Budget.Exhaustion is { } exhausted) { approvalsClosing = true; closingExhaustion ??= exhausted; }
+        if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
         return new PlannerPermit(this, operation);
     }
     internal IReadOnlyList<RunEvent> InterruptedBoundaryFailureEvents(RunStartBoundary boundary)
@@ -162,7 +164,7 @@ public sealed class RunSession
         var operation = new ApprovedOperation(this, Min(now + window, RunningOrigin.Value + Limits.MaxDuration), reservation,
             count > 0 ? Min(now + Limits.ActionTimeout, RunningOrigin.Value + Limits.MaxDuration) : null);
         operations.Add(operation);
-        if (Budget.Exhaustion is { } exhausted) { approvalsClosing = true; closingExhaustion ??= exhausted; }
+        if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
         return operation;
     }
     public sealed class PlannerPermit
@@ -317,7 +319,8 @@ public sealed class RunSession
                 if (!cycle.Any(x => x.Reason == reason && x.Phase == Phase && x.Origin == origin))
                     cycle.Add(new(reason, Phase, origin));
             }
-            if ((closingExhaustion ?? Budget.Exhaustion) is { } exhausted) Add(exhausted, RunOrigin.Budget);
+            foreach (var exhausted in closingExhaustions.Concat(Budget.Exhaustions).Distinct().OrderBy(x => x))
+                Add(exhausted, RunOrigin.Budget);
             if (executionComplete && !goalVerified) Add(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, RunOrigin.Runner);
             if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete)) Add(RunReason.GoalSatisfied, RunOrigin.Condition);
         }

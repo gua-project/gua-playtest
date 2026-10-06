@@ -26,6 +26,7 @@ public sealed class OwnedCleanup
     public async ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken = default,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
     {
+        realClock = run.AuthoritativeRealClock;
         Step[] ordered;
         lock (registrationGate)
         {

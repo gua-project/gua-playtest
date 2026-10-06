@@ -24,6 +24,8 @@ public static class RunMonitor
         Func<T, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default)
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
+        realClock = run.AuthoritativeRealClock;
+        conditionClock = run.AuthoritativeConditionClock;
         if (cancellationToken.IsCancellationRequested)
         {
             run.Evaluate(cancelled: true);
