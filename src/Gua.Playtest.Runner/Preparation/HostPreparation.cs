@@ -205,6 +205,11 @@ public sealed class HostPreparation
             var authority = await ReadSetupAsync(setup, preparationDeadline, cancellationToken).ConfigureAwait(false);
             var operations = authority.Operations;
             var setupDeadline = Min(preparationDeadline, setupStartedAt + authority.Timeout);
+            if (preparationClock.Elapsed >= setupDeadline)
+            {
+                RecordDiagnosticTrace(new(PreparationStage.Setup, PreparationCode.Timeout));
+                throw FiniteOperation.DeadlineReached("SetupDeadlineReached");
+            }
             for (var index = 0; index < operations.Length; index++)
             {
                 var current = await ReadSetupAsync(setup, setupDeadline, cancellationToken).ConfigureAwait(false);

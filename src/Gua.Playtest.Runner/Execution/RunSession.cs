@@ -184,10 +184,13 @@ public sealed class RunSession
     internal IReadOnlyList<RunEvent> InterruptedBoundaryFailureEvents(RunStartBoundary boundary)
     {
         var retained = new List<RunEvent>();
+        var lifecycleAccepted = false;
         try
         {
             Require(ExecutionState.Preparing);
-            if (boundary.Owner != this || boundary.Used || boundary.RealCapturedAt < preparationOrigin ||
+            if (boundary.Owner != this || boundary.Used) throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
+            lifecycleAccepted = true;
+            if (boundary.RealCapturedAt < preparationOrigin ||
                 boundary.RealCapturedAt >= preparationOrigin + Limits.PreparationTimeout || boundary.RealCapturedAt > ReadReal())
                 throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
             boundary.Used = true;
@@ -211,6 +214,12 @@ public sealed class RunSession
             RecordException(exception);
             if (!pendingEvents.Any(x => x.Reason == RunReason.InvalidContract && x.Origin == RunOrigin.Clock))
                 retained.Add(new(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract));
+        }
+        if (lifecycleAccepted && boundary.InitialLifecycleFailure is { } lifecycle)
+        {
+            boundary.InitialLifecycleFailure = null;
+            if (lifecycle() is { } failure)
+            { RecordException(failure); retained.Add(failure.Cause with { Phase = RunPhase.Preparation }); }
         }
         return retained;
     }

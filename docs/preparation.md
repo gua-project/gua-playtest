@@ -208,6 +208,10 @@ A separate owned exact-handle watch remains armed across preparation return and
 the initial Running observation/clock processing. The serialized owner samples it
 in that same initial arbitration unit, so an already-known exit outranks an initial
 goal even when the driver/feed is skipped. Cleanup cancels only that owned watch.
+The completed-preparation/deadline path samples that same watch while retaining
+Preparing phase; it records failure/trace evidence without starting Running or
+crediting the initial goal. Whole-Setup metadata deadlines also apply to an empty
+operation list, checked before the loop or further identity/synchronization.
 Source cancellation callbacks use safe cancellation and post bounded original
 exception evidence without throwing through the caller's Cancel operation or
 turning a completed authoritative observation into a source failure.

@@ -14,7 +14,9 @@ public sealed class PreparationTests
     private sealed class Clock : IClock
     {
         private readonly List<(TimeSpan Due, TaskCompletionSource Completion)> timers = [];
-        public TimeSpan Elapsed { get; private set; }
+        private TimeSpan elapsed;
+        public Action? OnRead { get; set; }
+        public TimeSpan Elapsed { get { OnRead?.Invoke(); return elapsed; } private set => elapsed = value; }
         public Action<TimeSpan>? OnDelay { get; set; }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
         {
@@ -1549,6 +1551,39 @@ public sealed class PreparationTests
         var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
         Assert.Equal(2, before); Assert.Equal(primary.Exceptions, outcome.Exceptions);
         Assert.Equal(before, run.Exceptions.Count); Assert.All(outcome.Exceptions, item => Assert.NotNull(item.StackTrace));
+    }
+
+    [Fact]
+    public async Task InterruptedCompletedBoundaryRetainsKnownProcessExitWithoutStartingRunning()
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(true), BooleanUnit(false)) };
+        var trace = new Trace(); var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); var calls = 0;
+        var result = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, cleanup, token) =>
+        {
+            var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), trace)
+                .PrepareAsync(session, cleanup, null, null, token);
+            clock.OnRead = () => { clock.OnRead = null; launcher.Process.ConfirmExitWithStaleStatus(); clock.Advance(2000); };
+            return host.Boundary;
+        }, (_, _) => { calls++; return ValueTask.FromResult(true); });
+        Assert.Null(run.RunningOrigin); Assert.Equal(0, calls); Assert.Equal(0, connection.Captures);
+        Assert.Equal(1, result.ExitCode); Assert.Equal(RunReason.PreparationTimeout, result.Primary.Cause.Reason);
+        Assert.Equal(RunPhase.Preparation, result.Primary.Cause.Phase);
+        Assert.Contains(result.Events, item => item.Reason == RunReason.ExecutionError && item.Origin == RunOrigin.Host && item.Phase == RunPhase.Preparation);
+        Assert.DoesNotContain(result.Events, item => item.Reason == RunReason.GoalSatisfied);
+        Assert.Contains(result.Exceptions, item => item.Type == typeof(PreparationException).FullName);
+        Assert.Contains(new(PreparationStage.Launch, PreparationCode.ProcessExited), trace.Events);
+        Assert.Equal(1, launcher.Process.Shutdowns);
+    }
+    [Fact]
+    public async Task EmptySetupStillEnforcesItsWholeMetadataDeadline()
+    {
+        var clock = new Clock(); var connection = new Connection(); var trace = new Trace();
+        var setup = new Setup { OperationIds = [], ReadTimeout = () => { clock.Advance(50); return TimeSpan.FromMilliseconds(40); } };
+        var result = await Execute(new(Policy(), clock, new Launcher(), new Connector(connection), trace), clock, setup);
+        Assert.Equal(RunReason.PreparationTimeout, result.Primary.Cause.Reason);
+        Assert.Equal(0, setup.Calls); Assert.Equal(0, connection.Synchronizations);
+        Assert.Contains(new(PreparationStage.Setup, PreparationCode.Timeout), trace.Events);
     }
 
 }
