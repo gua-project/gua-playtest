@@ -24,8 +24,9 @@ internal static class ValueReader
     public static AssertionValue Read(JsonObject node, EnumCatalogSnapshot? catalog)
     {
         var type = ValueTypeIdentity.Read(node);
-        if (type.EnumType.Length != 0)
+        if (type.Kind == "enum" || (type.IsCollection && type.ElementKind == "enum"))
         {
+            if (type.EnumType.Length == 0) throw new ContractException("EnumTypeInvalid");
             if (catalog is null) throw new ContractException("EnumUnknown");
             catalog.RequireType(type.EnumType); // including empty enum collections
         }
@@ -34,22 +35,21 @@ internal static class ValueReader
             ? node["value"]!.AsArray().Select(item => item is null ? throw new ContractException("ValueShapeInvalid") : Scalar(item, type.ElementKind, type.EnumType, catalog)).ToArray()
             : [Scalar(node["value"]!, type.Kind, type.EnumType, catalog)];
         var value = new AssertionValue(type, items);
-        ContractSchemas.Validate("value-v1.schema.json", SchemaValue(node, value));
         if (type.Kind == "set" && items.Distinct().Count() != items.Length) throw new ContractException("SetDuplicate");
+        ContractSchemas.Validate("value-v1.schema.json", SchemaValue(node, value));
         return value;
     }
 
     internal static JsonObject SchemaValue(JsonObject wire, AssertionValue value)
     {
         // JsonSchema.Net 7 uses decimal and cannot read valid Gua binary64 values such as 1e308.
-        // All numeric values were already semantically checked. Preserve fields and types; mask only
-        // unbounded number payloads (and normalize exact integers) for the structural schema pass.
+        // Scalar/element semantics and set uniqueness were already checked above. Preserve all
+        // fields/type metadata. Gua collections have no minimum length: an empty structural copy
+        // avoids the schema library's quadratic uniqueItems scan without skipping element checks.
         var result = wire.DeepClone().AsObject();
-        var kind = value.Type.IsCollection ? value.Type.ElementKind : value.Type.Kind;
-        if (kind is not ("number" or "integer")) return result;
-        result["value"] = value.Type.IsCollection
-            ? new JsonArray(value.Items.Select((item, index) => kind == "number" ? JsonValue.Create((double)index) : (JsonNode?)JsonValue.Create((long)item)).ToArray())
-            : kind == "number" ? JsonValue.Create(0d) : JsonValue.Create((long)value.Scalar);
+        if (value.Type.IsCollection) result["value"] = new JsonArray();
+        else if (value.Type.Kind == "number") result["value"] = JsonValue.Create(0d);
+        else if (value.Type.Kind == "integer") result["value"] = JsonValue.Create((long)value.Scalar);
         return result;
     }
 
@@ -97,7 +97,12 @@ internal static class ValueReader
             case "enum":
                 var text = node.GetValue<string>();
                 CheckUnicode(text);
-                if (kind == "enum") catalog!.RequireMember(enumType, text);
+                if (kind == "enum")
+                {
+                    if (enumType.Length == 0) throw new ContractException("EnumTypeInvalid");
+                    if (catalog is null) throw new ContractException("EnumUnknown");
+                    catalog.RequireMember(enumType, text);
+                }
                 return text;
             default: throw new ContractException("ValueTypeInvalid");
         }

@@ -14,9 +14,15 @@ public sealed class PreparedAssertion
     private readonly double tolerance;
     private readonly Regex? regex;
     private readonly EnumCatalogSnapshot? catalog;
+    private readonly HashSet<object>? expectedMembership;
+    private readonly int[] sequencePrefix;
 
     private PreparedAssertion(ValueTypeIdentity type, string operation, AssertionValue? expected, double tolerance, Regex? regex, EnumCatalogSnapshot? catalog)
-        => (this.type, this.operation, this.expected, this.tolerance, this.regex, this.catalog) = (type, operation, expected, tolerance, regex, catalog);
+    {
+        (this.type, this.operation, this.expected, this.tolerance, this.regex, this.catalog) = (type, operation, expected, tolerance, regex, catalog);
+        expectedMembership = expected?.Type.IsCollection == true ? new HashSet<object>(expected.Items) : null;
+        sequencePrefix = operation == "containsSequence" ? BuildSequencePrefix(expected!.Items) : [];
+    }
 
     public static PreparedAssertion CreateJson(string assertionJson, AssertionOptions options, EnumCatalogSnapshot? catalog = null)
     {
@@ -115,8 +121,8 @@ public sealed class PreparedAssertion
             case "startsWith": return ((string)actual.Scalar).StartsWith((string)expected!.Scalar, StringComparison.Ordinal);
             case "endsWith": return ((string)actual.Scalar).EndsWith((string)expected!.Scalar, StringComparison.Ordinal);
             case "matches": return regex!.IsMatch((string)actual.Scalar);
-            case "containsAll": return expectedItems.All(items.Contains);
-            case "containsAny": return expectedItems.Any(items.Contains);
+            case "containsAll": return expectedItems.All(new HashSet<object>(items).Contains);
+            case "containsAny": return expectedItems.Any(new HashSet<object>(items).Contains);
             case "isEmpty": return items.Length == 0;
             case "isNotEmpty": return items.Length != 0;
             case "countEquals": return items.LongLength == (long)expected!.Scalar;
@@ -128,17 +134,39 @@ public sealed class PreparedAssertion
             case "sequenceEquals": return items.SequenceEqual(expectedItems);
             case "startsWithSequence": return SequenceAt(items, expectedItems, 0);
             case "endsWithSequence": return SequenceAt(items, expectedItems, items.Length - expectedItems.Length);
-            case "containsSequence":
-                for (int start = 0; start <= items.Length - expectedItems.Length; start++)
-                    if (SequenceAt(items, expectedItems, start)) return true;
-                return false;
+            case "containsSequence": return ContainsSequence(items, expectedItems, sequencePrefix);
             default: throw new InvalidOperationException(); // exhaustive schema/operator validation in Create
         }
     }
 
     private static bool SequenceAt(object[] source, object[] sequence, int start)
         => start >= 0 && start + sequence.Length <= source.Length && source.AsSpan(start, sequence.Length).SequenceEqual(sequence);
-    private static bool Equal(AssertionValue left, AssertionValue right)
-        => left.Type.Kind == "set" ? left.Items.Length == right.Items.Length && left.Items.All(right.Items.Contains) : left.Items.SequenceEqual(right.Items);
+    private bool Equal(AssertionValue left, AssertionValue right)
+        => left.Type.Kind == "set" ? left.Items.Length == right.Items.Length && left.Items.All(expectedMembership!.Contains) : left.Items.SequenceEqual(right.Items);
+
+    private static int[] BuildSequencePrefix(object[] sequence)
+    {
+        var prefix = new int[sequence.Length];
+        for (int i = 1, matched = 0; i < sequence.Length; i++)
+        {
+            while (matched > 0 && !Equals(sequence[i], sequence[matched])) matched = prefix[matched - 1];
+            if (Equals(sequence[i], sequence[matched])) matched++;
+            prefix[i] = matched;
+        }
+        return prefix;
+    }
+
+    private static bool ContainsSequence(object[] source, object[] sequence, int[] prefix)
+    {
+        if (sequence.Length == 0) return true;
+        int matched = 0;
+        foreach (var item in source)
+        {
+            while (matched > 0 && !Equals(item, sequence[matched])) matched = prefix[matched - 1];
+            if (Equals(item, sequence[matched])) matched++;
+            if (matched == sequence.Length) return true;
+        }
+        return false;
+    }
     private static int Order(object left, object right) => left is long integer ? integer.CompareTo((long)right) : ((double)left).CompareTo((double)right);
 }
