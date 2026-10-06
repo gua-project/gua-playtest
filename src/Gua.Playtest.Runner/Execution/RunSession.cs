@@ -18,7 +18,7 @@ public sealed class RunSession
     private readonly List<RunEvent> pendingEvents = [];
     private readonly List<ExceptionEvidence> exceptions = [];
     private readonly List<ApprovedOperation> operations = [];
-    private TimeSpan lastReal, lastCondition, preparationOrigin;
+    private TimeSpan lastReal, lastCondition, lastCapture, preparationOrigin;
     private bool goalVerified;
     private bool approvalsClosing;
     private readonly HashSet<RunReason> closingExhaustions = [];
@@ -26,6 +26,7 @@ public sealed class RunSession
     public RunLimits Limits { get; }
     internal IClock AuthoritativeRealClock => realClock;
     internal IClock AuthoritativeConditionClock => conditionClock;
+    internal TimeSpan ReadAuthoritativeReal() => ReadReal();
     public RunBudget Budget { get; }
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
@@ -43,6 +44,7 @@ public sealed class RunSession
     {
         ArgumentNullException.ThrowIfNull(limits); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(conditionClock);
+        if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
         Limits = limits; Budget = new(limits); this.realClock = realClock; this.conditionClock = conditionClock;
         this.success = success; this.failure = failure; this.policy = policy;
         lastReal = ReadReal();
@@ -90,6 +92,7 @@ public sealed class RunSession
         if (ReadReal() - preparationOrigin >= Limits.PreparationTimeout)
             throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         var sharedConditionOrigin = ReadCondition();
+        lastCapture = sharedConditionOrigin;
         successSession = StartCondition(success, sharedConditionOrigin);
         failureSession = StartCondition(failure, sharedConditionOrigin);
         RunningOrigin = lastReal; State = ExecutionState.Running;
@@ -118,6 +121,7 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(boundary); Require(ExecutionState.Preparing);
         if (boundary.Owner != this || boundary.Used) throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
         ValidateStartTimes(boundary.RealCapturedAt, boundary.InitialObservation.CapturedAt);
+        lastCapture = boundary.InitialObservation.CapturedAt;
         successSession = StartCondition(success, boundary.InitialObservation.CapturedAt);
         failureSession = StartCondition(failure, boundary.InitialObservation.CapturedAt);
         boundary.Used = true;
@@ -284,7 +288,7 @@ public sealed class RunSession
         }
         if (cycle.Count > Limits.MaxEvidenceItems)
         {
-            cycle = cycle.OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).Take(Limits.MaxEvidenceItems - 1).ToList();
+            cycle = cycle.OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).ThenBy(x => x.Phase).ThenBy(x => x.Origin).Take(Limits.MaxEvidenceItems - 1).ToList();
             cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
         }
         if (cancelled) cycle.Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
@@ -294,6 +298,22 @@ public sealed class RunSession
         {
             foreach (var captured in units)
             {
+                // Source timestamps obey the observation contract even for exploration without trees.
+                bool validCapture;
+                try
+                {
+                    if (captured.At < TimeSpan.Zero || captured.At > TimeSpan.MaxValue - TimeSpan.FromDays(2) ||
+                        captured.At < lastCapture || captured.At > ReadCondition())
+                        throw new InvalidOperationException("ConditionObservationTimeInvalid");
+                    validCapture = true;
+                }
+                catch (InvalidOperationException exception) { RecordException(exception); validCapture = false; }
+                if (!validCapture)
+                {
+                    cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
+                    continue;
+                }
+                lastCapture = captured.At;
                 // Mandatory failure evaluation even if success has latched or the plan is not yet complete.
                 // Paths are local to each prepared tree. Missing failure evidence is Unknown, never the success tree's reads.
                 ConditionEvaluation? EvaluateCondition(ConditionSession? session, ConditionObservationUnit? evidence)
@@ -335,7 +355,7 @@ public sealed class RunSession
         // A verified success in that final unit wins over mere exhaustion; errors/cancel/deadline still win.
         if (events.Count + cycle.Count > Limits.MaxEvidenceItems)
         {
-            cycle = cycle.OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).Take(Limits.MaxEvidenceItems - 1).ToList();
+            cycle = cycle.OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).ThenBy(x => x.Phase).ThenBy(x => x.Origin).Take(Limits.MaxEvidenceItems - 1).ToList();
             cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
             // Retain a bounded prefix and the final deciding unit; no silent continuation after evidence overflow.
             events.RemoveRange(Math.Max(0, Limits.MaxEvidenceItems - cycle.Count),

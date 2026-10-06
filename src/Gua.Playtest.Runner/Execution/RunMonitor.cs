@@ -81,7 +81,7 @@ public static class RunMonitor
         try
         {
             // Registration can synchronously propagate cancellation that arrived after entry.
-            var launchAt = realClock.Elapsed;
+            var launchAt = run.ReadAuthoritativeReal();
             if (cancellationToken.IsCancellationRequested || run.HasPendingTerminalEvidence || launchAt >= run.NextRealEvaluationAt)
             {
                 run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
@@ -91,7 +91,7 @@ public static class RunMonitor
             while (run.Primary is null)
             {
                 using var captureCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var remaining = run.NextRealEvaluationAt - realClock.Elapsed;
+                var remaining = run.NextRealEvaluationAt - run.ReadAuthoritativeReal();
                 if (remaining <= TimeSpan.Zero)
                 {
                     var ready = await ReadyWork().ConfigureAwait(false);
@@ -163,7 +163,7 @@ public static class RunMonitor
                 try
                 {
                     wakes.Add(feed.WaitForChangeAsync(wakeCancellation.Token).AsTask());
-                    wakes.Add(realClock.DelayAsync(Positive(run.NextRealEvaluationAt - realClock.Elapsed), wakeCancellation.Token).AsTask());
+                    wakes.Add(realClock.DelayAsync(Positive(run.NextRealEvaluationAt - run.ReadAuthoritativeReal()), wakeCancellation.Token).AsTask());
                     if (run.NextConditionEvaluationAt is { } conditionWake)
                         wakes.Add(conditionClock.DelayAsync(Positive(conditionWake - conditionClock.Elapsed), wakeCancellation.Token).AsTask());
                     var winner = await Task.WhenAny(wakes.Append(workTask)).ConfigureAwait(false);

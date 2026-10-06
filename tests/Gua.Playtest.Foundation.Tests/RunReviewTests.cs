@@ -9,6 +9,76 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task InvalidRealClockPreventsMonitoredProviderLaunch(int kind)
+    {
+        var good = TimeSpan.FromMilliseconds(100); var real = new LaunchReadClock { Now = good }; var condition = new Clock();
+        var run = new RunSession(Limits(), real, condition); run.BeginPreparation(); run.BeginRunning(); bool worked = false, captured = false;
+        real.OnRead = () =>
+        {
+            real.Now = kind switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue };
+            real.OnRead = () => real.Now = good;
+        };
+        await RunMonitor.AwaitAsync(run, real, condition, new CallbackCaptureFeed(_ =>
+        { captured = true; return ValueTask.FromResult(new RunObservation(TimeSpan.Zero, Unit(), Unit())); }), _ =>
+        { worked = true; return ValueTask.FromResult(1); }, _ => []);
+        Assert.False(worked); Assert.False(captured); Assert.Equal(2, run.Primary!.ExitCode);
+        Assert.Equal(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Clock), run.Primary.Cause);
+    }
+    [Theory]
+    [InlineData(0, 0)] [InlineData(0, 1)] [InlineData(0, 2)] [InlineData(0, 3)]
+    [InlineData(1, 0)] [InlineData(1, 1)] [InlineData(1, 2)] [InlineData(1, 3)]
+    [InlineData(2, 0)] [InlineData(2, 1)] [InlineData(2, 2)] [InlineData(2, 3)]
+    [InlineData(3, 0)] [InlineData(3, 1)] [InlineData(3, 2)] [InlineData(3, 3)]
+    public void CaptureTimeContractDoesNotDependOnConditionTrees(int trees, int invalid)
+    {
+        var real = new Clock(); var condition = new Clock();
+        var run = new RunSession(Limits(), real, condition, (trees & 1) != 0 ? Condition() : null,
+            (trees & 2) != 0 ? Condition() : null, CompletionPolicy.AfterPlan);
+        run.BeginPreparation(); run.BeginRunning(); condition.At(100);
+        Assert.Null(run.Evaluate(Unit("false"), TimeSpan.FromMilliseconds(100), failureUnit: Unit("false")));
+        var bad = invalid switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(101),
+            2 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue };
+        var result = run.Evaluate(Unit("false"), bad, executionComplete: true, failureUnit: Unit("false"))!;
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(new RunEvent(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract), result.Cause);
+        Assert.False(run.GoalVerified);
+    }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
+    public async Task ExplorationFinalCaptureRequiresValidSourceTime(int invalid)
+    {
+        var real = new Clock(); var condition = new Clock(); var run = new RunSession(Limits(), real, condition);
+        run.BeginPreparation(); run.BeginRunning(); condition.At(100); int captures = 0;
+        var bad = invalid switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(101),
+            2 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue };
+        var feed = new CallbackCaptureFeed(_ => ValueTask.FromResult(new RunObservation(
+            ++captures == 1 ? TimeSpan.FromMilliseconds(100) : bad, Unit("false"), Unit("false"))));
+        await RunMonitor.AwaitAsync(run, real, condition, feed, _ => ValueTask.FromResult(1), _ => []);
+        Assert.Equal(2, captures); Assert.Equal(2, run.Primary!.ExitCode);
+        Assert.Equal(RunReason.ObservationContractViolation, run.Primary.Cause.Reason);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void OverflowRetainsFullPhaseAndOriginTieBreak(bool cumulative)
+    {
+        foreach (var reverse in new[] { false, true })
+        {
+            var clock = new Clock(); var defaults = Limits();
+            var limits = new RunLimits(defaults.MaxDuration, defaults.PreparationTimeout, defaults.CleanupTimeout,
+                defaults.PlannerTimeout, defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 32);
+            var run = Running(clock, failure: cumulative, limits: limits, policy: CompletionPolicy.AfterPlan);
+            var expected = new RunEvent(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Contract);
+            var entries = Enumerable.Repeat(new RunEvent(RunReason.InvalidContract, RunPhase.Execution, RunOrigin.Host), cumulative ? 30 : 31)
+                .Append(new(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Runner)).Append(expected).ToArray();
+            var result = run.Evaluate(Unit("false"), TimeSpan.Zero, reverse ? entries.Reverse() : entries, failureUnit: Unit())!;
+            Assert.Equal(expected, result.Cause); Assert.True(run.Events.Count <= 32);
+        }
+    }
+    [Theory] [InlineData(-1)] [InlineData(2)]
+    public void UndefinedCompletionPolicyIsRejectedBeforeRunAuthority(int value)
+    {
+        var clock = new Clock();
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RunSession(Limits(), clock, clock, policy: (CompletionPolicy)value));
+    }
     [Theory]
     [InlineData(0, 0)] [InlineData(0, 1)] [InlineData(0, 2)]
     [InlineData(1, 0)] [InlineData(1, 1)] [InlineData(1, 2)]
