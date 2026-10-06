@@ -10,6 +10,8 @@ namespace Gua.Playtest.Runner.Execution;
 public sealed record RunObservation(TimeSpan CapturedAt, ConditionObservationUnit Success, ConditionObservationUnit Failure);
 public interface IRunObservationFeed
 {
+    /// <summary>Produce a new synchronized unit covering source state through this invocation.
+    /// A cached unit from before the request does not satisfy this contract.</summary>
     ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken);
     ValueTask WaitForChangeAsync(CancellationToken cancellationToken);
 }
@@ -80,7 +82,7 @@ public static class RunMonitor
         {
             // Registration can synchronously propagate cancellation that arrived after entry.
             var launchAt = realClock.Elapsed;
-            if (cancellationToken.IsCancellationRequested || launchAt >= run.NextRealEvaluationAt)
+            if (cancellationToken.IsCancellationRequested || run.HasPendingTerminalEvidence || launchAt >= run.NextRealEvaluationAt)
             {
                 run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 return new(false, default);
@@ -117,15 +119,41 @@ public static class RunMonitor
                     var ready = await ReadyWork().ConfigureAwait(false);
                     EvaluateInterruptedCapture(ready.Events, true); break;
                 }
-                catch (TimeoutException)
+                catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception))
                 {
                     var ready = await ReadyWork().ConfigureAwait(false);
                     EvaluateInterruptedCapture(ready.Events, cancellationToken.IsCancellationRequested); break;
                 }
                 var result = await ReadyWork().ConfigureAwait(false);
+                if (result.Completed)
+                {
+                    // Delivery can lag the first capture boundary. Synchronize once more after
+                    // observing completion, retaining both units until the single arbiter runs.
+                    var observations = new List<RunObservation?> { observation };
+                    var finalEvents = result.Events.ToList(); Task<RunObservation>? finalCapture = null;
+                    try
+                    {
+                        var final = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt, token =>
+                        { finalCapture = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(finalCapture); }, cancellationToken).ConfigureAwait(false);
+                        observations.Add(final);
+                    }
+                    catch (Exception exception)
+                    {
+                        if (finalCapture?.IsCompletedSuccessfully == true) observations.Add(finalCapture.GetAwaiter().GetResult());
+                        var callerInterrupted = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
+                            interrupted.CancellationToken == cancellationToken;
+                        if (!callerInterrupted && !FiniteOperation.IsDeadline(exception))
+                        {
+                            run.RecordException(exception);
+                            finalEvents.Add(exception is RunFailureException failure ? failure.Cause
+                                : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner));
+                        }
+                    }
+                    run.EvaluateCapturedUnits(observations, finalEvents, cancellationToken.IsCancellationRequested);
+                    return new(run.Primary is null, result.Value);
+                }
                 // All ready observations/events/cancellation/current deadlines go through one arbiter.
                 EvaluateCapture(observation, result.Events, cancellationToken.IsCancellationRequested);
-                if (result.Completed) return new(run.Primary is null, result.Value);
                 if (run.Primary is not null) break;
                 using var wakeCancellation = new CancellationTokenSource();
                 using var wakeRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wakeCancellation, QueueCancellationFault));

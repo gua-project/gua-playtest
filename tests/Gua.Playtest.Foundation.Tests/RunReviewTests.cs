@@ -10,6 +10,112 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory]
+    [InlineData(0, false)] [InlineData(0, true)]
+    [InlineData(1, false)] [InlineData(1, true)]
+    [InlineData(2, false)] [InlineData(2, true)]
+    [InlineData(3, false)] [InlineData(3, true)]
+    public async Task ProviderTimeoutProvenanceTableNeverClaimsSafetyDeadline(int boundary, bool asynchronous)
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock); var pending = new TaskCompletionSource<int>();
+        ValueTask<T> Fault<T>()
+        {
+            // Matching message text is deliberately insufficient to forge a safety deadline.
+            var error = new TimeoutException("OperationDeadlineReached");
+            if (asynchronous) return ValueTask.FromException<T>(error);
+            throw error;
+        }
+        RunOutcome result;
+        if (boundary <= 1)
+            result = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(),
+                (_, _) => boundary == 0 ? Fault<bool>() : ValueTask.FromResult(true), (_, _) => Fault<bool>());
+        else
+        {
+            run.BeginPreparation(); run.BeginRunning();
+            var feed = new CallbackCaptureFeed(_ => boundary == 2 ? Fault<RunObservation>()
+                : ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit("false"), Unit("false"))));
+            await RunMonitor.AwaitAsync(run, clock, clock, feed, _ => boundary == 3 ? Fault<int>() : new ValueTask<int>(pending.Task), _ => []);
+            result = await new OwnedCleanup().CompleteAsync(run, clock); pending.SetResult(1);
+        }
+        Assert.Equal(10, result.ExitCode); Assert.Equal(RunReason.ExecutionError, result.Primary.Cause.Reason);
+        Assert.Contains(result.Exceptions, x => x.Type == "System.TimeoutException");
+        Assert.DoesNotContain(result.Events, x => x.Reason is RunReason.MaxDuration or RunReason.PreparationTimeout);
+    }
+    [Theory]
+    [InlineData(RunReason.ActionUnconfirmed)]
+    [InlineData(RunReason.PlannerTimeout)]
+    [InlineData(RunReason.WaitExpired)]
+    public async Task PendingTerminalEvidenceClosesAuthorityBeforeNextEvaluate(RunReason reason)
+    {
+        var clock = new Clock(); var run = Running(clock, success: false);
+        if (reason == RunReason.PlannerTimeout) { var permit = run.RequestPlanner()!; clock.At(1000); permit.CompleteWithoutOperation(); }
+        else
+        {
+            var operation = run.ApproveOperation(reason == RunReason.ActionUnconfirmed ? 1 : 0, TimeSpan.FromSeconds(1))!;
+            if (reason == RunReason.ActionUnconfirmed) operation.BeginDispatch(0); else clock.At(1000);
+            operation.Complete();
+        }
+        Assert.Null(run.Primary); Assert.True(run.ActionsClosing);
+        Assert.Null(run.ApproveOperation(1, TimeSpan.FromSeconds(1))); Assert.Null(run.ApproveOperation(0, TimeSpan.FromSeconds(1)));
+        Assert.Null(run.RequestPlanner()); bool invoked = false;
+        await RunMonitor.AwaitAsync(run, clock, clock, new Feed(() => throw new InvalidOperationException("no capture")),
+            _ => { invoked = true; return ValueTask.FromResult(1); }, _ => []);
+        Assert.False(invoked); Assert.Equal(reason, run.Primary!.Cause.Reason);
+    }
+    [Fact]
+    public void MissingCaptureTimestampCannotConsumePendingTerminalEvidence()
+    {
+        var clock = new Clock(); var run = Running(clock); var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+        operation.BeginDispatch(0); operation.Complete();
+        Assert.Throws<ArgumentException>(() => run.Evaluate(Unit()));
+        Assert.True(run.ActionsClosing); Assert.Equal(RunReason.ActionUnconfirmed, run.Evaluate()!.Cause.Reason);
+    }
+    [Theory]
+    [InlineData("false", "true", 1)]
+    [InlineData("true", "false", 1)]
+    [InlineData("false", "1", 2)]
+    public async Task FinalPostWorkCaptureArbitratesBothBoundariesBeforeGoal(string firstFailure, string finalFailure, int expectedExit)
+    {
+        var clock = new Clock(); var run = Running(clock, failure: true); var work = new TaskCompletionSource<int>(); int captures = 0;
+        var feed = new CallbackCaptureFeed(_ =>
+        {
+            captures++; var unit = new RunObservation(clock.Elapsed, Unit(), Unit(captures == 1 ? firstFailure : finalFailure));
+            if (captures == 1) work.SetResult(1); return ValueTask.FromResult(unit);
+        });
+        var result = await RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => []);
+        Assert.False(result.Completed); Assert.Equal(2, captures); Assert.Equal(expectedExit, run.Primary!.ExitCode);
+        Assert.True(run.GoalVerified); Assert.Contains(run.Events, x => x.Reason == RunReason.GoalSatisfied);
+    }
+    [Theory]
+    [InlineData(false, 3)]
+    [InlineData(true, 4)]
+    public async Task FinalPostWorkCaptureRemainsBoundedAndCannotPassOnStaleGoal(bool cancelled, int expectedExit)
+    {
+        var clock = new Clock(); var run = Running(clock); var work = new TaskCompletionSource<int>();
+        var final = new TaskCompletionSource<RunObservation>(); using var cancel = new CancellationTokenSource(); int captures = 0;
+        var feed = new CallbackCaptureFeed(_ =>
+        {
+            if (++captures != 1) return new(final.Task);
+            var unit = new RunObservation(clock.Elapsed, Unit(), Unit("false")); work.SetResult(1); return ValueTask.FromResult(unit);
+        });
+        var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => [], cancel.Token).AsTask();
+        Assert.Equal(2, captures); if (cancelled) cancel.Cancel(); else clock.At(5000);
+        Assert.False((await monitoring).Completed); Assert.Equal(expectedExit, run.Primary!.ExitCode);
+        final.SetResult(new(clock.Elapsed, Unit(), Unit("false")));
+    }
+    [Fact]
+    public async Task FinalCaptureProviderTimeoutOutranksPreviouslyCapturedGoal()
+    {
+        var clock = new Clock(); var run = Running(clock); var work = new TaskCompletionSource<int>(); int captures = 0;
+        var feed = new CallbackCaptureFeed(_ =>
+        {
+            if (++captures != 1) throw new TimeoutException("OperationDeadlineReached");
+            var unit = new RunObservation(clock.Elapsed, Unit(), Unit("false")); work.SetResult(1); return ValueTask.FromResult(unit);
+        });
+        await RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => []);
+        Assert.Equal(2, captures); Assert.Equal(10, run.Primary!.ExitCode); Assert.True(run.GoalVerified);
+        Assert.Contains(run.Exceptions, x => x.Type == "System.TimeoutException");
+    }
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task ExecutorUsesSessionTimebaseDespiteForeignClockEpoch(bool execution)

@@ -65,7 +65,7 @@ public sealed class OwnedCleanup
             {
                 issues.Add(new(PostProcessingReason.Cancelled)); issues.Add(new(Failure(step.Stage)));
             }
-            catch (TimeoutException)
+            catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception))
             {
                 issues.Add(new(PostProcessingReason.CleanupTimeout)); issues.Add(new(Failure(step.Stage)));
             }
@@ -97,6 +97,14 @@ internal sealed class ProviderCancellationException(OperationCanceledException o
 
 public static class FiniteOperation
 {
+    private static readonly object deadlineProvenance = new();
+    internal static TimeoutException DeadlineReached(string code)
+    {
+        var exception = new TimeoutException(code);
+        exception.Data[deadlineProvenance] = true;
+        return exception;
+    }
+    internal static bool IsDeadline(Exception exception) => exception is TimeoutException && exception.Data.Contains(deadlineProvenance);
     public static ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default)
     {
@@ -109,7 +117,7 @@ public static class FiniteOperation
     {
         cancellationToken.ThrowIfCancellationRequested();
         var startDeadline = deadline;
-        if (realClock.Elapsed >= startDeadline) throw new TimeoutException("OperationDeadlineReached");
+        if (realClock.Elapsed >= startDeadline) throw DeadlineReached("OperationDeadlineReached");
         using var operationCancellation = new CancellationTokenSource();
         using var timerCancellation = new CancellationTokenSource();
         Task<T>? operation = null;
@@ -125,7 +133,7 @@ public static class FiniteOperation
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
             var remaining = startDeadline - realClock.Elapsed;
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
-            if (remaining <= TimeSpan.Zero) throw new TimeoutException("OperationDeadlineReached");
+            if (remaining <= TimeSpan.Zero) throw DeadlineReached("OperationDeadlineReached");
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
             var winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
@@ -133,7 +141,7 @@ public static class FiniteOperation
             if (winner == timer) await timer.ConfigureAwait(false);
             var expired = winner == timer || realClock.Elapsed >= startDeadline;
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
-            if (expired) throw new TimeoutException("OperationDeadlineReached");
+            if (expired) throw DeadlineReached("OperationDeadlineReached");
             return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
         }
         finally

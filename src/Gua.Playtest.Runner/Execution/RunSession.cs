@@ -9,6 +9,7 @@ namespace Gua.Playtest.Runner.Execution;
 /// Evaluate receives a complete same-cycle event set and reads real time once.</summary>
 public sealed class RunSession
 {
+    private sealed record CapturedUnit(ConditionObservationUnit? Success, TimeSpan At, ConditionObservationUnit? Failure);
     private readonly IClock realClock, conditionClock;
     private readonly PreparedCondition? success, failure;
     private readonly CompletionPolicy policy;
@@ -34,7 +35,8 @@ public sealed class RunSession
         operations.Where(x => x.IsOpen).Select(x => x.NextDeadline).Append(RunningOrigin!.Value + Limits.MaxDuration).Min();
     public IReadOnlyList<RunEvent> Events => events.AsReadOnly();
     public IReadOnlyList<ExceptionEvidence> Exceptions => exceptions.AsReadOnly();
-    public bool ActionsClosing => State != ExecutionState.Running || approvalsClosing || Budget.Exhaustion.HasValue;
+    internal bool HasPendingTerminalEvidence => pendingEvents.Count != 0;
+    public bool ActionsClosing => State != ExecutionState.Running || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     public RunSession(RunLimits limits, IClock realClock, IClock conditionClock,
         PreparedCondition? success = null, PreparedCondition? failure = null,
         CompletionPolicy policy = CompletionPolicy.OnGoal)
@@ -69,7 +71,7 @@ public sealed class RunSession
         Require(ExecutionState.Preparing);
         if (startCaptureArmed) throw new InvalidOperationException("RunningBoundaryCertificateRequired");
         if (ReadReal() - preparationOrigin >= Limits.PreparationTimeout)
-            throw new TimeoutException("PreparationDeadlineReached");
+            throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         var sharedConditionOrigin = ReadCondition();
         successSession = success?.Start(conditionClock, sharedConditionOrigin);
         failureSession = failure?.Start(conditionClock, sharedConditionOrigin);
@@ -80,7 +82,7 @@ public sealed class RunSession
         Require(ExecutionState.Preparing);
         if (startCaptureArmed) throw new InvalidOperationException("RunningBoundaryAlreadyArmed");
         var real = ReadReal();
-        if (real - preparationOrigin >= Limits.PreparationTimeout) throw new TimeoutException("PreparationDeadlineReached");
+        if (real - preparationOrigin >= Limits.PreparationTimeout) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         var condition = ReadCondition();
         startCaptureArmed = true;
         return new(this, real, condition);
@@ -89,7 +91,7 @@ public sealed class RunSession
     {
         var now = ReadReal();
         var conditionNow = ReadCondition();
-        if (now - preparationOrigin >= Limits.PreparationTimeout) throw new TimeoutException("PreparationDeadlineReached");
+        if (now - preparationOrigin >= Limits.PreparationTimeout) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         if (real < preparationOrigin || real > now || condition < TimeSpan.Zero || condition > conditionNow ||
             real - preparationOrigin >= Limits.PreparationTimeout)
             throw new InvalidOperationException("RunningBoundaryTimeInvalid");
@@ -157,7 +159,7 @@ public sealed class RunSession
         if (operations.Count != 0) return null;
         if (window <= TimeSpan.Zero || window > Limits.WaitTimeout || count < 0) throw new ArgumentOutOfRangeException(nameof(window));
         var now = ReadReal();
-        if (now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
+        if (HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
             (!finalPlannerPermit && ActionsClosing)) return null;
         var reservation = count == 0 ? null : Budget.Reserve(count);
         if (count > 0 && reservation is null) return null;
@@ -227,6 +229,25 @@ public sealed class RunSession
         ConditionObservationUnit? failureUnit = null)
     {
         if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+        CapturedUnit[] units = unit is not null || failureUnit is not null
+            ? [new(unit, capturedAt ?? throw new ArgumentException("CaptureTimeRequired", nameof(capturedAt)), failureUnit)] : [];
+        return EvaluateCore(units, candidates, cancelled, executionComplete);
+    }
+    internal PrimaryResult? EvaluateCapturedUnits(IReadOnlyList<RunObservation?> observations, IEnumerable<RunEvent> candidates, bool cancelled)
+    {
+        var units = new List<CapturedUnit>(); var invalid = new List<RunEvent>();
+        foreach (var observation in observations)
+        {
+            if (observation is null || observation.Success is null || observation.Failure is null)
+                invalid.Add(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract));
+            else units.Add(new(observation.Success, observation.CapturedAt, observation.Failure));
+        }
+        return EvaluateCore(units, candidates.Concat(invalid), cancelled, false);
+    }
+    private PrimaryResult? EvaluateCore(IReadOnlyList<CapturedUnit> units, IEnumerable<RunEvent>? candidates,
+        bool cancelled, bool executionComplete)
+    {
+        if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
         var cycle = candidates?.Take(Limits.MaxEvidenceItems + 1).ToList() ?? [];
         // Caller argument rejection must not consume already-authoritative operation evidence.
         if (cycle.Any(x => !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) || !Enum.IsDefined(x.Origin)))
@@ -250,14 +271,13 @@ public sealed class RunSession
             cycle.Add(new(RunReason.PreparationTimeout, RunPhase.Preparation, RunOrigin.Clock));
         if (State == ExecutionState.Running)
         {
-            if (unit is not null || failureUnit is not null)
+            foreach (var captured in units)
             {
-                if (capturedAt is null) throw new ArgumentException("CaptureTimeRequired", nameof(capturedAt));
                 // Mandatory failure evaluation even if success has latched or the plan is not yet complete.
                 // Paths are local to each prepared tree. Missing failure evidence is Unknown, never the success tree's reads.
                 ConditionEvaluation? EvaluateCondition(ConditionSession? session, ConditionObservationUnit? evidence)
                 {
-                    try { return session?.EvaluateAt(evidence ?? new ConditionObservationUnit([]), capturedAt.Value); }
+                    try { return session?.EvaluateAt(evidence ?? new ConditionObservationUnit([]), captured.At); }
                     catch (InvalidOperationException exception)
                     {
                         RecordException(exception);
@@ -265,8 +285,8 @@ public sealed class RunSession
                         return null;
                     }
                 }
-                var failed = EvaluateCondition(failureSession, failureUnit);
-                var passed = EvaluateCondition(successSession, unit);
+                var failed = EvaluateCondition(failureSession, captured.Failure);
+                var passed = EvaluateCondition(successSession, captured.Success);
                 var wakes = new[] { failed?.NextEvaluationAt, passed?.NextEvaluationAt }.Where(x => x.HasValue).ToArray();
                 nextConditionEvaluationAt = wakes.Length == 0 ? null : wakes.Min();
                 AddError(failed); AddError(passed);

@@ -55,7 +55,7 @@ public static class RunExecutor
                 // A certified initial failure outranks cancellation; no driver starts after cancellation.
                 preparation = preparationTask.GetAwaiter().GetResult();
             }
-            catch (TimeoutException) when (preparationTask?.IsCompletedSuccessfully == true)
+            catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception) && preparationTask?.IsCompletedSuccessfully == true)
             {
                 var completed = mapPreparation(preparationTask.GetAwaiter().GetResult());
                 completedBoundary = completed.Boundary;
@@ -93,11 +93,11 @@ public static class RunExecutor
             var reason = exception switch
             {
                 OperationCanceledException cancelled when cancellationToken.IsCancellationRequested && cancelled.CancellationToken == cancellationToken => RunReason.Cancelled,
-                TimeoutException when phase == RunPhase.Preparation => RunReason.PreparationTimeout,
-                TimeoutException => RunReason.MaxDuration,
+                TimeoutException when FiniteOperation.IsDeadline(exception) && phase == RunPhase.Preparation => RunReason.PreparationTimeout,
+                TimeoutException when FiniteOperation.IsDeadline(exception) => RunReason.MaxDuration,
                 _ => RunReason.ExecutionError
             };
-            var retained = exception is TimeoutException && phase == RunPhase.Preparation && completedBoundary is not null
+            var retained = FiniteOperation.IsDeadline(exception) && phase == RunPhase.Preparation && completedBoundary is not null
                 ? run.InterruptedBoundaryFailureEvents(completedBoundary) : completedPreparationEvents;
             bool? completedExecution = phase == RunPhase.Execution && executionTask?.IsCompletedSuccessfully == true
                 ? executionTask.GetAwaiter().GetResult() : null;
