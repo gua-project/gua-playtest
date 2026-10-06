@@ -19,9 +19,10 @@ public sealed class RunStartCapture
         ArgumentNullException.ThrowIfNull(initialObservation.Success);
         ArgumentNullException.ThrowIfNull(initialObservation.Failure);
         if (certified || owner.State != ExecutionState.Preparing || captureRequestId != RequestId ||
-            !preconditionsSatisfied || string.IsNullOrWhiteSpace(synchronizationEvidence) || synchronizationEvidence.Length > 256 ||
-            capturedRealAt < readyReal || initialObservation.CapturedAt < readyCondition)
+            !preconditionsSatisfied || string.IsNullOrWhiteSpace(synchronizationEvidence) || synchronizationEvidence.Length > 256)
             throw new InvalidOperationException("RunningBoundaryUncertified");
+        if (capturedRealAt < readyReal || initialObservation.CapturedAt < readyCondition)
+            owner.RejectStartObservation("RunningBoundaryUncertified");
         owner.ValidateStartTimes(capturedRealAt, initialObservation.CapturedAt);
         certified = true;
         return new(owner, capturedRealAt, initialObservation, synchronizationEvidence);

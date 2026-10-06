@@ -9,6 +9,72 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    private sealed class SerializedCaptureFeed(bool ignoreCancellation, bool failure) : IRunObservationFeed
+    {
+        public int Captures; public bool Ended;
+        public TaskCompletionSource<RunObservation> First { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Joined { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
+        {
+            if (++Captures == 1) return new(InitialAsync(token));
+            if (!Ended) throw new InvalidOperationException("OverlappingSourceCapture");
+            return ValueTask.FromResult(new RunObservation(TimeSpan.Zero, Unit(), Unit(failure ? "true" : "false")));
+        }
+        private async Task<RunObservation> InitialAsync(CancellationToken token)
+        {
+            using var registration = token.Register(() => Cancelled.TrySetResult());
+            try { return ignoreCancellation ? await First.Task : await First.Task.WaitAsync(token); }
+            finally { Ended = true; Joined.TrySetResult(); }
+        }
+        public ValueTask WaitForChangeAsync(CancellationToken token) => throw new InvalidOperationException("unexpected wait");
+    }
+    [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task SerializedSupersededCaptureEndsBeforeFreshPostWorkCapture(bool ignoreCancellation, bool failure)
+    {
+        var clock = new Clock(); var run = Running(clock, failure: true); var feed = new SerializedCaptureFeed(ignoreCancellation, failure);
+        var work = new TaskCompletionSource<int>();
+        var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => []).AsTask();
+        work.SetResult(1); await feed.Cancelled.Task;
+        if (ignoreCancellation)
+        {
+            Assert.Equal(1, feed.Captures); Assert.False(monitoring.IsCompleted);
+            feed.First.SetResult(new(TimeSpan.Zero, Unit("false"), Unit("false")));
+        }
+        await monitoring.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(feed.Ended); Assert.Equal(2, feed.Captures); Assert.True(run.GoalVerified);
+        Assert.Equal(failure ? RunReason.FailureCondition : RunReason.GoalSatisfied, run.Primary!.Cause.Reason);
+        Assert.DoesNotContain(run.Events, x => x.Reason == RunReason.ExecutionError);
+    }
+    [Fact]
+    public async Task NeverEndingSerializedCaptureStopsAtExistingDeadlineWithoutOverlap()
+    {
+        var clock = new Clock(); var run = Running(clock); var feed = new SerializedCaptureFeed(true, false);
+        var work = new TaskCompletionSource<int>();
+        var monitoring = RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => []).AsTask();
+        work.SetResult(1); await feed.Cancelled.Task; clock.At(5000);
+        await monitoring.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, feed.Captures); Assert.False(feed.Ended); Assert.Equal(RunReason.MaxDuration, run.Primary!.Cause.Reason);
+        var primary = run.Primary; feed.First.SetResult(new(TimeSpan.Zero, Unit(), Unit())); await feed.Joined.Task;
+        Assert.Same(primary, run.Primary); Assert.False(run.GoalVerified);
+    }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
+    public async Task RejectedStartupTimestampRetainsObservationContractCauseAndRelease(int kind)
+    {
+        var real = new Clock(); var condition = new Clock(); var run = new RunSession(Limits(), real, condition, Condition());
+        bool released = false, executed = false;
+        var outcome = await RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (session, owned, _) =>
+        {
+            owned.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+            real.At(100); condition.At(100); var request = session.ArmRunningBoundary();
+            var realAt = TimeSpan.FromMilliseconds(kind == 0 ? 50 : kind == 2 ? 101 : 100);
+            var conditionAt = TimeSpan.FromMilliseconds(kind == 1 ? 50 : kind == 3 ? 101 : 100);
+            return ValueTask.FromResult(request.Certify(request.RequestId, realAt, new(conditionAt, Unit(), Unit("false")), "fresh/source", true));
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); });
+        Assert.True(released); Assert.False(executed); Assert.False(run.GoalVerified);
+        Assert.Equal(new RunEvent(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract), outcome.Primary.Cause);
+        Assert.Equal(2, outcome.ExitCode); Assert.Contains(outcome.Exceptions, x => x.Type == "System.InvalidOperationException");
+    }
     private sealed class CountingClockFeed(Func<TimeSpan> current, bool hold) : IRunObservationFeed
     {
         public int Captures;

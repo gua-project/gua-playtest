@@ -705,7 +705,7 @@ public sealed partial class RunTests
         Assert.Contains(outcome.Events, x => x.Reason == RunReason.Cancelled);
         if (interruption == 2) Assert.Contains(outcome.Exceptions, x => x.Type == "System.Threading.Tasks.TaskCanceledException");
     }
-    private sealed class CallbackCaptureFeed(Func<CancellationToken, ValueTask<RunObservation>> capture) : IRunObservationFeed
+    private sealed class CallbackCaptureFeed(Func<CancellationToken, ValueTask<RunObservation>> capture) : IIndependentRunObservationFeed
     {
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => capture(token);
         public ValueTask WaitForChangeAsync(CancellationToken token) => throw new InvalidOperationException("unexpected wait");

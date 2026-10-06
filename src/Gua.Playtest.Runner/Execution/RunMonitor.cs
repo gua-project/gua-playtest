@@ -15,6 +15,10 @@ public interface IRunObservationFeed
     ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken);
     ValueTask WaitForChangeAsync(CancellationToken cancellationToken);
 }
+/// <summary>Trusted adapter capability: replacement captures have independent request scopes,
+/// never queue behind the obsolete call, and synchronize fresh source state through invocation.
+/// Do not implement this for a serialized source or infer it from polling delivery timestamps.</summary>
+public interface IIndependentRunObservationFeed : IRunObservationFeed { }
 public sealed record MonitoredResult<T>(bool Completed, T? Value);
 
 /// <summary>Single-owner notification/timer/real-deadline coordinator during a Planner/action/wait.
@@ -103,6 +107,7 @@ public static class RunMonitor
                 }
                 RunObservation? observation;
                 Task<RunObservation>? captureTask = null;
+                CancellationToken sourceCaptureToken = default;
                 bool supersededCapture = false;
                 void EvaluateInterruptedCapture(IReadOnlyList<RunEvent> readyEvents, bool cancelled)
                 {
@@ -116,7 +121,7 @@ public static class RunMonitor
                 try
                 {
                     var capturing = FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
-                        token => { captureTask = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(captureTask); },
+                        token => { sourceCaptureToken = token; captureTask = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(captureTask); },
                         captureCancellation.Token, run.RecordException).AsTask();
                     if (await Task.WhenAny(capturing, workTask).ConfigureAwait(false) == workTask && !capturing.IsCompleted)
                     {
@@ -152,6 +157,18 @@ public static class RunMonitor
                     var finalEvents = result.Events.ToList(); Task<RunObservation>? finalCapture = null;
                     try
                     {
+                        if (supersededCapture && captureTask is not null && feed is not IIndependentRunObservationFeed)
+                        {
+                            try
+                            {
+                                var ended = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
+                                    _ => new ValueTask<RunObservation>(captureTask), cancellationToken, run.RecordException).ConfigureAwait(false);
+                                if (observation is null) observations.Add(ended);
+                            }
+                            catch (ProviderCancellationException exception) when (exception.InnerException is OperationCanceledException cancelled &&
+                                sourceCaptureToken.IsCancellationRequested && cancelled.CancellationToken == sourceCaptureToken)
+                            { /* underlying call ended under its requested supersession cancellation */ }
+                        }
                         var final = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt, token =>
                         { finalCapture = feed.CaptureAsync(token).AsTask(); return new ValueTask<RunObservation>(finalCapture); }, cancellationToken, run.RecordException).ConfigureAwait(false);
                         observations.Add(final);

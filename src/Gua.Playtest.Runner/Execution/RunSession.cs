@@ -142,7 +142,13 @@ public sealed class RunSession
         if (now - preparationOrigin >= Limits.PreparationTimeout) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         if (real < preparationOrigin || real > now || condition < TimeSpan.Zero || condition > conditionNow ||
             real - preparationOrigin >= Limits.PreparationTimeout)
-            throw new InvalidOperationException("RunningBoundaryTimeInvalid");
+            RejectStartObservation("RunningBoundaryTimeInvalid");
+    }
+    internal void RejectStartObservation(string code)
+    {
+        var cause = new RunEvent(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract);
+        if (!pendingEvents.Contains(cause)) pendingEvents.Add(cause);
+        throw new InvalidOperationException(code);
     }
     public void BeginRunning(RunStartBoundary boundary)
     {
