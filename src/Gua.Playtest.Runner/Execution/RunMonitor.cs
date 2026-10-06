@@ -24,6 +24,11 @@ public static class RunMonitor
         Func<T, IReadOnlyList<RunEvent>> resultEvents, CancellationToken cancellationToken = default)
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
+        if (cancellationToken.IsCancellationRequested)
+        {
+            run.Evaluate(cancelled: true);
+            return new(false, default);
+        }
         var cancellationFaults = new ConcurrentQueue<Exception>();
         var cancellationFaultCount = 0;
         void QueueCancellationFault(Exception exception)
@@ -45,21 +50,29 @@ public static class RunMonitor
         using var workCancellation = new CancellationTokenSource();
         using var workRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(workCancellation, QueueCancellationFault));
         Task<T>? workTask = null;
+        (bool Completed, T? Value, IReadOnlyList<RunEvent> Events)? readyResult = null;
         async ValueTask<(bool Completed, T? Value, IReadOnlyList<RunEvent> Events)> ReadyWork()
         {
             DrainCancellationFaults();
+            if (readyResult is { } cached) return cached;
             if (workTask is null || !workTask.IsCompleted) return (false, default, []);
             try
             {
                 var value = await workTask.ConfigureAwait(false);
-                return (true, value, resultEvents(value));
+                var mapped = resultEvents(value)?.Take(run.Limits.MaxEvidenceItems + 1).ToArray()
+                    ?? throw new ArgumentException("RunWorkEventsInvalid");
+                if (mapped.Any(x => x is null || !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) ||
+                    !Enum.IsDefined(x.Origin) || x.Reason == RunReason.GoalSatisfied))
+                    throw new ArgumentException("RunWorkEventsInvalid");
+                readyResult = (true, value, mapped);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return (true, default, []); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { readyResult = (true, default, []); }
             catch (Exception exception)
             {
                 run.RecordException(exception);
-                return (true, default, [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
+                readyResult = (true, default, [exception is RunFailureException failure ? failure.Cause : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)]);
             }
+            return readyResult.Value;
         }
         try
         {

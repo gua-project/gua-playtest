@@ -9,6 +9,49 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData(RunReason.Cancelled, false, RunReason.ActionUnconfirmed)]
+    [InlineData(RunReason.Cancelled, true, RunReason.ActionUnconfirmed)]
+    [InlineData(RunReason.InvalidContract, false, RunReason.InvalidContract)]
+    [InlineData(RunReason.InvalidContract, true, RunReason.InvalidContract)]
+    [InlineData(RunReason.ActionFailed, false, RunReason.ActionFailed)]
+    [InlineData(RunReason.ActionFailed, true, RunReason.ActionFailed)]
+    public void ClosingUnitArbitratesAbandonedSentOrUncertainActions(RunReason terminal, bool sent, RunReason expected)
+    {
+        var clock = new Clock(); var run = Running(clock); var operation = run.ApproveOperation(2, TimeSpan.FromSeconds(1))!;
+        operation.BeginDispatch(0); if (sent) operation.Actions!.ConfirmSent(0);
+        var result = run.Evaluate(Unit(), clock.Elapsed, terminal == RunReason.Cancelled ? [] : [Event(terminal)],
+            cancelled: terminal == RunReason.Cancelled);
+        Assert.Equal(expected, result!.Cause.Reason); Assert.True(run.GoalVerified); Assert.False(operation.IsOpen);
+        Assert.Single(run.Events, x => x.Reason == RunReason.ActionUnconfirmed);
+        Assert.Equal(new[] { sent ? DeliveryState.Sent : DeliveryState.Uncertain, DeliveryState.NotSent }, operation.Actions!.Deliveries);
+        Assert.False(operation.ConfirmResult()); Assert.Throws<InvalidOperationException>(() => operation.BeginDispatch(1));
+    }
+    [Fact]
+    public async Task PreCancelledMonitorCannotInvokeWorkOrTransport()
+    {
+        var clock = new Clock(); var run = Running(clock); var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+        using var cancel = new CancellationTokenSource(); cancel.Cancel(); var invoked = false;
+        var result = await RunMonitor.AwaitAsync(run, clock, clock, new Feed(() => throw new InvalidOperationException("capture")), _ =>
+        { invoked = true; operation.BeginDispatch(0); return ValueTask.FromResult(1); }, _ => [], cancel.Token);
+        Assert.False(invoked); Assert.False(result.Completed); Assert.Equal(RunReason.Cancelled, run.Primary!.Cause.Reason);
+        Assert.Equal(ExecutionState.Completing, run.State); Assert.Equal(0, run.Budget.Snapshot.Actions);
+        Assert.Equal(DeliveryState.NotSent, operation.Actions!.Deliveries.Single());
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task RejectedWorkEventProjectionFailsClosedAndIsNotRetried(int invalid)
+    {
+        var clock = new Clock(); var run = Running(clock); var projections = 0;
+        var result = await RunMonitor.AwaitAsync(run, clock, clock, new Feed(() => new(TimeSpan.Zero, Unit(), Unit())),
+            _ => ValueTask.FromResult(1), _ =>
+            { projections++; return invalid == 2 ? null! : [Event(invalid == 0 ? RunReason.GoalSatisfied : (RunReason)int.MaxValue)]; });
+        Assert.False(result.Completed); Assert.Equal(1, projections); Assert.Equal(RunReason.ExecutionError, run.Primary!.Cause.Reason);
+        Assert.Equal(10, run.Primary.ExitCode); Assert.Equal(ExecutionState.Completing, run.State);
+        Assert.Single(run.Exceptions, x => x.Type == "System.ArgumentException");
+    }
     [Fact]
     public void CertifiedStartCannotOutliveCurrentPreparationDeadline()
     {

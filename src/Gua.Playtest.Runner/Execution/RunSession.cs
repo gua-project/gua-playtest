@@ -245,17 +245,21 @@ public sealed class RunSession
             if (now >= RunningOrigin!.Value + Limits.MaxDuration) cycle.Add(new(RunReason.MaxDuration, Phase, RunOrigin.Clock));
             foreach (var operation in operations.Where(x => x.IsOpen && now >= x.NextDeadline))
             {
-                cycle.Add(new(operation.IsPlanner ? RunReason.PlannerTimeout :
-                    !operation.ResultConfirmed && operation.Actions?.Deliveries.Any(x => x is DeliveryState.Sent or DeliveryState.Uncertain) == true
-                    ? RunReason.ActionUnconfirmed : RunReason.WaitExpired, Phase, operation.IsPlanner ? RunOrigin.Planner : RunOrigin.Host));
                 operation.CompleteAt(now);
             }
+            cycle.AddRange(pendingEvents); pendingEvents.Clear();
             var pending = operations.Any(x => x.IsOpen);
             if ((closingExhaustion ?? Budget.Exhaustion) is { } exhausted && !pending) cycle.Add(new(exhausted, Phase, RunOrigin.Budget));
             if (executionComplete && !pending && !goalVerified)
                 cycle.Add(new(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, Phase, RunOrigin.Runner));
             if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete) && !pending)
                 cycle.Add(new(RunReason.GoalSatisfied, Phase, RunOrigin.Condition));
+        }
+        if (cycle.Count != 0 && State == ExecutionState.Running)
+        {
+            // A terminal unit abandons outstanding results. Include that uncertainty before choosing/fixing primary.
+            foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
+            cycle.AddRange(pendingEvents); pendingEvents.Clear();
         }
         // Budget exhaustion is terminal only after the final approved result/observation opportunity.
         // A verified success in that final unit wins over mere exhaustion; errors/cancel/deadline still win.
