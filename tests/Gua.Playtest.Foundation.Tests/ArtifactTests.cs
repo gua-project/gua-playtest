@@ -417,6 +417,22 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
     }
     [Fact]
+    public async Task Directory_identity_case_lookup_preserves_long_Windows_output_paths()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var longRoot = Path.Combine(root, new string('a', 100), new string('b', 100), new string('c', 100));
+        RunArtifactStore? store = null;
+        for (var attempt = 0; attempt < 16; attempt++)
+        {
+            var candidate = RunArtifactStore.Create(longRoot, Limits, new([Secret], []));
+            if (candidate.RunId != candidate.RunId.ToUpperInvariant()) { store = candidate; break; }
+        }
+        Assert.NotNull(store); Assert.True(store.DirectoryPath.Length > 260);
+        Confirm(store); Assert.True(store.Complete(Outcome(), Omitted, [], DateTimeOffset.UtcNow).Saved);
+        var alternate = Path.Combine(longRoot, store.RunId.ToUpperInvariant());
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(alternate, Limits)).State);
+    }
+    [Fact]
     public void Oversized_receipt_names_fail_before_proportional_split_allocations()
     {
         foreach (var name in new[] { new string('x', 100000), new string('/', 100000), "a/a/a/a/a/a/a/a/a", "trace.gua" })

@@ -36,7 +36,10 @@ internal readonly record struct FileIdentity(ulong Device, ulong Low, ulong High
         {
             // Metadata-only OPEN_EXISTING, no privilege changes. Backup semantics opens directories;
             // OPEN_REPARSE_POINT plus handle attributes reject final-component links.
-            using var handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
+            var absolute = Path.GetFullPath(path);
+            var nativePath = absolute.StartsWith(@"\\?\", StringComparison.Ordinal) ? absolute :
+                absolute.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\UNC\" + absolute[2..] : @"\\?\" + absolute;
+            using var handle = CreateFileW(nativePath, 0, 7, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
             if (handle.IsInvalid) throw new IOException("DirectoryIdentityUnavailable");
             return Read(handle, directory: true);
         }
