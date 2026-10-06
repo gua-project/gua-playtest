@@ -952,7 +952,7 @@ public sealed class PreparationTests
     [Fact]
     public async Task WholePreparationDeadlineCannotOmitOwnershipReleaseDuringRetryDelay()
     {
-        var clock = new Clock(); var policy = Policy() with { RetryDelay = TimeSpan.FromSeconds(2) };
+        var clock = new Clock(); var policy = Policy() with { RetryDelay = TimeSpan.FromSeconds(3) };
         var first = new Connector(new()) { NotReadyCount = 1 }; var trace = new Trace();
         var retryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         clock.OnDelay = duration => { if (duration == policy.RetryDelay) retryStarted.TrySetResult(); };
