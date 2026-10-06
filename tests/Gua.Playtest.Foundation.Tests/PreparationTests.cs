@@ -338,9 +338,9 @@ public sealed class PreparationTests
             .PrepareAsync(run, cleanup, null, null);
         run.BeginRunning(host.Boundary); launcher.Process.HasExited = true;
         await Assert.ThrowsAsync<PreparationException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask());
-        Assert.Contains(new(PreparationStage.Launch, PreparationCode.ProcessExited), trace.Events);
         run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host)]);
         await cleanup.CompleteAsync(run, clock);
+        Assert.Contains(new(PreparationStage.Launch, PreparationCode.ProcessExited), trace.Events);
         Assert.Equal(1, launcher.Process.Shutdowns);
     }
     [Fact]
