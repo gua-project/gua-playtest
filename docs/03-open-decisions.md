@@ -48,7 +48,7 @@ visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、
 
 ## OPEN-05 条件評価の完全な状態表
 
-P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](assertions.md) で確定。時間/quantifier/Pending/Expired/終端伝播の状態表はP-04/P-05の未完了範囲として維持する。
+P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](assertions.md) で確定。P-04のquantifier、任意ネスト、within/for、観測連続性、Pending/Satisfied/Expiredとgroupへのローカル期限伝播は [conditions.md](conditions.md) で確定。独立した完全時間状態表は `tests/fixtures/playtest/condition-state-table.json`、三値・対象数・期限境界の固定期待値は `ConditionTests` に収録する。
 
 承認済みの三値・通常all・時間成立履歴・within/forを維持しつつ、任意のネスト、Unknown中の期限切れ、対象数変化とforの継続、観測errorとPending/Expired、同時観測境界を真理値表・状態機械へ落とす。
 
@@ -56,7 +56,7 @@ P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](a
 
 **固定する時点:** P-04の公開意味規則とgolden fixture確定前。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** 条件境界の意味規則と受け入れデータを確定。観測errorも真偽と時間状態を分離し、holdをリセットして期限・timerを進める。Running/waitの同時観測起点は明示capture timestampで共有する。P-05のRun終端優先順位・全体期限/予算、P-07/P-10の実Observe連続性・profile/操作抑止、P-15の実fixture統合受け入れは後続の未完了範囲として維持する。条件仕様の確定はこれらの実統合完了を意味しない。
 
 ## OPEN-06 終端述語・理由コード・予算最終操作
 
