@@ -86,7 +86,10 @@ public static class RunMonitor
                     if (winner != workTask) await winner.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                { run.Evaluate(cancelled: true); }
+                {
+                    var ready = await ReadyWork().ConfigureAwait(false);
+                    run.Evaluate(candidates: ready.Events, cancelled: true);
+                }
                 finally
                 {
                     wakeCancellation.Cancel();
