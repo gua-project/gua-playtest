@@ -2,7 +2,7 @@ namespace Gua.Playtest.Core.Assertions;
 
 public enum TruthValue { False, True, Unknown }
 public enum EvaluationError { None, InvalidConfiguration, ObservationContractViolation }
-public enum EvaluationCode { None, Unavailable, Missing, GetterError, Stale, Gap, Truncated, RegexTimeout, InvalidObservation, TypeMismatch, EnumCatalogChanged }
+public enum EvaluationCode { None, Unavailable, Missing, GetterError, Stale, Gap, Truncated, RegexTimeout, InvalidObservation, TypeMismatch, EnumCatalogChanged, TargetAmbiguous }
 
 /// <summary>Truth never carries a game Value. Errors cannot establish success or failure.</summary>
 public readonly record struct EvaluationResult
@@ -22,7 +22,12 @@ public readonly record struct EvaluationResult
         return new(TruthValue.Unknown, EvaluationError.None, code);
     }
     public static EvaluationResult InvalidConfiguration() => new(TruthValue.Unknown, EvaluationError.InvalidConfiguration, EvaluationCode.None);
-    internal static EvaluationResult Violation(EvaluationCode code) => new(TruthValue.Unknown, EvaluationError.ObservationContractViolation, code);
+    public static EvaluationResult Violation(EvaluationCode code)
+    {
+        if (code is not (EvaluationCode.InvalidObservation or EvaluationCode.TypeMismatch or EvaluationCode.EnumCatalogChanged or EvaluationCode.TargetAmbiguous))
+            throw new ArgumentOutOfRangeException(nameof(code));
+        return new(TruthValue.Unknown, EvaluationError.ObservationContractViolation, code);
+    }
 }
 
 /// <summary>Pure ordinary groups, with no temporal history or selector quantification.</summary>

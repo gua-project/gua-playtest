@@ -1,0 +1,22 @@
+{
+  "version": "issue-5-open-05-fixed-expectations",
+  "legend": {"O":"ordinary currently True", "P":"for Pending currently gated False", "S":"temporal Satisfied retained True", "E":"within Expired locally impossible False"},
+  "cases": [
+    {"left":"O","right":"O","allTruth":"True","allState":"Open","anyTruth":"True","anyState":"Open"},
+    {"left":"O","right":"P","allTruth":"False","allState":"Open","anyTruth":"True","anyState":"Open"},
+    {"left":"O","right":"S","allTruth":"True","allState":"Open","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"O","right":"E","allTruth":"False","allState":"Expired","anyTruth":"True","anyState":"Open"},
+    {"left":"P","right":"O","allTruth":"False","allState":"Open","anyTruth":"True","anyState":"Open"},
+    {"left":"P","right":"P","allTruth":"False","allState":"Pending","anyTruth":"False","anyState":"Pending"},
+    {"left":"P","right":"S","allTruth":"False","allState":"Pending","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"P","right":"E","allTruth":"False","allState":"Expired","anyTruth":"False","anyState":"Pending"},
+    {"left":"S","right":"O","allTruth":"True","allState":"Open","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"S","right":"P","allTruth":"False","allState":"Pending","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"S","right":"S","allTruth":"True","allState":"Satisfied","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"S","right":"E","allTruth":"False","allState":"Expired","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"E","right":"O","allTruth":"False","allState":"Expired","anyTruth":"True","anyState":"Open"},
+    {"left":"E","right":"P","allTruth":"False","allState":"Expired","anyTruth":"False","anyState":"Pending"},
+    {"left":"E","right":"S","allTruth":"False","allState":"Expired","anyTruth":"True","anyState":"Satisfied"},
+    {"left":"E","right":"E","allTruth":"False","allState":"Expired","anyTruth":"False","anyState":"Expired"}
+  ]
+}
