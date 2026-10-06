@@ -72,6 +72,11 @@ metadata. Permission/cancellation refusal before native enqueue stays NotSent.
 Native tests include inexact and exact exponent/decimal values, >UInt64 exact
 integers, duplicate query responses, missing completeness, and boundary refusal.
 An actual limited query verifies both truncated and complete native matches.
+Windows real CI twice encountered the existing bounded Trace flush-timeout,
+including unchanged retry, while bridge/contracts passed. CI now runs every
+discovered test project sequentially and retains all assertions/timeouts/TRX,
+continuing through all projects even after a failure. This isolates processes;
+it does not change the Trace package or relax the success criterion.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 
