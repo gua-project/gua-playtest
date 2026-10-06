@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Gua.Core;
 using Gua.Runtime;
 using Gua.Testing;
+using Gua.Playtest.Core.Assertions;
 using Gua.Playtest.GuaIntegration;
 using Xunit;
 
@@ -74,6 +75,13 @@ public sealed class RealBridgeTests
         Assert.Equal("Alive", actual.Value!.Value.GetProperty("value").GetString());
         Assert.NotNull(actual.EnumCatalog); Assert.True(actual.Identity!.OwnerId > 0); Assert.True(actual.Identity.RegistrationId > 0);
         Assert.Equal("enemy-1", actual.Identity.RuntimeId);
+        var approved = EnumCatalogSnapshot.Create(JsonNode.Parse("{\"schemaVersion\":1,\"enums\":[{\"enumType\":\"game.Phase\",\"members\":[\"Alive\",\"Dead\"]}]}")!.AsObject());
+        var assertion = new JsonObject { ["kind"] = "assertion", ["quantifier"] = "one", ["read"] = read.DeepClone(), ["operator"] = "equals",
+            ["expected"] = new JsonObject { ["type"] = "enum", ["enumType"] = "game.Phase", ["value"] = "Alive" } };
+        var comparison = PreparedAssertion.Create(assertion, new(10, 1000), approved);
+        var observedCatalog = EnumCatalogSnapshot.Create(JsonNode.Parse(actual.EnumCatalog!.Value.GetRawText())!.AsObject());
+        var evaluated = comparison.EvaluateJson(actual.Value.Value.GetRawText(), observedCatalog);
+        Assert.Equal(TruthValue.True, evaluated.Truth); Assert.Equal(EvaluationError.None, evaluated.Error);
     }
 
     [Fact]
@@ -551,5 +559,49 @@ public sealed class RealBridgeTests
         var definition = catalogs[side]!["enums"]![0]!;
         if (fault == "identity") definition["enumType"] = "game.Other";
         else definition["members"] = new JsonArray("Unknown");
+    }
+
+    [Fact]
+    public async Task WorldTreeWithoutRequiredEpochNeverProducesAnAvailableRead()
+    {
+        using var runtime = new GuaRuntime(); World(runtime); int omitted = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (command.GetProperty("type").GetString() != "get_world_object_tree") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var tree = root["result"]!.AsObject();
+            Assert.True(tree.Remove("sessionEpoch")); omitted++;
+            Assert.False(GuaDistribution.ValidateJson("world-object-tree.schema.json", tree.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint); var result = reader.Read(Read("object", "standard", "label", "string", "enemy-1"));
+        Assert.Equal(1, omitted); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
+    }
+
+    [Theory]
+    [InlineData("sourceId")]
+    [InlineData("sessionEpoch")]
+    [InlineData("profile")]
+    public async Task PlayerReadRefusesSchemaValidEventWithForeignIdentity(string field)
+    {
+        using var runtime = new GuaRuntime(); runtime.SetObservationProfile(GuaObservationProfile.Player);
+        using var owner = runtime.CreateObserveOwner(GuaObserveSource.World);
+        int value = 0; using var property = owner.Property("count", () => GuaValue.Integer(value), allowPlayer: true); property.Notify();
+        bool armed = false; int injected = 0;
+        await using var proxy = new BridgeFaultProxy(Start(runtime), (_, _) => false, (command, response) =>
+        {
+            if (!armed || command.GetProperty("type").GetString() != "poll_observations") return null;
+            var root = JsonNode.Parse(response.GetRawText())!.AsObject(); var transport = root["result"]!.AsObject();
+            var change = transport["document"]!["events"]![0]!;
+            if (field == "sourceId") change[field] = "different-host";
+            else if (field == "sessionEpoch") change[field] = change[field]!.GetValue<ulong>() + 1;
+            else change[field] = "debug";
+            injected++; Assert.True(GuaDistribution.ValidateJson("observe-transport-v1.schema.json", transport.ToJsonString()));
+            return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+        });
+        using var reader = Reader(proxy.Endpoint, GuaObservationProfile.Player); var read = Read("world", "property", "count");
+        Assert.Equal(ReadAvailability.Available, reader.Read(read).Availability); value++; property.Notify(); armed = true;
+        var result = reader.Read(read); Assert.Equal(1, injected); Assert.Equal(ReadAvailability.Unavailable, result.Availability);
+        Assert.Null(Assert.Single(result.Reads).Value); Assert.Null(result.Changes);
     }
 }

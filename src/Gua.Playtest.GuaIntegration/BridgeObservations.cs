@@ -129,7 +129,7 @@ public sealed class BridgeObservations : IDisposable
                     var result = context.Query(BridgeSelectors.Ui((JsonObject)read["target"]!["selector"]!));
                     if (!result.Valid) return Failure(ReadAvailability.Unavailable, "target-unavailable");
                     ids.AddRange(result.Matches.Select(m => m.Id));
-                    tree = ParseBounded(context.GetUiTreeJson());
+                    tree = ParseTree(context.GetUiTreeJson(), "ui-tree.schema.json");
                 }
                 else if (source == "object")
                 {
@@ -137,7 +137,7 @@ public sealed class BridgeObservations : IDisposable
                     if (!result.Valid) return Failure(ReadAvailability.Unavailable, "target-unavailable");
                     if (result.Spatial?.Truncated == true) return Failure(ReadAvailability.Truncated, "query-truncated");
                     ids.AddRange(result.Matches.Select(m => m.Id));
-                    tree = ParseBounded(context.GetWorldObjectTreeJson());
+                    tree = ParseTree(context.GetWorldObjectTreeJson(), "world-object-tree.schema.json");
                 }
                 else if (source == "world") ids.Add("");
                 else return Failure(ReadAvailability.Unavailable, "invalid-read");
@@ -245,7 +245,22 @@ public sealed class BridgeObservations : IDisposable
         if (root.GetProperty("document").TryGetProperty("events", out var events) &&
             events.GetArrayLength() != root.GetProperty("catalogs").GetArrayLength())
             throw new InvalidOperationException("Unpaired Observe change catalogs.");
+        if (root.GetProperty("document").TryGetProperty("events", out events))
+        {
+            var document = root.GetProperty("document");
+            foreach (var change in events.EnumerateArray())
+                if (change.GetProperty("sourceId").GetString() != document.GetProperty("sourceId").GetString() ||
+                    change.GetProperty("sessionEpoch").GetUInt64() != document.GetProperty("sessionEpoch").GetUInt64() ||
+                    change.GetProperty("profile").GetString() != ProfileName)
+                    throw new InvalidOperationException("Observe event identity mismatch.");
+        }
         return root;
+    }
+    private JsonElement ParseTree(string json, string schema)
+    {
+        var tree = ParseBounded(json);
+        if (!GuaDistribution.ValidateJson(schema, json)) throw new InvalidOperationException("Invalid published tree.");
+        return tree;
     }
     private JsonElement ParseBounded(string json)
     {

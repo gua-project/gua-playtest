@@ -25,6 +25,16 @@ event/value ceiling checks, and schema-valid interoperability faults applied to
 the actual host responses. No fabricated host execution or successful action
 result is used. The expanded bridge suite passed 44 tests, no skips; final-head CI
 and Codex re-review must validate these later changes.
+
+Merged latest main ab9c7cbb1c9df877b5f37ca8f3c5f3ad1405844a (#4 assertions), with
+both histories retained and no conflicts. Local integration passed bridge44,
+contracts528 and foundation22, skip0; the actual native enum observation now also
+feeds PreparedAssertion.EvaluateJson with the paired catalog. Further real Codex
+findings require pinned UI/world tree validation and bind every event identity
+to its enclosing cursor document/profile. Added actual native response fault
+tests for a world tree missing required epoch and schema-valid foreign event
+source/epoch/Debug profile on a Player bridge. Latest bridge48 passed, skip0,
+and boundaries passed. New final-head real CI and actual review remain mandatory.
 `scripts/check-boundaries.ps1`: passed. Later PR CI supplies final-head evidence;
 these local results are not a substitute for real CI or Codex GitHub review.
 

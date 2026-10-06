@@ -26,7 +26,10 @@ targets must be rejected by the quantifier consumer, never reduced to index 0.
 
 Value and its paired enum catalog are cloned directly from the original wire
 JsonElement. Consumers convert `Value.GetRawText()` / `EnumCatalog.GetRawText()`
-to JsonObject for the #4 comparison API. Do not deserialize Value numbers through
+to the #4 comparison API. Use `PreparedAssertion.EvaluateJson(Value.GetRawText(),
+observedCatalog)` and `EnumCatalogSnapshot.Create` on the paired catalog. The real
+native enum bridge test exercises this connection against the merged #4 API.
+Do not deserialize Value numbers through
 double before the comparator. The adapter refuses dynamic type mismatch and
 keeps getter errors without arbitrary exception text. Standard and named reads
 are separate even when both are called `visible` or `state.checked`.
@@ -45,7 +48,11 @@ is Stale/changed-since-poll and cannot hide an intervening violation. Every
 available enum snapshot and before/after event requires a catalog for its exact
 enumType containing its members. Schema-valid missing/mismatched catalogs are
 Unavailable. Optional UI-tree epoch is compared when present; context and Observe
-epochs remain mandatory. One ReadBatch shares a node/event and serialized-byte
+epochs remain mandatory. UI/world trees are validated against their respective
+pinned schemas, so world-object epoch cannot be omitted. Every polled event's
+sourceId/sessionEpoch/profile must match its document identity, including events
+not ultimately selected for a read; a foreign event invalidates the pass.
+One ReadBatch shares a node/event and serialized-byte
 budget, including repeated selectors, changes and values. Aggregate overflow
 truncates the entire pass, discarding partially collected values/history.
 
