@@ -28,6 +28,7 @@ public sealed class RunSession
     internal IClock AuthoritativeConditionClock => conditionClock;
     internal TimeSpan ReadAuthoritativeReal() => ReadReal();
     internal TimeSpan ReadAuthoritativeCondition() => ReadCondition();
+    internal TimeSpan LastValidatedReal => lastReal;
     public RunBudget Budget { get; }
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
@@ -375,12 +376,14 @@ public sealed class RunSession
 
         void CollectCompletionEvidence()
         {
-            if (operations.Any(x => x.IsOpen)) return;
             void Add(RunReason reason, RunOrigin origin)
             {
                 if (!cycle.Any(x => x.Reason == reason && x.Phase == Phase && x.Origin == origin))
                     cycle.Add(new(reason, Phase, origin));
             }
+            // OnGoal is terminal now: closure below collects abandoned delivery uncertainty.
+            if (goalVerified && policy == CompletionPolicy.OnGoal) Add(RunReason.GoalSatisfied, RunOrigin.Condition);
+            if (operations.Any(x => x.IsOpen)) return;
             foreach (var exhausted in closingExhaustions.Concat(Budget.Exhaustions).Distinct().OrderBy(x => x))
                 Add(exhausted, RunOrigin.Budget);
             if (executionComplete && !goalVerified) Add(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, RunOrigin.Runner);

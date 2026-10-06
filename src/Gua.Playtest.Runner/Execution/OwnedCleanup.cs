@@ -1,6 +1,7 @@
 using Gua.Playtest.Core;
 using Gua.Playtest.Core.Contracts;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace Gua.Playtest.Runner.Execution;
 
@@ -10,6 +11,66 @@ public enum CleanupStage { PrimarySnapshot, Diagnostics, Artifacts, InputRelease
 /// Diagnostics precede release; each resource release gets an attempt even after artifact/cancellation failure.</summary>
 public sealed class OwnedCleanup
 {
+    private sealed class CleanupClock : IClock
+    {
+        private readonly RunSession run;
+        private readonly Action<Exception> reject;
+        private readonly Stopwatch safety = Stopwatch.StartNew();
+        private TimeSpan last, lastSafety;
+        private long fallbackOffset;
+        private bool fallback;
+        private long hardWakeAt;
+        public CleanupClock(RunSession run, Action<Exception> reject)
+        {
+            this.run = run; this.reject = reject;
+            last = run.LastValidatedReal;
+            _ = Elapsed;
+        }
+        public TimeSpan Elapsed
+        {
+            get
+            {
+                if (!fallback)
+                    try
+                    {
+                        var now = run.ReadAuthoritativeReal();
+                        var due = Interlocked.Exchange(ref hardWakeAt, 0);
+                        if (due == 0 || now.Ticks >= due) { lastSafety = safety.Elapsed; return last = now; }
+                        Reject(new InvalidOperationException("CleanupClockDidNotAdvance"));
+                    }
+                    catch (Exception exception) { Reject(exception); }
+                // The independent safety clock began at cleanup entry. A rejected epoch cannot
+                // rebase its duration or move behind the last good cleanup reading.
+                return last = new TimeSpan(Math.Max(last.Ticks, fallbackOffset + safety.Elapsed.Ticks));
+            }
+        }
+        private void Reject(Exception exception)
+        {
+            fallback = true;
+            fallbackOffset = last.Ticks - lastSafety.Ticks;
+            reject(exception);
+        }
+        public async ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            var due = Elapsed + duration;
+            var hardWake = Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(duration.TotalMilliseconds)), token);
+            if (fallback) { await hardWake.ConfigureAwait(false); return; }
+            var providerWake = run.AuthoritativeRealClock.DelayAsync(duration, token).AsTask();
+            try
+            {
+                var winner = await Task.WhenAny(providerWake, hardWake).ConfigureAwait(false);
+                if (providerWake.IsFaulted) await providerWake.ConfigureAwait(false);
+                await winner.ConfigureAwait(false);
+                // The timer never mutates session/issue evidence. The owner validates this hint.
+                if (winner == hardWake && !token.IsCancellationRequested) Interlocked.Exchange(ref hardWakeAt, due.Ticks);
+            }
+            finally
+            {
+                foreach (var task in new[] { providerWake, hardWake })
+                    _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            }
+        }
+    }
     private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action);
     private readonly List<Step> steps = [];
     private readonly object registrationGate = new();
@@ -41,6 +102,8 @@ public sealed class OwnedCleanup
             ordered = [new(CleanupStage.PrimarySnapshot, token => confirmPrimary(snapshot, token)), .. ordered];
         }
         var issues = new List<PostProcessingIssue>();
+        realClock = new CleanupClock(run, exception => issues.Add(new(PostProcessingReason.CleanupClockInvalid,
+            new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
         var origin = realClock.Elapsed;
         var deadline = origin + run.Limits.CleanupTimeout;
         if (cancellationToken.IsCancellationRequested) issues.Add(new(PostProcessingReason.Cancelled));
@@ -83,6 +146,7 @@ public sealed class OwnedCleanup
         }
         if (cancellationToken.IsCancellationRequested && !issues.Any(x => x.Reason == PostProcessingReason.Cancelled))
             issues.Add(new(PostProcessingReason.Cancelled));
+        _ = realClock.Elapsed; // drain any final safety-wake hint on the owner before freezing issues
         return run.Finish(issues.AsReadOnly());
     }
     private static PostProcessingReason Failure(CleanupStage stage) => stage switch

@@ -9,6 +9,76 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)] [InlineData(1, true)]
+    [InlineData(2, false)] [InlineData(2, true)] [InlineData(3, false)] [InlineData(3, true)]
+    [InlineData(4, false)] [InlineData(4, true)]
+    public void OnGoalClosesActiveOperationAndArbitratesUncertainty(int operationKind, bool afterPlan)
+    {
+        var clock = new Clock(); var run = Running(clock, policy: afterPlan ? CompletionPolicy.AfterPlan : CompletionPolicy.OnGoal);
+        RunSession.PlannerPermit? planner = null; RunSession.ApprovedOperation? operation = null;
+        if (operationKind == 0) planner = run.RequestPlanner();
+        else operation = run.ApproveOperation(operationKind == 1 ? 0 : 1, TimeSpan.FromSeconds(1));
+        if (operationKind >= 3)
+        {
+            operation!.BeginDispatch(0);
+            if (operationKind == 4) { operation.Actions!.ConfirmSent(0); Assert.True(operation.ConfirmResult()); }
+        }
+        var primary = run.Evaluate(Unit(), TimeSpan.Zero);
+        Assert.True(run.GoalVerified);
+        if (afterPlan)
+        {
+            Assert.Null(primary); Assert.Equal(ExecutionState.Running, run.State);
+            if (operation is not null) Assert.True(operation.IsOpen);
+            else Assert.True(planner!.Deadline > clock.Elapsed);
+        }
+        else
+        {
+            Assert.Equal(operationKind == 3 ? RunReason.ActionUnconfirmed : RunReason.GoalSatisfied, primary!.Cause.Reason);
+            Assert.Contains(run.Events, x => x.Reason == RunReason.GoalSatisfied);
+            Assert.Equal(ExecutionState.Completing, run.State); Assert.True(run.ActionsClosing);
+            if (operation is not null) Assert.False(operation.IsOpen);
+            else Assert.Null(planner!.Approve(0, TimeSpan.FromSeconds(1)));
+            Assert.DoesNotContain(run.Events, x => x.Reason is RunReason.PlannerTimeout or RunReason.WaitExpired);
+        }
+    }
+    [Theory]
+    [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)] [InlineData(1, true)]
+    [InlineData(2, false)] [InlineData(2, true)]
+    public async Task InvalidCleanupClockCannotEscapeOrChangePrimary(int kind, bool later)
+    {
+        var good = TimeSpan.FromMilliseconds(100); var real = new LaunchReadClock { Now = good }; var condition = new Clock();
+        var run = new RunSession(Limits(), real, condition, Condition()); run.BeginPreparation(); run.BeginRunning();
+        var primary = run.Evaluate(Unit(), TimeSpan.Zero)!; var cleanup = new OwnedCleanup(); bool released = false;
+        void RejectNextRead() => real.OnRead = () =>
+        { real.Now = kind switch { 0 => TimeSpan.FromTicks(-1), 1 => TimeSpan.FromMilliseconds(50), _ => TimeSpan.MaxValue }; real.OnRead = () => real.Now = good; };
+        if (!later) RejectNextRead();
+        cleanup.Register(CleanupStage.Diagnostics, _ => { if (later) RejectNextRead(); return ValueTask.FromResult(true); });
+        cleanup.Register(CleanupStage.ResourceRelease, token => { Assert.False(token.IsCancellationRequested); released = true; return ValueTask.FromResult(true); });
+        var outcome = await cleanup.CompleteAsync(run, real);
+        Assert.Same(primary, outcome.Primary); Assert.Equal(11, outcome.ExitCode); Assert.True(released);
+        Assert.Equal(ExecutionState.Finished, run.State);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid && x.Exception?.Type == "System.InvalidOperationException");
+        Assert.DoesNotContain(outcome.PostProcessing, x => x.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task StalledCleanupClockStillBoundsBlockedStageAndAttemptsRelease(bool failedPrimary)
+    {
+        var clock = new Clock(); var defaults = Limits();
+        var limits = new RunLimits(defaults.MaxDuration, defaults.PreparationTimeout, TimeSpan.FromMilliseconds(200), defaults.PlannerTimeout,
+            defaults.WaitTimeout, defaults.ActionTimeout, 3, 3, 2, 1024);
+        var run = Running(clock, limits: limits);
+        var primary = failedPrimary ? run.Evaluate(candidates: [Event(RunReason.ActionFailed)])! : run.Evaluate(Unit(), TimeSpan.Zero)!;
+        var cleanup = new OwnedCleanup(); bool released = false; var never = new TaskCompletionSource<bool>();
+        cleanup.Register(CleanupStage.Diagnostics, _ => new(never.Task));
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
+        // A stalled real-time epoch cannot grant an additional duration to each cleanup share.
+        var outcome = await cleanup.CompleteAsync(run, clock).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Same(primary, outcome.Primary); Assert.Equal(failedPrimary ? 1 : 11, outcome.ExitCode);
+        Assert.True(released); Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+        Assert.Equal(ExecutionState.Finished, run.State); never.SetResult(true);
+    }
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task CompletedWorkStartsFreshCaptureWithoutWaitingForOldDelivery(bool failure)
     {
