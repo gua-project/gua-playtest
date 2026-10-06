@@ -71,7 +71,8 @@ public static class RunExecutor
                 TimeoutException => RunReason.MaxDuration,
                 _ => RunReason.ExecutionError
             };
-            run.Evaluate(candidates: [new(reason, phase, RunOrigin.Runner)], cancelled: cancellationToken.IsCancellationRequested);
+            run.Evaluate(candidates: [exception is RunFailureException failure ? failure.Cause : new(reason, phase, RunOrigin.Runner)],
+                cancelled: cancellationToken.IsCancellationRequested);
         }
         // Input/resource releases have fresh bounded tokens; main result is already immutable.
         return await cleanup.CompleteAsync(run, realClock, cancellationToken, confirmPrimary).ConfigureAwait(false);

@@ -189,4 +189,16 @@ public sealed partial class RunTests
         Assert.Contains(result.PostProcessing, x => x.Reason == PostProcessingReason.Cancelled);
         Assert.True(result.PostProcessingComplete); Assert.Equal(0, result.ExitCode);
     }
+    [Fact]
+    public async Task TypedHostPreparationFailurePreservesClassificationAndOriginalEvidence()
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock);
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) =>
+        {
+            try { throw new IOException("private host detail"); }
+            catch (IOException exception) { throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host), exception); }
+        }, (_, _) => throw new InvalidOperationException("execute must not run"));
+        Assert.Equal(ResultStatus.Failed, outcome.Primary.Status); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Equal(1, outcome.ExitCode); Assert.Contains(outcome.Exceptions, x => x.Type == "System.IO.IOException" && x.StackTrace is not null);
+    }
 }

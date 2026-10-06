@@ -290,6 +290,8 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(exception);
         if (exceptions.Count < Limits.MaxEvidenceItems)
             exceptions.Add(new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace));
+        if (exception is RunFailureException && exception.InnerException is { } original && exceptions.Count < Limits.MaxEvidenceItems)
+            exceptions.Add(new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace));
     }
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)
     {
