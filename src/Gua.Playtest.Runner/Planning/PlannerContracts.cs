@@ -39,14 +39,15 @@ public sealed record PlannerAdoption(PlannerFeedbackCode Code, ApprovedDecision?
 public sealed class PlannerRequest
 {
     internal PlannerRequest(PlannerGate owner, Execution.RunSession.PlannerPermit permit,
-        PlannerInputDocument input, ProjectedPlannerState basis)
-    { Owner = owner; Permit = permit; Input = input; Basis = basis; }
+        PlannerInputDocument input, ProjectedPlannerState basis, bool recovering)
+    { Owner = owner; Permit = permit; Input = input; Basis = basis; Recovering = recovering; }
     internal PlannerGate Owner { get; }
     internal Execution.RunSession.PlannerPermit Permit { get; }
     internal PlannerInputDocument Input { get; }
     internal ProjectedPlannerState Basis { get; }
     internal bool Closed { get; set; }
     public string DecisionRequestId => Input.DecisionRequestId;
+    public bool Recovering { get; }
     public TimeSpan Deadline => Permit.Deadline;
     public PlannerInputDocument CopyInput() => Input with
     {

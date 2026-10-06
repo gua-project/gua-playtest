@@ -37,7 +37,9 @@ proposals. It matches run/request/observation IDs and rejects closed, cancelled,
 duplicate and expired responses. Invalid unsent responses carry `RetryAllowed`
 only while #6's real decision/action/recovery budgets allow another request.
 Each recovery permanently consumes that budget. No retry revives a cancelled
-permit, and the final valid request can still approve its operation.
+permit, and the final valid request can still approve its operation. Recovery
+classification is sticky through rejected retries, even when the caller omits
+the recovering flag on the next request; only confirmed approved work ends it.
 
 The pinned schema has exactly execute(single/timed), observe, finite wait or
 finish. Unknown fields, multiple kinds, internal commands, confirmed/owner,
@@ -62,7 +64,7 @@ Only after these checks does the permit reserve the entire segment atomically.
 Existing Gua hard ceilings and stricter segment/lateness/execution/cleanup/wait
 limits remain in force. `ApprovedDecision.BeginDispatch(index)` repeats current
 checks for the entire approved proposal before #6 marks that request Uncertain.
-It refuses duplicate indices. It does not require neutral input between requests
+It requires the next ordered input index and refuses duplicates/reordering. It does not require neutral input between requests
 of the same approved segment, allowing the approved release. New decisions always
 require neutral input. `ConfirmSent` changes evidence without charging twice;
 `ConfirmResult` checks #6's finite result deadline. `Complete` distinguishes
@@ -82,6 +84,8 @@ Failure conditions, condition timers, real deadlines and cancellation retain
 their machine-owned arbitration. On interruption Run authority closes first,
 then a finite owner-scoped input release is attempted, then cancellation is
 requested from the actual Planner. A noncooperative late result has no authority.
+Cancellation callback faults are contained and recorded without replacing the
+primary outcome or owned-input-release evidence.
 The returned release flag must enter the driver's mandatory cleanup/postprocessing
 evidence; it is never manufactured from lease expiry. The callback may release
 only acquired Run-owned inputs. Synchronous blocking providers cannot be preempted

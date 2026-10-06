@@ -385,4 +385,60 @@ public sealed class PlannerGateTests
         Assert.Equal(ResultStatus.Failed, s.Run.Primary.Status);
         Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
     }
+
+    [Fact]
+    public void RecoveryRetryCannotDowngradeToGeneralDecisionBudget()
+    {
+        var s = new Setup(); var r = s.Gate.Begin(State(), recovering: true)!;
+        Assert.True(r.Recovering); Assert.Equal(1, s.Run.Budget.Snapshot.RecoveryDecisions);
+        var rejection = s.Gate.Adopt(r, Encoding.UTF8.GetBytes("{\"partial\":")); Assert.True(rejection.RetryAllowed);
+        r = s.Begin(); Assert.True(r.Recovering); Assert.Equal(2, s.Run.Budget.Snapshot.RecoveryDecisions);
+        rejection = s.Gate.Adopt(r, Encoding.UTF8.GetBytes("{\"partial\":"));
+        Assert.False(rejection.RetryAllowed); Assert.NotNull(rejection.TerminalEvent);
+        Assert.Null(s.Gate.Begin(State())); Assert.Equal(2, s.Run.Budget.Snapshot.Decisions);
+    }
+
+    [Fact]
+    public void RecoveryModeAlsoSurvivesUnsentDispatchRejection()
+    {
+        var s = new Setup(); var r = s.Gate.Begin(State(), recovering: true)!;
+        var approved = s.Gate.Adopt(r, Response(r, Single())).Approved!;
+        s.Authority.Permission = false;
+        Assert.Equal(PlannerFeedbackCode.PermissionDenied, approved.BeginDispatch(0));
+        Assert.Equal(PlannerFeedbackCode.NotSent, approved.Complete());
+        s.Authority.Permission = true; r = s.Begin();
+        Assert.True(r.Recovering); Assert.Equal(2, s.Run.Budget.Snapshot.RecoveryDecisions);
+        Assert.NotNull(s.Gate.Adopt(r, Response(r, Single())).Approved);
+    }
+
+    [Fact]
+    public void TimedInputsCannotDispatchReleaseBeforePress()
+    {
+        var s = new Setup(); var r = s.Begin(); var approved = s.Gate.Adopt(r, Response(r, Timed())).Approved!;
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, approved.BeginDispatch(1));
+        Assert.Equal(0, s.Run.Budget.Snapshot.Actions);
+        Assert.Equal(PlannerFeedbackCode.Approved, approved.BeginDispatch(0));
+        Assert.Equal(PlannerFeedbackCode.Approved, approved.BeginDispatch(1));
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, approved.BeginDispatch(0));
+    }
+
+    private sealed class ThrowingCancellationPlanner : IPlanner<PlannerInputDocument, PlannerReply>
+    {
+        public ValueTask<PlannerReply> DecideAsync(PlannerInputDocument input, CancellationToken token)
+        {
+            token.Register(() => throw new IOException("PRIVATE_CANCEL_EXCEPTION"));
+            return new(new TaskCompletionSource<PlannerReply>().Task);
+        }
+    }
+    [Fact]
+    public async Task ThrowingCancellationCallbackCannotReplaceReleaseOrPrimaryEvidence()
+    {
+        var s = new Setup(); var r = s.Begin();
+        var work = PlannerTurn.AwaitAsync(s.Gate, r, s.Run, s.Clock, s.Clock, new Feed(), new ThrowingCancellationPlanner(), _ => new(true)).AsTask();
+        s.Clock.At(r.Deadline);
+        var result = await work.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(result.Interrupted); Assert.True(result.OwnedInputsReleased);
+        Assert.Equal(RunReason.PlannerTimeout, s.Run.Primary!.Cause.Reason);
+        Assert.Single(s.Run.Exceptions); Assert.DoesNotContain("PRIVATE_CANCEL_EXCEPTION", s.Run.Exceptions.Single().ToString());
+    }
 }

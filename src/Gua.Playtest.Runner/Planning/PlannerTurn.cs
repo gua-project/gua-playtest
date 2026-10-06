@@ -44,7 +44,11 @@ public static class PlannerTurn
             gate.Cancel(request);
             return new(adoption, true, released);
         }
-        finally { plannerCancellation.Cancel(); }
+        finally
+        {
+            try { plannerCancellation.Cancel(); }
+            catch (Exception exception) { run.RecordException(exception); }
+        }
     }
 
     private static async ValueTask<PlannerReply> ProposeAsync(

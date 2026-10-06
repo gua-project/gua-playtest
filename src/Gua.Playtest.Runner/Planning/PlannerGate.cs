@@ -17,6 +17,7 @@ public sealed class PlannerGate
     private PlannerRequest? active;
     private long sequence;
     private bool unsafeToContinue;
+    private bool recoveryRetry;
     private readonly Queue<PlannerDecisionReference> feedback = new();
 
     public PlannerGate(RunSession run, IClock realClock, IPlannerAuthority authority,
@@ -57,9 +58,11 @@ public sealed class PlannerGate
             { ["code"] = x.Code.ToString(), ["relatedDecisionRequestId"] = x.DecisionRequestId }).ToArray());
         if (!PlannerExchange.Validate(Encoding.UTF8.GetBytes(ContractJson.Serialize(input)), "plannerInput").IsValid)
             throw new ArgumentException("ProjectedPlannerInputInvalid");
+        recovering |= recoveryRetry;
         var permit = run.RequestPlanner(recovering);
         if (permit is null) return null;
-        active = new(this, permit, input, basis);
+        recoveryRetry = recovering;
+        active = new(this, permit, input, basis, recovering);
         return active;
     }
 
@@ -149,6 +152,7 @@ public sealed class PlannerGate
         return item;
     }
     internal void StopAfterUnconfirmedDispatch() => unsafeToContinue = true;
+    internal void EndRecoveryAfterConfirmation() => recoveryRetry = false;
     private static JsonObject Clone(JsonObject json) => (JsonObject)json.DeepClone();
     private static ProjectedPlannerState Copy(ProjectedPlannerState state) => state with
     {
@@ -165,6 +169,7 @@ public sealed class ApprovedDecision
     private readonly JsonObject decision;
     private readonly ProjectedPlannerState basis;
     private PlannerFeedbackCode? completion;
+    private int nextDispatchIndex;
     internal ApprovedDecision(PlannerGate gate, RunSession.ApprovedOperation operation, JsonObject decision,
         ProjectedPlannerState basis, PlannerDecisionReference reference)
     { this.gate = gate; this.operation = operation; this.decision = decision; this.basis = basis; Reference = reference; }
@@ -175,13 +180,13 @@ public sealed class ApprovedDecision
     public IReadOnlyList<DeliveryState> Deliveries => operation.Actions?.Deliveries ?? Array.Empty<DeliveryState>();
     public PlannerFeedbackCode BeginDispatch(int index)
     {
-        if (completion.HasValue || index < 0 || index >= Deliveries.Count || Deliveries[index] != DeliveryState.Reserved)
+        if (completion.HasValue || index != nextDispatchIndex || index < 0 || index >= Deliveries.Count || Deliveries[index] != DeliveryState.Reserved)
             return PlannerFeedbackCode.ResponseClosed;
         // Neutrality is required for a new decision, not between inputs of an already approved segment.
         var code = gate.Validate(decision, basis, requireNeutral: false);
         if (code == PlannerFeedbackCode.Approved)
         {
-            try { operation.BeginDispatch(index); return code; }
+            try { operation.BeginDispatch(index); nextDispatchIndex++; return code; }
             catch (InvalidOperationException) { code = PlannerFeedbackCode.ResponseClosed; }
         }
         operation.Complete();
@@ -202,6 +207,7 @@ public sealed class ApprovedDecision
             operation.ResultConfirmed ? PlannerFeedbackCode.Confirmed : PlannerFeedbackCode.NotSent;
         operation.Complete(); completion = code;
         if (code is PlannerFeedbackCode.SentUnconfirmed or PlannerFeedbackCode.PartialExecution) gate.StopAfterUnconfirmedDispatch();
+        if (code == PlannerFeedbackCode.Confirmed) gate.EndRecoveryAfterConfirmation();
         gate.Record(Reference with { Code = code }); return code;
     }
 }
