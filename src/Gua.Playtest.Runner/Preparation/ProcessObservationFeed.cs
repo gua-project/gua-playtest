@@ -34,7 +34,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         if (process.HasExited)
         {
             trace.Record(new(PreparationStage.Launch, PreparationCode.ProcessExited));
-            throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited);
+            throw new PreparationException(PreparationStage.Launch, PreparationCode.ProcessExited, phase: RunPhase.Execution);
         }
     }
 }

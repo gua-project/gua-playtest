@@ -67,7 +67,9 @@ public interface IPreparationPlannerCheck
     // Capability/availability only: no decision requests and no setup route.
     ValueTask<bool> CheckAsync(CancellationToken cancellationToken);
 }
-public sealed class PreparationException(PreparationStage stage, PreparationCode code) : Exception("HostPreparationFailed")
+public sealed class PreparationException(PreparationStage stage, PreparationCode code,
+    Exception? innerException = null, RunPhase phase = RunPhase.Preparation)
+    : RunFailureException(new(RunReason.ExecutionError, phase, RunOrigin.Host), innerException)
 {
     public PreparationStage Stage { get; } = stage;
     public PreparationCode Code { get; } = code;

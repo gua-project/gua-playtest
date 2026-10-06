@@ -13,13 +13,22 @@ public sealed class PreparationTests
 {
     private sealed class Clock : IClock
     {
+        private readonly List<(TimeSpan Due, TaskCompletionSource Completion)> timers = [];
         public TimeSpan Elapsed { get; private set; }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
         {
-            if (duration == TimeSpan.FromMilliseconds(1)) { token.ThrowIfCancellationRequested(); Elapsed += duration; return ValueTask.CompletedTask; }
-            return new(Task.Delay(Timeout.Infinite, token));
+            if (duration == TimeSpan.FromMilliseconds(1)) { token.ThrowIfCancellationRequested(); Advance(1); return ValueTask.CompletedTask; }
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            token.Register(() => completion.TrySetCanceled(token));
+            lock (timers) timers.Add((Elapsed + duration, completion));
+            return new(completion.Task);
         }
-        public void Advance(int milliseconds) => Elapsed += TimeSpan.FromMilliseconds(milliseconds);
+        public void Advance(int milliseconds)
+        {
+            Elapsed += TimeSpan.FromMilliseconds(milliseconds);
+            lock (timers)
+                foreach (var timer in timers.Where(timer => timer.Due <= Elapsed).ToArray()) timer.Completion.TrySetResult();
+        }
     }
     private sealed class Trace : IPreparationTrace
     {
@@ -30,9 +39,10 @@ public sealed class PreparationTests
     {
         public bool HasExited { get; set; }
         public int Shutdowns { get; private set; }
+        public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public ValueTask WaitForExitAsync(CancellationToken token) => new(Task.Delay(Timeout.Infinite, token));
         public ValueTask<bool> ShutdownAsync(CancellationToken token)
-        { Shutdowns++; HasExited = true; return ValueTask.FromResult(true); }
+        { Shutdowns++; HasExited = true; Released.TrySetResult(); return ValueTask.FromResult(true); }
     }
     private sealed class Launcher : IProcessLauncher
     {
@@ -41,6 +51,11 @@ public sealed class PreparationTests
         public Process Process { get; } = new();
         public ValueTask<IOwnedProcess> LaunchAsync(LaunchCommand command, CancellationToken token)
         { Calls++; if (Fail) throw new IOException("private-path"); return ValueTask.FromResult<IOwnedProcess>(Process); }
+    }
+    private sealed class DelayedLauncher : IProcessLauncher
+    {
+        public TaskCompletionSource<IOwnedProcess> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<IOwnedProcess> LaunchAsync(LaunchCommand command, CancellationToken token) => new(Completion.Task);
     }
     private sealed class Connection : IPreparationConnection, IRunObservationFeed
     {
@@ -125,6 +140,8 @@ public sealed class PreparationTests
         var clock = new Clock(); var connector = new Connector(new()); var launcher = new Launcher { Fail = true }; var trace = new Trace();
         var outcome = await Execute(new(Policy(HostMode.Launch), clock, launcher, connector, trace), clock);
         Assert.Equal(ResultStatus.Failed, outcome.Primary.Status); Assert.Equal(RunPhase.Preparation, outcome.Primary.Cause.Phase);
+        Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin); Assert.Equal(1, outcome.ExitCode);
+        Assert.Contains(outcome.Exceptions, evidence => evidence.Type == typeof(IOException).FullName);
         Assert.Contains(new(PreparationStage.Launch, PreparationCode.LaunchFailed), trace.Events);
         Assert.Equal(0, connector.Calls); Assert.Equal(0, launcher.Process.Shutdowns);
     }
@@ -272,6 +289,22 @@ public sealed class PreparationTests
         run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host)]);
         await cleanup.CompleteAsync(run, clock);
         Assert.Equal(1, launcher.Process.Shutdowns);
+    }
+    [Fact]
+    public async Task NoncooperativeLaunchCannotExtendPreparationAndLateProcessIsShutDown()
+    {
+        var clock = new Clock(); var launcher = new DelayedLauncher(); var policy = Policy(HostMode.Launch); var trace = new Trace();
+        var pending = Execute(new(policy, clock, launcher, new Connector(new()), trace), clock);
+        clock.Advance(1000);
+        var outcome = await pending;
+        Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason);
+        Assert.False(outcome.PostProcessingComplete); // acquisition is still outstanding, local exclusion stays closed
+        var lateProcess = new Process(); launcher.Completion.TrySetResult(lateProcess);
+        await lateProcess.Released.Task;
+        Assert.Equal(1, lateProcess.Shutdowns);
+        var connector = new Connector(new()); var laterTrace = new Trace();
+        await Execute(new(policy, clock, new Launcher(), connector, laterTrace), clock);
+        Assert.Contains(new(PreparationStage.Ownership, PreparationCode.Busy), laterTrace.Events); Assert.Equal(0, connector.Calls);
     }
     [Fact]
     public async Task MissingPortOrLaunchCannotGuessAnExecutable()

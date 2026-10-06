@@ -71,6 +71,9 @@ user's attached process, or a whole process tree. Descendant ownership requires
 independent proof and registration. Process shutdown and connection release are
 registered with #6 cleanup and have finite deadlines even after caller cancellation.
 Failure preserves the primary result and reports resource release unconfirmed.
+An acquisition still pending at cleanup confirmation also keeps local exclusion
+closed, even if its late task subsequently self-releases; that frozen outcome is
+not silently rewritten into confirmed cleanup or permission to reclaim an owner.
 An attached session owns only its connection/subscriptions/owner input, not the
 external host. `ReleaseAsync` must return authoritative evidence and cannot claim
 lease expiry as confirmed input release. Launched process exit remains visible
@@ -108,6 +111,9 @@ launch/connection, so startup failure is traceable without a live engine. It is
 not a persisted new format, arbitrary exception-message channel or Planner export.
 Trace persistence and prelaunch run-summary creation are #9/#15 composition work.
 The #6 primary remains structured Preparation/Execution/Host/Runner evidence;
+typed host failures retain Host-origin ExecutionError (Failed/exit 1), while
+unknown Runner defects retain exit 10. Original wrapper/provider exception type
+and stack evidence is preserved for #9 redaction, never arbitrary Planner feedback.
 more detailed Launch/Connect/Identity/Setup/Planner/Synchronize failure stages are
 retained by this sink without overwriting the original failure during cleanup.
 

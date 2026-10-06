@@ -64,14 +64,14 @@ public sealed class HostPreparation
                 var owned = await launcher.LaunchAsync(policy.Launch!, token).ConfigureAwait(false);
                 if (token.IsCancellationRequested)
                 {
-                    await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, owned.ShutdownAsync).ConfigureAwait(false);
+                    await ReleaseUnregisteredAsync(owned.ShutdownAsync).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
                 }
                 try { RegisterRelease(cleanup, releaseToken => FiniteOperation.RunAsync(clock,
                     policy.ShutdownTimeout, owned.ShutdownAsync, releaseToken)); }
                 catch
                 {
-                    await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, owned.ShutdownAsync).ConfigureAwait(false);
+                    await ReleaseUnregisteredAsync(owned.ShutdownAsync).ConfigureAwait(false);
                     throw;
                 }
                 return owned;
@@ -88,13 +88,13 @@ public sealed class HostPreparation
                     var acquired = await connector.ConnectAsync(policy.Endpoint, token).ConfigureAwait(false);
                     if (token.IsCancellationRequested)
                     {
-                        await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, acquired.ReleaseAsync).ConfigureAwait(false);
+                        await ReleaseUnregisteredAsync(acquired.ReleaseAsync).ConfigureAwait(false);
                         token.ThrowIfCancellationRequested();
                     }
                     try { RegisterRelease(cleanup, acquired.ReleaseAsync); }
                     catch
                     {
-                        await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, acquired.ReleaseAsync).ConfigureAwait(false);
+                        await ReleaseUnregisteredAsync(acquired.ReleaseAsync).ConfigureAwait(false);
                         throw;
                     }
                     return acquired;
@@ -197,6 +197,14 @@ public sealed class HostPreparation
         catch { Interlocked.Decrement(ref pendingReleases); throw; }
     }
 
+    private async ValueTask ReleaseUnregisteredAsync(Func<CancellationToken, ValueTask<bool>> release)
+    {
+        // A failed self-release is still an owned outstanding resource, even though cleanup registration closed.
+        Interlocked.Increment(ref pendingReleases);
+        if (await FiniteOperation.RunAsync(clock, policy.ShutdownTimeout, release).ConfigureAwait(false))
+            Interlocked.Decrement(ref pendingReleases);
+    }
+
     private async ValueTask<T> Step<T>(PreparationStage stage, TimeSpan deadline,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken)
     {
@@ -215,9 +223,10 @@ public sealed class HostPreparation
         catch (TimeoutException) { trace.Record(new(stage, PreparationCode.Timeout)); throw; }
         catch (OperationCanceledException) { trace.Record(new(stage, PreparationCode.Cancelled)); throw; }
         catch (ConnectionNotReadyException) { throw; }
-        catch (Exception)
+        catch (PreparationException) { throw; }
+        catch (Exception exception)
         {
-            trace.Record(new(stage, stage switch
+            var code = stage switch
             {
                 PreparationStage.Launch => PreparationCode.LaunchFailed,
                 PreparationStage.Connect => PreparationCode.ConnectionFailed,
@@ -225,7 +234,8 @@ public sealed class HostPreparation
                 PreparationStage.Planner => PreparationCode.PlannerUnavailable,
                 PreparationStage.Synchronize => PreparationCode.SynchronizationFailed,
                 _ => PreparationCode.SetupFailed
-            })); throw;
+            };
+            trace.Record(new(stage, code)); throw new PreparationException(stage, code, exception);
         }
     }
     private void CheckDeadline(TimeSpan deadline)
