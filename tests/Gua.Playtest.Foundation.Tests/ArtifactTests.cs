@@ -185,5 +185,48 @@ public sealed class ArtifactTests : IDisposable
         Assert.True(result.Saved); Assert.Equal(11, result.ExitCode(Outcome()));
         Assert.DoesNotContain(Secret, File.ReadAllText(Path.Combine(store.DirectoryPath, "primary.json")));
     }
+    [Fact]
+    public async Task Runner_snapshot_persists_preconnection_failure_before_owned_release_and_retains_original_exception()
+    {
+        var store = Store(); Assert.True(store.BeginPreparation(Metadata).Saved);
+        var clock = new ImmediateWorkClock();
+        var run = new RunSession(new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 3, 3, 2, 32), clock, clock);
+        var released = false;
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (cleanup, _) =>
+        {
+            cleanup.Register(CleanupStage.ResourceRelease, _ =>
+            { Assert.True(File.Exists(Path.Combine(store.DirectoryPath, "primary.json"))); released = true; return ValueTask.FromResult(true); });
+            throw new IOException(Secret);
+        }, (_, _) => throw new InvalidOperationException("MustNotExecute"),
+        confirmPrimary: (snapshot, token) => ValueTask.FromResult(store.ConfirmPrimary(snapshot, [], [], token).Saved));
+        Assert.True(released); Assert.Equal(RunPhase.Preparation, outcome.Primary.Cause.Phase);
+        Assert.Equal("System.IO.IOException", outcome.Exceptions[0].Type); Assert.NotNull(outcome.Exceptions[0].StackTrace);
+        var result = store.Complete(outcome, [new(ArtifactKind.Trace, ArtifactState.CaptureFailed), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(10, result.ExitCode(outcome));
+        foreach (var file in Directory.GetFiles(store.DirectoryPath)) Assert.DoesNotContain(Secret, File.ReadAllText(file));
+    }
+    [Fact]
+    public async Task Runner_snapshot_uses_fresh_token_after_cancellation_and_cancel_marker_does_not_change_complete_exit()
+    {
+        var store = Store(); Assert.True(store.BeginPreparation(Metadata).Saved);
+        var clock = new ImmediateWorkClock();
+        var run = new RunSession(new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 3, 3, 2, 32), clock, clock);
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true),
+            (_, _) => ValueTask.FromResult(true), new CancellationToken(true), (snapshot, token) =>
+            { Assert.False(token.IsCancellationRequested); return ValueTask.FromResult(store.ConfirmPrimary(snapshot, [], [], token).Saved); });
+        Assert.Equal(ResultStatus.Aborted, outcome.Primary.Status); Assert.True(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        var passed = Outcome() with { PostProcessing = [new(PostProcessingReason.Cancelled)] };
+        var confirmed = Store(); Confirm(confirmed);
+        var result = confirmed.Complete(passed, Omitted, [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(0, result.ExitCode(passed));
+        Assert.True((await RunArtifactReader.ReadResultAsync(confirmed.DirectoryPath, Limits)).Result!.PostProcessing.Complete);
+    }
+    private sealed class ImmediateWorkClock : Gua.Playtest.Core.IClock
+    {
+        public TimeSpan Elapsed => TimeSpan.Zero;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken cancellationToken) => new(Task.Delay(Timeout.Infinite, cancellationToken));
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 }

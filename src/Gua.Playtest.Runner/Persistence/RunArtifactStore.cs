@@ -65,6 +65,10 @@ public sealed class RunArtifactStore
                 executionState = ExecutionState.Preparing, metadata.Profile, metadata.Settings, metadata.Versions, inputs }), cancellationToken);
         });
     /// <summary>Snapshot machine authority at confirmation, before diagnostics or input/resource release.</summary>
+    public PersistenceResult ConfirmPrimary(RunSnapshot snapshot, IReadOnlyList<ObservationReference> observations,
+        IReadOnlyList<DecisionReference> decisions, CancellationToken cancellationToken = default)
+        => ConfirmPrimary(snapshot.Primary, observations, decisions, snapshot.Exceptions, cancellationToken, snapshot.Events);
+
     public PersistenceResult ConfirmPrimary(PrimaryResult result, IReadOnlyList<ObservationReference> observations,
         IReadOnlyList<DecisionReference> decisions, IReadOnlyList<ExceptionEvidence> exceptions,
         CancellationToken cancellationToken = default, IReadOnlyList<RunEvent>? events = null)
@@ -103,11 +107,11 @@ public sealed class RunArtifactStore
                 artifacts, observations = cleanupObservations, postProcessing = issues }), cancellationToken);
             var document = new ResultDocument(RunId, outcome.Primary.Status, outcome.Primary.Cause.Phase.ToString(),
                 outcome.Primary.Cause.Origin.ToString(), outcome.Primary.Cause.Reason.ToString(),
-                new(issues.Count == 0, issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
+                new(issues.All(x => x.Reason == PostProcessingReason.Cancelled), issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
             // ResultDocument is the existing public schema. No storage extension changes its wire format.
             Publish("result.json", Encode(JsonSerializer.Deserialize<JsonElement>(ContractJson.Serialize(document))), cancellationToken);
         });
-        return saved with { PostProcessingIncomplete = persistenceIncomplete || outcome.PostProcessing.Count != 0 ||
+        return saved with { PostProcessingIncomplete = persistenceIncomplete || !outcome.PostProcessingComplete ||
             artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed) };
     }
     private void ValidateReferences(IReadOnlyList<ObservationReference> observations, IReadOnlyList<DecisionReference> decisions)
