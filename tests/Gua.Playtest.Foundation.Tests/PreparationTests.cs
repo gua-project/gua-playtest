@@ -867,7 +867,7 @@ public sealed class PreparationTests
         var posted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var feed = new ProcessObservationFeed(connection, launcher.Process,
             token => new(Task.Run(() => launcher.Process.HasExited, token)), trace.Record, run.PostException,
-            exception => { run.PostProviderException(exception); if (ReferenceEquals(exception, source)) posted.TrySetResult(); });
+            exception => { run.PostProviderException(exception); if (ReferenceEquals(exception, source) || ReferenceEquals(exception.InnerException, source)) posted.TrySetResult(); });
         var failure = await Assert.ThrowsAsync<RunFailureException>(() => feed.CaptureAsync(CancellationToken.None).AsTask());
         run.RecordException(failure);
         if (!run.Exceptions.Any(item => item.Type == typeof(IOException).FullName)) await posted.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -1126,6 +1126,65 @@ public sealed class PreparationTests
         Assert.Equal(DeliveryState.Uncertain, operation.Actions!.Deliveries[0]); Assert.Equal(1, run.Budget.Snapshot.Actions);
         if (frozen) Assert.Equal(snapshot!.Exceptions, outcome.Exceptions);
         else Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
+    }
+
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, false)] [InlineData(2, false)]
+    [InlineData(0, true)] [InlineData(1, true)] [InlineData(2, true)]
+    public async Task LateUntypedProviderFaultCompetesWithGoalOnlyBeforeFreeze(int kind, bool frozen)
+    {
+        var clock = new Clock(); var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition());
+        run.BeginPreparation(); run.BeginRunning();
+        var process = new Process { DirectExitWatch = true };
+        var connection = new Connection { BlockedCapture = kind == 0 ? new(TaskCreationOptions.RunContinuationsAsynchronously) : null,
+            BlockedWait = kind == 1 ? new(TaskCreationOptions.RunContinuationsAsynchronously) : null };
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.OnCapture = _ => entered.TrySetResult(); connection.OnWait = _ => entered.TrySetResult();
+        var posted = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var feed = new ProcessObservationFeed(connection, process, _ => ValueTask.FromResult(false), _ => { }, run.PostException,
+            exception => { run.PostProviderException(exception); posted.TrySetResult(exception); });
+        var pending = kind == 1 ? feed.WaitForChangeAsync(CancellationToken.None).AsTask() : (Task)feed.CaptureAsync(CancellationToken.None).AsTask();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        if (kind != 2)
+        {
+            process.ConfirmExitWithStaleStatus();
+            await Assert.ThrowsAsync<PreparationException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+        else await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        RunSnapshot? snapshot = null;
+        if (frozen) { run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false)); snapshot = run.CapturePrimary(); }
+        Exception original; try { throw new IOException(); } catch (Exception exception) { original = exception; }
+        if (kind == 0) connection.BlockedCapture!.SetException(original);
+        else if (kind == 1) connection.BlockedWait!.SetException(original);
+        else process.FailExit(original);
+        var evidence = await posted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var expectedCause = new RunEvent(RunReason.ExecutionError, RunPhase.Execution, kind == 2 ? RunOrigin.Host : RunOrigin.Runner);
+        if (!frozen) run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
+        if (frozen) { Assert.Equal(snapshot!.Primary, outcome.Primary); Assert.Equal(snapshot.Exceptions, outcome.Exceptions); }
+        else
+        {
+            Assert.Equal(kind == 2 ? 1 : 10, outcome.ExitCode); Assert.Equal(expectedCause, outcome.Primary.Cause);
+            Assert.Contains(outcome.Events, item => item.Reason == RunReason.GoalSatisfied);
+            Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
+        }
+        Assert.Same(original, evidence.InnerException);
+        Assert.Equal(expectedCause, Assert.IsAssignableFrom<RunFailureException>(evidence).Cause);
+    }
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+    public async Task PostedEvidenceOverflowCannotSilentlyPassOrRewriteFrozenPrimary(bool provider, bool frozen)
+    {
+        var clock = new Clock(); var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition());
+        run.BeginPreparation(); run.BeginRunning(); RunSnapshot? snapshot = null;
+        if (frozen) { run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false)); snapshot = run.CapturePrimary(); }
+        for (var i = 0; i < run.Limits.MaxEvidenceItems; i++) run.PostException(new IOException("secondary"));
+        var cause = new RunEvent(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host);
+        if (provider) run.PostProviderException(new RunFailureException(cause)); else run.PostException(new IOException("overflow"));
+        if (!frozen) run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        var outcome = await new OwnedCleanup().CompleteAsync(run, clock);
+        Assert.True(outcome.Exceptions.Count <= run.Limits.MaxEvidenceItems); Assert.True(outcome.Events.Count <= run.Limits.MaxEvidenceItems);
+        if (frozen) { Assert.Equal(snapshot!.Primary, outcome.Primary); Assert.Equal(snapshot.Exceptions, outcome.Exceptions); }
+        else { Assert.Equal(10, outcome.ExitCode); Assert.Equal(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), outcome.Primary.Cause); }
     }
 
     private sealed class CapabilitySet(Action contains) : IReadOnlySet<string>

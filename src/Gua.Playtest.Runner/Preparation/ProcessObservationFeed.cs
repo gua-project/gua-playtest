@@ -103,7 +103,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             if (task is null || retained) return;
             // A losing call can fail after the ready-task scan. Preserve its actual
             // original failure through the bounded owner-posting port, never by
-            // mutating Run state or inventing a competing terminal cause. Posting
+            // mutating Run state. Use the same provider classification as the ready
+            // path so actual pre-freeze failure cannot be treated as diagnostics. Posting
             // after primary confirmation is rejected by that port.
             _ = task.ContinueWith(completed =>
             {
@@ -116,7 +117,18 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                     if (original is OperationCanceledException cancelled && completed.IsCanceled &&
                         abandonedToken.IsCancellationRequested && cancelled.CancellationToken == abandonedToken &&
                         (!source || !cancellationToken.IsCancellationRequested)) return;
-                    (recordProviderFailure ?? recordException)(original);
+                    if (recordProviderFailure is null) recordException(original);
+                    else
+                    {
+                        Exception evidence = original is RunFailureException ? original : !source
+                            ? new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, original, RunPhase.Execution)
+                            : new RunFailureException(original is OperationCanceledException cancelledSource &&
+                                cancellationToken.IsCancellationRequested &&
+                                (cancelledSource.CancellationToken == abandonedToken || cancelledSource.CancellationToken == cancellationToken)
+                                ? new(RunReason.Cancelled, RunPhase.Execution, RunOrigin.User)
+                                : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), original);
+                        recordProviderFailure(evidence);
+                    }
                 }
             }, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion |
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);

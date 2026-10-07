@@ -31,6 +31,7 @@ public sealed class RunSession
     private readonly object postedExceptionGate = new();
     private readonly Queue<(Exception Exception, RunEvent? Cause)> postedExceptions = new();
     private bool postedExceptionsClosed;
+    private bool postedExceptionsOverflow;
     private Func<RunFailureException?>? initialLifecycleFailure;
     private readonly List<ApprovedOperation> operations = [];
     private TimeSpan lastReal, lastCondition, lastCapture, preparationOrigin;
@@ -486,17 +487,23 @@ public sealed class RunSession
     {
         ArgumentNullException.ThrowIfNull(exception);
         lock (postedExceptionGate)
-            if (!postedExceptionsClosed && postedExceptions.Count < Limits.MaxEvidenceItems)
-                  postedExceptions.Enqueue((exception, cause));
+        {
+            if (postedExceptionsClosed) return;
+            if (postedExceptions.Count < Limits.MaxEvidenceItems) postedExceptions.Enqueue((exception, cause));
+            else postedExceptionsOverflow = true;
+        }
     }
     private void DrainPostedExceptions(bool close)
     {
         (Exception Exception, RunEvent? Cause)[] ready;
+        bool overflow;
         lock (postedExceptionGate)
         {
             if (close) postedExceptionsClosed = true;
             ready = postedExceptions.ToArray(); postedExceptions.Clear();
+            overflow = postedExceptionsOverflow; postedExceptionsOverflow = false;
         }
+        if (overflow) pendingEvents.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
         foreach (var item in ready)
         {
             RecordException(item.Exception);

@@ -247,6 +247,12 @@ unknown result, unsatisfied prerequisites after successful Setup, stale epoch,
 original preparation deadline, cancellation after acquisition, finite safe retry
 and unknown-release exclusion. These are contract tests, not real engine acceptance.
 
+Late losing source and exact exit-watch faults are classified identically to ready
+faults before posting: untyped source failures use Runner ExecutionError (requested
+caller cancellation uses User Cancelled), and untyped exit-watch failures use Host
+LaunchFailed. Original type and stack remain inner evidence. Requested obsolete
+watch cancellation remains excluded; posting after primary freeze is rejected.
+
 Keep #8 open: actual approved Unity/Godot host fixture attestation, subscription/
 capture synchronization and guarded external play dispatch remain unverified.
 Installed Unity was inspected at `C:/Program Files/Unity/Hub/Editor`: 2022.3.22f1,
