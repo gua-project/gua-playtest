@@ -67,7 +67,17 @@ public sealed class RunSession
         get
         {
             lock (postedExceptionGate)
+            {
+                // This getter is an owner authority boundary, never a provider
+                // callback. Sample exact lifecycle readiness even when no async
+                // causal post exists; final reservation checks hold this lock too.
+                if (State == ExecutionState.Running && initialLifecycleFailure is { } lifecycle && lifecycle() is { } failure)
+                {
+                    initialLifecycleFailure = null; RecordException(failure);
+                    if (!pendingEvents.Contains(failure.Cause)) pendingEvents.Add(failure.Cause);
+                }
                 return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow;
+            }
         }
     }
     public bool ActionsClosing => State != ExecutionState.Running || IsConfirmingWork || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;

@@ -1197,16 +1197,17 @@ public sealed class PreparationTests
         var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)) };
         var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), trace)
             .PrepareAsync(run, cleanup, null, null);
-        var exactProbe = host.Boundary.InitialLifecycleFailure!; var polls = 0;
+        var exactProbe = host.Boundary.InitialLifecycleFailure!; var polls = 0; var raceArmed = false;
         host.Boundary.InitialLifecycleFailure = () =>
         {
             var ready = exactProbe();
-            if (++polls == 1) { Assert.Null(ready); launcher.Process.ConfirmExitWithStaleStatus(); }
+            if (raceArmed && ++polls == 1) { Assert.Null(ready); launcher.Process.ConfirmExitWithStaleStatus(); }
             return ready;
         };
         run.BeginRunning(host.Boundary);
         var operation = dispatch ? run.ApproveOperation(1, TimeSpan.FromSeconds(1)) : null;
         operation?.BeginDispatch(0);
+        raceArmed = true;
         run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
         var outcome = await cleanup.CompleteAsync(run, clock);
         Assert.Equal(1, outcome.ExitCode);
@@ -1445,6 +1446,34 @@ public sealed class PreparationTests
         Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidOperationException).FullName &&
             item.StackTrace?.Contains(nameof(CertificationClockInvalidOperationRetainsOriginalAndIsNotStaleObservation)) == true);
         Assert.DoesNotContain(trace.Events, item => item.Stage == PreparationStage.Synchronize && item.Code == PreparationCode.StaleObservation);
+    }
+
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, false)] [InlineData(2, false)] [InlineData(3, false)]
+    [InlineData(0, true)] [InlineData(1, true)] [InlineData(2, true)] [InlineData(3, true)]
+    public async Task ContinuousExactWatchCompletionClosesEveryAuthorityGateBeforeAnotherEvaluation(int gate, bool fault)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); run.BeginPreparation();
+        var cleanup = new OwnedCleanup(); var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)) };
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace()).PrepareAsync(run, cleanup, null, null);
+        run.BeginRunning(host.Boundary); run.Evaluate(); Assert.Null(run.Primary);
+        var operation = gate == 3 ? run.ApproveOperation(1, TimeSpan.FromSeconds(1)) : null; var before = run.Budget.Snapshot;
+        Exception original; try { throw new IOException(); } catch (Exception exception) { original = exception; }
+        if (fault) launcher.Process.FailExit(original); else launcher.Process.ConfirmExitWithStaleStatus();
+        Assert.False(launcher.Process.HasExited);
+        switch (gate)
+        {
+            case 0: Assert.True(run.ActionsClosing); break;
+            case 1: Assert.Null(run.RequestPlanner()); break;
+            case 2: Assert.Null(run.ApproveOperation(1, TimeSpan.FromSeconds(1))); break;
+            default: Assert.Throws<InvalidOperationException>(() => operation!.BeginDispatch(0)); Assert.Equal(DeliveryState.Reserved, operation!.Actions!.Deliveries[0]); break;
+        }
+        Assert.Null(run.Primary); Assert.True(run.ActionsClosing); Assert.Equal(before, run.Budget.Snapshot);
+        run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(1, outcome.ExitCode); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin); Assert.Equal(1, launcher.Process.Shutdowns);
+        if (fault) Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null);
     }
 
     private sealed class CapabilitySet(Action contains) : IReadOnlySet<string>
