@@ -1584,10 +1584,10 @@ public sealed class PreparationTests
     public async Task SuccessfulExitWatchOverridesStaleStatusWithReadyOrPendingSource(bool pending)
     {
         var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var run = Run(clock);
+        launcher.Process.DirectExitWatch = true;
         run.BeginPreparation(); var cleanup = new OwnedCleanup();
         var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
             .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
-        launcher.Process.DirectExitWatch = true;
         if (pending) connection.BlockedCapture = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.OnCapture = _ => launcher.Process.ConfirmExitWithStaleStatus();
         var failure = await Assert.ThrowsAsync<PreparationException>(() => host.Feed.CaptureAsync(CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
@@ -1601,10 +1601,11 @@ public sealed class PreparationTests
     public async Task ExitWatchIsArmedBeforeSynchronousSourceThrow()
     {
         var clock = new Clock(); var launcher = new Launcher(); var connection = new Connection(); var run = Run(clock);
+        // Configure the raw watch before preparation acquires its continuous watch.
+        launcher.Process.DirectExitWatch = true;
         run.BeginPreparation(); var cleanup = new OwnedCleanup();
         var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), new Trace())
             .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
-        launcher.Process.DirectExitWatch = true;
         var armed = false; launcher.Process.OnExitWait = _ => armed = true;
         connection.OnCapture = _ => { Assert.True(armed); throw new IOException(); };
         // Establish the thrown source evidence before signalling exit. Signalling
