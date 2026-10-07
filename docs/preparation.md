@@ -227,6 +227,16 @@ turning a completed authoritative observation into a source failure.
 Late provider callbacks post to a bounded session queue rather than mutate Run
 state or its exception list. The serialized owner drains it and freezes posting
 before primary confirmation; posts after that boundary cannot alter either snapshot.
+Losing capture/change-wait and exit-watch failures that complete after the initial
+ready-task scan post their actual original exception through that same port.
+Already retained faults are not posted twice, and cancellation of an obsolete
+watch or source without caller cancellation is not new provider-failure evidence.
+Future faults do not retroactively join an earlier terminal unit: only posts ready
+before the owner freezes evidence can be retained in its primary snapshot.
+Typed actual provider failures use a separate internal posting port that carries
+their guarded cause for owner arbitration before that freeze. Ordinary cancellation
+callback faults remain secondary diagnostics. Both ports share the same bounded
+queue and closure; late work cannot mutate state or reopen authority.
 more detailed Launch/Connect/Identity/Setup/Planner/Synchronize failure stages are
 retained by this sink without overwriting the original failure during cleanup.
 

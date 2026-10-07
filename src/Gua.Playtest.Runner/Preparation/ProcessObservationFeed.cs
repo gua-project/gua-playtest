@@ -4,7 +4,8 @@ namespace Gua.Playtest.Runner.Preparation;
 
 /// <summary>Keep launched-process exit visible during Planner/action waits. Attached processes never enter this wrapper.</summary>
 internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess process,
-    Func<CancellationToken, ValueTask<bool>> readStatus, Action<PreparationEvent> recordTrace, Action<Exception> recordException) : IRunObservationFeed
+    Func<CancellationToken, ValueTask<bool>> readStatus, Action<PreparationEvent> recordTrace, Action<Exception> recordException,
+    Action<Exception>? recordProviderFailure = null) : IRunObservationFeed
 {
     private readonly SemaphoreSlim captureOwner = new(1);
     public async ValueTask<RunObservation> CaptureAsync(CancellationToken cancellationToken)
@@ -31,6 +32,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         using var registration = cancellationToken.Register(() => FiniteOperation.CancelSafely(wait, exception =>
         { faults.Enqueue(exception); recordException(exception); }));
         Task<T>? changed = null; Task? exited = null;
+        var changedEvidenceRetained = false; var exitedEvidenceRetained = false;
         Exception? failure = null; T result = default!;
         try
         {
@@ -68,6 +70,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                     try { task.GetAwaiter().GetResult(); }
                     catch (Exception original)
                     {
+                        if (ReferenceEquals(task, changed)) changedEvidenceRetained = true;
+                        else exitedEvidenceRetained = true;
                         if (ReferenceEquals(task, exited) && original is not RunFailureException &&
                             !(original is OperationCanceledException && exitWait.IsCancellationRequested))
                         {
@@ -91,8 +95,31 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
             registration.Dispose();
             if (changed?.IsCompleted != true) FiniteOperation.CancelSafely(wait, exception => { faults.Enqueue(exception); recordException(exception); });
             FiniteOperation.CancelSafely(exitWait, exception => { faults.Enqueue(exception); recordException(exception); });
-            if (changed is not null) _ = changed.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-            if (exited is not null) _ = exited.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            ObserveRemaining(changed, changedEvidenceRetained, wait.Token, source: true);
+            ObserveRemaining(exited, exitedEvidenceRetained, exitWait.Token, source: false);
+        }
+        void ObserveRemaining(Task? task, bool retained, CancellationToken abandonedToken, bool source)
+        {
+            if (task is null || retained) return;
+            // A losing call can fail after the ready-task scan. Preserve its actual
+            // original failure through the bounded owner-posting port, never by
+            // mutating Run state or inventing a competing terminal cause. Posting
+            // after primary confirmation is rejected by that port.
+            _ = task.ContinueWith(completed =>
+            {
+                try { completed.GetAwaiter().GetResult(); }
+                catch (Exception original)
+                {
+                    // Ordinary cancellation of an obsolete source/watch is not
+                    // provider failure. Caller cancellation still retains its
+                    // actual source exception; unrelated cancellation also does.
+                    if (original is OperationCanceledException cancelled && completed.IsCanceled &&
+                        abandonedToken.IsCancellationRequested && cancelled.CancellationToken == abandonedToken &&
+                        (!source || !cancellationToken.IsCancellationRequested)) return;
+                    (recordProviderFailure ?? recordException)(original);
+                }
+            }, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion |
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
         Task WatchExitAsync()
         {

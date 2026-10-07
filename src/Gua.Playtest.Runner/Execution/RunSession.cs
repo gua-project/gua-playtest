@@ -29,7 +29,7 @@ public sealed class RunSession
     private readonly List<RunEvent> pendingEvents = [];
     private readonly List<ExceptionEvidence> exceptions = [];
     private readonly object postedExceptionGate = new();
-    private readonly Queue<Exception> postedExceptions = new();
+    private readonly Queue<(Exception Exception, RunEvent? Cause)> postedExceptions = new();
     private bool postedExceptionsClosed;
     private Func<RunFailureException?>? initialLifecycleFailure;
     private readonly List<ApprovedOperation> operations = [];
@@ -479,21 +479,29 @@ public sealed class RunSession
     public TimeSpan? NextConditionEvaluationAt => new[] { successSession, failureSession }.Any(x => x is not null) ? nextConditionEvaluationAt : null;
     private TimeSpan? nextConditionEvaluationAt;
     internal void PostException(Exception exception)
+        => PostEvidence(exception, null);
+    internal void PostProviderException(Exception exception)
+        => PostEvidence(exception, (exception as RunFailureException)?.Cause);
+    private void PostEvidence(Exception exception, RunEvent? cause)
     {
         ArgumentNullException.ThrowIfNull(exception);
         lock (postedExceptionGate)
             if (!postedExceptionsClosed && postedExceptions.Count < Limits.MaxEvidenceItems)
-                postedExceptions.Enqueue(exception);
+                  postedExceptions.Enqueue((exception, cause));
     }
     private void DrainPostedExceptions(bool close)
     {
-        Exception[] ready;
+        (Exception Exception, RunEvent? Cause)[] ready;
         lock (postedExceptionGate)
         {
             if (close) postedExceptionsClosed = true;
             ready = postedExceptions.ToArray(); postedExceptions.Clear();
         }
-        foreach (var exception in ready) RecordException(exception);
+        foreach (var item in ready)
+        {
+            RecordException(item.Exception);
+            if (item.Cause is { } cause && !pendingEvents.Contains(cause)) pendingEvents.Add(cause);
+        }
     }
     public void RecordException(Exception exception)
     {

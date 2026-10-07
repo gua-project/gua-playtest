@@ -251,7 +251,7 @@ public sealed class HostPreparation
         await TraceAsync(new(PreparationStage.Ready, PreparationCode.Completed), required: true).ConfigureAwait(false);
         certificate.InitialLifecycleFailure = initialLifecycleFailure;
         var feed = process is null ? boundary.Feed : new ProcessObservationFeed(boundary.Feed, process, token => ReadProcessStatusAsync(process, RunPhase.Execution, token),
-            RecordDiagnosticTrace, run.PostException);
+            RecordDiagnosticTrace, run.PostException, run.PostProviderException);
         return new(certificate, feed, boundary.CurrentRestorable);
     }
 
