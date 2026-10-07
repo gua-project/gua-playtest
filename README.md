@@ -2,8 +2,11 @@
 
 変更・push前の検証と独立サブエージェント監査は [AGENTS.md](AGENTS.md) と
 [$playtest-bug-hunt](.agents/skills/playtest-bug-hunt/SKILL.md) に従う。
-通常最大2回、意図的なPR全体監査は総計最大4回。ローカル監査は最終HEADの
-実CI・実Codex GitHub AI reviewの代替ではない。
+通常最大2回、意図的なPR全体監査は総計最大4回。上限は追加独立監査を止める。
+既知の具体的CI／review不具合は、根拠確認・同型分岐のまとめ修正・回帰検証・
+追加独立監査未実施の差分開示を経てまとめpushし、実CI／実reviewへ進める。
+変更なしの同一コマンド再試行と、根拠ある修正後の検証は区別する。
+ローカル監査は最終HEADの実CI・実Codex GitHub AI reviewの代替ではない。
 
 C#/.NET 10 のゲーム外 Playtest 基盤。現在は五つの project、抽象窓口、静的検証の共通 Runner、CLI 骨格、CI と配布 smoke を実装する。
 

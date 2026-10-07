@@ -28,7 +28,11 @@ No edits, commits, pushes, external comments or child agents are permitted,
 even if the inherited sandbox permits writing. The parent validates findings,
 deduplicates, investigates analogous branches, applies supported fixes and runs
 regressions. Follow AGENTS.md's two-pass ordinary/four-pass deliberate PR-wide
-cap; do not start another audit loop inside this skill.
+cap; do not start another audit loop inside this skill. At the cap, the parent
+may use AGENTS.md's known-defect path to validate and consolidate concrete
+existing audit/CI/external-review fixes with regressions, disclose the diff with
+no additional independent audit, and obtain new-HEAD actual CI/external review.
+The auditor remains read-only and cannot extend or reset the audit budget.
 
 For each actionable finding provide severity, exact file/line, trigger, expected
 versus actual behavior, violated contract, verification command/result (or
@@ -36,5 +40,6 @@ explicit unverified status), narrow fix direction and regression test/assertion.
 Ignore style, speculation and missing features without a violated contract.
 When none remain, explicitly say so and list audited lanes, performed checks,
 missing required evidence and concrete residual risks. A report with blockers
-does not authorize push, claim acceptance or substitute for final-HEAD CI and
-Codex GitHub AI review.
+does not claim acceptance or substitute for final-HEAD CI and Codex GitHub AI
+review. Only the parent may proceed under AGENTS.md's explicit known-defect
+correction path; the report itself never grants implementation or push authority.

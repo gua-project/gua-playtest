@@ -31,7 +31,8 @@ auditor is a separate, fresh, behaviorally read-only subagent.
 
 - After repository changes, including untracked additions, finish focused
   validation and spawn exactly one `playtest_auditor` before the initial push
-  or final handoff. Repeat this gate before each consolidated review-fix push.
+  or final handoff. Repeat this gate before each consolidated review-fix push
+  within the remaining audit budget, except for the known-defect path below.
   A read-only audit or unchanged repository needs no automatic audit.
 - Supply task scope, intended base and resolved merge-base/HEAD, cumulative
   branch diff, status, staged/unstaged diffs and relevant untracked contents,
@@ -40,7 +41,8 @@ auditor is a separate, fresh, behaviorally read-only subagent.
 - Explicitly prohibit edits, commits, pushes, external comments and further
   agent spawning. `.codex/agents/playtest-auditor.toml` defaults to read-only,
   but inherited permission overrides can take precedence. Reject audit-authored
-  source changes and invalidate the report if its reviewed snapshot changed.
+  source changes. A report proves only its reviewed snapshot; disclose later
+  changes rather than claiming that the old report audited the new diff.
 - Wait for the report. Independently validate findings; reject unsupported,
   speculative, duplicate, style-only or out-of-scope claims with reasons.
   Investigate the same failure pattern in neighboring branches/callers and
@@ -50,22 +52,36 @@ auditor is a separate, fresh, behaviorally read-only subagent.
   A deliberate PR-wide gate may instead use at most four total passes for that
   batch, including passes already spent; it replaces rather than nests the
   ordinary gate. The parent alone owns this finite review/fix sequence.
-- Stop as soon as no actionable finding remains. After the limit, unresolved
-  findings, unverified required checks or unreviewed final fixes block push and
-  handoff as complete. Report blockers to the coordinating parent/user; do not
-  reset the counter, spawn recursively or start a new batch to evade the cap.
-  Limit verification to changed surfaces and validated failures; retry a failed
-  command once only when a concrete environmental cause was addressed. Further
-  failure is a blocker, not an infinite validation loop.
+- Stop independent auditing as soon as no actionable finding remains or the
+  pass limit is reached. The cap stops additional independent or recursive
+  audits, not implementation of known defects. Do not reset the counter or
+  start a new batch to evade the cap; report the budget and outstanding findings.
+- At the cap, concrete defects evidenced by an existing audit, actual CI or
+  external review may still be corrected within the authorized task. The
+  implementer must validate each finding, investigate analogous branches,
+  consolidate supported fixes, and run the relevant regression checks plus
+  changed-surface validation before a consolidated push. Map each fix to its
+  evidence and assertions, and explicitly identify the post-audit diff that
+  received no additional independent audit. Then run actual CI and external
+  review on the new HEAD. This path permits correction, not new scope, a fresh
+  independent audit or a claim that an earlier report covers later changes.
+  Findings without concrete support and missing required evidence remain
+  blockers to acceptance; never claim the task complete while defects remain.
+- Keep verification focused on changed surfaces and validated failures. For an
+  unchanged command and unchanged implementation, allow at most one rerun after
+  addressing a concrete environmental cause; further unchanged reruns stop and
+  require a blocker report. Evidence-supported code or test fixes require fresh
+  regression verification and may proceed to the known-defect path above.
+  Such verification is not an additional audit and does not reset its counter.
 - If independent agents or required evidence are unavailable, disclose the
   blocker; a self-review is not an independent pass. An explicit user waiver
   can waive the local gate only, never the merge conditions below.
 
 ## External review and merge
 
-Local audit is not a substitute for external review. After a reviewed batch is
-pushed, require actual CI success and actual Codex GitHub AI review completion
-for the **final HEAD**, with zero new or unresolved actionable findings before
+Local audit is not a substitute for external review. After any batch is pushed,
+including the disclosed known-defect path, require actual CI success and actual
+Codex GitHub AI review completion for the **final HEAD**, with zero new or unresolved actionable findings before
 merge. Absence of comments, a pending request, old-commit review or local success
 does not prove completion. A subsequent code change invalidates that evidence.
 Do not hide findings, omit external review or weaken tests to reduce pushes.

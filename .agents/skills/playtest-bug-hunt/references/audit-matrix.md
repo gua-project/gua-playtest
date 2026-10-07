@@ -12,7 +12,7 @@ consumer. Existing acceptance conditions determine required evidence.
 | Planner secrecy/adoption | `docs/planning.md`, Runner, Planners.Codex | separate public observation connection, no private Goal/expected/setup/secret feedback, pre-send redaction, complete single proposal, stale/duplicate/expired IDs, closed permits, no direct Gua/shell/file bypass, real sandbox evidence |
 | Artifacts/CLI/package | `docs/artifacts.md`, Runner/Persistence, CLI, scripts | primary before cleanup, postprocessing separate, no fabricated result, create-only writes, byte/hash/identity/link checks, safe references, redaction before buffers/hashes, genuine Gua receipts, actual archive/tool execution |
 | Real boundary/acceptance | `docs/01-spec-ledger.md`, `docs/02-issue-plan.md`, fixture evidence, GuaIntegration, tests | distinguish Fake/schema/native/transport/engine/real Codex paths; unavailable upstream APIs stay unavailable; genuine host action/observed completion and profile/cancel/reset fixtures |
-| Audit workflow/docs | `AGENTS.md`, skills, custom agents, work guidance | discoverable skill, distinct read-only reviewer, full dirty/cumulative snapshot, bounded passes/retries, actionable evidence, consolidated same-pattern fixes, final-HEAD external gates |
+| Audit workflow/docs | `AGENTS.md`, skills, custom agents, work guidance | discoverable skill, distinct read-only reviewer, full dirty/cumulative snapshot, bounded audit passes/unchanged-command reruns, evidence-backed known-defect correction after the cap, disclosed unaudited diff, consolidated same-pattern fixes, final-HEAD external gates |
 
 Use the narrowest existing test project/case or `scripts/check-boundaries.ps1`.
 For applicable runtime/package changes use README checks and CI's sequential
