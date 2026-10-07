@@ -38,6 +38,9 @@ public sealed class RunStartBoundary
 {
     internal RunSession Owner { get; }
     internal bool Used { get; set; }
+    // Trusted adapter's already-armed exact lifecycle task, sampled by the
+    // serialized owner in the first Running arbitration unit; no async mutation.
+    internal Func<RunFailureException?>? InitialLifecycleFailure { get; set; }
     public TimeSpan RealCapturedAt { get; }
     public RunObservation InitialObservation { get; }
     public string SynchronizationEvidence { get; }

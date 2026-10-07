@@ -5,7 +5,7 @@ using System.Diagnostics;
 
 namespace Gua.Playtest.Runner.Execution;
 
-public enum CleanupStage { PrimarySnapshot, Diagnostics, Artifacts, InputRelease, ResourceRelease }
+public enum CleanupStage { PrimarySnapshot, Diagnostics, Artifacts, InputRelease, ResourceRelease, OwnershipRelease }
 
 /// <summary>Register only acquired owner-scoped resources, immediately after acquisition.
 /// Diagnostics precede release; each resource release gets an attempt even after artifact/cancellation failure.</summary>
@@ -117,18 +117,18 @@ public sealed class OwnedCleanup
                 await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(remaining.TotalMilliseconds)), token).ConfigureAwait(false);
         }
     }
-    private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action);
+    private sealed record Step(CleanupStage Stage, Func<CancellationToken, ValueTask<bool>> Action, Action? CloseOwnership = null);
     private readonly List<Step> steps = [];
     private readonly object registrationGate = new();
     private bool closed;
-    public void Register(CleanupStage stage, Func<CancellationToken, ValueTask<bool>> action)
+    public void Register(CleanupStage stage, Func<CancellationToken, ValueTask<bool>> action, Action? closeOwnership = null)
     {
         ArgumentNullException.ThrowIfNull(action);
         lock (registrationGate)
         {
-            if (closed || !Enum.IsDefined(stage)) throw new InvalidOperationException("CleanupRegistrationClosed");
+            if (closed || !Enum.IsDefined(stage) || closeOwnership is not null && stage != CleanupStage.OwnershipRelease) throw new InvalidOperationException("CleanupRegistrationClosed");
             if (steps.Count >= 1000) throw new InvalidOperationException("CleanupResourceLimit");
-            steps.Add(new(stage, action));
+            steps.Add(new(stage, action, closeOwnership));
         }
     }
     public async ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken = default,
@@ -148,14 +148,19 @@ public sealed class OwnedCleanup
             ordered = [new(CleanupStage.PrimarySnapshot, token => confirmPrimary(snapshot, token)), .. ordered];
         }
         var issues = new List<PostProcessingIssue>();
+        var resourcesConfirmed = true;
         bool AddIssue(PostProcessingIssue issue)
         {
+            if (issue.Reason is PostProcessingReason.InputReleaseUnconfirmed or PostProcessingReason.ResourceReleaseUnconfirmed)
+                resourcesConfirmed = false;
             if (issues.Count < run.Limits.MaxEvidenceItems - 1) { issues.Add(issue); return true; }
             if (issues.Count == run.Limits.MaxEvidenceItems - 1) issues.Add(new(PostProcessingReason.EvidenceLimitExceeded));
             return false;
         }
         void RecordStageFault(CleanupStage stage, Exception exception)
         {
+            if (stage is CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease)
+                resourcesConfirmed = false;
             if (issues.Count >= run.Limits.MaxEvidenceItems - 1) { AddIssue(new(PostProcessingReason.EvidenceLimitExceeded)); return; }
             var allowance = run.Limits.MaxEvidenceItems - issues.Count;
             var faults = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions.Take(allowance) : [exception];
@@ -165,6 +170,12 @@ public sealed class OwnedCleanup
                 if (!AddIssue(new(Failure(stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)))) break;
             }
         }
+        // Revoke provider starts independently of whether earlier resource releases
+        // will permit terminal exclusion removal. These trusted callbacks are pure,
+        // synchronous gate closures, invoked outside the registration lock.
+        foreach (var step in ordered)
+            if (step.CloseOwnership is { } close)
+                try { close(); } catch (Exception exception) { RecordStageFault(step.Stage, exception); }
         var cleanupClock = new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
             new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
         realClock = cleanupClock;
@@ -174,13 +185,18 @@ public sealed class OwnedCleanup
         for (var i = 0; i < ordered.Length; i++)
         {
             var step = ordered[i];
+            // Ownership exclusion outlives every release registered before cleanup closes,
+            // including execution resources registered after preparation. Unknown releases
+            // keep the exclusion even if diagnostic evidence has reached its bounded limit.
+            if (step.Stage == CleanupStage.OwnershipRelease && !resourcesConfirmed)
+            { AddIssue(new(PostProcessingReason.ResourceReleaseUnconfirmed)); continue; }
             // Share remaining time fairly: a noncooperative early task cannot consume all later release attempts.
             var sampledNow = realClock.Elapsed;
             var remaining = deadline - sampledNow;
             if (remaining <= TimeSpan.Zero)
             {
                 AddIssue(new(PostProcessingReason.CleanupTimeout));
-                if (step.Stage is not (CleanupStage.InputRelease or CleanupStage.ResourceRelease))
+                if (step.Stage is not (CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease))
                 { AddIssue(new(Failure(step.Stage))); continue; }
                 // An expired observation budget still owes a release attempt. Invoke once,
                 // accept only already-completed confirmation, and grant no additional wait.
@@ -235,6 +251,7 @@ public sealed class OwnedCleanup
         CleanupStage.Artifacts => PostProcessingReason.ArtifactFailed,
         CleanupStage.InputRelease => PostProcessingReason.InputReleaseUnconfirmed,
         CleanupStage.ResourceRelease => PostProcessingReason.ResourceReleaseUnconfirmed,
+        CleanupStage.OwnershipRelease => PostProcessingReason.ResourceReleaseUnconfirmed,
         _ => throw new ArgumentOutOfRangeException(nameof(stage))
     };
 }
