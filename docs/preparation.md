@@ -254,6 +254,11 @@ does not infer independent-source capability. Ready and late execution-time stat
 or exact-watch failures enqueue LaunchFailed in the common lifecycle trace port.
 Capture and change waits share one invocation gate until actual source completion.
 Linked preparation exit-watch cancellation is normalized to the operation token.
+Losing per-step preparation exit-watch faults also post guarded Host LaunchFailed
+evidence and register its lifecycle Trace; requested obsolete cancellation is
+excluded and already-retained ready faults are not posted twice. Certification
+clock failures keep their original type/stack and Clock InvalidContract cause,
+without being relabelled Synchronize/StaleObservation.
 Late lifecycle Trace registration precedes causal publication, so cleanup owes
 that bounded write before selecting complete postprocessing.
 

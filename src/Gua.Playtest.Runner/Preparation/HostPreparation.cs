@@ -20,6 +20,7 @@ public sealed class HostPreparation
     private readonly IClock releaseClock = new ReleaseClock();
     private IClock preparationClock = null!;
     private Action<Exception>? recordException;
+    private Action<Exception>? recordProviderFailure;
     private readonly IProcessLauncher launcher;
     private readonly IPreparationConnector connector;
     private readonly IPreparationTrace trace;
@@ -80,6 +81,7 @@ public sealed class HostPreparation
         preparationCancellation = cancellationToken;
         preparationClock = run.AuthoritativeRealClock;
         recordException = run.PostException;
+        recordProviderFailure = run.PostProviderException;
         // Closing this registration gate is owed even if the Diagnostics stage
         // cannot be invoked after a blocked primary snapshot consumes cleanup time.
         cleanup.Register(CleanupStage.OwnershipRelease, _ => ValueTask.FromResult(true), CloseDiagnosticRegistration);
@@ -247,7 +249,11 @@ public sealed class HostPreparation
             certificate = capture.Certify(boundary.CaptureRequestId, boundary.RealCapturedAt, boundary.Observation,
                 boundary.SynchronizationEvidence, boundary.PreconditionsSatisfied);
         }
-        catch (InvalidOperationException) { await FailAsync(PreparationStage.Synchronize, PreparationCode.StaleObservation); throw; }
+        catch (InvalidOperationException exception) when (!run.HasPendingClockRejection)
+        {
+            RecordDiagnosticTrace(new(PreparationStage.Synchronize, PreparationCode.StaleObservation));
+            throw new PreparationException(PreparationStage.Synchronize, PreparationCode.StaleObservation, exception);
+        }
         await TraceAsync(new(PreparationStage.Ready, PreparationCode.Completed), required: true).ConfigureAwait(false);
         certificate.InitialLifecycleFailure = initialLifecycleFailure;
         var feed = new ProcessObservationFeed(boundary.Feed, process, token => process is null ? ValueTask.FromResult(false) : ReadProcessStatusAsync(process, RunPhase.Execution, token),
@@ -299,6 +305,7 @@ public sealed class HostPreparation
         if (process is null) return await work.ConfigureAwait(false);
         using var exitCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
         Task? exited = null;
+        var exitFailureRetained = false;
         try
         {
             try { exited = process.WaitForExitAsync(exitCancellation.Token).AsTask(); }
@@ -331,6 +338,7 @@ public sealed class HostPreparation
                 try { task.GetAwaiter().GetResult(); }
                 catch (Exception exception)
                 {
+                    if (launch) exitFailureRetained = true;
                     if (launch && exception is OperationCanceledException cancelled && token.IsCancellationRequested &&
                         cancelled.CancellationToken == exitCancellation.Token)
                         exception = new OperationCanceledException("PreparationExitWatchCancelled", cancelled, token);
@@ -344,9 +352,25 @@ public sealed class HostPreparation
         finally
         {
             FiniteOperation.CancelSafely(exitCancellation, exception => recordException?.Invoke(exception));
-            foreach (var pending in new Task?[] { work, exited })
-                if (pending is not null) _ = pending.ContinueWith(task => _ = task.Exception, CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            _ = work.ContinueWith(task => _ = task.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            if (exited is not null && !exitFailureRetained)
+            {
+                var obsoleteToken = exitCancellation.Token;
+                _ = exited.ContinueWith(task =>
+                {
+                    try { task.GetAwaiter().GetResult(); }
+                    catch (Exception original)
+                    {
+                        if (original is OperationCanceledException cancelled && obsoleteToken.IsCancellationRequested &&
+                            cancelled.CancellationToken == obsoleteToken) return;
+                        var evidence = original as RunFailureException ?? new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, original);
+                        RecordDiagnosticTrace(new(PreparationStage.Launch, PreparationCode.LaunchFailed));
+                        (recordProviderFailure ?? recordException)?.Invoke(evidence);
+                    }
+                }, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion |
+                    TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            }
         }
     }
 

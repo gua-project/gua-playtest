@@ -50,6 +50,7 @@ public sealed class PreparationTests
         public int Shutdowns { get; private set; }
         public Action<CancellationToken>? OnExitWait { get; set; }
         public Exception? ExitWaitFailure { get; set; }
+        public Func<CancellationToken, Task>? ExitWatchTask { get; set; }
         public bool DirectExitWatch { get; set; }
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -57,7 +58,7 @@ public sealed class PreparationTests
         public void ConfirmExitWithStaleStatus() => exited.TrySetResult();
         public void FailExit(Exception exception) => exited.TrySetException(exception);
         public ValueTask WaitForExitAsync(CancellationToken token)
-        { OnExitWait?.Invoke(token); return ExitWaitFailure is null ? new(DirectExitWatch ? exited.Task : exited.Task.WaitAsync(token)) : ValueTask.FromException(ExitWaitFailure); }
+        { OnExitWait?.Invoke(token); return ExitWaitFailure is null ? new(ExitWatchTask?.Invoke(token) ?? (DirectExitWatch ? exited.Task : exited.Task.WaitAsync(token))) : ValueTask.FromException(ExitWaitFailure); }
         public ValueTask<bool> ShutdownAsync(CancellationToken token)
         { Shutdowns++; Exit(); Released.TrySetResult(); return ValueTask.FromResult(true); }
     }
@@ -1364,6 +1365,86 @@ public sealed class PreparationTests
             _ => published.TrySetResult(Volatile.Read(ref registered) == 1));
         await feed.CaptureAsync(CancellationToken.None); process.FailExit(new IOException());
         Assert.True(await published.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task DispatchAndCausalPostHaveOneReservationLinearizationBoundary()
+    {
+        for (var attempt = 0; attempt < 500; attempt++)
+        {
+            var clock = new Clock(); var run = Run(clock); run.BeginPreparation(); run.BeginRunning();
+            var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+            using var ready = new ManualResetEventSlim();
+            var posted = Task.Run(() =>
+            {
+                Assert.True(ready.Wait(TimeSpan.FromSeconds(5)));
+                run.PostProviderException(new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)));
+                return operation.Actions!.Deliveries[0];
+            });
+            clock.OnRead = () => { clock.OnRead = null; ready.Set(); };
+            var dispatched = true;
+            try { operation.BeginDispatch(0); } catch (InvalidOperationException) { dispatched = false; }
+            var stateAtPost = await posted.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(run.ActionsClosing);
+            if (stateAtPost == DeliveryState.Reserved)
+            { Assert.False(dispatched); Assert.Equal(DeliveryState.Reserved, operation.Actions!.Deliveries[0]); Assert.Equal(0, run.Budget.Snapshot.Actions); }
+            else
+            { Assert.True(dispatched); Assert.Equal(DeliveryState.Uncertain, stateAtPost); Assert.Equal(1, run.Budget.Snapshot.Actions); }
+        }
+    }
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)]
+    public async Task LatePreparationExitFaultPostsHostCauseAndTraceUnlessFrozenOrExpectedCancellation(bool frozen, bool cancelled)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); run.BeginPreparation();
+        var cleanup = new OwnedCleanup(); var trace = new Trace();
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)) };
+        var preparation = new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), trace);
+        var host = await preparation.PrepareAsync(run, cleanup, null, null);
+        var late = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); CancellationToken watchToken = default;
+        launcher.Process.ExitWatchTask = token => { watchToken = token; return late.Task; };
+        var posted = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        typeof(HostPreparation).GetField("recordProviderFailure", flags)!.SetValue(preparation,
+            (Action<Exception>)(exception => { run.PostProviderException(exception); posted.TrySetResult(exception); }));
+        var method = typeof(HostPreparation).GetMethod("WatchPreparationAsync", flags)!.MakeGenericMethod(typeof(bool));
+        Assert.True(await (ValueTask<bool>)method.Invoke(preparation, [Task.FromResult(true), CancellationToken.None])!);
+        Assert.True(watchToken.IsCancellationRequested); launcher.Process.ExitWatchTask = null;
+        RunSnapshot? snapshot = null;
+        if (frozen) { run.BeginRunning(host.Boundary); run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false)); snapshot = run.CapturePrimary(); }
+        Exception original; try { throw new IOException(); } catch (Exception exception) { original = exception; }
+        if (cancelled) late.SetCanceled(watchToken);
+        else
+        {
+            late.SetException(original); var evidence = await posted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Same(original, evidence.InnerException); Assert.Equal(PreparationCode.LaunchFailed, Assert.IsType<PreparationException>(evidence).Code);
+        }
+        if (!frozen) { run.BeginRunning(host.Boundary); run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false)); }
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(cancelled || frozen ? 0 : 1, outcome.ExitCode); Assert.Equal(1, launcher.Process.Shutdowns);
+        if (frozen) { Assert.Equal(snapshot!.Primary, outcome.Primary); Assert.Equal(snapshot.Exceptions, outcome.Exceptions); }
+        else if (!cancelled)
+        { Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin); Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null); }
+        if (cancelled) Assert.DoesNotContain(trace.Events, item => item.Code == PreparationCode.LaunchFailed);
+        else Assert.Contains(trace.Events, item => item.Code == PreparationCode.LaunchFailed);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CertificationClockInvalidOperationRetainsOriginalAndIsNotStaleObservation(bool condition)
+    {
+        var real = new Clock(); var simulation = new Clock(); var provider = condition ? simulation : real;
+        var run = new RunSession(Run(real).Limits, real, simulation); var trace = new Trace();
+        provider.OnRead = () =>
+        {
+            if (new System.Diagnostics.StackTrace().GetFrames().Any(frame => frame.GetMethod()?.Name == "ValidateStartTimes"))
+            { provider.OnRead = null; throw new InvalidOperationException("provider-clock-certification"); }
+        };
+        var outcome = await RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), async (session, cleanup, token) =>
+            (await new HostPreparation(Policy(), real, new Launcher(), new Connector(new()), trace).PrepareAsync(session, cleanup, null, null, token)).Boundary,
+            (_, _) => ValueTask.FromResult(true));
+        Assert.Equal(new(RunReason.InvalidContract, RunPhase.Preparation, RunOrigin.Clock), outcome.Primary.Cause);
+        Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidOperationException).FullName &&
+            item.StackTrace?.Contains(nameof(CertificationClockInvalidOperationRetainsOriginalAndIsNotStaleObservation)) == true);
+        Assert.DoesNotContain(trace.Events, item => item.Stage == PreparationStage.Synchronize && item.Code == PreparationCode.StaleObservation);
     }
 
     private sealed class CapabilitySet(Action contains) : IReadOnlySet<string>

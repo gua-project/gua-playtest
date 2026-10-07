@@ -100,6 +100,7 @@ public sealed class RunSession
         if (!pendingEvents.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
             pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
     }
+    internal bool HasPendingClockRejection => pendingEvents.Any(item => item.Reason == RunReason.InvalidContract && item.Origin == RunOrigin.Clock);
     private ConditionSession? StartCondition(PreparedCondition? prepared, TimeSpan origin)
     {
         try { return prepared?.Start(validatedConditionClock, origin); }
@@ -184,11 +185,14 @@ public sealed class RunSession
         operations.RemoveAll(x => !x.IsOpen);
         if (operations.Count != 0) return null;
         var now = ReadReal();
-        if (ActionsClosing || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
-        var operation = new ApprovedOperation(this, Min(now + Limits.PlannerTimeout, RunningOrigin.Value + Limits.MaxDuration), null, planner: true);
-        operations.Add(operation);
-        if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
-        return new PlannerPermit(this, operation);
+        lock (postedExceptionGate)
+        {
+            if (ActionsClosing || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
+            var operation = new ApprovedOperation(this, Min(now + Limits.PlannerTimeout, RunningOrigin.Value + Limits.MaxDuration), null, planner: true);
+            operations.Add(operation);
+            if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
+            return new PlannerPermit(this, operation);
+        }
     }
     internal IReadOnlyList<RunEvent> InterruptedBoundaryFailureEvents(RunStartBoundary boundary)
     {
@@ -247,15 +251,18 @@ public sealed class RunSession
             if (expiryCause is not null) pendingEvents.Add(expiryCause);
             return null;
         }
-        if (IsConfirmingWork || HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
-            (!finalPlannerPermit && ActionsClosing)) return null;
-        var reservation = count == 0 ? null : Budget.Reserve(count);
-        if (count > 0 && reservation is null) return null;
-        var operation = new ApprovedOperation(this, Min(now + window, RunningOrigin.Value + Limits.MaxDuration), reservation,
-            count > 0 ? Min(now + Limits.ActionTimeout, RunningOrigin.Value + Limits.MaxDuration) : null);
-        operations.Add(operation);
-        if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
-        return operation;
+        lock (postedExceptionGate)
+        {
+            if (IsConfirmingWork || HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
+                (!finalPlannerPermit && ActionsClosing)) return null;
+            var reservation = count == 0 ? null : Budget.Reserve(count);
+            if (count > 0 && reservation is null) return null;
+            var operation = new ApprovedOperation(this, Min(now + window, RunningOrigin.Value + Limits.MaxDuration), reservation,
+                count > 0 ? Min(now + Limits.ActionTimeout, RunningOrigin.Value + Limits.MaxDuration) : null);
+            operations.Add(operation);
+            if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
+            return operation;
+        }
     }
     public sealed class PlannerPermit
     {
@@ -317,9 +324,12 @@ public sealed class RunSession
             if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running)
                 throw new InvalidOperationException("OperationClosed");
             var now = owner.ReadReal();
-            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || now >= ResultDeadline)
-                throw new InvalidOperationException("OperationClosed");
-            Actions!.BeginDispatch(index);
+            lock (owner.postedExceptionGate)
+            {
+                if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || now >= ResultDeadline)
+                    throw new InvalidOperationException("OperationClosed");
+                Actions!.BeginDispatch(index);
+            }
         }
     }
     /// <summary>Both monitors consume the same trusted capture boundary. Real deadlines use delivery/current time.
