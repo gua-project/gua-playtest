@@ -331,6 +331,9 @@ public sealed class HostPreparation
                 try { task.GetAwaiter().GetResult(); }
                 catch (Exception exception)
                 {
+                    if (launch && exception is OperationCanceledException cancelled && token.IsCancellationRequested &&
+                        cancelled.CancellationToken == exitCancellation.Token)
+                        exception = new OperationCanceledException("PreparationExitWatchCancelled", cancelled, token);
                     if (launch && exception is not RunFailureException &&
                         !(exception is OperationCanceledException && token.IsCancellationRequested))
                         exception = new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, exception);

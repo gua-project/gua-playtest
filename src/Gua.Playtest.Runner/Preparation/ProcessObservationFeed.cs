@@ -20,7 +20,12 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         }, cancellationToken).ConfigureAwait(false);
     }
     public async ValueTask WaitForChangeAsync(CancellationToken cancellationToken) =>
-        _ = await WatchAsync(async token => { await feed.WaitForChangeAsync(token).ConfigureAwait(false); return true; }, cancellationToken).ConfigureAwait(false);
+        _ = await WatchAsync(async token =>
+        {
+            await captureOwner.WaitAsync(token).ConfigureAwait(false);
+            try { await feed.WaitForChangeAsync(token).ConfigureAwait(false); return true; }
+            finally { captureOwner.Release(); }
+        }, cancellationToken).ConfigureAwait(false);
 
     private async Task<T> WatchAsync<T>(Func<CancellationToken, Task<T>> request, CancellationToken cancellationToken)
     {
@@ -138,8 +143,8 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                                 (cancelledSource.CancellationToken == abandonedToken || cancelledSource.CancellationToken == cancellationToken)
                                 ? new(RunReason.Cancelled, RunPhase.Execution, RunOrigin.User)
                                 : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), original);
-                        recordProviderFailure(evidence);
                         if (!source) recordTrace(new(PreparationStage.Launch, PreparationCode.LaunchFailed));
+                        recordProviderFailure(evidence);
                     }
                 }
             }, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion |

@@ -32,6 +32,7 @@ public sealed class RunSession
     private readonly Queue<(Exception Exception, RunEvent? Cause)> postedExceptions = new();
     private bool postedExceptionsClosed;
     private bool postedExceptionsOverflow;
+    private bool postedCausalEvidence;
     private Func<RunFailureException?>? initialLifecycleFailure;
     private readonly List<ApprovedOperation> operations = [];
     private TimeSpan lastReal, lastCondition, lastCapture, preparationOrigin;
@@ -61,7 +62,14 @@ public sealed class RunSession
         operations.Where(x => x.IsOpen).Select(x => x.NextDeadline).Append(RunningOrigin!.Value + Limits.MaxDuration).Min();
     public IReadOnlyList<RunEvent> Events => events.AsReadOnly();
     public IReadOnlyList<ExceptionEvidence> Exceptions => exceptions.AsReadOnly();
-    internal bool HasPendingTerminalEvidence => pendingEvents.Count != 0;
+    internal bool HasPendingTerminalEvidence
+    {
+        get
+        {
+            lock (postedExceptionGate)
+                return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow;
+        }
+    }
     public bool ActionsClosing => State != ExecutionState.Running || IsConfirmingWork || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     public RunSession(RunLimits limits, IClock realClock, IClock conditionClock,
         PreparedCondition? success = null, PreparedCondition? failure = null,
@@ -306,7 +314,10 @@ public sealed class RunSession
         }
         public void BeginDispatch(int index)
         {
-            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || owner.ReadReal() >= ResultDeadline)
+            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running)
+                throw new InvalidOperationException("OperationClosed");
+            var now = owner.ReadReal();
+            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || now >= ResultDeadline)
                 throw new InvalidOperationException("OperationClosed");
             Actions!.BeginDispatch(index);
         }
@@ -489,6 +500,7 @@ public sealed class RunSession
         lock (postedExceptionGate)
         {
             if (postedExceptionsClosed) return;
+            if (cause is not null) postedCausalEvidence = true;
             if (postedExceptions.Count < Limits.MaxEvidenceItems) postedExceptions.Enqueue((exception, cause));
             else postedExceptionsOverflow = true;
         }
@@ -511,6 +523,7 @@ public sealed class RunSession
             }
             ready = postedExceptions.ToArray(); postedExceptions.Clear();
             overflow = postedExceptionsOverflow; postedExceptionsOverflow = false;
+            postedCausalEvidence = false;
         }
         if (overflow) pendingEvents.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
         if (closingLifecycleFailure is { } lifecycleFailure)

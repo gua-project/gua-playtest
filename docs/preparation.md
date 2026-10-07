@@ -252,6 +252,10 @@ process or exit authority; its actual source failure is posted before the wrappe
 completes, including failure after a finite monitor stopped awaiting it. Wrapping
 does not infer independent-source capability. Ready and late execution-time status
 or exact-watch failures enqueue LaunchFailed in the common lifecycle trace port.
+Capture and change waits share one invocation gate until actual source completion.
+Linked preparation exit-watch cancellation is normalized to the operation token.
+Late lifecycle Trace registration precedes causal publication, so cleanup owes
+that bounded write before selecting complete postprocessing.
 
 Late losing source and exact exit-watch faults are classified identically to ready
 faults before posting: untyped source failures use Runner ExecutionError (requested
