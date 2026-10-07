@@ -2,8 +2,8 @@ using Gua.Playtest.Runner.Execution;
 
 namespace Gua.Playtest.Runner.Preparation;
 
-/// <summary>Keep launched-process exit visible during Planner/action waits. Attached processes never enter this wrapper.</summary>
-internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess process,
+/// <summary>Retain late source faults in both modes and exact exit evidence for owned launched processes.</summary>
+internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedProcess? process,
     Func<CancellationToken, ValueTask<bool>> readStatus, Action<PreparationEvent> recordTrace, Action<Exception> recordException,
     Action<Exception>? recordProviderFailure = null) : IRunObservationFeed
 {
@@ -87,6 +87,17 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                     : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner);
             failure = ready.OrderBy(item => RunSession.Priority(Cause(item).Reason))
                 .ThenBy(item => Cause(item).Reason).ThenBy(item => Cause(item).Phase).ThenBy(item => Cause(item).Origin).First();
+            if (ready.Any(item => item is PreparationException { Stage: PreparationStage.Launch, Code: PreparationCode.LaunchFailed }) ||
+                exited?.IsFaulted == true || exited?.IsCanceled == true && !exitWait.IsCancellationRequested)
+                recordTrace(new(PreparationStage.Launch, PreparationCode.LaunchFailed));
+            // Attach has no exit winner to end this wrapper early. Its actual
+            // source may fail after a finite monitor stopped awaiting the wrapper;
+            // post before completing it so observation-only cleanup cannot lose it.
+            if (process is null && recordProviderFailure is not null &&
+                !(failure is OperationCanceledException obsolete && cancellationToken.IsCancellationRequested &&
+                  (obsolete.CancellationToken == wait.Token || obsolete.CancellationToken == cancellationToken)))
+                recordProviderFailure(failure is RunFailureException ? failure :
+                    new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), failure));
             foreach (var original in ready)
                 if (!ReferenceEquals(original, failure)) faults.Enqueue(original);
         }
@@ -128,6 +139,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
                                 ? new(RunReason.Cancelled, RunPhase.Execution, RunOrigin.User)
                                 : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), original);
                         recordProviderFailure(evidence);
+                        if (!source) recordTrace(new(PreparationStage.Launch, PreparationCode.LaunchFailed));
                     }
                 }
             }, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion |
@@ -137,7 +149,7 @@ internal sealed class ProcessObservationFeed(IRunObservationFeed feed, IOwnedPro
         {
             // Preserve readiness of the provider's exact task; an async forwarding
             // continuation could hide a ready exit behind a ready source result.
-            try { return process.WaitForExitAsync(exitWait.Token).AsTask(); }
+            try { return process is null ? Task.Delay(Timeout.Infinite, exitWait.Token) : process.WaitForExitAsync(exitWait.Token).AsTask(); }
             catch (Exception exception) { return Task.FromException(exception); }
         }
         async Task<T> ReadSourceAsync()

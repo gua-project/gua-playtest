@@ -247,6 +247,12 @@ unknown result, unsatisfied prerequisites after successful Setup, stale epoch,
 original preparation deadline, cancellation after acquisition, finite safe retry
 and unknown-release exclusion. These are contract tests, not real engine acceptance.
 
+Both Launch and Attach use the serialized source wrapper. Attach has no owned
+process or exit authority; its actual source failure is posted before the wrapper
+completes, including failure after a finite monitor stopped awaiting it. Wrapping
+does not infer independent-source capability. Ready and late execution-time status
+or exact-watch failures enqueue LaunchFailed in the common lifecycle trace port.
+
 Late losing source and exact exit-watch faults are classified identically to ready
 faults before posting: untyped source failures use Runner ExecutionError (requested
 caller cancellation uses User Cancelled), and untyped exit-watch failures use Host

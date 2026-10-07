@@ -497,13 +497,24 @@ public sealed class RunSession
     {
         (Exception Exception, RunEvent? Cause)[] ready;
         bool overflow;
+        RunFailureException? closingLifecycleFailure = null;
         lock (postedExceptionGate)
         {
-            if (close) postedExceptionsClosed = true;
+            if (close)
+            {
+                // This is the confirmation linearization boundary, before Primary.
+                // Sample the exact watch inside the same closed posting gate; an
+                // earlier nonterminal poll cannot stand in for readiness here.
+                postedExceptionsClosed = true;
+                if (initialLifecycleFailure is { } lifecycle && lifecycle() is { } failure)
+                { closingLifecycleFailure = failure; initialLifecycleFailure = null; }
+            }
             ready = postedExceptions.ToArray(); postedExceptions.Clear();
             overflow = postedExceptionsOverflow; postedExceptionsOverflow = false;
         }
         if (overflow) pendingEvents.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
+        if (closingLifecycleFailure is { } lifecycleFailure)
+        { RecordException(lifecycleFailure); pendingEvents.Add(lifecycleFailure.Cause); }
         foreach (var item in ready)
         {
             RecordException(item.Exception);

@@ -1187,6 +1187,77 @@ public sealed class PreparationTests
         else { Assert.Equal(10, outcome.ExitCode); Assert.Equal(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner), outcome.Primary.Cause); }
     }
 
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task FinalLifecycleSampleSharesPrimaryClosureAfterEarlierPollWasNotReady(bool dispatch)
+    {
+        var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); run.BeginPreparation();
+        var cleanup = new OwnedCleanup(); var trace = new Trace();
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)) };
+        var host = await new HostPreparation(Policy(HostMode.Launch), clock, launcher, new Connector(connection), trace)
+            .PrepareAsync(run, cleanup, null, null);
+        var exactProbe = host.Boundary.InitialLifecycleFailure!; var polls = 0;
+        host.Boundary.InitialLifecycleFailure = () =>
+        {
+            var ready = exactProbe();
+            if (++polls == 1) { Assert.Null(ready); launcher.Process.ConfirmExitWithStaleStatus(); }
+            return ready;
+        };
+        run.BeginRunning(host.Boundary);
+        var operation = dispatch ? run.ApproveOperation(1, TimeSpan.FromSeconds(1)) : null;
+        operation?.BeginDispatch(0);
+        run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(1, outcome.ExitCode);
+        Assert.Contains(outcome.Events, item => item.Reason == RunReason.ExecutionError && item.Origin == RunOrigin.Host);
+        Assert.Contains(outcome.Events, item => item.Reason == RunReason.GoalSatisfied);
+        Assert.Contains(trace.Events, item => item.Code == PreparationCode.ProcessExited);
+        Assert.Equal(2, polls);
+        if (dispatch) { Assert.Contains(outcome.Events, item => item.Reason == RunReason.ActionUnconfirmed); Assert.False(operation!.IsOpen); }
+    }
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+    public async Task AttachLateActualSourceFaultCannotBeLostToObservationOnlyCleanup(bool waiting, bool frozen)
+    {
+        var clock = new Clock(); var launcher = new Launcher();
+        var run = new RunSession(Run(clock).Limits, clock, clock, BooleanCondition(), BooleanCondition()); run.BeginPreparation();
+        var connection = new Connection { InitialObservation = new(TimeSpan.Zero, BooleanUnit(false), BooleanUnit(false)),
+            BlockedCapture = new(TaskCreationOptions.RunContinuationsAsynchronously), BlockedWait = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var cleanup = new OwnedCleanup(); var host = await new HostPreparation(Policy(HostMode.Attach), clock, launcher, new Connector(connection), new Trace())
+            .PrepareAsync(run, cleanup, null, null); run.BeginRunning(host.Boundary);
+        using var obsolete = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.OnCapture = _ => entered.TrySetResult(); connection.OnWait = _ => entered.TrySetResult();
+        var pending = waiting ? host.Feed.WaitForChangeAsync(obsolete.Token).AsTask() : (Task)host.Feed.CaptureAsync(obsolete.Token).AsTask();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); obsolete.Cancel(); Assert.False(pending.IsCompleted);
+        RunSnapshot? snapshot = null;
+        if (frozen) { run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false)); snapshot = run.CapturePrimary(); }
+        Exception original; try { throw new IOException(); } catch (Exception exception) { original = exception; }
+        if (waiting) connection.BlockedWait.SetException(original); else connection.BlockedCapture.SetException(original);
+        var fault = await Assert.ThrowsAsync<IOException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5))); Assert.Same(original, fault);
+        if (!frozen) run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        var outcome = await cleanup.CompleteAsync(run, clock);
+        Assert.Equal(0, launcher.Calls); Assert.Equal(0, launcher.Process.Shutdowns); Assert.Equal(1, connection.Releases);
+        if (frozen) { Assert.Equal(snapshot!.Primary, outcome.Primary); Assert.Equal(snapshot.Exceptions, outcome.Exceptions); }
+        else { Assert.Equal(10, outcome.ExitCode); Assert.Contains(outcome.Exceptions, item => item.Type == typeof(IOException).FullName && item.StackTrace is not null); }
+    }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task ReadyAndLateLifecycleProviderFaultsEmitLaunchFailedTrace(int kind)
+    {
+        var clock = new Clock(); var run = Run(clock); run.BeginPreparation(); run.BeginRunning();
+        var process = new Process { DirectExitWatch = true }; var trace = new Trace();
+        var traced = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        trace.OnRecord = item => { if (item.Code == PreparationCode.LaunchFailed) traced.TrySetResult(); };
+        Exception original; try { throw new IOException(); } catch (Exception exception) { original = exception; }
+        var feed = new ProcessObservationFeed(new Connection(), process,
+            _ => kind == 0 ? ValueTask.FromException<bool>(new PreparationException(PreparationStage.Launch, PreparationCode.LaunchFailed, original, RunPhase.Execution)) : ValueTask.FromResult(false),
+            trace.Record, run.PostException, run.PostProviderException);
+        if (kind == 1) process.FailExit(original);
+        if (kind < 2) await Assert.ThrowsAsync<PreparationException>(() => feed.CaptureAsync(CancellationToken.None).AsTask());
+        else { await feed.CaptureAsync(CancellationToken.None); process.FailExit(original); }
+        await traced.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains(trace.Events, item => item == new PreparationEvent(PreparationStage.Launch, PreparationCode.LaunchFailed));
+    }
+
     private sealed class CapabilitySet(Action contains) : IReadOnlySet<string>
     {
         private readonly HashSet<string> values = ["observe"];
