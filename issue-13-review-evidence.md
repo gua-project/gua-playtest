@@ -40,7 +40,8 @@ Apache LICENSE is included in archive output and tool package
 ## Execution evidence
 
 Environment: Windows 10.0.26300, win-x64, .NET SDK 10.0.401 / MSBuild 18.9.11.
-Executed 2026-10-11 UTC on the preserved checkout plus this batch's source diff.
+Executed 2026-10-10 UTC (host local date 2026-10-11, UTC+09:00) on the
+preserved checkout plus this batch's source diff. TRX filenames use host local time.
 Source changes were complete before the full validation; later edits only added
 this evidence document and adjusted documentation wrapping. Tests use Fake
 protocol transport; they do not invoke a real Planner, engine or game.
