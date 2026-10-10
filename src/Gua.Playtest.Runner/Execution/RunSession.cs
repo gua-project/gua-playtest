@@ -347,6 +347,18 @@ public sealed class RunSession
             if (waitCompletesAt is { } waitBoundary && owner.ReadCondition() < waitBoundary) return false;
             resultConfirmedAt = now; ResultConfirmed = true; return true;
         }
+        /// <summary>Owner-only accounting for reported side effects that bypassed the dispatch guard.
+        /// Consumes an uncertain attempt without granting dispatch authority or confirming its result.
+        /// The caller must retain the contract failure; closed operations cannot accept late evidence.</summary>
+        public void RecordUnconfirmedSend(int index)
+        {
+            lock (owner.postedExceptionGate)
+            {
+                if (!IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || Actions is null)
+                    throw new InvalidOperationException("OperationClosed");
+                Actions.RecordUnconfirmedSend(index);
+            }
+        }
         public void BeginDispatch(int index)
         {
             if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running)
