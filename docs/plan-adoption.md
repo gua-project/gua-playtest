@@ -1,0 +1,55 @@
+# Plan candidates and explicit adoption
+
+`PlanManager` is a trusted host service over a private managed root. `CreateAsync`
+copies exact validated Scenario and Gua Recording bytes into a random directory,
+then creates `plan.json` with relative fixed references, full Recording coverage,
+no checkpoints and `afterPlan` completion. Supplied Goal conditions are copied;
+observed states never become expected values automatically. Edit conditions
+explicitly before trial. Any change, including whitespace or timing, requires
+another trial and approval. Existing Recording waits remain intact.
+
+Supply the host's `PersistenceRedactor`. Known secret collisions reject publication
+rather than rewriting pinned bytes. Recording must already be a Gua-owned redacted
+export with secret references. The private root and `.plan-authority` key are host
+resources excluded from Planner access and public artifact bundles. Reparse points
+and nonregular files are rejected; this is not an OS sandbox against another
+process modifying the trusted root or stealing its key. HMAC authenticates local
+host provenance, not publisher approval, permissions or safe actions. Losing the
+key invalidates old receipts.
+
+The Replay composition opens its Run store and calls `BeginReplayPreparation`
+with the effective host-certified identity before invoking the driver,
+passes that store as `trialStore` to `ReplayDriver.ExecuteAsync` to bind its Run ID,
+calls `ConfirmPrimary` at primary confirmation, then
+`CompleteReplay` after cleanup and artifact receipt validation. `RecordTrialAsync`
+receives that store, the driver-issued `ReplayOutcome` and effective Scenario,
+build and Environment identity from trusted preparation. Only the driver constructs
+an outcome. It binds retained Plan/Scenario/Recording hashes to `ReplayProgress`.
+All steps must be dispatched and confirmed, all checkpoints must complete, the
+machine Goal must be verified, `afterPlan` must finish, and mandatory postprocessing
+and persistence must succeed. `onGoal`, omitted suffixes and unverified Goals cannot
+issue a trial. ReplayDriver has no Planner port, certifying an AI-free trial.
+
+Trial publication copies immutable `run.json`, `result.json` and `completion.json` into the candidate,
+checks their hashes against the bytes originally published by the same live store,
+then signs their hashes, Run identity and progress in `proof.json`. Temporary Run
+storage can be removed afterwards. Plan never contains its own hash or adoption
+state. `AcceptAsync` verifies the current graph, signed proof and summaries,
+requires explicit adoption and approval of expectations, and creates `accepted.json`
+once. Its signed payload contains the existing `AdoptionEvidenceDocument`. Imported
+or hand-written evidence cannot confer authority. `IsAcceptedAsync` rechecks these
+identities. Publication never overwrites an existing file or adoption.
+
+`PlanCommand.ExecuteAsync` supplies a separate CLI handler. The shared composition
+passes its secret policy and dispatches these exact forms:
+
+```text
+plan create --managed-root <root> --allow-root <input-root> --scenario <file> --recording <file> --timing <recorded|conditionSynchronized>
+plan accept --managed-root <root> --plan <managed-plan.json> --trial <trial-id> --approve --approve-expectations
+```
+
+The Replay command checks `IsAcceptedAsync`; an unaccepted candidate requires
+explicit `--allow-candidate` and retains all normal host safety limits. It persists
+its trial through the sequence above and returns the trial ID for adoption. The
+Plan handler creates candidates or accepts trials; engine execution belongs to
+Replay composition.
