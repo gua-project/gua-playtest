@@ -197,3 +197,54 @@ separate from real transport, real Planner, OS isolation, Trace/game acceptance.
 Production provider and OPEN-09/11 remain unavailable/unverified; issue #13 stays
 open. Final-HEAD CI/review success and parent ordering approval remain the merge
 gate; earlier-HEAD reports and CI cannot substitute for them.
+
+## Final-head external warning/error findings (evidence group 5)
+
+Actual Codex review 5481112901 of 5f4dbff at 2026-10-10 22:58:36 UTC
+raised 4239507490 (valid warning before response refused) and 4239507495
+(non-retryable error erased by contradictory completed turn). Both are supported
+by the fixed [warning schema](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v2/WarningNotification.json)
+and [event handler](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/bespoke_event_handling.rs).
+Warning is thread-scoped or global, without a turn ID. Its shape/optional target
+is validated consistently during RPC and active-turn reads; message/frame/deadline
+bounds still apply. A non-retryable error records terminal failure independently
+of subsequent retry notices and requires failed completion. Investigated both
+response orderings, global/null targets, malformed/wrong targets, floods and
+failed/interrupted/completed terminal statuses; raw warning/error text is not returned.
+
+- `WarningBeforeOrAfterResponseIsBoundedNonfatalTelemetry`,
+  `InvalidWarningsCloseBeforeAndAfterResponse`, `WarningFloodConsumesMessageLimitBeforeAndAfterResponse`
+  cover valid consumption, schema/identity refusal and existing bounds.
+- `NonRetryableErrorRequiresFailedTerminalStatus` covers both response orderings,
+  contradictory proposal/interrupt refusal, later retry telemetry, safe failed
+  completion, no output bytes and permanently closed reuse.
+- [Focused TRX](docs/evidence/issue-13/batch-5/focused.trx)/[log](docs/evidence/issue-13/batch-5/focused.log):
+  210 pass/0 fail/skip, command `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter FullyQualifiedName~CodexProtocolTests`.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-5/pre-fix.trx)/[log](docs/evidence/issue-13/batch-5/pre-fix.log):
+  reviewed 5f4dbff backend with new tests gives 6 intended assertion failures and
+  2 failed-terminal passes; fixed bytes restored in finally. Expected Completed
+  vs actual OutputInvalid proves warning loss; expected OutputInvalid vs actual
+  Completed proves erased terminal error. No build/environment failures.
+- [Restore](docs/evidence/issue-13/batch-5/restore.log), [build](docs/evidence/issue-13/batch-5/build.log),
+  [boundaries](docs/evidence/issue-13/batch-5/boundaries.log), [sequential tests](docs/evidence/issue-13/batch-5/tests.log):
+  locked restore/Release build (0 warnings/errors), boundary check and
+  Bridge 130 + Contracts 528 + Foundation 1138 = 1796 pass, 0 fail/skip.
+  [Bridge TRX](docs/evidence/issue-13/batch-5/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-5/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-5/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-5/package.log)/[JSON](docs/evidence/issue-13/batch-5/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-5/contracts.log)/[JSON](docs/evidence/issue-13/batch-5/contracts-evidence.json)
+  record actual archive/tool install/execute and native-free packaged consumer.
+  Commands: `./scripts/package-smoke.ps1 -Rid win-x64`, `./scripts/contract-smoke.ps1`;
+  normal [pack](docs/evidence/issue-13/batch-5/pack.log) restores transient RID locks.
+  [Manifest](docs/evidence/issue-13/batch-5/manifest.json) pins exact tested source blobs
+  and original artifact bytes; host-local Oct11 UTC+09 is Oct10 UTC.
+
+Source was complete before these executions; later additions are docs/evidence only.
+Independent audit remains 2/2 consumed, without another agent or reset. This
+entire post-audit warning/error/backend/test/docs/evidence diff received NO further
+independent audit, under the concrete external-review correction path. New HEAD
+requires its own actual CI and completed Codex review, plus parent ordering
+approval. Production, OPEN-09/11 and real transport/Planner/OS/Trace/game scope
+remain unverified; issue #13 is still open. Evidence group numbering is not an
+audit counter or a reset of the finite review budget.

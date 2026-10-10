@@ -124,6 +124,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             if (startedTurn.GetProperty("status").GetString() != "inProgress") throw new ProtocolException();
             var turnId = Identifier(startedTurn.GetProperty("id"));
             CodexUsage? usage = null;
+            var terminalErrorSeen = false;
             var completedItems = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             var completedItemBytes = 0;
             while (true)
@@ -134,6 +135,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 var method = message.GetProperty("method").GetString();
                 if (string.IsNullOrWhiteSpace(method)) throw new ProtocolException();
                 var parameters = message.GetProperty("params");
+                if (method == "warning") { ValidateWarning(parameters, threadId); continue; }
                 if (parameters.TryGetProperty("threadId", out var thread) && thread.GetString() != threadId)
                     throw new ProtocolException();
                 if (method is not null && (method.StartsWith("item/", StringComparison.Ordinal) ||
@@ -165,8 +167,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 else if (method == "error")
                 {
                     ValidateErrorNotice(message, threadId, turnId);
-                    // Server retry telemetry is not a proposal or a client resend.
-                    // The correlated terminal completion remains authoritative.
+                    // A retry can recover; non-retryable failure cannot be erased by later completion.
+                    terminalErrorSeen |= parameters.GetProperty("willRetry").ValueKind == JsonValueKind.False;
                 }
                 else if (method == "item/completed")
                 {
@@ -198,6 +200,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     // A later cumulative snapshot cannot separate an unobserved earlier turn.
                     if (usage is null) usageBaselineKnown = false;
                     var status = turn.GetProperty("status").GetString();
+                    if (terminalErrorSeen && status != "failed") throw new ProtocolException();
                     if (status == "interrupted")
                     { closed = true; return new(CodexReplyStatus.ConnectionFailure, Usage: usage); }
                     if (status == "failed")
@@ -270,6 +273,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // 0.150.1 sends benign configuration/remote-control status notices
                 // after initialize. They grant no capabilities and still consume bounds.
                 var notification = message.GetProperty("method").GetString();
+                if (notification == "warning")
+                { ValidateWarning(message.GetProperty("params"), threadId ?? announcedThread); continue; }
                 if (notification is "configWarning" or "remoteControl/status/changed" or "account/rateLimits/updated") continue;
                 if (notification is "thread/started" or "turn/started" or "thread/status/changed")
                 {
@@ -445,6 +450,12 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         var parameters = message.GetProperty("params");
         if (!CodexItemSchema.ValidItemCompleted(parameters) || !parameters.GetProperty("completedAtMs").TryGetInt64(out _))
             throw new ProtocolException();
+    }
+    private static void ValidateWarning(JsonElement parameters, string? expectedThread)
+    {
+        if (parameters.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
+        if (parameters.TryGetProperty("threadId", out var thread) && thread.ValueKind != JsonValueKind.Null &&
+            Identifier(thread) != expectedThread) throw new ProtocolException();
     }
     private static void ValidateErrorNotice(JsonElement message, string expectedThread, string expectedTurn)
     {

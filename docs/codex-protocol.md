@@ -82,7 +82,12 @@ events, including correlated retry error notices, are buffered until the matchin
 start response is verified, then replayed
 in order. Paired account rate-limit telemetry is consumed within message/frame/
 deadline limits and never contributes a proposal. Retry notices are validated
-before and after the response; they do not cause client resends. Aggregate
+before and after the response; they do not cause client resends. A correlated
+`willRetry:false` error persists through the exchange and requires failed terminal
+status; later retry telemetry cannot erase it. Pinned nonfatal `warning` notices
+require a string message and, when present/non-null, the current thread ID. Global
+or correlated warnings are consumed before/after RPC responses within frame,
+message and deadline bounds and grant no output authority. Aggregate
 pre-response events and canonical output each consume at most
 the configured frame-byte limit, in addition to message and deadline bounds.
 
