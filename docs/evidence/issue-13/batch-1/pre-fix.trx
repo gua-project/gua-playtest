@@ -1,0 +1,1116 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="7918a8e1-46a2-4e8c-b3b6-1f63e46a53dd" name="testk@DESKTOP-3CJOU9S 2026-10-11 07:15:32" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T07:15:32.6394347+09:00" queuing="2026-10-11T07:15:32.6394349+09:00" start="2026-10-11T07:15:31.8555396+09:00" finish="2026-10-11T07:15:32.6774458+09:00" />
+  <TestSettings name="default" id="cb98a750-dae5-4fa5-93a4-d28d96d5b8dc">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_07_15_32" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c27899e2-7f59-409a-83b2-e5502bfb1c86" testId="444a0ade-7c77-b7b0-2a75-2abdacec3c54" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009244" startTime="2026-10-11T07:15:32.6326717+09:00" endTime="2026-10-11T07:15:32.6326914+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c27899e2-7f59-409a-83b2-e5502bfb1c86">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 118&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d3ccb9e2-59fd-4db2-86ae-b2b620bcc556" testId="3c3e9dbd-3348-0ec2-a5d0-66f4042e3436" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001243" startTime="2026-10-11T07:15:32.6229430+09:00" endTime="2026-10-11T07:15:32.6229678+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d3ccb9e2-59fd-4db2-86ae-b2b620bcc556">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="21bf4363-6d0e-493c-9e64-a74598c7bd67" testId="9955349a-b0ad-13cd-1b84-5ac6c5c93ee4" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001464" startTime="2026-10-11T07:15:32.5985231+09:00" endTime="2026-10-11T07:15:32.5985471+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="21bf4363-6d0e-493c-9e64-a74598c7bd67">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2ee27b48-c93d-4efa-a7ae-f3163523ac5e" testId="d2c71d5e-d9fb-b38c-aa2e-a4daf61dda03" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;[null]&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001239" startTime="2026-10-11T07:15:32.6231882+09:00" endTime="2026-10-11T07:15:32.6232112+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2ee27b48-c93d-4efa-a7ae-f3163523ac5e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="0f44b42f-3cde-4ba4-aa5b-0773885b5757" testId="c546f202-7042-20f8-effd-cf1048e120dc" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;durationMs&quot;, value: &quot;\&quot;wrong\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001129" startTime="2026-10-11T07:15:32.6320749+09:00" endTime="2026-10-11T07:15:32.6320948+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0f44b42f-3cde-4ba4-aa5b-0773885b5757">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="04ebf13e-f944-4a38-b78a-9fe2c57eb9af" testId="aa516509-d99d-ff36-101b-4e29163f6c67" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;completed\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001159" startTime="2026-10-11T07:15:32.6307528+09:00" endTime="2026-10-11T07:15:32.6307716+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="04ebf13e-f944-4a38-b78a-9fe2c57eb9af">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f27bb7ba-afdd-492e-9a39-d342db0158b9" testId="f95f95de-d818-f93f-4993-cf2d53739cec" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;interrupted&quot;, wrongType: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001312" startTime="2026-10-11T07:15:32.6207898+09:00" endTime="2026-10-11T07:15:32.6208069+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f27bb7ba-afdd-492e-9a39-d342db0158b9" />
+    <UnitTestResult executionId="ae048bb1-cc4e-4d1f-a1e5-8e58add9a5a4" testId="da5897a9-2d92-5ee3-1dc6-88b785bf3df2" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{\&quot;httpStatusCode\&quot;:-1}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001166" startTime="2026-10-11T07:15:32.6353276+09:00" endTime="2026-10-11T07:15:32.6353443+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ae048bb1-cc4e-4d1f-a1e5-8e58add9a5a4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7ff7382e-8a97-4781-9a0c-553b8f583132" testId="c19a6d7c-938d-867a-d35d-b8c2f775eb71" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;\&quot;unknown\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001161" startTime="2026-10-11T07:15:32.6349635+09:00" endTime="2026-10-11T07:15:32.6349801+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ff7382e-8a97-4781-9a0c-553b8f583132">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a7100c5d-0a1c-4ce8-b3d9-0558ff4e544a" testId="a91e0432-7bb6-2ed2-11b7-0342efe0dcb7" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;readOnly\&quot;,\&quot;networkAccess\&quot;:\&quot;false\&quot;&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001283" startTime="2026-10-11T07:15:32.5987743+09:00" endTime="2026-10-11T07:15:32.5987948+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a7100c5d-0a1c-4ce8-b3d9-0558ff4e544a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f8a41a7f-0b87-4d11-b301-4640562598ac" testId="02bcade8-33a4-7dcd-f3e7-2c624bc0ab5a" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{},\&quot;other\&quot;:{}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001243" startTime="2026-10-11T07:15:32.6345977+09:00" endTime="2026-10-11T07:15:32.6346153+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f8a41a7f-0b87-4d11-b301-4640562598ac">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5987388e-1878-4aee-bcb0-5d1f3bed1b2f" testId="0db2aa02-fa4f-a776-d2ae-53aebd61350b" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;interrupted\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001215" startTime="2026-10-11T07:15:32.6309555+09:00" endTime="2026-10-11T07:15:32.6309736+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5987388e-1878-4aee-bcb0-5d1f3bed1b2f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e2a0826c-b2e0-4cdd-a666-931aebf4437c" testId="22eb1f2f-68fb-a719-16ee-c6dabd51e86b" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;failed&quot;, wrongType: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0003913" startTime="2026-10-11T07:15:32.6206675+09:00" endTime="2026-10-11T07:15:32.6207010+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e2a0826c-b2e0-4cdd-a666-931aebf4437c" />
+    <UnitTestResult executionId="25d28355-bc40-4437-868a-8d97678d4e33" testId="a0abae26-ffa0-4f83-23cf-0e1c66e36b7f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0004113" startTime="2026-10-11T07:15:32.5978252+09:00" endTime="2026-10-11T07:15:32.5978832+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="25d28355-bc40-4437-868a-8d97678d4e33">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="91fbef2b-12ea-4505-9ede-391424ffd81f" testId="81b95c2d-d4d2-0989-2787-bcaff8771555" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:null}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001260" startTime="2026-10-11T07:15:32.6347793+09:00" endTime="2026-10-11T07:15:32.6347960+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="91fbef2b-12ea-4505-9ede-391424ffd81f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="dcfc8e27-c457-4c25-a724-04d93c405e54" testId="bb74e425-6cbc-2170-6932-206124683cc0" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;itemsView&quot;, value: &quot;\&quot;unknown\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001162" startTime="2026-10-11T07:15:32.6305422+09:00" endTime="2026-10-11T07:15:32.6305653+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dcfc8e27-c457-4c25-a724-04d93c405e54">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="24c98a5f-7a74-4e44-bd8b-c5dc1045fce0" testId="fc1dd19c-7f04-c2eb-cac9-69b94084b652" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;interrupted&quot;, wrongType: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0006017" startTime="2026-10-11T07:15:32.6199638+09:00" endTime="2026-10-11T07:15:32.6201472+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="24c98a5f-7a74-4e44-bd8b-c5dc1045fce0" />
+    <UnitTestResult executionId="a86e6d6f-fead-4ae1-9566-b5dd9268d01d" testId="43a2b7dc-5566-714b-0879-44538372c892" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0007548" startTime="2026-10-11T07:15:32.6329579+09:00" endTime="2026-10-11T07:15:32.6329751+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a86e6d6f-fead-4ae1-9566-b5dd9268d01d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fc5a1e62-361e-48ac-bacb-0d630af1694d" testId="ab40446f-6b95-645e-7ab1-969c3f41b382" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{\&quot;httpStatusCode\&quot;:6553&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001150" startTime="2026-10-11T07:15:32.6351454+09:00" endTime="2026-10-11T07:15:32.6351623+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fc5a1e62-361e-48ac-bacb-0d630af1694d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fa0c3085-ae6c-426f-92ab-b9ebb15fb0b0" testId="94014446-1e68-1748-fce8-fb42b40503e5" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;unknown\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0006706" startTime="2026-10-11T07:15:32.6208638+09:00" endTime="2026-10-11T07:15:32.6208821+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fa0c3085-ae6c-426f-92ab-b9ebb15fb0b0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="cee959d2-c2d1-45da-80d2-88eb6ccc0b22" testId="5ae39499-9f39-dc62-6f1a-2b2bd22318e9" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;activeTurnNotSteerable\&quot;:{\&quot;turnKind\&quot;:\&quot;unknow&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001172" startTime="2026-10-11T07:15:32.6356887+09:00" endTime="2026-10-11T07:15:32.6357057+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cee959d2-c2d1-45da-80d2-88eb6ccc0b22">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="24a92c61-b6df-41ad-a208-8924317a62ed" testId="30a9fcde-ff9d-1c21-0377-9adef4cdee8f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;[]&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0006880" startTime="2026-10-11T07:15:32.6339134+09:00" endTime="2026-10-11T07:15:32.6339308+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="24a92c61-b6df-41ad-a208-8924317a62ed">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="768141df-db27-4ef4-924d-40f3ff168713" testId="d3ece408-b840-ede5-a0b7-1c964bdb50a1" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;\&quot;on-request\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001183" startTime="2026-10-11T07:15:32.6186826+09:00" endTime="2026-10-11T07:15:32.6187215+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="768141df-db27-4ef4-924d-40f3ff168713">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2d441bf6-6213-4a99-80fe-495eb32f4ad9" testId="48cfc3f6-d323-6ba8-5951-157677ee2cae" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;readOnly\&quot;,\&quot;networkAccess\&quot;:true}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001173" startTime="2026-10-11T07:15:32.5995799+09:00" endTime="2026-10-11T07:15:32.5995986+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2d441bf6-6213-4a99-80fe-495eb32f4ad9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="bac48cdd-93ba-4a73-b8c6-59b33ae92f7b" testId="fdf4abd4-63b0-07e9-3aba-372e3a095275" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;workspaceWrite\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001160" startTime="2026-10-11T07:15:32.6191864+09:00" endTime="2026-10-11T07:15:32.6192488+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bac48cdd-93ba-4a73-b8c6-59b33ae92f7b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8fbd82dd-2e7e-4a69-8fe5-ee8db5b09043" testId="ec036d45-bf07-db13-bf2b-c750be153dc8" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0064027" startTime="2026-10-11T07:15:32.6328941+09:00" endTime="2026-10-11T07:15:32.6329123+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8fbd82dd-2e7e-4a69-8fe5-ee8db5b09043" />
+    <UnitTestResult executionId="2321067c-774d-4262-9fe8-a148adc5bfc0" testId="e8f83a27-4b0d-8640-99d9-a883e8372eee" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;false&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001514" startTime="2026-10-11T07:15:32.6336986+09:00" endTime="2026-10-11T07:15:32.6337157+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2321067c-774d-4262-9fe8-a148adc5bfc0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="93e08db5-ac09-489d-bc58-ff9965a240c2" testId="83b17064-82e7-7866-ab36-b5e32946026b" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;[{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;agentMessage\&quot;}]&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001349" startTime="2026-10-11T07:15:32.6226099+09:00" endTime="2026-10-11T07:15:32.6226612+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="93e08db5-ac09-489d-bc58-ff9965a240c2">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a0c768c6-3d91-4329-9297-1b6fcbb2d0ce" testId="335b7d2c-af7e-397b-92bd-efd591ddad61" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001240" startTime="2026-10-11T07:15:32.5989788+09:00" endTime="2026-10-11T07:15:32.5989983+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a0c768c6-3d91-4329-9297-1b6fcbb2d0ce">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="abf3e5ea-e02a-4f76-8778-17c550049e37" testId="c5be7942-4213-aae5-ee39-081fcf2009e7" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;42&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002532" startTime="2026-10-11T07:15:32.6358700+09:00" endTime="2026-10-11T07:15:32.6358871+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="abf3e5ea-e02a-4f76-8778-17c550049e37">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9a7909f8-3467-4ea8-b50a-b52655febf09" testId="3d6d8e28-5336-23b9-62ff-5bab762e651f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;failed\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001176" startTime="2026-10-11T07:15:32.6313433+09:00" endTime="2026-10-11T07:15:32.6313607+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9a7909f8-3467-4ea8-b50a-b52655febf09">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="42412313-f67e-4547-9bb5-59001da3d75a" testId="3a2a07e3-d41d-540a-9fa5-32bb7e953b4c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001557" startTime="2026-10-11T07:15:32.6363600+09:00" endTime="2026-10-11T07:15:32.6363790+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="42412313-f67e-4547-9bb5-59001da3d75a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="bd75b333-da28-4c44-ab28-a4140ffef9f9" testId="310600ae-28b1-be4f-f6f8-11fee3a6bb0c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;error&quot;, value: &quot;{\&quot;message\&quot;:42}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001151" startTime="2026-10-11T07:15:32.6322812+09:00" endTime="2026-10-11T07:15:32.6322985+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bd75b333-da28-4c44-ab28-a4140ffef9f9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a9031967-361b-47df-a50b-bcae59df4067" testId="e9944658-d835-1bc1-e6cd-d06acbed356e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;activeTurnNotSteerable\&quot;:{}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002255" startTime="2026-10-11T07:15:32.6344067+09:00" endTime="2026-10-11T07:15:32.6344265+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9031967-361b-47df-a50b-bcae59df4067">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="63df0744-4fc9-4e6e-9972-c3d0976cae12" testId="ce30d03a-3ebc-40e8-92f8-ded2b40e4e8d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002468" startTime="2026-10-11T07:15:32.6210928+09:00" endTime="2026-10-11T07:15:32.6211127+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="63df0744-4fc9-4e6e-9972-c3d0976cae12">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="36bead8b-71b5-4ecd-9ace-91df038dcf94" testId="32e2b338-6da2-fe78-8e06-5000c0cc3e15" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0013029" startTime="2026-10-11T07:15:32.6365609+09:00" endTime="2026-10-11T07:15:32.6366300+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="36bead8b-71b5-4ecd-9ace-91df038dcf94" />
+    <UnitTestResult executionId="909c4a23-76f9-46f3-8bb5-f91388ccd5e3" testId="e6952879-33d6-dbdb-14c6-86861198dc6c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;failed&quot;, wrongType: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001636" startTime="2026-10-11T07:15:32.6207412+09:00" endTime="2026-10-11T07:15:32.6207588+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="909c4a23-76f9-46f3-8bb5-f91388ccd5e3" />
+    <UnitTestResult executionId="fff8452c-4208-4723-a70e-8c4ed7f24f85" testId="9c10ec57-a36a-481a-8d86-f0e75278ee72" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001123" startTime="2026-10-11T07:15:32.6315307+09:00" endTime="2026-10-11T07:15:32.6315473+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fff8452c-4208-4723-a70e-8c4ed7f24f85">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="96021e66-ff9f-4d51-93f7-42515faa87c7" testId="145035d4-a4da-3ecf-0ca1-5b67310da697" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;{}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0347817" startTime="2026-10-11T07:15:32.5433825+09:00" endTime="2026-10-11T07:15:32.5877784+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="96021e66-ff9f-4d51-93f7-42515faa87c7">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6c57d352-d023-434b-b32d-9a148a1a78cc" testId="36ff9758-e94e-f34d-f8c1-802d9f4accd6" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;dangerFullAccess\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001310" startTime="2026-10-11T07:15:32.5991800+09:00" endTime="2026-10-11T07:15:32.5991983+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6c57d352-d023-434b-b32d-9a148a1a78cc">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d6296524-89b8-471f-9b5b-e1ba83a6827d" testId="d9dc30fe-19ba-1edc-1d4d-ac524beb01d4" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001264" startTime="2026-10-11T07:15:32.5993894+09:00" endTime="2026-10-11T07:15:32.5994083+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d6296524-89b8-471f-9b5b-e1ba83a6827d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6e011a5f-5254-4f1a-b8c6-983f19476e7b" testId="20a7cee6-2205-2f05-36a4-1b8d3778de4d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;{}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001254" startTime="2026-10-11T07:15:32.6212877+09:00" endTime="2026-10-11T07:15:32.6213057+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6e011a5f-5254-4f1a-b8c6-983f19476e7b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="af68760b-afeb-46e1-8683-9675b8a7e494" testId="5a9a7c76-aa7e-1294-25c0-f2fdf50c662c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;readOnly\&quot;,\&quot;networkAccess\&quot;:null}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001183" startTime="2026-10-11T07:15:32.5997760+09:00" endTime="2026-10-11T07:15:32.5997935+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="af68760b-afeb-46e1-8683-9675b8a7e494">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="16316444-baf1-4907-9c61-2d74bb4b6487" testId="fd4b2d7a-a9b1-2715-e5a5-e9f31138c0f3" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002532" startTime="2026-10-11T07:15:32.6366651+09:00" endTime="2026-10-11T07:15:32.6366816+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="16316444-baf1-4907-9c61-2d74bb4b6487">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(Boolean overflow) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 245&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="eca17695-1785-4971-9ea6-9acd2d276f80" testId="75c502b2-6592-7dd2-161c-652347895aa0" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001439" startTime="2026-10-11T07:15:32.6335091+09:00" endTime="2026-10-11T07:15:32.6335272+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="eca17695-1785-4971-9ea6-9acd2d276f80">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="773647ea-7788-4e87-808f-a79ed55bdee8" testId="f61d01f1-e11e-b901-40e2-65c441ceafc1" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{\&quot;httpStatusCode\&quot;:\&quot;50&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001164" startTime="2026-10-11T07:15:32.6355083+09:00" endTime="2026-10-11T07:15:32.6355252+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="773647ea-7788-4e87-808f-a79ed55bdee8">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d5d6f3bd-64a6-4e40-abd1-2ab6a50da5b6" testId="87addbe6-394f-5a62-3f7a-2d3036f6a28d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001224" startTime="2026-10-11T07:15:32.6311433+09:00" endTime="2026-10-11T07:15:32.6311598+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d5d6f3bd-64a6-4e40-abd1-2ab6a50da5b6">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f9cfc721-aed7-41e2-a206-597afc45e157" testId="67fb7670-2ba9-8a20-c745-49e856131791" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;\&quot;true\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002633" startTime="2026-10-11T07:15:32.6331490+09:00" endTime="2026-10-11T07:15:32.6331674+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f9cfc721-aed7-41e2-a206-597afc45e157">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;failed\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="3d6d8e28-5336-23b9-62ff-5bab762e651f">
+      <Execution id="9a7909f8-3467-4ea8-b50a-b52655febf09" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;interrupted&quot;, wrongType: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="fc1dd19c-7f04-c2eb-cac9-69b94084b652">
+      <Execution id="24c98a5f-7a74-4e44-bd8b-c5dc1045fce0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedTerminalItemsAreInvalidBeforeFailureClassification" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ec036d45-bf07-db13-bf2b-c750be153dc8">
+      <Execution id="8fbd82dd-2e7e-4a69-8fe5-ee8db5b09043" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;readOnly\&quot;,\&quot;networkAccess\&quot;:\&quot;false\&quot;&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="a91e0432-7bb6-2ed2-11b7-0342efe0dcb7">
+      <Execution id="a7100c5d-0a1c-4ce8-b3d9-0558ff4e544a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;unknown\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="94014446-1e68-1748-fce8-fb42b40503e5">
+      <Execution id="fa0c3085-ae6c-426f-92ab-b9ebb15fb0b0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;error&quot;, value: &quot;{\&quot;message\&quot;:42}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="310600ae-28b1-be4f-f6f8-11fee3a6bb0c">
+      <Execution id="bd75b333-da28-4c44-ab28-a4140ffef9f9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{\&quot;httpStatusCode\&quot;:\&quot;50&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="f61d01f1-e11e-b901-40e2-65c441ceafc1">
+      <Execution id="773647ea-7788-4e87-808f-a79ed55bdee8" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="3a2a07e3-d41d-540a-9fa5-32bb7e953b4c">
+      <Execution id="42412313-f67e-4547-9bb5-59001da3d75a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;\&quot;unknown\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c19a6d7c-938d-867a-d35d-b8c2f775eb71">
+      <Execution id="7ff7382e-8a97-4781-9a0c-553b8f583132" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;dangerFullAccess\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="36ff9758-e94e-f34d-f8c1-802d9f4accd6">
+      <Execution id="6c57d352-d023-434b-b32d-9a148a1a78cc" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9c10ec57-a36a-481a-8d86-f0e75278ee72">
+      <Execution id="fff8452c-4208-4723-a70e-8c4ed7f24f85" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="32e2b338-6da2-fe78-8e06-5000c0cc3e15">
+      <Execution id="36bead8b-71b5-4ecd-9ace-91df038dcf94" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="43a2b7dc-5566-714b-0879-44538372c892">
+      <Execution id="a86e6d6f-fead-4ae1-9566-b5dd9268d01d" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadMustConfirmEphemeralBeforePlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;false&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="e8f83a27-4b0d-8640-99d9-a883e8372eee">
+      <Execution id="2321067c-774d-4262-9fe8-a148adc5bfc0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadMustConfirmEphemeralBeforePlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;\&quot;on-request\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d3ece408-b840-ede5-a0b7-1c964bdb50a1">
+      <Execution id="768141df-db27-4ef4-924d-40f3ff168713" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;activeTurnNotSteerable\&quot;:{}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="e9944658-d835-1bc1-e6cd-d06acbed356e">
+      <Execution id="a9031967-361b-47df-a50b-bcae59df4067" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{},\&quot;other\&quot;:{}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="02bcade8-33a4-7dcd-f3e7-2c624bc0ab5a">
+      <Execution id="f8a41a7f-0b87-4d11-b301-4640562598ac" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;interrupted\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0db2aa02-fa4f-a776-d2ae-53aebd61350b">
+      <Execution id="5987388e-1878-4aee-bcb0-5d1f3bed1b2f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:null}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="81b95c2d-d4d2-0989-2787-bcaff8771555">
+      <Execution id="91fbef2b-12ea-4505-9ede-391424ffd81f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;{}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="145035d4-a4da-3ecf-0ca1-5b67310da697">
+      <Execution id="96021e66-ff9f-4d51-93f7-42515faa87c7" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;readOnly\&quot;,\&quot;networkAccess\&quot;:true}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="48cfc3f6-d323-6ba8-5951-157677ee2cae">
+      <Execution id="2d441bf6-6213-4a99-80fe-495eb32f4ad9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{\&quot;httpStatusCode\&quot;:-1}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="da5897a9-2d92-5ee3-1dc6-88b785bf3df2">
+      <Execution id="ae048bb1-cc4e-4d1f-a1e5-8e58add9a5a4" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d9dc30fe-19ba-1edc-1d4d-ac524beb01d4">
+      <Execution id="d6296524-89b8-471f-9b5b-e1ba83a6827d" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;itemsView&quot;, value: &quot;\&quot;unknown\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="bb74e425-6cbc-2170-6932-206124683cc0">
+      <Execution id="dcfc8e27-c457-4c25-a724-04d93c405e54" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;failed&quot;, wrongType: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="e6952879-33d6-dbdb-14c6-86861198dc6c">
+      <Execution id="909c4a23-76f9-46f3-8bb5-f91388ccd5e3" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedTerminalItemsAreInvalidBeforeFailureClassification" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;42&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c5be7942-4213-aae5-ee39-081fcf2009e7">
+      <Execution id="abf3e5ea-e02a-4f76-8778-17c550049e37" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;[{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;agentMessage\&quot;}]&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="83b17064-82e7-7866-ab36-b5e32946026b">
+      <Execution id="93e08db5-ac09-489d-bc58-ff9965a240c2" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;workspaceWrite\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="fdf4abd4-63b0-07e9-3aba-372e3a095275">
+      <Execution id="bac48cdd-93ba-4a73-b8c6-59b33ae92f7b" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;{\&quot;type\&quot;:\&quot;readOnly\&quot;,\&quot;networkAccess\&quot;:null}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5a9a7c76-aa7e-1294-25c0-f2fdf50c662c">
+      <Execution id="af68760b-afeb-46e1-8683-9675b8a7e494" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;durationMs&quot;, value: &quot;\&quot;wrong\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c546f202-7042-20f8-effd-cf1048e120dc">
+      <Execution id="0f44b42f-3cde-4ba4-aa5b-0773885b5757" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;activeTurnNotSteerable\&quot;:{\&quot;turnKind\&quot;:\&quot;unknow&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5ae39499-9f39-dc62-6f1a-2b2bd22318e9">
+      <Execution id="cee959d2-c2d1-45da-80d2-88eb6ccc0b22" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="a0abae26-ffa0-4f83-23cf-0e1c66e36b7f">
+      <Execution id="25d28355-bc40-4437-868a-8d97678d4e33" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ce30d03a-3ebc-40e8-92f8-ded2b40e4e8d">
+      <Execution id="63df0744-4fc9-4e6e-9972-c3d0976cae12" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;approvalPolicy&quot;, value: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="335b7d2c-af7e-397b-92bd-efd591ddad61">
+      <Execution id="a0c768c6-3d91-4329-9297-1b6fcbb2d0ce" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;\&quot;true\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="67fb7670-2ba9-8a20-c745-49e856131791">
+      <Execution id="f9cfc721-aed7-41e2-a206-597afc45e157" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadMustConfirmEphemeralBeforePlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;failed&quot;, wrongType: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="22eb1f2f-68fb-a719-16ee-c6dabd51e86b">
+      <Execution id="e2a0826c-b2e0-4cdd-a666-931aebf4437c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedTerminalItemsAreInvalidBeforeFailureClassification" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;{\&quot;httpConnectionFailed\&quot;:{\&quot;httpStatusCode\&quot;:6553&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ab40446f-6b95-645e-7ab1-969c3f41b382">
+      <Execution id="fc5a1e62-361e-48ac-bacb-0d630af1694d" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="fd4b2d7a-a9b1-2715-e5a5-e9f31138c0f3">
+      <Execution id="16316444-baf1-4907-9c61-2d74bb4b6487" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: &quot;sandbox&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9955349a-b0ad-13cd-1b84-5ac6c5c93ee4">
+      <Execution id="21bf4363-6d0e-493c-9e64-a74598c7bd67" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: &quot;[]&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="30a9fcde-ff9d-1c21-0377-9adef4cdee8f">
+      <Execution id="24a92c61-b6df-41ad-a208-8924317a62ed" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedErrorUnionCannotMasqueradeAsBackendFailure" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="87addbe6-394f-5a62-3f7a-2d3036f6a28d">
+      <Execution id="d5d6f3bd-64a6-4e40-abd1-2ab6a50da5b6" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="444a0ade-7c77-b7b0-2a75-2abdacec3c54">
+      <Execution id="c27899e2-7f59-409a-83b2-e5502bfb1c86" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;[null]&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d2c71d5e-d9fb-b38c-aa2e-a4daf61dda03">
+      <Execution id="2ee27b48-c93d-4efa-a7ae-f3163523ac5e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;items&quot;, value: &quot;{}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="20a7cee6-2205-2f05-36a4-1b8d3778de4d">
+      <Execution id="6e011a5f-5254-4f1a-b8c6-983f19476e7b" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;\&quot;completed\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="aa516509-d99d-ff36-101b-4e29163f6c67">
+      <Execution id="04ebf13e-f944-4a38-b78a-9fe2c57eb9af" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: &quot;status&quot;, value: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="3c3e9dbd-3348-0ec2-a5d0-66f4042e3436">
+      <Execution id="d3ccb9e2-59fd-4db2-86ae-b2b620bcc556" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidStartTurnCannotBeRescuedByLaterCompletion" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="75c502b2-6592-7dd2-161c-652347895aa0">
+      <Execution id="eca17695-1785-4971-9ea6-9acd2d276f80" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadMustConfirmEphemeralBeforePlannerInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedTerminalItemsAreInvalidBeforeFailureClassification(status: &quot;interrupted&quot;, wrongType: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="f95f95de-d818-f93f-4993-cf2d53739cec">
+      <Execution id="f27bb7ba-afdd-492e-9a39-d342db0158b9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedTerminalItemsAreInvalidBeforeFailureClassification" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="444a0ade-7c77-b7b0-2a75-2abdacec3c54" executionId="c27899e2-7f59-409a-83b2-e5502bfb1c86" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3c3e9dbd-3348-0ec2-a5d0-66f4042e3436" executionId="d3ccb9e2-59fd-4db2-86ae-b2b620bcc556" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9955349a-b0ad-13cd-1b84-5ac6c5c93ee4" executionId="21bf4363-6d0e-493c-9e64-a74598c7bd67" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d2c71d5e-d9fb-b38c-aa2e-a4daf61dda03" executionId="2ee27b48-c93d-4efa-a7ae-f3163523ac5e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c546f202-7042-20f8-effd-cf1048e120dc" executionId="0f44b42f-3cde-4ba4-aa5b-0773885b5757" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="aa516509-d99d-ff36-101b-4e29163f6c67" executionId="04ebf13e-f944-4a38-b78a-9fe2c57eb9af" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f95f95de-d818-f93f-4993-cf2d53739cec" executionId="f27bb7ba-afdd-492e-9a39-d342db0158b9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="da5897a9-2d92-5ee3-1dc6-88b785bf3df2" executionId="ae048bb1-cc4e-4d1f-a1e5-8e58add9a5a4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c19a6d7c-938d-867a-d35d-b8c2f775eb71" executionId="7ff7382e-8a97-4781-9a0c-553b8f583132" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a91e0432-7bb6-2ed2-11b7-0342efe0dcb7" executionId="a7100c5d-0a1c-4ce8-b3d9-0558ff4e544a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="02bcade8-33a4-7dcd-f3e7-2c624bc0ab5a" executionId="f8a41a7f-0b87-4d11-b301-4640562598ac" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0db2aa02-fa4f-a776-d2ae-53aebd61350b" executionId="5987388e-1878-4aee-bcb0-5d1f3bed1b2f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="22eb1f2f-68fb-a719-16ee-c6dabd51e86b" executionId="e2a0826c-b2e0-4cdd-a666-931aebf4437c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a0abae26-ffa0-4f83-23cf-0e1c66e36b7f" executionId="25d28355-bc40-4437-868a-8d97678d4e33" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="81b95c2d-d4d2-0989-2787-bcaff8771555" executionId="91fbef2b-12ea-4505-9ede-391424ffd81f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bb74e425-6cbc-2170-6932-206124683cc0" executionId="dcfc8e27-c457-4c25-a724-04d93c405e54" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fc1dd19c-7f04-c2eb-cac9-69b94084b652" executionId="24c98a5f-7a74-4e44-bd8b-c5dc1045fce0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="43a2b7dc-5566-714b-0879-44538372c892" executionId="a86e6d6f-fead-4ae1-9566-b5dd9268d01d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ab40446f-6b95-645e-7ab1-969c3f41b382" executionId="fc5a1e62-361e-48ac-bacb-0d630af1694d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="94014446-1e68-1748-fce8-fb42b40503e5" executionId="fa0c3085-ae6c-426f-92ab-b9ebb15fb0b0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5ae39499-9f39-dc62-6f1a-2b2bd22318e9" executionId="cee959d2-c2d1-45da-80d2-88eb6ccc0b22" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="30a9fcde-ff9d-1c21-0377-9adef4cdee8f" executionId="24a92c61-b6df-41ad-a208-8924317a62ed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d3ece408-b840-ede5-a0b7-1c964bdb50a1" executionId="768141df-db27-4ef4-924d-40f3ff168713" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="48cfc3f6-d323-6ba8-5951-157677ee2cae" executionId="2d441bf6-6213-4a99-80fe-495eb32f4ad9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fdf4abd4-63b0-07e9-3aba-372e3a095275" executionId="bac48cdd-93ba-4a73-b8c6-59b33ae92f7b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ec036d45-bf07-db13-bf2b-c750be153dc8" executionId="8fbd82dd-2e7e-4a69-8fe5-ee8db5b09043" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e8f83a27-4b0d-8640-99d9-a883e8372eee" executionId="2321067c-774d-4262-9fe8-a148adc5bfc0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="83b17064-82e7-7866-ab36-b5e32946026b" executionId="93e08db5-ac09-489d-bc58-ff9965a240c2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="335b7d2c-af7e-397b-92bd-efd591ddad61" executionId="a0c768c6-3d91-4329-9297-1b6fcbb2d0ce" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c5be7942-4213-aae5-ee39-081fcf2009e7" executionId="abf3e5ea-e02a-4f76-8778-17c550049e37" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3d6d8e28-5336-23b9-62ff-5bab762e651f" executionId="9a7909f8-3467-4ea8-b50a-b52655febf09" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3a2a07e3-d41d-540a-9fa5-32bb7e953b4c" executionId="42412313-f67e-4547-9bb5-59001da3d75a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="310600ae-28b1-be4f-f6f8-11fee3a6bb0c" executionId="bd75b333-da28-4c44-ab28-a4140ffef9f9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e9944658-d835-1bc1-e6cd-d06acbed356e" executionId="a9031967-361b-47df-a50b-bcae59df4067" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ce30d03a-3ebc-40e8-92f8-ded2b40e4e8d" executionId="63df0744-4fc9-4e6e-9972-c3d0976cae12" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="32e2b338-6da2-fe78-8e06-5000c0cc3e15" executionId="36bead8b-71b5-4ecd-9ace-91df038dcf94" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e6952879-33d6-dbdb-14c6-86861198dc6c" executionId="909c4a23-76f9-46f3-8bb5-f91388ccd5e3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9c10ec57-a36a-481a-8d86-f0e75278ee72" executionId="fff8452c-4208-4723-a70e-8c4ed7f24f85" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="145035d4-a4da-3ecf-0ca1-5b67310da697" executionId="96021e66-ff9f-4d51-93f7-42515faa87c7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="36ff9758-e94e-f34d-f8c1-802d9f4accd6" executionId="6c57d352-d023-434b-b32d-9a148a1a78cc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d9dc30fe-19ba-1edc-1d4d-ac524beb01d4" executionId="d6296524-89b8-471f-9b5b-e1ba83a6827d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="20a7cee6-2205-2f05-36a4-1b8d3778de4d" executionId="6e011a5f-5254-4f1a-b8c6-983f19476e7b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5a9a7c76-aa7e-1294-25c0-f2fdf50c662c" executionId="af68760b-afeb-46e1-8683-9675b8a7e494" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fd4b2d7a-a9b1-2715-e5a5-e9f31138c0f3" executionId="16316444-baf1-4907-9c61-2d74bb4b6487" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="75c502b2-6592-7dd2-161c-652347895aa0" executionId="eca17695-1785-4971-9ea6-9acd2d276f80" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f61d01f1-e11e-b901-40e2-65c441ceafc1" executionId="773647ea-7788-4e87-808f-a79ed55bdee8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="87addbe6-394f-5a62-3f7a-2d3036f6a28d" executionId="d5d6f3bd-64a6-4e40-abd1-2ab6a50da5b6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="67fb7670-2ba9-8a20-c745-49e856131791" executionId="f9cfc721-aed7-41e2-a206-597afc45e157" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="48" executed="48" passed="6" failed="42" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.27]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.33]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.33]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.33]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.33]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.33]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(57,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.36]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.36]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.36]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.36]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(95,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.37]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(118,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(175,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.37]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(245,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(Boolean overflow)&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.38]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5899507+09:00">
+        <Text>[xUnit.net 00:00:00.33]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "{}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5981895+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5986356+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5989063+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":\"false\""···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5990564+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5992594+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"dangerFullAccess\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5995032+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5996531+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":true}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.5998491+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":null}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6452121+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "\"on-request\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6452343+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"workspaceWrite\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6452536+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"unknown\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6452707+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6452869+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "{}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6456956+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "[{\"id\":\"x\",\"type\":\"agentMessage\"}]") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6457138+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6457292+09:00">
+        <Text>[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "[null]") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6457487+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "itemsView", value: "\"unknown\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6457654+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"completed\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6457883+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"interrupted\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6458051+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6458220+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"failed\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6458371+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6463883+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "durationMs", value: "\"wrong\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6464084+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "error", value: "{\"message\":42}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6464261+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6464417+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6464590+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "\"true\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6464763+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6464944+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "false") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6465112+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "[]") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6470257+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"activeTurnNotSteerable\":{}}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6470445+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{},\"other\":{}}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6471179+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":null}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6471422+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "\"unknown\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6471649+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":6553"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6471865+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":-1}}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6472109+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":\"50"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6472354+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"activeTurnNotSteerable\":{\"turnKind\":\"unknow"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6472559+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "42") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6479794+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:32.6480048+09:00">
+        <Text>[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

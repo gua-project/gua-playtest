@@ -52,7 +52,8 @@ cannot supply proposals. This preserves ephemeral threads: 0.150.1 rejects
 enable persisted history to work around that restriction.
 
 Before sending Planner input, the thread-start response must confirm an ephemeral
-thread, approval policy `never`, and effective `readOnly` sandbox with network
+thread with a complete pinned ThreadStartResponse/Thread shape, approval policy
+`never`, and effective `readOnly` sandbox with network
 access false (including the schema default when omitted). Broader, missing or
 malformed effective restrictions close the converter as a connection failure.
 These response checks do not prove OS enforcement or close OPEN-09.
@@ -60,6 +61,10 @@ These response checks do not prove OS enforcement or close OPEN-09.
 Start responses and turn-start notices validate the required Turn fields and
 in-progress status. Every terminal item is checked against the pinned 0.150.1
 ThreadItem schema before failure classification, including non-assistant items.
+Canonical item completion envelopes require the pinned integer completedAtMs
+timestamp before caching/hydration, both before and after the start response.
+A non-null Turn error is permitted only on failed status; completed/interrupted
+or in-progress turns with errors are contradictory and refuse output.
 Optional TurnError details use its pinned CodexErrorInfo union; malformed details
 are invalid output, while known backend failures retain safe typed status.
 The derived schemas are embedded for offline evaluation; their Apache-2.0 notice

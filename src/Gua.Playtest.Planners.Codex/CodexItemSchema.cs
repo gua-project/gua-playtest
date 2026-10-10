@@ -4,21 +4,35 @@ using Json.Schema;
 
 namespace Gua.Playtest.Planners.Codex;
 
-// Derived from rust-v0.150.1 ThreadStartResponse.json (ThreadItem) and
-// ErrorNotification.json (TurnError), including reachable references.
+// Derived from rust-v0.150.1 ThreadStartResponse.json,
+// ItemCompletedNotification.json and ErrorNotification.json (TurnError),
+// including reachable references.
 // Only annotations were removed. Apache-2.0.
 internal static class CodexItemSchema
 {
     private static readonly object Gate = new();
     private static readonly JsonSchema Schema = Load("ThreadItem");
     private static readonly JsonSchema ErrorSchema = Load("TurnError");
-    private static JsonSchema Load(string name)
+    private static readonly JsonSchema ThreadStartSchema = Load("ThreadStartResponse");
+    private static readonly JsonSchema ThreadSchema = Load("ThreadStartResponse", "Thread");
+    private static readonly JsonSchema ItemCompletedSchema = Load("ItemCompleted");
+    private static JsonSchema Load(string name, string? definition = null)
     {
         using var stream = typeof(CodexItemSchema).Assembly.GetManifestResourceStream("Gua.Playtest.Codex." + name)!;
         using var reader = new StreamReader(stream);
-        return JsonSchema.FromText(reader.ReadToEnd());
+        var json = reader.ReadToEnd();
+        if (definition is not null)
+        {
+            var source = JsonNode.Parse(json)!;
+            json = new JsonObject { ["$schema"] = "http://json-schema.org/draft-07/schema#",
+                ["$ref"] = "#/definitions/" + definition, ["definitions"] = source["definitions"]!.DeepClone() }.ToJsonString();
+        }
+        return JsonSchema.FromText(json);
     }
     public static bool Valid(JsonElement item) => Evaluate(Schema, item);
+    public static bool ValidThreadStart(JsonElement response) => Evaluate(ThreadStartSchema, response);
+    public static bool ValidThread(JsonElement thread) => Evaluate(ThreadSchema, thread);
+    public static bool ValidItemCompleted(JsonElement parameters) => Evaluate(ItemCompletedSchema, parameters);
     public static bool ValidError(JsonElement error)
     {
         if (!Evaluate(ErrorSchema, error)) return false;

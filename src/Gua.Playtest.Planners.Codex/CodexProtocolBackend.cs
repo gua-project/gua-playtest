@@ -103,6 +103,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     sandboxType.ValueKind != JsonValueKind.String || sandboxType.GetString() != "readOnly" ||
                     (sandbox.TryGetProperty("networkAccess", out var network) && network.ValueKind != JsonValueKind.False))
                     throw new BackendException();
+                if (!CodexItemSchema.ValidThreadStart(started)) throw new ProtocolException();
+                ValidateThread(createdThread);
                 threadId = Identifier(createdThread.GetProperty("id"));
             }
             var usageBaseline = usageHighWater;
@@ -154,7 +156,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 }
                 else if (method == "item/completed")
                 {
-                    ValidateTurnNotice(message, threadId, turnId);
+                    ValidateItemCompleted(message, threadId, turnId);
                     var item = parameters.GetProperty("item");
                     if (!CodexItemSchema.Valid(item)) throw new ProtocolException();
                     if (IsFinalAgent(item))
@@ -258,6 +260,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 if (notification is "thread/started" or "turn/started" or "thread/status/changed")
                 {
                     var notice = message.GetProperty("params");
+                    if (notification == "thread/started") ValidateThread(notice.GetProperty("thread"));
                     var noticeThread = Identifier(notification == "thread/started"
                         ? notice.GetProperty("thread").GetProperty("id") : notice.GetProperty("threadId"));
                     if ((threadId is not null && noticeThread != threadId) ||
@@ -292,6 +295,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 {
                     ValidateTurnNotice(message, threadId!, announcedTurn);
                     if (notification == "error") ValidateErrorNotice(message, threadId!, announcedTurn);
+                    if (notification == "item/completed") ValidateItemCompleted(message, threadId!, announcedTurn);
                     pendingBytes = checked(pendingBytes + Utf8.GetByteCount(message.GetRawText()));
                     if (pendingBytes > limits.MaximumFrameBytes) throw new ProtocolException();
                     pendingTurnEvents.Enqueue(message); continue;
@@ -399,7 +403,24 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             if (turn.TryGetProperty(name, out var timestamp) && timestamp.ValueKind != JsonValueKind.Null &&
                 (timestamp.ValueKind != JsonValueKind.Number || !timestamp.TryGetInt64(out _))) throw new ProtocolException();
         if (turn.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null &&
-            !CodexItemSchema.ValidError(error)) throw new ProtocolException();
+            (turn.GetProperty("status").GetString() != "failed" || !CodexItemSchema.ValidError(error)))
+            throw new ProtocolException();
+    }
+    private static void ValidateThread(JsonElement thread)
+    {
+        if (!CodexItemSchema.ValidThread(thread)) throw new ProtocolException();
+        _ = Identifier(thread.GetProperty("id"));
+        if (thread.GetProperty("ephemeral").ValueKind != JsonValueKind.True || thread.GetProperty("turns").GetArrayLength() != 0)
+            throw new ProtocolException();
+        foreach (var name in new[] { "createdAt", "updatedAt" })
+            if (!thread.GetProperty(name).TryGetInt64(out _)) throw new ProtocolException();
+    }
+    private static void ValidateItemCompleted(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        ValidateTurnNotice(message, expectedThread, expectedTurn);
+        var parameters = message.GetProperty("params");
+        if (!CodexItemSchema.ValidItemCompleted(parameters) || !parameters.GetProperty("completedAtMs").TryGetInt64(out _))
+            throw new ProtocolException();
     }
     private static void ValidateErrorNotice(JsonElement message, string expectedThread, string expectedTurn)
     {
