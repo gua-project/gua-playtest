@@ -375,15 +375,22 @@ public sealed class ReplayTests
     {
         using var files = new Fixture(completion: "onGoal", checkpoints: [0]);
         var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!;
-        plan["checkpoints"]![0]!["timeoutMilliseconds"] = 50; File.WriteAllText(files.PlanPath, plan.ToJsonString());
-        var clock = new MonotonicClock(); var feed = new Feed(clock) { Goal = false, Checkpoint = false };
+        plan["checkpoints"]![0]!["timeoutMilliseconds"] = 1000; File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        var clock = new CheckpointBoundaryClock(); var feed = new Feed(clock) { Goal = false, Checkpoint = false };
         feed.OnCapture = () => { if (feed.CheckpointCaptures > 0) feed.Goal = true; };
-        if (satisfies) feed.OnWait = () => feed.Checkpoint = true;
+        feed.OnWait = () => { clock.MoveTo(satisfies ? TimeSpan.FromMilliseconds(500) : TimeSpan.FromMilliseconds(1000)); feed.Checkpoint = satisfies; };
         var playback = new Playback(); var result = await Run(await files.Load(), feed, playback, clock);
         Assert.Equal(satisfies ? ResultStatus.Passed : ResultStatus.Failed, result.Run.Primary.Status);
         if (!satisfies) Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
         else Assert.Equal(0, result.Progress.OmittedFromStep);
         Assert.Equal(satisfies ? 1 : 0, result.Progress.CompletedCheckpoints); Assert.Equal(0, playback.Sends);
+    }
+    private sealed class CheckpointBoundaryClock : IClock
+    {
+        public TimeSpan Elapsed { get; private set; }
+        public void MoveTo(TimeSpan boundary) => Elapsed = boundary;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+            => new(Task.Delay(Timeout.InfiniteTimeSpan, token));
     }
     [Fact]
     public async Task OnGoalStopsReservedSuffixWhileFirstReceiptSettles()
