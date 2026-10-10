@@ -136,7 +136,16 @@ public sealed class ReplayDriver
         public TimeSpan? NextConditionEvaluationAt => next;
         public async ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         {
-            var unit = await feed.CaptureAsync(condition, token).ConfigureAwait(false);
+            ReplayObservation unit;
+            try
+            {
+                unit = await FiniteOperation.RunUntilAsync(run.AuthoritativeRealClock, deadline,
+                    captureToken => feed.CaptureAsync(condition, captureToken), token, run.PostException).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (FiniteOperation.IsDeadline(exception))
+            {
+                throw new RunFailureException(new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Condition), exception);
+            }
             ConditionEvaluation evaluated;
             try
             {

@@ -72,11 +72,12 @@ public sealed class ReplayTests
         public Action? OnWait { get; set; }
         public ConditionObservationUnit? PointOverride { get; set; }
         public Func<ReplayObservation, ReplayObservation>? EnvelopeOverride { get; set; }
+        public Func<CancellationToken, ValueTask>? BeforeCheckpointCapture { get; set; }
         public int CheckpointCaptures;
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { OnCapture?.Invoke(); return ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit(Goal), Unit(Failure))); }
         public async ValueTask<ReplayObservation> CaptureAsync(PreparedCondition point, CancellationToken token)
-        { CheckpointCaptures++; var unit = new ReplayObservation(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); return EnvelopeOverride?.Invoke(unit) ?? unit; }
+        { CheckpointCaptures++; if (BeforeCheckpointCapture is { } wait) await wait(token); var unit = new ReplayObservation(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); return EnvelopeOverride?.Invoke(unit) ?? unit; }
         public ValueTask WaitForChangeAsync(CancellationToken token)
         { if (OnWait is { } wake) { wake(); return ValueTask.CompletedTask; } return new(Task.Delay(Timeout.InfiniteTimeSpan, token)); }
     }
@@ -284,6 +285,23 @@ public sealed class ReplayTests
         public int Delays;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token = default)
         { token.ThrowIfCancellationRequested(); Delays++; return ValueTask.CompletedTask; }
+    }
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task LateTrueCheckpointCaptureCannotExtendPrivateDeadline(int boundary)
+    {
+        using var files = new Fixture(checkpoints: [boundary]);
+        var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!;
+        plan["checkpoints"]![0]!["timeoutMilliseconds"] = 20;
+        File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        var clock = new MonotonicClock(); var playback = new Playback();
+        var feed = new Feed(clock) { BeforeCheckpointCapture = token => new(Task.Delay(100, token)) };
+        var result = await Run(await files.Load(), feed, playback, clock);
+        Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status);
+        Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
+        Assert.Equal(boundary, playback.Sends); Assert.Equal(0, result.Progress.CompletedCheckpoints);
+        Assert.False(result.Progress.PlanCompleted);
     }
     [Fact]
     public async Task PrivateTemporalCheckpointRejectsEarlyFrozenClockWake()
