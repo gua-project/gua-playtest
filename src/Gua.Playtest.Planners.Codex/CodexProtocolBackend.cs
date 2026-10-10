@@ -94,7 +94,16 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 {
                     ["ephemeral"] = true, ["approvalPolicy"] = "never", ["sandbox"] = "read-only"
                 }, token).ConfigureAwait(false);
-                threadId = Identifier(started.GetProperty("thread").GetProperty("id"));
+                var createdThread = started.GetProperty("thread");
+                if (!createdThread.TryGetProperty("ephemeral", out var ephemeral) || ephemeral.ValueKind != JsonValueKind.True)
+                    throw new BackendException();
+                if (!started.TryGetProperty("approvalPolicy", out var approval) || approval.ValueKind != JsonValueKind.String ||
+                    approval.GetString() != "never" || !started.TryGetProperty("sandbox", out var sandbox) ||
+                    sandbox.ValueKind != JsonValueKind.Object || !sandbox.TryGetProperty("type", out var sandboxType) ||
+                    sandboxType.ValueKind != JsonValueKind.String || sandboxType.GetString() != "readOnly" ||
+                    (sandbox.TryGetProperty("networkAccess", out var network) && network.ValueKind != JsonValueKind.False))
+                    throw new BackendException();
+                threadId = Identifier(createdThread.GetProperty("id"));
             }
             var usageBaseline = usageHighWater;
             var result = await RequestAsync("turn/start", new JsonObject
@@ -105,7 +114,10 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 ["sandboxPolicy"] = new JsonObject { ["type"] = "readOnly", ["networkAccess"] = false },
                 ["outputSchema"] = outputSchema.DeepClone()
             }, token).ConfigureAwait(false);
-            var turnId = Identifier(result.GetProperty("turn").GetProperty("id"));
+            var startedTurn = result.GetProperty("turn");
+            ValidateTurn(startedTurn);
+            if (startedTurn.GetProperty("status").GetString() != "inProgress") throw new ProtocolException();
+            var turnId = Identifier(startedTurn.GetProperty("id"));
             CodexUsage? usage = null;
             var completedItems = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             var completedItemBytes = 0;
@@ -134,10 +146,17 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                         usageHighWater.OutputTokens - usageBaseline.OutputTokens,
                         usageHighWater.TotalTokens - usageBaseline.TotalTokens) : null;
                 }
+                else if (method == "error")
+                {
+                    ValidateErrorNotice(message, threadId, turnId);
+                    // Server retry telemetry is not a proposal or a client resend.
+                    // The correlated terminal completion remains authoritative.
+                }
                 else if (method == "item/completed")
                 {
                     ValidateTurnNotice(message, threadId, turnId);
                     var item = parameters.GetProperty("item");
+                    if (!CodexItemSchema.Valid(item)) throw new ProtocolException();
                     if (IsFinalAgent(item))
                     {
                         var itemId = Identifier(item.GetProperty("id"));
@@ -157,8 +176,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
                     var turn = parameters.GetProperty("turn");
                     if (Identifier(turn.GetProperty("id")) != turnId) throw new ProtocolException();
+                    ValidateTurn(turn);
                     var turnItems = turn.GetProperty("items");
-                    if (turnItems.ValueKind != JsonValueKind.Array) throw new ProtocolException();
                     token.ThrowIfCancellationRequested();
                     // A later cumulative snapshot cannot separate an unobserved earlier turn.
                     if (usage is null) usageBaselineKnown = false;
@@ -170,7 +189,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                         closed = true;
                         if (!turn.TryGetProperty("error", out var error) || error.ValueKind == JsonValueKind.Null)
                             return new(CodexReplyStatus.ConnectionFailure, Usage: usage);
-                        if (error.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
+                        if (!CodexItemSchema.ValidError(error)) throw new ProtocolException();
                         return new(error.TryGetProperty("codexErrorInfo", out var info) &&
                             info.ValueKind == JsonValueKind.String && info.GetString() is "usageLimitExceeded" or "sessionBudgetExceeded"
                             ? CodexReplyStatus.UsageLimit : CodexReplyStatus.ConnectionFailure, Usage: usage);
@@ -235,7 +254,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // 0.150.1 sends benign configuration/remote-control status notices
                 // after initialize. They grant no capabilities and still consume bounds.
                 var notification = message.GetProperty("method").GetString();
-                if (notification is "configWarning" or "remoteControl/status/changed") continue;
+                if (notification is "configWarning" or "remoteControl/status/changed" or "account/rateLimits/updated") continue;
                 if (notification is "thread/started" or "turn/started" or "thread/status/changed")
                 {
                     var notice = message.GetProperty("params");
@@ -259,6 +278,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (notification == "turn/started")
                     {
                         if (method != "turn/start") throw new ProtocolException();
+                        ValidateTurn(notice.GetProperty("turn"));
+                        if (notice.GetProperty("turn").GetProperty("status").GetString() != "inProgress") throw new ProtocolException();
                         var noticeTurn = Identifier(notice.GetProperty("turn").GetProperty("id"));
                         if (announcedTurn is not null && announcedTurn != noticeTurn) throw new ProtocolException();
                         announcedTurn = noticeTurn;
@@ -267,9 +288,10 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 }
                 if (method == "turn/start" && announcedTurn is not null && notification is not null &&
                     (notification.StartsWith("item/", StringComparison.Ordinal) ||
-                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification == "thread/tokenUsage/updated"))
+                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification is "thread/tokenUsage/updated" or "error"))
                 {
                     ValidateTurnNotice(message, threadId!, announcedTurn);
+                    if (notification == "error") ValidateErrorNotice(message, threadId!, announcedTurn);
                     pendingBytes = checked(pendingBytes + Utf8.GetByteCount(message.GetRawText()));
                     if (pendingBytes > limits.MaximumFrameBytes) throw new ProtocolException();
                     pendingTurnEvents.Enqueue(message); continue;
@@ -360,6 +382,31 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         var turn = message.GetProperty("method").GetString() == "turn/completed"
             ? parameters.GetProperty("turn").GetProperty("id") : parameters.GetProperty("turnId");
         if (Identifier(turn) != expectedTurn) throw new ProtocolException();
+    }
+    private static void ValidateTurn(JsonElement turn)
+    {
+        _ = Identifier(turn.GetProperty("id"));
+        if (turn.GetProperty("status").GetString() is not ("inProgress" or "completed" or "failed" or "interrupted"))
+            throw new ProtocolException();
+        var items = turn.GetProperty("items");
+        if (items.ValueKind != JsonValueKind.Array) throw new ProtocolException();
+        foreach (var item in items.EnumerateArray())
+            if (!CodexItemSchema.Valid(item)) throw new ProtocolException();
+        if (turn.TryGetProperty("itemsView", out var view) &&
+            (view.ValueKind != JsonValueKind.String || view.GetString() is not ("full" or "summary" or "notLoaded")))
+            throw new ProtocolException();
+        foreach (var name in new[] { "startedAt", "completedAt", "durationMs" })
+            if (turn.TryGetProperty(name, out var timestamp) && timestamp.ValueKind != JsonValueKind.Null &&
+                (timestamp.ValueKind != JsonValueKind.Number || !timestamp.TryGetInt64(out _))) throw new ProtocolException();
+        if (turn.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null &&
+            !CodexItemSchema.ValidError(error)) throw new ProtocolException();
+    }
+    private static void ValidateErrorNotice(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        ValidateTurnNotice(message, expectedThread, expectedTurn);
+        var parameters = message.GetProperty("params");
+        if (parameters.GetProperty("willRetry").ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+            !CodexItemSchema.ValidError(parameters.GetProperty("error"))) throw new ProtocolException();
     }
     private void RedactInput(JsonNode node)
     {
