@@ -1209,6 +1209,13 @@ public sealed class PreparationTests
         operation?.BeginDispatch(0);
         raceArmed = true;
         run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        if (dispatch)
+        {
+            // Goal is retained while the dispatched receipt is unresolved. The next
+            // owner poll must still discover the actual process exit and abandon it.
+            Assert.Null(run.Primary); Assert.True(operation!.IsOpen); Assert.True(run.GoalVerified);
+            run.Evaluate(BooleanUnit(true), TimeSpan.Zero, failureUnit: BooleanUnit(false));
+        }
         var outcome = await cleanup.CompleteAsync(run, clock);
         Assert.Equal(1, outcome.ExitCode);
         Assert.Contains(outcome.Events, item => item.Reason == RunReason.ExecutionError && item.Origin == RunOrigin.Host);
