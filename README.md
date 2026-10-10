@@ -33,4 +33,6 @@ dotnet run --project src/Gua.Playtest.Cli -- doctor --native
 
 Trace writer/reader/詳細 Viewer は Gua の `GuaTraceSession` / `GuaTraceReader` / `GuaTraceReport` をそのまま使い、Playtest 独自形式へ複製しない。実製品の Run への接続は #9。境界テストは public package だけで round-trip、Player profile、秘密値 redaction、HTML の非上書きを確認する。
 
+[Replay composition](docs/replay.md) は保持した Plan/Recording bytes、既存 Run owner、初期・中間条件、全操作完了を接続する。GuaIntegration の公開 `Gua.Testing.Recording` 1.1.1 adapter が Gua の UI/Timed Segment scheduler を消費する。UI の原子的送信には host 全体の lifecycle lease が必要で、厳密 timing capability がない host を拒否する。native/transport fixture は実 engine/Planner の受け入れと区別する。
+
 PR/push CI は build、tests、実際に zip 展開した self-contained archive と独立 tool-path への .NET Tool install を実行する。公開/release job はない。現 smoke は早期実行試験であり、最終配布、ライセンス閉包、engine、実 Codex、全 E2E の完了は #18 で確認する。[要件対応と残件](foundation-evidence.md)。

@@ -21,6 +21,16 @@
           "JsonSchema.Net": "7.3.4"
         }
       },
+      "Gua.Testing.Recording": {
+        "type": "Direct",
+        "requested": "[1.1.1, 1.1.1]",
+        "resolved": "1.1.1",
+        "contentHash": "iMKFDHIJek8xNEvj/grxDbCcn3oqTDySYCA8BBf9AIldZp5xBkuP+HKxuI16+7sReUoyjJMEAHxlz3aP5/aWOQ==",
+        "dependencies": {
+          "Gua.Runtime": "1.1.1",
+          "Gua.Testing": "1.1.1"
+        }
+      },
       "Gua.Core": {
         "type": "Transitive",
         "resolved": "1.1.1",
