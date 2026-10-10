@@ -19,6 +19,7 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
     public ValueTask<T> SendAsync<T>(int index, Func<Action, ReplaySend<T>> callback, CancellationToken token)
         => InvokeAsync(() =>
         {
+            if (operation.DispatchClosedByGoal) throw new ReplayDispatchClosedException();
             if (index != next || index < 0 || index >= operation.Actions!.Deliveries.Count)
                 throw Failure(RunReason.InvalidContract, RunOrigin.Contract);
             if (check() != ReplayCheck.Approved) throw Failure(RunReason.ActionFailed, RunOrigin.Host);
@@ -58,7 +59,7 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
             }
             catch (Exception exception)
             {
-                if (exception is not OperationCanceledException) run.PostProviderException(exception is RunFailureException ? exception
+                if (exception is not (OperationCanceledException or ReplayDispatchClosedException)) run.PostProviderException(exception is RunFailureException ? exception
                     : new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), exception));
                 completion.TrySetException(exception);
             }

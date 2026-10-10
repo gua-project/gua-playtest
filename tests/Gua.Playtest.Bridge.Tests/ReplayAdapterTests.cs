@@ -21,7 +21,7 @@ public sealed class ReplayAdapterTests
         private static object Enter(object gate) { Monitor.Enter(gate); return gate; }
         public void Dispose() => Monitor.Exit(gate);
     }
-    private sealed class Calls(Action? afterSend = null) : IReplayCalls
+    private sealed class Calls(Action? afterSend = null, int? goalStopAt = null) : IReplayCalls
     {
         public int Sends;
         public ValueTask<T> ReadAsync<T>(Func<T> callback, CancellationToken token)
@@ -29,6 +29,7 @@ public sealed class ReplayAdapterTests
         public ValueTask<T> SendAsync<T>(int index, Func<Action, ReplaySend<T>> callback, CancellationToken token)
         {
             token.ThrowIfCancellationRequested(); Assert.Equal(Sends, index);
+            if (index == goalStopAt) throw new ReplayDispatchClosedException();
             var result = callback(() => { token.ThrowIfCancellationRequested(); Sends++; });
             afterSend?.Invoke(); return ValueTask.FromResult(result.Value);
         }
@@ -126,6 +127,8 @@ public sealed class ReplayAdapterTests
         public GuaTimedSegment? Segment;
         public int Releases, Ends;
         public Exception? SendFault { get; set; }
+        public bool CompletionSuccess = true;
+        public double? AppliedTime;
         public string? CleanupFaultAt { get; set; }
         public Exception? OriginalCleanupFault { get; set; }
         public Action? OnSend { get; set; }
@@ -137,7 +140,7 @@ public sealed class ReplayAdapterTests
             Sent.Add(input); OnSend?.Invoke(); return (ulong)Sent.Count;
         }
         private void CleanupFault(string phase) { if (Releases > 0 && CleanupFaultAt == phase) throw OriginalCleanupFault!; }
-        public GuaTimedCompletion? Poll(ulong id) { CleanupFault("poll"); return new(true); }
+        public GuaTimedCompletion? Poll(ulong id) { CleanupFault("poll"); return new(id == 100 || CompletionSuccess, HostAppliedMilliseconds: id == 100 ? null : AppliedTime); }
         public ulong ReleaseAll() { Releases++; CleanupFault("release"); return 100; }
         public void End() { Ends++; CleanupFault("end"); }
     }
@@ -185,6 +188,46 @@ public sealed class ReplayAdapterTests
         Assert.Equal(new long[] { 0, 0 }, host.Sent.Select(x => x.OffsetMilliseconds));
         Assert.Equal(new[] { GuaGameInputOperation.Down, GuaGameInputOperation.Up }, host.Sent.Select(x => x.Operation));
         Assert.Equal(1, host.Releases); Assert.Equal(1, host.Ends); Assert.True(receipt.NeutralConfirmed);
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GoalClosureSettlesOnlyActualTimedPrefixAndRequiresSuccessfulReceipts(bool completionSuccess)
+    {
+        var host = new TimedHost { CompletionSuccess = completionSuccess }; var calls = new Calls(goalStopAt: 1);
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing());
+        var receipt = await replay.PlayAsync(GameBatch(), calls, default);
+        Assert.Equal(completionSuccess ? ReplayReceiptStatus.Succeeded : ReplayReceiptStatus.Failed, receipt.Status);
+        Assert.Equal(1, receipt.CompletedSteps); Assert.Equal(1, calls.Sends); Assert.Single(host.Sent);
+        Assert.True(receipt.NeutralConfirmed); Assert.True(host.Releases >= 1); Assert.Equal(1, host.Ends);
+    }
+    [Fact]
+    public async Task GoalClosureCannotHideMeasuredApplicationTimingFailure()
+    {
+        var host = new TimedHost { AppliedTime = 500 }; var calls = new Calls(goalStopAt: 1);
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing());
+        var receipt = await replay.PlayAsync(GameBatch(), calls, default);
+        Assert.Equal(ReplayReceiptStatus.Failed, receipt.Status); Assert.Equal(1, receipt.CompletedSteps);
+        Assert.Single(host.Sent); Assert.True(host.Releases >= 1);
+    }
+    [Fact]
+    public async Task GoalClosureStopsPublicUiAfterConfirmedNativePrefix()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy");
+        using var context = new GuaWebSocketContext(Start(runtime));
+        var batch = Batch(); var json = System.Text.Json.Nodes.JsonNode.Parse(batch.RecordingJson)!;
+        json["steps"]!.AsArray().Add(json["steps"]![0]!.DeepClone()); batch = batch with { Count = 2, RecordingJson = json.ToJsonString() };
+        var calls = new Calls(() =>
+        {
+            lock (lifecycle)
+            {
+                Assert.True(runtime.TryConsumeAction(GuaActionType.Click, "buy", out var request));
+                runtime.EmitActionResult(request, true);
+            }
+        }, goalStopAt: 1);
+        var receipt = await Playback(context).PlayAsync(batch, calls, default);
+        Assert.Equal(ReplayReceiptStatus.Succeeded, receipt.Status); Assert.Equal(1, receipt.CompletedSteps);
+        Assert.Equal(1, calls.Sends); Assert.False(runtime.TryConsumeAction(GuaActionType.Click, "buy", out _));
     }
     [Fact]
     public void StrictTimingRejectsHostWithoutMeasuredCapability()

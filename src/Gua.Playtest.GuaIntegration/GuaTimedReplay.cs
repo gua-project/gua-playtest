@@ -69,11 +69,30 @@ public sealed class GuaTimedReplay : IReplayPlayback
                 throw;
             }
             var count = result.Inputs.Count(i => i.ResultReceivedMilliseconds is not null && i.Succeeded is not null);
-            var status = result.Outcome == GuaSegmentOutcome.Succeeded ? ReplayReceiptStatus.Succeeded
+            var goalPrefixSucceeded = queued.GoalStopped && queued.OriginalException is null &&
+                result.NeutralConfirmed && result.CleanupSucceeded &&
+                result.Inputs.Where(i => i.SentMilliseconds is not null).All(i => i.Succeeded == true && i.ResultReceivedMilliseconds is not null) &&
+                PrefixApplicationValid(result.Inputs, policy);
+            var status = result.Outcome == GuaSegmentOutcome.Succeeded || goalPrefixSucceeded ? ReplayReceiptStatus.Succeeded
                 : result.Inputs.Any(i => i.SentMilliseconds is not null && i.ResultReceivedMilliseconds is null)
                     ? ReplayReceiptStatus.Unconfirmed : ReplayReceiptStatus.Failed;
             return new ReplayReceipt(status, count, result.NeutralConfirmed && result.CleanupSucceeded, queued.OriginalException);
         }, token));
+    private static bool PrefixApplicationValid(IReadOnlyList<GuaTimedInputResult> inputs, GuaReplayTimingPolicy policy)
+    {
+        double? previous = null; long previousOffset = -1;
+        foreach (var input in inputs.Where(i => i.SentMilliseconds is not null))
+        {
+            if (input.HostAppliedMilliseconds is not { } applied)
+            { if (policy.RequireApplicationTimes || policy.RequireSameTickApplication) return false; continue; }
+            if (!double.IsFinite(applied) || applied < input.ScheduledMilliseconds ||
+                applied - input.ScheduledMilliseconds > policy.MaxLatenessMilliseconds ||
+                previous is { } prior && (applied < prior || policy.RequireSameTickApplication &&
+                    input.ScheduledMilliseconds == previousOffset && applied != prior)) return false;
+            previous = applied; previousOffset = input.ScheduledMilliseconds;
+        }
+        return true;
+    }
     private GuaTimedSegment Import(ReplayBatch batch, Func<string, GuaGameInputValueType?>? importValueType = null)
     {
         if (batch.Timing is not ("recorded" or "conditionSynchronized") || batch.OffsetBaseMilliseconds < 0)
@@ -107,6 +126,7 @@ public sealed class GuaTimedReplay : IReplayPlayback
         private bool cleaning;
         private bool dispatchingOnOwner;
         public Exception? OriginalException { get; private set; }
+        public bool GoalStopped { get; private set; }
         private T Retain<T>(Func<T> callback)
         {
             try { return callback(); }
@@ -126,7 +146,8 @@ public sealed class GuaTimedReplay : IReplayPlayback
             => Read(() => { if (host is IGuaTimedSegmentValueHost valueHost) valueHost.Begin(segment, values); else host.Begin(segment); return true; });
         public ulong Send(GuaTimedInput input, JsonElement? secret, Action verifySendBoundary)
         {
-            var request = calls.SendAsync(next, beforeSend =>
+            ulong request;
+            try { request = calls.SendAsync(next, beforeSend =>
             {
                 dispatchingOnOwner = true;
                 try
@@ -140,7 +161,8 @@ public sealed class GuaTimedReplay : IReplayPlayback
                     return new ReplaySend<ulong>(id, id != 0);
                 }
                 finally { dispatchingOnOwner = false; }
-            }, token).AsTask().GetAwaiter().GetResult();
+            }, token).AsTask().GetAwaiter().GetResult(); }
+            catch (ReplayDispatchClosedException) { GoalStopped = true; throw; }
             next++; return request;
         }
         public GuaTimedCompletion? Poll(ulong requestId) => cleaning ? Retain(() => host.Poll(requestId)) : Read(() => host.Poll(requestId));

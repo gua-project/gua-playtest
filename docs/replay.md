@@ -16,8 +16,10 @@ earlier snapshot cannot substitute for it. Replay never restores Trace snapshots
 
 The feed captures success, failure and the requested checkpoint together at one trusted
 condition-clock boundary. Each checkpoint starts a fresh condition session when playback
-reaches it. Repeated boundaries run in file order. Checkpoint timeout and Goal observation
-remain finite under the original Run deadline. Recording coverage is contiguous from zero
+reaches it. Repeated boundaries run in file order. Each reached checkpoint receives fresh
+observation authority under its own timeout, WaitTimeout and the original Run deadline;
+it must settle before `onGoal` can pass. This authority consumes no action or decision
+budget and cannot authorize more playback. Recording coverage is contiguous from zero
 through its final step, including normal releases; splitting at checkpoints does not skip
 steps. A batch reserves its whole action count before any dispatch. Existing approved
 work can settle after the last action budget is consumed; a new operation cannot reopen
@@ -29,6 +31,12 @@ steps alone cannot produce Passed. `onGoal` reports the first omitted step in
 `ReplayProgress.OmittedFromStep`; progress separately reports dispatched/completed steps,
 completed checkpoints and Plan completion. Safety cleanup and its exit 11 obligations
 remain separate from the immutable primary result.
+
+When `onGoal` becomes verified during an in-flight batch, reserved suffix requests close
+immediately. The adapter receives `ReplayDispatchClosedException` on a later send and
+settles the actual prefix with required input neutralization. A partial successful receipt
+is accepted only for this explicit Goal closure and the exact dispatched count; failed or
+unconfirmed prefix results still fail. Impossible completion counts do not enter progress.
 
 `IReplayPlayback` is a trusted adapter. Gua resumes playback on a worker; `IReplayCalls`
 marshals its reads and actual sends back to the serialized execution owner. Every send

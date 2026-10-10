@@ -26,3 +26,7 @@ public interface IReplayCalls
     ValueTask<T> SendAsync<T>(int actionIndex, Func<Action, ReplaySend<T>> callback, CancellationToken cancellationToken);
 }
 public sealed record ReplaySend<T>(T Value, bool Enqueued);
+
+/// <summary>The owner revoked unsent suffix work after its verified onGoal fact.
+/// The adapter must settle the actual prefix and neutralize owned inputs; this grants no result authority.</summary>
+public sealed class ReplayDispatchClosedException() : Exception("ReplayDispatchClosedByGoal");

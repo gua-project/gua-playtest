@@ -51,10 +51,13 @@ public sealed class ReplayDriver
                 {
                     foreach (var point in replay.Checkpoints.Where(p => p.BeforeStep == cursor))
                     {
-                        active ??= owner.ApproveOperation(0, Min(point.Timeout, limits.WaitTimeout));
+                        active?.Complete();
+                        active = owner.ApproveObservation(Min(point.Timeout, limits.WaitTimeout));
                         if (active is null) return false;
                         if (!await CheckpointAsync(owner, feed!, point.Condition, active, point.Timeout, token).ConfigureAwait(false)) return false;
                         checkpoints++;
+                        active.Complete(); active = null;
+                        if (owner.Primary is not null) return false;
                     }
                     if (cursor == replay.StepCount)
                     {
@@ -63,12 +66,13 @@ public sealed class ReplayDriver
                         planCompleted = true;
                         if (!owner.GoalVerified && replay.Success is not null)
                         {
-                            active ??= owner.ApproveOperation(0, limits.WaitTimeout);
+                            active?.Complete(); active = owner.ApproveObservation(limits.WaitTimeout);
                             if (active is not null)
                             {
                                 var reached = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                                 await RunMonitor.AwaitAsync(owner, realClock, conditionClock, new GoalFeed(feed!, owner, reached),
-                                    waitToken => new ValueTask<bool>(reached.Task.WaitAsync(waitToken)), _ => [], token).ConfigureAwait(false);
+                                    waitToken => new ValueTask<bool>(reached.Task.WaitAsync(waitToken)), _ => [], token,
+                                    _ => active.ConfirmResult()).ConfigureAwait(false);
                             }
                         }
                         active?.Complete();
@@ -86,7 +90,8 @@ public sealed class ReplayDriver
                     using var calls = new ReplayCalls(owner, active, () => playback.Check(batch, starting: false), () => dispatched++);
                     var pump = new PumpFeed(feed!, calls, owner);
                     var result = await RunMonitor.AwaitAsync(owner, realClock, conditionClock, pump,
-                        workToken => playback.PlayAsync(batch, calls, workToken), receipt => ReceiptEvents(receipt, batch.Count), token,
+                        workToken => playback.PlayAsync(batch, calls, workToken), receipt => ReceiptEvents(receipt, batch.Count,
+                            active.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain), active.DispatchClosedByGoal), token,
                         receipt =>
                         {
                             if (receipt?.OriginalException is { } exception) owner.RecordException(exception);
@@ -94,7 +99,9 @@ public sealed class ReplayDriver
                                 && receipt.Status != ReplayReceiptStatus.Unconfirmed)
                                 active.ConfirmResult();
                         }).ConfigureAwait(false);
-                    if (result.Value is { } received) completed += Math.Clamp(received.CompletedSteps, 0, batch.Count);
+                    if (result.Value is { } received && received.CompletedSteps >= 0 && received.CompletedSteps <= batch.Count &&
+                        received.CompletedSteps <= active.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain))
+                        completed += received.CompletedSteps;
                     if (!result.Completed || result.Value?.Status != ReplayReceiptStatus.Succeeded || !active.ResultConfirmed) return false;
                     cursor = end;
                     if (cursor < replay.StepCount && !replay.Checkpoints.Any(p => p.BeforeStep == cursor))
@@ -108,10 +115,10 @@ public sealed class ReplayDriver
             outcome.Primary.Status == ResultStatus.Passed && !planCompleted ? dispatched : null, run.GoalVerified));
     }
 
-    private static IReadOnlyList<RunEvent> ReceiptEvents(ReplayReceipt? receipt, int count)
+    private static IReadOnlyList<RunEvent> ReceiptEvents(ReplayReceipt? receipt, int count, int actual, bool goalClosed)
     {
-        if (receipt is null || !Enum.IsDefined(receipt.Status) || receipt.CompletedSteps < 0 || receipt.CompletedSteps > count ||
-            receipt.Status == ReplayReceiptStatus.Succeeded && receipt.CompletedSteps != count)
+        if (receipt is null || !Enum.IsDefined(receipt.Status) || receipt.CompletedSteps < 0 || receipt.CompletedSteps > count || receipt.CompletedSteps > actual ||
+            receipt.Status == ReplayReceiptStatus.Succeeded && receipt.CompletedSteps != (goalClosed ? actual : count))
             return [new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract)];
         if (receipt.Status == ReplayReceiptStatus.Unconfirmed) return [new(RunReason.ActionUnconfirmed, RunPhase.Execution, RunOrigin.Host)];
         if (receipt.Status == ReplayReceiptStatus.Failed || !receipt.NeutralConfirmed) return [new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host)];
@@ -126,8 +133,10 @@ public sealed class ReplayDriver
         var boundary = Min(run.AuthoritativeRealClock.Elapsed + timeout, operation.Deadline);
         var checkpointFeed = new CheckpointFeed(feed, run, condition, session, completion, boundary);
         var result = await RunMonitor.AwaitAsync(run, run.AuthoritativeRealClock, run.AuthoritativeConditionClock, checkpointFeed,
-            waitToken => new ValueTask<IReadOnlyList<RunEvent>>(completion.Task.WaitAsync(waitToken)), events => events, token).ConfigureAwait(false);
-        return result.Completed && result.Value?.Count == 0;
+            waitToken => new ValueTask<IReadOnlyList<RunEvent>>(completion.Task.WaitAsync(waitToken)), events => events, token,
+            events => { if (events.Count == 0) operation.ConfirmResult(); }).ConfigureAwait(false);
+        return operation.ResultConfirmed && completion.Task.IsCompletedSuccessfully && completion.Task.Result.Count == 0 &&
+            (result.Completed || run.Primary?.Status == ResultStatus.Passed);
     }
     private sealed class CheckpointFeed(IReplayObservationFeed feed, RunSession run, PreparedCondition condition, ConditionSession session,
         TaskCompletionSource<IReadOnlyList<RunEvent>> completion, TimeSpan deadline) : IRunObservationFeed, IRunConditionSchedule

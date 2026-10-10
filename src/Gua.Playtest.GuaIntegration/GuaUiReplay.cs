@@ -55,6 +55,11 @@ public sealed class GuaUiReplay : IReplayPlayback
                 }, token).ConfigureAwait(false);
                 return new ReplayReceipt(ReplayReceiptStatus.Succeeded, queued.CompletedSteps, true);
             }
+            catch (ReplayDispatchClosedException)
+            {
+                // UI playback awaits each correlated result before requesting the next action.
+                return new ReplayReceipt(ReplayReceiptStatus.Succeeded, queued.CompletedSteps, true);
+            }
             catch (GuaActionException exception)
             {
                 return new ReplayReceipt(exception.Kind is GuaActionFailureKind.Failed or GuaActionFailureKind.Rejected

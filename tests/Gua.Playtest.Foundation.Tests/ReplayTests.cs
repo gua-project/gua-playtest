@@ -72,12 +72,12 @@ public sealed class ReplayTests
         public Action? OnWait { get; set; }
         public ConditionObservationUnit? PointOverride { get; set; }
         public Func<ReplayObservation, ReplayObservation>? EnvelopeOverride { get; set; }
-        public Func<CancellationToken, ValueTask>? BeforeCheckpointCapture { get; set; }
+        public Func<PreparedCondition, CancellationToken, ValueTask>? BeforeCheckpointCapture { get; set; }
         public int CheckpointCaptures;
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { OnCapture?.Invoke(); return ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit(Goal), Unit(Failure))); }
         public async ValueTask<ReplayObservation> CaptureAsync(PreparedCondition point, CancellationToken token)
-        { CheckpointCaptures++; if (BeforeCheckpointCapture is { } wait) await wait(token); var unit = new ReplayObservation(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); return EnvelopeOverride?.Invoke(unit) ?? unit; }
+        { CheckpointCaptures++; if (BeforeCheckpointCapture is { } wait) await wait(point, token); var unit = new ReplayObservation(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); return EnvelopeOverride?.Invoke(unit) ?? unit; }
         public ValueTask WaitForChangeAsync(CancellationToken token)
         { if (OnWait is { } wake) { wake(); return ValueTask.CompletedTask; } return new(Task.Delay(Timeout.InfiniteTimeSpan, token)); }
     }
@@ -90,11 +90,15 @@ public sealed class ReplayTests
         public Action? AfterPlayback;
         public Action? OnSend { get; set; }
         public Func<CancellationToken, ValueTask>? BeforeResult { get; set; }
+        public Func<CancellationToken, ValueTask>? BetweenSends { get; set; }
         public List<int> Order { get; } = [];
         public ReplayCheck Check(ReplayBatch batch, bool starting = true) { Checks++; return RejectAfter is { } at && Sends >= at ? ReplayCheck.PermissionDenied : ReplayCheck.Approved; }
         public async ValueTask<ReplayReceipt> PlayAsync(ReplayBatch batch, IReplayCalls calls, CancellationToken token)
         {
             Plays++;
+            var prefix = 0;
+            try
+            {
             for (var i = 0; !SkipSend && i < batch.Count; i++)
             {
                 var index = Duplicate ? 0 : i;
@@ -103,7 +107,11 @@ public sealed class ReplayTests
                     if (!OmitGuard) beforeSend(); if (GuardTwice) beforeSend();
                     Sends++; Order.Add(batch.BeforeStep + i); OnSend?.Invoke(); return new ReplaySend<bool>(true, true);
                 }, token);
+                prefix++;
+                if (i == 0 && BetweenSends is { } between) await between(token);
             }
+            }
+            catch (ReplayDispatchClosedException) { return new(ReplayReceiptStatus.Succeeded, prefix, Neutral); }
             if (BeforeResult is { } wait) await wait(token);
             AfterPlayback?.Invoke();
             return new(Status, batch.Count, Neutral);
@@ -187,7 +195,8 @@ public sealed class ReplayTests
     {
         using var files = new Fixture(); var clock = new MonotonicClock();
         var result = await Run(await files.Load(), new(clock), new Playback { SkipSend = true }, clock);
-        Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status); Assert.False(result.Progress.PlanCompleted);
+        Assert.Equal(ResultStatus.Invalid, result.Run.Primary.Status); Assert.False(result.Progress.PlanCompleted);
+        Assert.Equal(0, result.Progress.CompletedSteps); Assert.Equal(0, result.Progress.DispatchedSteps);
     }
     [Fact]
     public async Task WholeBatchBudgetRejectionNeverPartiallyStarts()
@@ -297,7 +306,7 @@ public sealed class ReplayTests
         plan["checkpoints"]![0]!["timeoutMilliseconds"] = 20;
         File.WriteAllText(files.PlanPath, plan.ToJsonString());
         var clock = new MonotonicClock(); var playback = new Playback();
-        var feed = new Feed(clock) { BeforeCheckpointCapture = token => new(Task.Delay(100, token)) };
+        var feed = new Feed(clock) { BeforeCheckpointCapture = (_, token) => new(Task.Delay(100, token)) };
         var result = await Run(await files.Load(), feed, playback, clock);
         Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status);
         Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
@@ -314,6 +323,53 @@ public sealed class ReplayTests
         Assert.Equal(1, owner!.Budget.Snapshot.Actions); Assert.Equal(0, owner.Budget.Snapshot.ReservedActions);
         Assert.Equal(1, result.Progress.DispatchedSteps); Assert.Equal(0, result.Progress.CompletedSteps);
         Assert.Equal(1, playback.Sends); Assert.False(result.Progress.PlanCompleted);
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task RepeatedReachedCheckpointsEachHaveFreshFiniteWindow(int boundary)
+    {
+        using var files = new Fixture(checkpoints: [boundary, boundary]);
+        var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!;
+        foreach (var point in plan["checkpoints"]!.AsArray()) point!["timeoutMilliseconds"] = 1500;
+        File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        var delayed = new HashSet<PreparedCondition>();
+        var clock = new MonotonicClock(); var feed = new Feed(clock)
+        { BeforeCheckpointCapture = (point, token) => delayed.Add(point) ? new(Task.Delay(1100, token)) : ValueTask.CompletedTask };
+        var result = await Run(await files.Load(), feed, new Playback(), clock, actions: 2);
+        Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status);
+        Assert.Equal(2, result.Progress.CompletedCheckpoints); Assert.True(result.Progress.PlanCompleted);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnGoalMustSettleAlreadyReachedCheckpoint(bool satisfies)
+    {
+        using var files = new Fixture(completion: "onGoal", checkpoints: [0]);
+        var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!;
+        plan["checkpoints"]![0]!["timeoutMilliseconds"] = 50; File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        var clock = new MonotonicClock(); var feed = new Feed(clock) { Goal = false, Checkpoint = false };
+        feed.OnCapture = () => { if (feed.CheckpointCaptures > 0) feed.Goal = true; };
+        if (satisfies) feed.OnWait = () => feed.Checkpoint = true;
+        var playback = new Playback(); var result = await Run(await files.Load(), feed, playback, clock);
+        Assert.Equal(satisfies ? ResultStatus.Passed : ResultStatus.Failed, result.Run.Primary.Status);
+        if (!satisfies) Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
+        else Assert.Equal(0, result.Progress.OmittedFromStep);
+        Assert.Equal(satisfies ? 1 : 0, result.Progress.CompletedCheckpoints); Assert.Equal(0, playback.Sends);
+    }
+    [Fact]
+    public async Task OnGoalStopsReservedSuffixWhileFirstReceiptSettles()
+    {
+        using var files = new Fixture(completion: "onGoal"); var clock = new MonotonicClock(); var feed = new Feed(clock) { Goal = false };
+        var captured = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        feed.OnCapture = () => { if (feed.Goal) captured.TrySetResult(true); };
+        var playback = new Playback { OnSend = () => feed.Goal = true,
+            BetweenSends = async token => { await captured.Task.WaitAsync(token); await Task.Delay(30, token); } };
+        RunSession? owner = null;
+        var result = await Run(await files.Load(), feed, playback, clock, inspect: run => owner = run);
+        Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status); Assert.Equal(1, playback.Sends);
+        Assert.Equal(1, result.Progress.CompletedSteps); Assert.Equal(1, result.Progress.OmittedFromStep);
+        Assert.Equal(1, owner!.Budget.Snapshot.Actions); Assert.Equal(0, owner.Budget.Snapshot.ReservedActions);
     }
     [Fact]
     public async Task PrivateTemporalCheckpointRejectsEarlyFrozenClockWake()
