@@ -42,6 +42,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     private int messages;
     private CodexUsage usageHighWater = new(0, 0, 0);
     private bool usageBaselineKnown = true;
+    private readonly Queue<JsonElement> pendingTurnEvents = new();
+    private int pendingBytes;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public CodexProtocolBackend(string runId, ICodexProtocolTransport transport, JsonObject outputSchema,
@@ -73,6 +75,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             if (closed || input.RunId != runId || requests.Count >= 10000 || !requests.Add(input.DecisionRequestId))
                 return new(CodexReplyStatus.OutputInvalid);
             messages = 0;
+            pendingTurnEvents.Clear(); pendingBytes = 0;
             var projected = JsonNode.Parse(ContractJson.Serialize(input)) ?? throw new ProtocolException();
             RedactInput(projected);
             var publicInput = projected.ToJsonString();
@@ -104,9 +107,11 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             }, token).ConfigureAwait(false);
             var turnId = Identifier(result.GetProperty("turn").GetProperty("id"));
             CodexUsage? usage = null;
+            var completedItems = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            var completedItemBytes = 0;
             while (true)
             {
-                var message = await ReadAsync(token).ConfigureAwait(false);
+                var message = pendingTurnEvents.Count > 0 ? pendingTurnEvents.Dequeue() : await ReadAsync(token).ConfigureAwait(false);
                 // Server requests are capabilities we never grant (including approvals and tools).
                 if (message.TryGetProperty("id", out _)) throw new ProtocolException();
                 var method = message.GetProperty("method").GetString();
@@ -119,13 +124,33 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (parameters.GetProperty("turnId").GetString() != turnId) throw new ProtocolException();
                     // `last` is one model response; `total` accumulates the thread.
                     // Duplicate or regressive snapshots must not erase already observed usage.
-                    var total = parameters.GetProperty("tokenUsage").GetProperty("total");
+                    var tokenUsage = parameters.GetProperty("tokenUsage");
+                    ValidateUsage(tokenUsage.GetProperty("last"));
+                    var total = tokenUsage.GetProperty("total"); ValidateUsage(total);
                     usageHighWater = new(Math.Max(usageHighWater.InputTokens, Nonnegative(total, "inputTokens")),
                         Math.Max(usageHighWater.OutputTokens, Nonnegative(total, "outputTokens")),
                         Math.Max(usageHighWater.TotalTokens, Nonnegative(total, "totalTokens")));
                     usage = usageBaselineKnown ? new(usageHighWater.InputTokens - usageBaseline.InputTokens,
                         usageHighWater.OutputTokens - usageBaseline.OutputTokens,
                         usageHighWater.TotalTokens - usageBaseline.TotalTokens) : null;
+                }
+                else if (method == "item/completed")
+                {
+                    ValidateTurnNotice(message, threadId, turnId);
+                    var item = parameters.GetProperty("item");
+                    if (IsFinalAgent(item))
+                    {
+                        var itemId = Identifier(item.GetProperty("id"));
+                        CheckRedaction(item);
+                        if (completedItems.TryGetValue(itemId, out var previous))
+                        { if (!JsonElement.DeepEquals(previous, item)) throw new ProtocolException(); }
+                        else
+                        {
+                            completedItemBytes = checked(completedItemBytes + Utf8.GetByteCount(item.GetRawText()));
+                            if (completedItemBytes > limits.MaximumFrameBytes) throw new ProtocolException();
+                            completedItems.Add(itemId, item.Clone());
+                        }
+                    }
                 }
                 else if (method == "turn/completed")
                 {
@@ -151,12 +176,20 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                             ? CodexReplyStatus.UsageLimit : CodexReplyStatus.ConnectionFailure, Usage: usage);
                     }
                     if (status != "completed") throw new ProtocolException();
-                    if (turn.TryGetProperty("itemsView", out var view) && view.GetString() != "full") throw new ProtocolException();
-                    var items = turnItems.EnumerateArray().Where(x =>
-                        x.GetProperty("type").GetString() == "agentMessage" &&
-                        (!x.TryGetProperty("delivery", out var delivery) || delivery.ValueKind == JsonValueKind.Null) &&
-                        (!x.TryGetProperty("phase", out var phase) || phase.ValueKind == JsonValueKind.Null || phase.GetString() == "final_answer")).ToArray();
+                    var itemsView = turn.TryGetProperty("itemsView", out var view) ? view.GetString() : "full";
+                    if (itemsView is not ("full" or "summary" or "notLoaded")) throw new ProtocolException();
+                    var items = turnItems.EnumerateArray().Where(IsFinalAgent).ToArray();
                     if (items.Length != 1) throw new ProtocolException();
+                    if (itemsView != "full")
+                    {
+                        if (itemsView != "summary") throw new ProtocolException();
+                        var itemId = Identifier(items[0].GetProperty("id"));
+                        // Ephemeral 0.150.1 threads cannot read persisted turns. Hydrate
+                        // the output from its canonical live completion, never display text.
+                        if (!completedItems.TryGetValue(itemId, out var canonical)) throw new BackendException();
+                        if (!JsonElement.DeepEquals(items[0], canonical)) throw new ProtocolException();
+                        items[0] = canonical;
+                    }
                     var text = items[0].GetProperty("text").GetString() ?? throw new ProtocolException();
                     if (redact(text) != text) throw new ProtocolException();
                     var bytes = Utf8.GetBytes(text);
@@ -184,7 +217,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             InvalidOperationException or KeyNotFoundException or DecoderFallbackException or FormatException or OverflowException)
         { closed = true; return new(CodexReplyStatus.OutputInvalid); }
         catch { closed = true; return new(CodexReplyStatus.ConnectionFailure); }
-        finally { Volatile.Write(ref active, 0); }
+        finally { pendingTurnEvents.Clear(); Volatile.Write(ref active, 0); }
     }
 
     private async ValueTask<JsonElement> RequestAsync(string method, JsonObject parameters, CancellationToken token)
@@ -231,6 +264,15 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                         announcedTurn = noticeTurn;
                     }
                     continue;
+                }
+                if (method == "turn/start" && announcedTurn is not null && notification is not null &&
+                    (notification.StartsWith("item/", StringComparison.Ordinal) ||
+                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification == "thread/tokenUsage/updated"))
+                {
+                    ValidateTurnNotice(message, threadId!, announcedTurn);
+                    pendingBytes = checked(pendingBytes + Utf8.GetByteCount(message.GetRawText()));
+                    if (pendingBytes > limits.MaximumFrameBytes) throw new ProtocolException();
+                    pendingTurnEvents.Enqueue(message); continue;
                 }
                 throw new ProtocolException();
             }
@@ -302,6 +344,23 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     }
     private static long Nonnegative(JsonElement value, string name)
     { var count = value.GetProperty(name).GetInt64(); return count >= 0 ? count : throw new ProtocolException(); }
+    private static void ValidateUsage(JsonElement value)
+    {
+        foreach (var name in new[] { "inputTokens", "cachedInputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens" })
+            _ = Nonnegative(value, name);
+        if (value.TryGetProperty("cacheWriteInputTokens", out _)) _ = Nonnegative(value, "cacheWriteInputTokens");
+    }
+    private static bool IsFinalAgent(JsonElement item) => item.GetProperty("type").GetString() == "agentMessage" &&
+        (!item.TryGetProperty("delivery", out var delivery) || delivery.ValueKind == JsonValueKind.Null) &&
+        (!item.TryGetProperty("phase", out var phase) || phase.ValueKind == JsonValueKind.Null || phase.GetString() == "final_answer");
+    private static void ValidateTurnNotice(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        var parameters = message.GetProperty("params");
+        if (Identifier(parameters.GetProperty("threadId")) != expectedThread) throw new ProtocolException();
+        var turn = message.GetProperty("method").GetString() == "turn/completed"
+            ? parameters.GetProperty("turn").GetProperty("id") : parameters.GetProperty("turnId");
+        if (Identifier(turn) != expectedTurn) throw new ProtocolException();
+    }
     private void RedactInput(JsonNode node)
     {
         if (node is JsonObject obj)

@@ -42,10 +42,20 @@ message in the matching `turn/completed` notification can return bytes; its
 Run/request/observation correlation must match. Secret-bearing decoded output is
 refused, rather than edited into a different action. Runner still validates the
 complete proposal against its pinned schemas and current authority.
-The turn's items view must be absent (the protocol default is `full`) or explicitly
-`full`; display summaries and not-loaded views cannot supply a proposal.
-Asynchronous agent deliveries are excluded. Known lifecycle notices can precede
-start responses, but their thread/turn identities must match that exchange.
+An absent items view defaults to `full`. Live 0.150.1 completion notices usually
+carry `summary` items; those cannot supply a proposal on their own. The converter
+hydrates the final item from an identical, correlated canonical `item/completed`
+event held in bounded memory. Missing canonical output is a connection failure;
+changed summary text is refused. Asynchronous deliveries and not-loaded views
+cannot supply proposals. This preserves ephemeral threads: 0.150.1 rejects
+`thread/read(includeTurns)` for ephemeral threads, and the converter does not
+enable persisted history to work around that restriction.
+
+Known lifecycle notices can precede start responses, but their thread/turn
+identities must match that exchange. Subsequent correlated item/usage/completion
+events are buffered until the matching start response is verified, then replayed
+in order. Aggregate pre-response events and canonical output each consume at most
+the configured frame-byte limit, in addition to message and deadline bounds.
 
 Server capability requests, duplicate response IDs, malformed frames, wrong
 correlation, invalid usage and exceeded bounds close the connection's converter.

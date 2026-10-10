@@ -70,6 +70,103 @@ public sealed class CodexProtocolTests
     private sealed class ReplyBackend(CodexReply reply) : ICodexDecisionBackend
     { public ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken token) => new(reply); }
 
+    private static string CanonicalItem(string text) => new JsonObject
+    {
+        ["method"] = "item/completed", ["params"] = new JsonObject
+        { ["threadId"] = "thread-1", ["turnId"] = "turn-1", ["item"] = new JsonObject
+            { ["id"] = "message-1", ["type"] = "agentMessage", ["text"] = text } }
+    }.ToJsonString();
+    private static string Summary(string text)
+    {
+        var message = JsonNode.Parse(Completed(text))!;
+        message["params"]!["turn"]!["itemsView"] = "summary";
+        return message.ToJsonString();
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LiveSummaryHydratesCanonicalOutputWithoutPersistedHistory(bool beforeResponse)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\"}}}");
+        if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+        transport.Add(CanonicalItem(Decision())); transport.Add(Usage("turn-1", 3, 2, 5));
+        transport.Add(Summary(Decision()));
+        if (beforeResponse) transport.Frames.Enqueue(frames[2]);
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.Completed, reply.Status); Assert.Equal(new CodexUsage(3, 2, 5), reply.Usage);
+        Assert.Equal(Decision(), Encoding.UTF8.GetString(reply.CompletedJson!));
+        Assert.True(JsonNode.Parse(transport.Writes[2])!["params"]!["ephemeral"]!.GetValue<bool>());
+        Assert.DoesNotContain(transport.Writes, x => x.Contains("thread/read"));
+    }
+    [Fact]
+    public async Task SummaryCannotReplaceCanonicalItemText()
+    {
+        var transport = Started(); transport.Add(CanonicalItem(Decision()));
+        transport.Add(Summary(Decision().Replace("goalClaimed", "inconclusive")));
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+    [Fact]
+    public async Task PreResponseBufferCannotExceedAggregateByteLimit()
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\"}}}");
+        for (var index = 0; index < 40; index++) transport.Add(Usage("turn-1", 3, 2, 5));
+        transport.Frames.Enqueue(frames[2]);
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status); Assert.Null(reply.CompletedJson);
+    }
+    [Fact]
+    public async Task CanonicalItemCacheCannotExceedAggregateByteLimit()
+    {
+        var transport = Started();
+        for (var index = 0; index < 60; index++)
+        {
+            var message = JsonNode.Parse(CanonicalItem(Decision()))!;
+            message["params"]!["item"]!["id"] = "message-" + index;
+            transport.Add(message.ToJsonString());
+        }
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status); Assert.Null(reply.CompletedJson);
+    }
+    [Theory]
+    [InlineData("threadId")]
+    [InlineData("turnId")]
+    public async Task StalePreResponseItemNeverSurvivesReplay(string key)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\"}}}");
+        var message = JsonNode.Parse(CanonicalItem(Decision()))!; message["params"]![key] = "wrong";
+        transport.Add(message.ToJsonString()); transport.Frames.Enqueue(frames[2]);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+    [Theory]
+    [InlineData("last")]
+    [InlineData("total")]
+    public async Task MissingUsageBreakdownIsInvalid(string key)
+    {
+        var transport = Started(); var message = JsonNode.Parse(Usage("turn-1", 3, 2, 5))!;
+        message["params"]!["tokenUsage"]!.AsObject().Remove(key); transport.Add(message.ToJsonString());
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+    [Theory]
+    [InlineData("last", "inputTokens")]
+    [InlineData("last", "cachedInputTokens")]
+    [InlineData("last", "reasoningOutputTokens")]
+    [InlineData("total", "cachedInputTokens")]
+    [InlineData("total", "reasoningOutputTokens")]
+    public async Task MissingRequiredUsageCounterNeverReturnsAProposal(string breakdown, string counter)
+    {
+        var transport = Started(); var message = JsonNode.Parse(Usage("turn-1", 3, 2, 5))!;
+        message["params"]!["tokenUsage"]![breakdown]!.AsObject().Remove(counter);
+        transport.Add(message.ToJsonString()); transport.Add(Completed(Decision()));
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status); Assert.Null(reply.CompletedJson);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -96,7 +193,7 @@ public sealed class CodexProtocolTests
         var transport = Started(); var message = JsonNode.Parse(Completed(Decision()))!;
         message["params"]!["turn"]!["itemsView"] = view; transport.Add(message.ToJsonString());
         var reply = await Backend(transport).DecideAsync(Input(), default);
-        Assert.Equal(valid ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+        Assert.Equal(valid ? CodexReplyStatus.Completed : view == "summary" ? CodexReplyStatus.ConnectionFailure : CodexReplyStatus.OutputInvalid, reply.Status);
         if (!valid) Assert.Null(reply.CompletedJson);
     }
 
@@ -319,8 +416,8 @@ public sealed class CodexProtocolTests
         {
             ["threadId"] = "thread-1", ["turnId"] = turn, ["tokenUsage"] = new JsonObject
             {
-                ["total"] = new JsonObject { ["inputTokens"] = input, ["outputTokens"] = output, ["totalTokens"] = total },
-                ["last"] = new JsonObject { ["inputTokens"] = 1, ["outputTokens"] = 1, ["totalTokens"] = 2 }
+                ["total"] = new JsonObject { ["inputTokens"] = input, ["cachedInputTokens"] = 0, ["outputTokens"] = output, ["reasoningOutputTokens"] = 0, ["totalTokens"] = total },
+                ["last"] = new JsonObject { ["inputTokens"] = 1, ["cachedInputTokens"] = 0, ["outputTokens"] = 1, ["reasoningOutputTokens"] = 0, ["totalTokens"] = 2 }
             }
         }
     }.ToJsonString();
