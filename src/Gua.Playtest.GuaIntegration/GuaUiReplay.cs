@@ -36,7 +36,10 @@ public sealed class GuaUiReplay : IReplayPlayback
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or OverflowException)
         { return ReplayCheck.Unsupported; }
         if (batch.Timing is not ("recorded" or "conditionSynchronized") ||
-            recording.Steps.Any(s => s.CoordinateFallback is not null || batch.Timing == "recorded" && s.WaitCondition is not null))
+            recording.Steps.Any(s => s.Action is not (GuaRecordedAction.click or GuaRecordedAction.focus or
+                GuaRecordedAction.set_value or GuaRecordedAction.set_checked or GuaRecordedAction.select or
+                GuaRecordedAction.scroll or GuaRecordedAction.press_key) || s.CoordinateFallback is not null ||
+                batch.Timing == "recorded" && s.WaitCondition is not null))
             return ReplayCheck.Unsupported;
         return admit(batch, starting);
     }

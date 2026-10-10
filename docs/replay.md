@@ -18,7 +18,11 @@ The feed captures success, failure and the requested checkpoint together at one 
 condition-clock boundary. Each checkpoint starts a fresh condition session when playback
 reaches it. Repeated boundaries run in file order. Each reached checkpoint receives fresh
 observation authority under its own timeout, WaitTimeout and the original Run deadline;
-it must settle before `onGoal` can pass. This authority consumes no action or decision
+it must settle before `onGoal` can pass. Boundary-zero authority is registered before
+the certified initial Goal unit is arbitrated. Receipt and repeated-checkpoint handoffs
+register the next reached observation on the serialized capture path before post-result
+Goal arbitration. No success/failure observations are masked and result-confirmation
+hooks grant no new authority. Observation authority consumes no action or decision
 budget and cannot authorize more playback. Recording coverage is contiguous from zero
 through its final step, including normal releases; splitting at checkpoints does not skip
 steps. A batch reserves its whole action count before any dispatch. Existing approved
@@ -52,6 +56,9 @@ enqueue after transport preflight. This boundary rechecks cancellation, deadline
 current admission, delivery state and authority. An enqueue acknowledgement is not an
 action completion. Closed queues revoke late work. All synchronous callbacks must be
 bounded by the concrete transport's request policy.
+Caller cancellation retains the supplied token through queued reads, sends and blocked
+queue writers. Queue revocation and unrelated provider cancellation do not impersonate
+caller cancellation.
 
 If an adapter reports enqueue without invoking `beforeSend`, the owner records an
 uncertain consumed attempt and rejects the adapter contract. That evidence cannot
@@ -67,6 +74,8 @@ at actual dispatch, with query membership checked against the revision-bound tre
 There is no first-match choice, alternate target, coordinate fallback or route repair.
 Because public Gua's recorded mode would ignore an existing wait, that combination is
 explicitly Unsupported. The adapter does not silently remove the wait.
+Only the seven public UI actions are admitted; game-input-only and mixed batches are
+Unsupported before operation approval.
 
 UI wire v1 lacks atomic remote epoch guarding. A trusted host lifecycle lease, shared
 with **every** frame writer, reset and replacement, is mandatory. A local connection lock
@@ -81,6 +90,12 @@ rejected by this path. Holds must have normal releases in that complete segment;
 that cannot satisfy this contract is rejected. Owner-scoped safety release is separate
 from Plan play authority and uses Gua's bounded fresh cleanup budget after cancellation.
 The caller also registers its independent fallback cleanup during preparation.
+Public timed playback starts a new origin per segment. A `recorded` or game-input Plan
+requiring an automatic chunk (more than 1000 steps between synchronization boundaries)
+is rejected as `ReplayAutomaticTimingUnsupported` during resolution, before dispatch.
+Recorded Plans cannot contain checkpoint waits under the existing static contract.
+Condition-synchronized checkpoints remain intentional synchronization boundaries. Playtest does not
+rebase an automatic recorded chunk after a delayed receipt or invent a new scheduler.
 
 Gua's live UI recorder samples `relativeMilliseconds` before selector resolution/enqueue,
 after an existing wait. Imported diagnostic/legacy offsets can have unknown provenance.

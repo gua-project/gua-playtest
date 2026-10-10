@@ -29,6 +29,14 @@ public sealed class ReplayDriver
             throw new ArgumentException("ReplayLimitsMismatch");
         var run = new RunSession(limits, realClock, conditionClock, replay.Success, replay.Failure, replay.Completion);
         IReplayObservationFeed? feed = null;
+        RunSession.ApprovedOperation? active = null;
+        var checkpointReady = false;
+        void RegisterPoint(RunSession owner, TimeSpan timeout)
+        {
+            active = owner.ApproveObservation(Min(timeout, limits.WaitTimeout))
+                ?? throw Failure(RunReason.WaitExpired, RunOrigin.Condition);
+            checkpointReady = true;
+        }
         var outcome = await RunExecutor.ExecuteAsync(run, realClock, cleanup, async (owner, owned, token) =>
         {
             var prepared = await prepare(owner, owned, token).ConfigureAwait(false);
@@ -46,19 +54,28 @@ public sealed class ReplayDriver
         }, async (owner, token) =>
         {
             var cursor = 0;
-            RunSession.ApprovedOperation? active = null;
             try
             {
                 while (owner.Primary is null)
                 {
-                    foreach (var point in replay.Checkpoints.Where(p => p.BeforeStep == cursor))
+                    var points = replay.Checkpoints.Where(p => p.BeforeStep == cursor).ToArray();
+                    for (var pointIndex = 0; pointIndex < points.Length; pointIndex++)
                     {
-                        active?.Complete();
-                        active = owner.ApproveObservation(Min(point.Timeout, limits.WaitTimeout));
-                        if (active is null) return false;
-                        if (!await CheckpointAsync(owner, feed!, point.Condition, active, point.Timeout, token).ConfigureAwait(false)) return false;
+                        var point = points[pointIndex];
+                        if (!checkpointReady) { active?.Complete(); RegisterPoint(owner, point.Timeout); }
+                        checkpointReady = false;
+                        var pointOperation = active!;
+                        var nextPoint = pointIndex + 1;
+                        var handedOff = false;
+                        if (!await CheckpointAsync(owner, feed!, point.Condition, pointOperation, point.Timeout, token, () =>
+                        {
+                            if (handedOff || !pointOperation.ResultConfirmed || nextPoint == points.Length) return;
+                            handedOff = true;
+                            pointOperation.Complete(); RegisterPoint(owner, points[nextPoint].Timeout);
+                        }).ConfigureAwait(false)) return false;
                         checkpoints++;
-                        active.Complete(); active = null;
+                        if (!checkpointReady) { pointOperation.Complete(); active = null; }
+                        if (cursor == replay.StepCount && nextPoint == points.Length) planCompleted = true;
                         if (owner.Primary is not null) return false;
                     }
                     if (cursor == replay.StepCount)
@@ -91,27 +108,39 @@ public sealed class ReplayDriver
                         throw Failure(RunReason.ActionFailed, RunOrigin.Host);
                     active = owner.ApproveOperation(batch.Count, limits.WaitTimeout);
                     if (active is null) return false;
-                    using var calls = new ReplayCalls(owner, active, () => playback.Check(batch, starting: false), () => dispatched++);
-                    var pump = new PumpFeed(feed!, calls, owner);
+                    var batchOperation = active;
+                    var pendingPoint = false;
+                    using var calls = new ReplayCalls(owner, batchOperation, () => playback.Check(batch, starting: false), () => dispatched++);
+                    var pump = new PumpFeed(feed!, calls, owner, () =>
+                    {
+                        if (!pendingPoint) return;
+                        pendingPoint = false;
+                        batchOperation.Complete();
+                        RegisterPoint(owner, replay.Checkpoints.First(p => p.BeforeStep == end).Timeout);
+                    });
                     var result = await RunMonitor.AwaitAsync(owner, realClock, conditionClock, pump,
                         workToken => playback.PlayAsync(batch, calls, workToken), receipt => ReceiptEvents(receipt, batch.Count,
-                            active.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain), active.DispatchClosedByGoal), token,
+                            batchOperation.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain), batchOperation.DispatchClosedByGoal), token,
                         receipt =>
                         {
                             if (receipt?.OriginalException is { } exception) owner.RecordException(exception);
-                            if (receipt is not null && receipt.CompletedSteps == active.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain)
+                            if (receipt is not null && receipt.CompletedSteps == batchOperation.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain)
                                 && receipt.Status != ReplayReceiptStatus.Unconfirmed)
-                                active.ConfirmResult();
+                            {
+                                batchOperation.ConfirmResult();
+                                pendingPoint = batchOperation.ResultConfirmed && receipt.Status == ReplayReceiptStatus.Succeeded && receipt.NeutralConfirmed &&
+                                    receipt.CompletedSteps == batch.Count && replay.Checkpoints.Any(p => p.BeforeStep == end);
+                            }
                         }).ConfigureAwait(false);
                     if (result.Value is { } received && received.CompletedSteps >= 0 && received.CompletedSteps <= batch.Count &&
-                        received.CompletedSteps <= active.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain))
+                        received.CompletedSteps <= batchOperation.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain))
                         completed += received.CompletedSteps;
-                    if (result.Value is { Status: ReplayReceiptStatus.Succeeded, NeutralConfirmed: true } settled && active.ResultConfirmed)
+                    if (result.Value is { Status: ReplayReceiptStatus.Succeeded, NeutralConfirmed: true } settled && batchOperation.ResultConfirmed)
                     {
                         cursor += settled.CompletedSteps;
                         if (cursor == replay.StepCount && !replay.Checkpoints.Any(p => p.BeforeStep == cursor)) planCompleted = true;
                     }
-                    if (!result.Completed || result.Value?.Status != ReplayReceiptStatus.Succeeded || !active.ResultConfirmed) return false;
+                    if (!result.Completed || result.Value?.Status != ReplayReceiptStatus.Succeeded || !batchOperation.ResultConfirmed) return false;
                     cursor = end;
                     if (cursor < replay.StepCount && !replay.Checkpoints.Any(p => p.BeforeStep == cursor))
                     { active.Complete(); active = null; }
@@ -119,7 +148,11 @@ public sealed class ReplayDriver
                 return false;
             }
             finally { active?.Complete(); }
-        }, cancellationToken, confirmPrimary).ConfigureAwait(false);
+        }, cancellationToken, confirmPrimary, owner =>
+        {
+            var first = replay.Checkpoints.FirstOrDefault(p => p.BeforeStep == 0);
+            if (first.Condition is not null) RegisterPoint(owner, first.Timeout);
+        }).ConfigureAwait(false);
         return new(outcome, new(replay.StepCount, dispatched, completed, checkpoints, planCompleted,
             outcome.Primary.Status == ResultStatus.Passed && !planCompleted ? dispatched : null, run.GoalVerified));
     }
@@ -135,12 +168,12 @@ public sealed class ReplayDriver
     }
 
     private static async ValueTask<bool> CheckpointAsync(RunSession run, IReplayObservationFeed feed,
-        PreparedCondition condition, RunSession.ApprovedOperation operation, TimeSpan timeout, CancellationToken token)
+        PreparedCondition condition, RunSession.ApprovedOperation operation, TimeSpan timeout, CancellationToken token, Action beforeCapture)
     {
         var session = condition.Start(run.AuthoritativeConditionClock);
         var completion = new TaskCompletionSource<IReadOnlyList<RunEvent>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var boundary = Min(run.AuthoritativeRealClock.Elapsed + timeout, operation.Deadline);
-        var checkpointFeed = new CheckpointFeed(feed, run, condition, session, completion, boundary);
+        var checkpointFeed = new CheckpointFeed(feed, run, condition, session, completion, boundary, beforeCapture);
         var result = await RunMonitor.AwaitAsync(run, run.AuthoritativeRealClock, run.AuthoritativeConditionClock, checkpointFeed,
             waitToken => new ValueTask<IReadOnlyList<RunEvent>>(completion.Task.WaitAsync(waitToken)), events => events, token,
             events => { if (events.Count == 0) operation.ConfirmResult(); }).ConfigureAwait(false);
@@ -148,12 +181,13 @@ public sealed class ReplayDriver
             (result.Completed || run.Primary?.Status == ResultStatus.Passed);
     }
     private sealed class CheckpointFeed(IReplayObservationFeed feed, RunSession run, PreparedCondition condition, ConditionSession session,
-        TaskCompletionSource<IReadOnlyList<RunEvent>> completion, TimeSpan deadline) : IRunObservationFeed, IRunConditionSchedule
+        TaskCompletionSource<IReadOnlyList<RunEvent>> completion, TimeSpan deadline, Action beforeCapture) : IRunObservationFeed, IRunConditionSchedule
     {
         private TimeSpan? next;
         public TimeSpan? NextConditionEvaluationAt => next;
         public async ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         {
+            beforeCapture();
             ReplayObservation unit;
             try
             {
@@ -209,9 +243,9 @@ public sealed class ReplayDriver
             reached.TrySetResult(true); return ValueTask.CompletedTask;
         }
     }
-    private sealed class PumpFeed(IRunObservationFeed feed, ReplayCalls calls, RunSession run) : IRunObservationFeed
+    private sealed class PumpFeed(IRunObservationFeed feed, ReplayCalls calls, RunSession run, Action beforeCapture) : IRunObservationFeed
     {
-        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) { calls.Pump(token); return feed.CaptureAsync(token); }
+        public ValueTask<RunObservation> CaptureAsync(CancellationToken token) { beforeCapture(); calls.Pump(token); return feed.CaptureAsync(token); }
         public ValueTask WaitForChangeAsync(CancellationToken token) => WaitAnyAsync(run, token, feed.WaitForChangeAsync, calls.WaitAsync);
     }
     private static async ValueTask WaitAnyAsync(RunSession run, CancellationToken token, params Func<CancellationToken, ValueTask>[] waits)

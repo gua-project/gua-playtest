@@ -34,6 +34,17 @@ public sealed class ResolvedReplay
         Success = Prepare(scenario.Goal.Success); Failure = Prepare(scenario.Goal.Failure); Initial = Prepare(plan.Initial);
         Checkpoints = Array.AsReadOnly(plan.Checkpoints.Select(c => (checked((int)c.BeforeStep),
             Prepare(c.Condition)!, TimeSpan.FromMilliseconds(c.TimeoutMilliseconds))).ToArray());
+        if (plan.Timing == "recorded" || recording["steps"]!.AsArray().Any(step => step!["action"]!.GetValue<string>() == "game_input"))
+        {
+            var start = 0;
+            foreach (var boundary in Checkpoints.Select(p => p.BeforeStep).Append(StepCount).Distinct().Order())
+            {
+                // Public playback establishes a new origin per segment. Automatic chunks
+                // cannot preserve a recorded common origin across delayed receipts.
+                if (boundary - start > 1000) throw new ArgumentException("ReplayAutomaticTimingUnsupported");
+                start = boundary;
+            }
+        }
         long previous = -1;
         foreach (var step in recording["steps"]!.AsArray())
         {

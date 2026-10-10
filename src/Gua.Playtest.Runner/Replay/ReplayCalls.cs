@@ -63,12 +63,17 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
                     : new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), exception));
                 completion.TrySetException(exception);
             }
-        }, () => completion.TrySetCanceled());
-        await channel.Writer.WriteAsync(call, effectiveToken).ConfigureAwait(false);
-        // Capture the token value before disposal; a cancelled queued callback may outlive
-        // this waiter, and may only test the captured token before invoking transport.
-        using var cancellation = effectiveToken.Register(() => completion.TrySetCanceled(effectiveToken));
-        return await completion.Task.ConfigureAwait(false);
+        }, () => completion.TrySetCanceled(token.IsCancellationRequested ? token : closed.Token));
+        try
+        {
+            await channel.Writer.WriteAsync(call, effectiveToken).ConfigureAwait(false);
+            // Capture the token value before disposal; a cancelled queued callback may outlive
+            // this waiter, and may only test the captured token before invoking transport.
+            using var cancellation = effectiveToken.Register(() => completion.TrySetCanceled(token.IsCancellationRequested ? token : closed.Token));
+            return await completion.Task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (token.IsCancellationRequested && exception.CancellationToken == effectiveToken)
+        { throw new OperationCanceledException("ReplayCallerCancelled", exception, token); }
     }
     public void Pump(CancellationToken token)
     {

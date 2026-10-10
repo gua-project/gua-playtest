@@ -56,6 +56,27 @@ public sealed class ReplayAdapterTests
     private GuaUiReplay Playback(IGuaContext context) => new(context, () => new Lease(lifecycle),
         (_, _) => ReplayCheck.Approved, TimeSpan.FromMilliseconds(5));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UiPreflightRejectsGameInputBeforeAdmission(bool mixed)
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy"); using var context = new GuaWebSocketContext(Start(runtime));
+        var admissions = 0;
+        var replay = new GuaUiReplay(context, () => new Lease(lifecycle), (_, _) => { admissions++; return ReplayCheck.Approved; }, TimeSpan.FromMilliseconds(5));
+        // Public 1.1.1's UI enum rejects game_input during parsing already. Do not
+        // mistake that existing refusal for a pre-fix capability-check reproduction.
+        Assert.DoesNotContain("game_input", Enum.GetNames<GuaRecordedAction>());
+        var batch = GameBatch();
+        if (mixed)
+        {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(batch.RecordingJson)!;
+            json["steps"]!.AsArray().Insert(0, System.Text.Json.Nodes.JsonNode.Parse(Batch().RecordingJson)!["steps"]![0]!.DeepClone());
+            batch = batch with { Count = 3, RecordingJson = json.ToJsonString(), OffsetBaseMilliseconds = 0 };
+        }
+        Assert.Equal(ReplayCheck.Unsupported, replay.Check(batch)); Assert.Equal(0, admissions);
+    }
+
     [Fact]
     public async Task PublishedPlaybackPreservesWaitAndConfirmsRealNativeAction()
     {

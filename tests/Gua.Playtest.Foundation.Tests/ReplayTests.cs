@@ -362,8 +362,8 @@ public sealed class ReplayTests
         foreach (var point in plan["checkpoints"]!.AsArray()) point!["timeoutMilliseconds"] = 1500;
         File.WriteAllText(files.PlanPath, plan.ToJsonString());
         var delayed = new HashSet<PreparedCondition>();
-        var clock = new MonotonicClock(); var feed = new Feed(clock)
-        { BeforeCheckpointCapture = (point, token) => delayed.Add(point) ? new(Task.Delay(1100, token)) : ValueTask.CompletedTask };
+        var clock = new CheckpointBoundaryClock(); var feed = new Feed(clock)
+        { BeforeCheckpointCapture = (point, _) => { if (delayed.Add(point)) clock.MoveTo(clock.Elapsed + TimeSpan.FromMilliseconds(1100)); return ValueTask.CompletedTask; } };
         var result = await Run(await files.Load(), feed, new Playback(), clock, actions: 2);
         Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status);
         Assert.Equal(2, result.Progress.CompletedCheckpoints); Assert.True(result.Progress.PlanCompleted);
@@ -391,6 +391,119 @@ public sealed class ReplayTests
         public void MoveTo(TimeSpan boundary) => Elapsed = boundary;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
             => new(Task.Delay(Timeout.InfiniteTimeSpan, token));
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task GoalAtReachedBoundaryCannotSkipFalseCheckpoint(int boundary)
+    {
+        using var files = new Fixture(1, "onGoal", [boundary]); var clock = new CheckpointBoundaryClock();
+        var feed = new Feed(clock) { Goal = boundary == 0, Checkpoint = false };
+        feed.OnWait = () => { if (feed.CheckpointCaptures > 0) clock.MoveTo(TimeSpan.FromMilliseconds(1000)); };
+        var playback = new Playback { OnSend = () => feed.Goal = true };
+        var result = await Run(await files.Load(), feed, playback, clock);
+        Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status);
+        Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
+        Assert.Equal(boundary, playback.Sends); Assert.Equal(0, result.Progress.CompletedCheckpoints);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QueuedCallRetainsSuppliedCancellationToken(bool send)
+    {
+        var clock = new MonotonicClock(); var run = new RunSession(Limits(), clock, clock);
+        run.BeginPreparation(); run.BeginRunning(); using var cancellation = new CancellationTokenSource();
+        using var calls = new ReplayCalls(run, run.ApproveOperation(1, TimeSpan.FromSeconds(2))!, () => ReplayCheck.Approved, () => { });
+        var called = false;
+        var waiting = send ? calls.SendAsync(0, _ => { called = true; return new ReplaySend<bool>(true, true); }, cancellation.Token).AsTask()
+            : calls.ReadAsync(() => { called = true; return true; }, cancellation.Token).AsTask();
+        cancellation.Cancel();
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+        Assert.Equal(cancellation.Token, exception.CancellationToken); Assert.False(called);
+        Assert.IsType<OperationCanceledException>(FiniteOperation.NormalizeCancellation(exception, cancellation.Token, cancellation.Token));
+    }
+    [Fact]
+    public async Task FullQueuedWriterRetainsSuppliedCancellationToken()
+    {
+        var clock = new MonotonicClock(); var run = new RunSession(Limits(), clock, clock);
+        run.BeginPreparation(); run.BeginRunning(); using var cancellation = new CancellationTokenSource();
+        using var calls = new ReplayCalls(run, run.ApproveOperation(1, TimeSpan.FromSeconds(2))!, () => ReplayCheck.Approved, () => { });
+        var first = calls.ReadAsync(() => true, default).AsTask(); var called = false;
+        var second = calls.ReadAsync(() => { called = true; return true; }, cancellation.Token).AsTask();
+        cancellation.Cancel();
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second);
+        Assert.Equal(cancellation.Token, exception.CancellationToken); Assert.False(called);
+        calls.Dispose(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+    }
+    [Theory]
+    [InlineData("recorded", false)]
+    [InlineData("recorded", true)]
+    [InlineData("conditionSynchronized", true)]
+    public async Task RecordedAutomaticChunkCannotRebaseOriginalTiming(string timing, bool gameInput)
+    {
+        using var files = new Fixture(1001, gameInput: gameInput, maxActions: 2000);
+        var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!; plan["timing"] = timing;
+        File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => files.Load().AsTask());
+        Assert.Equal("ReplayAutomaticTimingUnsupported", error.Message);
+    }
+    [Theory]
+    [InlineData(1000, "recorded", false)]
+    [InlineData(1001, "conditionSynchronized", true)]
+    public async Task SegmentsWithinSupportedPlanBoundariesRemainSupported(int steps, string timing, bool checkpoint)
+    {
+        using var files = new Fixture(steps, checkpoints: checkpoint ? [1000] : [], maxActions: 2000);
+        var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!; plan["timing"] = timing;
+        File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        Assert.Equal(steps, (await files.Load()).StepCount);
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task GoalCannotSkipSecondCheckpointAtSameBoundary(int boundary)
+    {
+        using var files = new Fixture(1, "onGoal", [boundary, boundary]); var clock = new CheckpointBoundaryClock();
+        var feed = new Feed(clock) { Goal = boundary == 0 };
+        var first = default(PreparedCondition);
+        feed.BeforeCheckpointCapture = (point, _) => { first ??= point; feed.Checkpoint = ReferenceEquals(first, point); return ValueTask.CompletedTask; };
+        feed.OnWait = () => { if (feed.CheckpointCaptures > 0 && !feed.Checkpoint) clock.MoveTo(TimeSpan.FromMilliseconds(1000)); };
+        var result = await Run(await files.Load(), feed, new Playback { OnSend = () => feed.Goal = true }, clock);
+        Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status); Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
+        Assert.Equal(1, result.Progress.CompletedCheckpoints);
+    }
+    [Theory]
+    [InlineData("failure", RunReason.FailureCondition)]
+    [InlineData("cancel", RunReason.Cancelled)]
+    [InlineData("deadline", RunReason.MaxDuration)]
+    [InlineData("deadlineError", RunReason.ExecutionError)]
+    [InlineData("lifecycle", RunReason.ExecutionError)]
+    [InlineData("clock", RunReason.InvalidContract)]
+    public async Task InitialRegistrationFaultRetainsCertifiedEvidenceAndPriority(string mode, RunReason expected)
+    {
+        var clock = new CheckpointBoundaryClock(); using var cancellation = new CancellationTokenSource();
+        var condition = PreparedCondition.Create(JsonNode.Parse(Assertion)!.AsObject(), new(10, 1000));
+        var run = new RunSession(Limits(), clock, clock, condition, condition); var executes = 0; var hooks = 0; var exited = false;
+        var original = new IOException("registration failed");
+        var result = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            var boundary = capture.Certify(capture.RequestId, clock.Elapsed, new(clock.Elapsed, Unit(true), Unit(mode is "failure" or "clock")), "synchronized-hook-test", true);
+            boundary.InitialLifecycleFailure = () => exited ? new(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host)) : null;
+            return ValueTask.FromResult(boundary);
+        }, (_, _) => { executes++; return ValueTask.FromResult(true); }, cancellation.Token, confirmPrimary: null, registerInitialObservation: _ =>
+        {
+            hooks++;
+            if (mode == "cancel") { cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token); }
+            if (mode is "deadline" or "deadlineError") clock.MoveTo(TimeSpan.FromSeconds(10));
+            if (mode == "deadline") throw FiniteOperation.DeadlineReached("hook deadline");
+            if (mode == "clock") throw new ClockProviderException(original);
+            exited = mode == "lifecycle"; throw original;
+        });
+        Assert.Equal(expected, result.Primary.Cause.Reason); Assert.Equal(1, hooks); Assert.Equal(0, executes);
+        if (mode is "failure" or "clock") Assert.Contains(result.Events, e => e.Reason == RunReason.FailureCondition);
+        if (mode is "deadline" or "deadlineError") Assert.Contains(result.Events, e => e.Reason == RunReason.MaxDuration);
+        if (mode == "lifecycle") Assert.Equal(RunOrigin.Host, result.Primary.Cause.Origin);
+        if (mode is not ("cancel" or "deadline")) Assert.Contains(result.Exceptions, e => e.Type == typeof(IOException).FullName);
     }
     [Fact]
     public async Task OnGoalStopsReservedSuffixWhileFirstReceiptSettles()
@@ -431,9 +544,10 @@ public sealed class ReplayTests
         var clock = new MonotonicClock(); var host = new SimulationHost();
         var playback = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved,
             new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
-        var result = await Run(replay, new(clock), playback, clock, token: cancellation.Token).WaitAsync(TimeSpan.FromSeconds(3));
-        Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status); Assert.False(cancellation.IsCancellationRequested);
+        // The unchanged outer ceiling and Passed assertion detect a nested owner-queue
+        // deadlock. An unrelated 500ms caller timer must not cancel cold-start work.
+        var result = await Task.Run(async () => await Run(replay, new(clock), playback, clock)).WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status); Assert.DoesNotContain(result.Run.Events, e => e.Reason == RunReason.Cancelled);
         Assert.Equal(2, host.Sends); Assert.Equal(1, host.Ends); Assert.True(host.Releases > 0);
     }
     [Theory]

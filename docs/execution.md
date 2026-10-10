@@ -185,3 +185,10 @@ settlement blocks OnGoal completion until actual `ConfirmResult`, expiry, or
 higher-priority terminal evidence. Early owner completion without confirmation
 retains WaitExpired. Ordinary arbitration, cancellation and global deadlines
 remain authoritative.
+
+The certified RunExecutor overload accepts an optional bounded owner hook to register
+a reached initial observation after BeginRunning and before the certified unit's first
+arbitration. Existing callers omit it. The hook may register observation settlement;
+it must not dispatch or request Planner work. A thrown hook exception enters the same
+arbiter with the original initial failure, cancellation, deadline and armed lifecycle
+evidence. It cannot bypass preparation certification or replace that source unit.

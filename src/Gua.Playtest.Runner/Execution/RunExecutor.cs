@@ -18,20 +18,32 @@ public static class RunExecutor
             token => prepare(cleanup, token), ready => new PreparedRun(ready, null), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
 
     /// <summary>Production initial-boundary path: preparation arms a readiness capability after Setup/compat checks,
-    /// synchronizes the subscription and capture, verifies prerequisites in that unit, and returns its certificate.</summary>
+    /// synchronizes the subscription and capture, verifies prerequisites in that unit, and returns its certificate.
+    /// The optional serialized owner hook registers a reached initial observation before the first Goal arbitration.
+    /// It must be bounded and must not dispatch or request Planner work; its failure retains the certified unit.</summary>
     public static async ValueTask<RunOutcome> ExecuteAsync(RunSession run, IClock realClock,
         OwnedCleanup cleanup, Func<RunSession, OwnedCleanup, CancellationToken, ValueTask<RunStartBoundary>> prepare,
         Func<RunSession, CancellationToken, ValueTask<bool>> execute,
         CancellationToken cancellationToken = default,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
+        => await ExecuteAsync(run, realClock, cleanup, prepare, execute, cancellationToken, confirmPrimary, null).ConfigureAwait(false);
+
+    /// <summary>Certified initial-boundary execution with bounded owner observation registration.
+    /// The existing overload remains available without registration.</summary>
+    public static async ValueTask<RunOutcome> ExecuteAsync(RunSession run, IClock realClock,
+        OwnedCleanup cleanup, Func<RunSession, OwnedCleanup, CancellationToken, ValueTask<RunStartBoundary>> prepare,
+        Func<RunSession, CancellationToken, ValueTask<bool>> execute,
+        CancellationToken cancellationToken,
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary,
+        Action<RunSession>? registerInitialObservation)
         => await ExecuteCoreAsync(run, realClock, cleanup,
             token => prepare(run, cleanup, token), boundary => new PreparedRun(true, boundary
-                ?? throw new InvalidOperationException("RunningBoundaryCertificateRequired")), execute, cancellationToken, confirmPrimary).ConfigureAwait(false);
+                ?? throw new InvalidOperationException("RunningBoundaryCertificateRequired")), execute, cancellationToken, confirmPrimary, registerInitialObservation).ConfigureAwait(false);
 
     private static async ValueTask<RunOutcome> ExecuteCoreAsync<T>(RunSession run, IClock realClock,
         OwnedCleanup cleanup, Func<CancellationToken, ValueTask<T>> prepare, Func<T, PreparedRun> mapPreparation,
         Func<RunSession, CancellationToken, ValueTask<bool>> execute, CancellationToken cancellationToken,
-        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary)
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary, Action<RunSession>? registerInitialObservation = null)
     {
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(cleanup); ArgumentNullException.ThrowIfNull(prepare); ArgumentNullException.ThrowIfNull(execute);
@@ -72,7 +84,19 @@ public static class RunExecutor
                 {
                     run.BeginRunning(boundary);
                     var initial = boundary.InitialObservation;
-                    run.Evaluate(initial.Success, initial.CapturedAt, cancelled: cancellationToken.IsCancellationRequested, failureUnit: initial.Failure);
+                    IReadOnlyList<RunEvent> registrationEvents = [];
+                    try { registerInitialObservation?.Invoke(run); }
+                    catch (Exception exception)
+                    {
+                        // Keep the certified failure/lifecycle unit even if registration fails.
+                        run.RecordException(exception);
+                        var reason = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
+                            interrupted.CancellationToken == cancellationToken ? RunReason.Cancelled :
+                            FiniteOperation.IsDeadline(exception) ? RunReason.MaxDuration : RunReason.ExecutionError;
+                        registrationEvents = [exception is RunFailureException failed ? failed.Cause : new(reason, RunPhase.Execution, RunOrigin.Runner)];
+                    }
+                    run.Evaluate(initial.Success, initial.CapturedAt, candidates: registrationEvents,
+                        cancelled: cancellationToken.IsCancellationRequested, failureUnit: initial.Failure);
                 }
                 else run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 if (run.Primary is null)
