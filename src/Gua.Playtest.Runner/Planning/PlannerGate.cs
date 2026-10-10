@@ -100,7 +100,9 @@ public sealed class PlannerGate
         if (window > run.Limits.WaitTimeout || window <= TimeSpan.Zero)
             return Reject(request, PlannerFeedbackCode.BudgetDenied);
         // Even finish takes an approved finite final observation opportunity; it never establishes success.
-        var operation = request.Permit.Approve(count, window);
+        var operation = kind == "wait" && decision["durationMilliseconds"] is { } elapsed
+            ? request.Permit.ApproveElapsedWait(TimeSpan.FromMilliseconds(elapsed.GetValue<long>()), run.Limits.WaitTimeout)
+            : request.Permit.Approve(count, window);
         if (operation is null) return Reject(request, clock.Elapsed >= request.Deadline
             ? PlannerFeedbackCode.PlannerTimeout : PlannerFeedbackCode.BudgetDenied);
         request.Closed = true;
@@ -272,7 +274,10 @@ public sealed class ApprovedDecision
         gate.Record(Reference with { Code = PlannerFeedbackCode.ResponseClosed }); return true;
     }
     public void ConfirmSent(int index) => operation.Actions!.ConfirmSent(index);
-    public bool ConfirmResult() => Deliveries.All(x => x is DeliveryState.Sent or DeliveryState.Uncertain)
+    public void RecordUnconfirmedSend(int index) => operation.RecordUnconfirmedSend(index);
+    public bool DispatchClosedByGoal => operation.DispatchClosedByGoal;
+    public bool ConfirmResult() => Deliveries.All(x => x is DeliveryState.Sent or DeliveryState.Uncertain ||
+            x == DeliveryState.NotSent && operation.DispatchClosedByGoal)
         && operation.ConfirmResult();
     public PlannerFeedbackCode Complete()
     {
@@ -280,7 +285,8 @@ public sealed class ApprovedDecision
         if (Volatile.Read(ref dispatchState) == 1 || dispatchCancellation.IsCancellationRequested) gate.ArbitrateCancellation();
         var deliveries = Deliveries;
         var sent = deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain);
-        var code = sent == 0 && deliveries.Count != 0 ? PlannerFeedbackCode.NotSent :
+        var code = operation.ResultConfirmed && operation.DispatchClosedByGoal ? PlannerFeedbackCode.Confirmed :
+            sent == 0 && deliveries.Count != 0 ? PlannerFeedbackCode.NotSent :
             sent != 0 && sent < deliveries.Count ? PlannerFeedbackCode.PartialExecution :
             sent != 0 && !operation.ResultConfirmed ? PlannerFeedbackCode.SentUnconfirmed :
             operation.ResultConfirmed ? PlannerFeedbackCode.Confirmed : PlannerFeedbackCode.NotSent;

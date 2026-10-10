@@ -134,7 +134,7 @@ public sealed partial class RunTests
     [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)] [InlineData(1, true)]
     [InlineData(2, false)] [InlineData(2, true)] [InlineData(3, false)] [InlineData(3, true)]
     [InlineData(4, false)] [InlineData(4, true)]
-    public void OnGoalClosesActiveOperationAndArbitratesUncertainty(int operationKind, bool afterPlan)
+    public void OnGoalSettlesDispatchedReceiptAndClosesUnsentOrConfirmedWork(int operationKind, bool afterPlan)
     {
         var clock = new Clock(); var run = Running(clock, policy: afterPlan ? CompletionPolicy.AfterPlan : CompletionPolicy.OnGoal);
         RunSession.PlannerPermit? planner = null; RunSession.ApprovedOperation? operation = null;
@@ -147,15 +147,21 @@ public sealed partial class RunTests
         }
         var primary = run.Evaluate(Unit(), TimeSpan.Zero);
         Assert.True(run.GoalVerified);
-        if (afterPlan)
+        if (afterPlan || operationKind == 3)
         {
             Assert.Null(primary); Assert.Equal(ExecutionState.Running, run.State);
             if (operation is not null) Assert.True(operation.IsOpen);
             else Assert.True(planner!.Deadline > clock.Elapsed);
+            if (!afterPlan)
+            {
+                operation!.Actions!.ConfirmSent(0);
+                Assert.True(operation.ConfirmResult()); operation.Complete();
+                Assert.Equal(RunReason.GoalSatisfied, run.Evaluate()!.Cause.Reason);
+            }
         }
         else
         {
-            Assert.Equal(operationKind == 3 ? RunReason.ActionUnconfirmed : RunReason.GoalSatisfied, primary!.Cause.Reason);
+            Assert.Equal(RunReason.GoalSatisfied, primary!.Cause.Reason);
             Assert.Contains(run.Events, x => x.Reason == RunReason.GoalSatisfied);
             Assert.Equal(ExecutionState.Completing, run.State); Assert.True(run.ActionsClosing);
             if (operation is not null) Assert.False(operation.IsOpen);

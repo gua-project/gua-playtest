@@ -19,6 +19,12 @@ public interface IRunObservationFeed
 /// never queue behind the obsolete call, and synchronize fresh source state through invocation.
 /// Do not implement this for a serialized source or infer it from polling delivery timestamps.</summary>
 public interface IIndependentRunObservationFeed : IRunObservationFeed { }
+/// <summary>Runner-owned private condition schedule. A wake only requests fresh capture;
+/// it grants no result, approval or action authority.</summary>
+internal interface IRunConditionSchedule
+{
+    TimeSpan? NextConditionEvaluationAt { get; }
+}
 public sealed record MonitoredResult<T>(bool Completed, T? Value);
 
 /// <summary>Single-owner notification/timer/real-deadline coordinator during a Planner/action/wait.
@@ -204,7 +210,10 @@ public static class RunMonitor
                     wakes.Add(feed.WaitForChangeAsync(wakeCancellation.Token).AsTask());
                     var realTarget = run.NextRealEvaluationAt;
                     AddClockWake(realClock.DelayAsync(Positive(realTarget - run.ReadAuthoritativeReal()), wakeCancellation.Token).AsTask(), realTarget, false);
-                    if (run.NextConditionEvaluationAt is { } conditionWake)
+                    var conditionWakeAt = run.NextConditionEvaluationAt;
+                    if (feed is IRunConditionSchedule schedule && schedule.NextConditionEvaluationAt is { } privateWake &&
+                        (!conditionWakeAt.HasValue || privateWake < conditionWakeAt.Value)) conditionWakeAt = privateWake;
+                    if (conditionWakeAt is { } conditionWake)
                         AddClockWake(conditionClock.DelayAsync(Positive(conditionWake - run.ReadAuthoritativeCondition()), wakeCancellation.Token).AsTask(), conditionWake, true);
                     while (true)
                     {
