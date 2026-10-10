@@ -43,3 +43,11 @@ boundaries passed. Package smoke evidence:
 `artifacts/smoke-win-x64-ec5c304fbf524dd1a71378923e44bfcc/evidence.json`;
 native-free contract smoke evidence:
 `artifacts/contracts-37c2dc053e974b2d8f617b6c02b2b8c6/evidence.json`.
+
+After pass 1 fixes, Foundation901 passed with no skips/failures:
+`artifacts/audit-1-foundation/testk_DESKTOP-3CJOU9S_2026-10-10_21_04_32_net10.0.trx`.
+Pass 2 found repetition history wrongly tied to the independent progress threshold.
+Both intended assertions failed before correction:
+`artifacts/audit-2-before/testk_DESKTOP-3CJOU9S_2026-10-10_21_06_42_net10.0.trx`.
+History now retains the documented finite 1,000 boundaries independently of the
+progress threshold; absent definitions and a three-operation route have regressions.

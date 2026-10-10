@@ -103,6 +103,24 @@ public sealed class ExploreTests
         }
     }
     [Fact]
+    public void RepeatThresholdDoesNotDependOnUndefinedProgressThreshold()
+    {
+        var clock = new Clock(); var tracker = new ProgressTracker(new([], []), Limits(stagnation: 1, repeats: 2), clock, Progress(clock, situation: Situation()));
+        Assert.Equal(StallSignal.None, tracker.ObserveBoundary(Progress(clock, situation: Situation()), Action()).Signal);
+        Assert.Equal(StallSignal.ComparableRepetition, tracker.ObserveBoundary(Progress(clock, situation: Situation()), Action()).Signal);
+    }
+    [Fact]
+    public void ThreeOperationRouteRepeatsAfterNineBoundariesWithIndependentThresholds()
+    {
+        var clock = new Clock(); var tracker = new ProgressTracker(new([], []), Limits(stagnation: 8, repeats: 3), clock, Progress(clock, situation: Situation()));
+        for (int i = 0; i < 9; i++)
+        {
+            var step = i % 3;
+            var boundary = tracker.ObserveBoundary(Progress(clock, situation: Situation((step + 1) % 3)), Action("step-" + step));
+            Assert.Equal(i == 8 ? StallSignal.ComparableRepetition : StallSignal.None, boundary.Signal);
+        }
+    }
+    [Fact]
     public void ImprovingAttackIsNotRepetitionAndMissingSituationBreaksComparison()
     {
         var clock = new Clock(); var tracker = new ProgressTracker(Metric(1), Limits(), clock, Progress(clock, 100, situation: Situation()));

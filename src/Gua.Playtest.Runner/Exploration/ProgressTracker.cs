@@ -45,7 +45,7 @@ public sealed class ProgressTracker
             throw new ArgumentException("ExploreLimitsInvalid");
         clock = conditionClock; lastCapture = initial.CapturedAt;
         actionLimit = limits.StagnationActionLimit; repeatLimit = limits.StagnationRepeatLimit;
-        maxHistory = (int)Math.Min(1000, limits.StagnationActionLimit);
+        maxHistory = 1000;
         maxObservationBytes = (int)limits.MaxObservationBytes; maxObservationNodes = (int)limits.MaxObservationNodes;
         milestones = definitions.Milestones.Select(x => new MilestoneState(x, clock, initial.CapturedAt)).ToArray();
         metrics = definitions.Metrics.Select(x => new MetricState(x)).ToArray();
