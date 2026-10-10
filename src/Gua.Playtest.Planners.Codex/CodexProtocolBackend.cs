@@ -89,6 +89,9 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 }, token).ConfigureAwait(false);
                 if (!initialized.TryGetProperty("userAgent", out var agent) || agent.ValueKind != JsonValueKind.String ||
                     !SupportedUserAgent(agent.GetString()!)) throw new BackendException();
+                foreach (var name in new[] { "codexHome", "platformFamily", "platformOs" })
+                    if (!initialized.TryGetProperty(name, out var required) || required.ValueKind != JsonValueKind.String)
+                        throw new ProtocolException();
                 await WriteAsync(new JsonObject { ["method"] = "initialized" }, token).ConfigureAwait(false);
                 var started = await RequestAsync("thread/start", new JsonObject
                 {
@@ -129,10 +132,21 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // Server requests are capabilities we never grant (including approvals and tools).
                 if (message.TryGetProperty("id", out _)) throw new ProtocolException();
                 var method = message.GetProperty("method").GetString();
+                if (string.IsNullOrWhiteSpace(method)) throw new ProtocolException();
                 var parameters = message.GetProperty("params");
                 if (parameters.TryGetProperty("threadId", out var thread) && thread.GetString() != threadId)
                     throw new ProtocolException();
-                if (method == "thread/tokenUsage/updated")
+                if (method is not null && (method.StartsWith("item/", StringComparison.Ordinal) ||
+                    method.StartsWith("turn/", StringComparison.Ordinal)))
+                    ValidateTurnNotice(message, threadId, turnId);
+                if (method == "turn/started") ValidateTurnStartedNotice(message, threadId, turnId);
+                else if (method == "thread/started")
+                {
+                    ValidateThread(parameters.GetProperty("thread"));
+                    if (Identifier(parameters.GetProperty("thread").GetProperty("id")) != threadId) throw new ProtocolException();
+                }
+                else if (method == "thread/status/changed") ValidateThreadStatusNotice(parameters, threadId);
+                else if (method == "thread/tokenUsage/updated")
                 {
                     if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
                     if (parameters.GetProperty("turnId").GetString() != turnId) throw new ProtocolException();
@@ -267,22 +281,11 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                         (threadId is null && method != "thread/start") ||
                         (announcedThread is not null && announcedThread != noticeThread)) throw new ProtocolException();
                     announcedThread = noticeThread;
-                    if (notification == "thread/status/changed")
-                    {
-                        var status = notice.GetProperty("status");
-                        var kind = status.GetProperty("type").GetString();
-                        if (kind == "active")
-                        {
-                            foreach (var flag in status.GetProperty("activeFlags").EnumerateArray())
-                                if (flag.GetString() is not ("waitingOnApproval" or "waitingOnUserInput")) throw new ProtocolException();
-                        }
-                        else if (kind is not ("notLoaded" or "idle" or "systemError")) throw new ProtocolException();
-                    }
+                    if (notification == "thread/status/changed") ValidateThreadStatusNotice(notice, noticeThread);
                     if (notification == "turn/started")
                     {
                         if (method != "turn/start") throw new ProtocolException();
-                        ValidateTurn(notice.GetProperty("turn"));
-                        if (notice.GetProperty("turn").GetProperty("status").GetString() != "inProgress") throw new ProtocolException();
+                        ValidateTurnStartedNotice(message, threadId!, Identifier(notice.GetProperty("turn").GetProperty("id")));
                         var noticeTurn = Identifier(notice.GetProperty("turn").GetProperty("id"));
                         if (announcedTurn is not null && announcedTurn != noticeTurn) throw new ProtocolException();
                         announcedTurn = noticeTurn;
@@ -383,7 +386,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     {
         var parameters = message.GetProperty("params");
         if (Identifier(parameters.GetProperty("threadId")) != expectedThread) throw new ProtocolException();
-        var turn = message.GetProperty("method").GetString() == "turn/completed"
+        var turn = message.GetProperty("method").GetString() is "turn/completed" or "turn/started"
             ? parameters.GetProperty("turn").GetProperty("id") : parameters.GetProperty("turnId");
         if (Identifier(turn) != expectedTurn) throw new ProtocolException();
     }
@@ -406,12 +409,33 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             (turn.GetProperty("status").GetString() != "failed" || !CodexItemSchema.ValidError(error)))
             throw new ProtocolException();
     }
+    private static void ValidateTurnStartedNotice(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        ValidateTurnNotice(message, expectedThread, expectedTurn);
+        var turn = message.GetProperty("params").GetProperty("turn");
+        ValidateTurn(turn);
+        if (turn.GetProperty("status").GetString() != "inProgress") throw new ProtocolException();
+    }
+    private static void ValidateThreadStatusNotice(JsonElement parameters, string expectedThread)
+    {
+        if (Identifier(parameters.GetProperty("threadId")) != expectedThread) throw new ProtocolException();
+        var status = parameters.GetProperty("status");
+        var kind = status.GetProperty("type").GetString();
+        if (kind == "active")
+        {
+            foreach (var flag in status.GetProperty("activeFlags").EnumerateArray())
+                if (flag.GetString() is not ("waitingOnApproval" or "waitingOnUserInput")) throw new ProtocolException();
+        }
+        else if (kind is not ("notLoaded" or "idle" or "systemError")) throw new ProtocolException();
+    }
     private static void ValidateThread(JsonElement thread)
     {
         if (!CodexItemSchema.ValidThread(thread)) throw new ProtocolException();
         _ = Identifier(thread.GetProperty("id"));
         if (thread.GetProperty("ephemeral").ValueKind != JsonValueKind.True || thread.GetProperty("turns").GetArrayLength() != 0)
             throw new ProtocolException();
+        if (thread.GetProperty("status").GetProperty("type").GetString() != "idle" ||
+            thread.GetProperty("cliVersion").GetString() != "0.150.1") throw new BackendException();
         foreach (var name in new[] { "createdAt", "updatedAt" })
             if (!thread.GetProperty(name).TryGetInt64(out _)) throw new ProtocolException();
     }

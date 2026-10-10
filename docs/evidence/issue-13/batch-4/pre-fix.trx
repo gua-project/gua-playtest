@@ -1,0 +1,678 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="998083a7-ec48-44a9-a238-b72d65f5d599" name="testk@DESKTOP-3CJOU9S 2026-10-11 07:46:08" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T07:46:08.8481950+09:00" queuing="2026-10-11T07:46:08.8481955+09:00" start="2026-10-11T07:46:07.8150080+09:00" finish="2026-10-11T07:46:08.9728299+09:00" />
+  <TestSettings name="default" id="d450dbe4-5ff9-47ee-ba33-56d1d2b60d03">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_07_46_08" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="fc3a0c53-84d1-4d97-a06f-97fa45fc3575" testId="17da8056-07b6-db7e-664a-4af063db7f89" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;threadId&quot;, value: &quot;\&quot;other-thread\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0063886" startTime="2026-10-11T07:46:08.8426857+09:00" endTime="2026-10-11T07:46:08.8490587+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fc3a0c53-84d1-4d97-a06f-97fa45fc3575" />
+    <UnitTestResult executionId="5fa83b8f-09e5-4a48-ab5e-c595a5c37451" testId="25e6b2d2-97ac-dc1a-4f8f-48502dd4e82c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;,\&quot;method\&quot;:\&quot;other\&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0040686" startTime="2026-10-11T07:46:08.8581679+09:00" endTime="2026-10-11T07:46:08.8619667+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5fa83b8f-09e5-4a48-ab5e-c595a5c37451" />
+    <UnitTestResult executionId="d4f30d3d-ef91-4ae2-842e-1b79d3f9a027" testId="5df8a2e6-7a0f-f6b9-c914-55ae54c33fff" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;\&quot;,\&quot;params\&quot;:{}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0039726" startTime="2026-10-11T07:46:08.8849724+09:00" endTime="2026-10-11T07:46:08.8891502+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d4f30d3d-ef91-4ae2-842e-1b79d3f9a027">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 855&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="cd3df085-aa23-42cc-93f4-36edf81c8235" testId="1d6778a3-d376-0268-190d-276cf3ea677a" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;systemError\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0041136" startTime="2026-10-11T07:46:08.9051214+09:00" endTime="2026-10-11T07:46:08.9085243+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cd3df085-aa23-42cc-93f4-36edf81c8235">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6e7edfb5-bf79-46bb-af03-02a0334173ac" testId="18eb66c6-b7b9-a2f9-b466-bbdb15e5f4f6" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;items&quot;, value: &quot;[null]&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0043374" startTime="2026-10-11T07:46:08.7775169+09:00" endTime="2026-10-11T07:46:08.7798982+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6e7edfb5-bf79-46bb-af03-02a0334173ac">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="279c1890-4695-497e-9ce1-04fb7f36f9e2" testId="205b3743-e28c-06c6-7ab6-1c604483f818" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;,\&quot;params\&quot;:{\&quot;threa&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0028490" startTime="2026-10-11T07:46:08.8655846+09:00" endTime="2026-10-11T07:46:08.8683900+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="279c1890-4695-497e-9ce1-04fb7f36f9e2" />
+    <UnitTestResult executionId="b1bfdadb-1c03-414b-aea3-f19f830d8f7e" testId="51701992-b5fc-3272-f00e-0279c5de355e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;status&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0046318" startTime="2026-10-11T07:46:08.7762778+09:00" endTime="2026-10-11T07:46:08.7763459+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b1bfdadb-1c03-414b-aea3-f19f830d8f7e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="680a24ee-5847-488a-be3b-08fd3fde2aa6" testId="b070395d-13f2-b356-21b7-3a5d96645be4" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;status&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0043673" startTime="2026-10-11T07:46:08.8279390+09:00" endTime="2026-10-11T07:46:08.8316195+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="680a24ee-5847-488a-be3b-08fd3fde2aa6">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="37932093-f0c2-442a-98ca-048e235e42dd" testId="87618c0b-6c96-54d1-9a37-9877adef624d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;id&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0039024" startTime="2026-10-11T07:46:08.7771669+09:00" endTime="2026-10-11T07:46:08.7772026+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="37932093-f0c2-442a-98ca-048e235e42dd">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d563b1f4-8b25-40f4-b259-6cadf7a47b3f" testId="22fee790-f1c0-6bea-302c-924935347fae" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;id&quot;, value: &quot;\&quot;other-turn\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2475373" startTime="2026-10-11T07:46:08.5089360+09:00" endTime="2026-10-11T07:46:08.7665501+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d563b1f4-8b25-40f4-b259-6cadf7a47b3f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7de62b26-2c60-4722-a371-735be455ee71" testId="233f9bd7-c0f9-3376-e957-11ad59e8a133" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformOs&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0043364" startTime="2026-10-11T07:46:08.8019200+09:00" endTime="2026-10-11T07:46:08.8060310+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7de62b26-2c60-4722-a371-735be455ee71">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 436&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a9cbedbc-ec12-4b75-871f-e9c571c82595" testId="571955a0-27f1-e29d-473e-abf4bb96d9e7" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;partial JSON&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0035163" startTime="2026-10-11T07:46:08.8635590+09:00" endTime="2026-10-11T07:46:08.8654987+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9cbedbc-ec12-4b75-871f-e9c571c82595" />
+    <UnitTestResult executionId="9f2fe0da-c630-4862-9bec-863376039ec3" testId="7b61b830-6c28-4a20-9cb9-0ab3e2af5489" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;id\&quot;:3,\&quot;result\&quot;:{}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0029294" startTime="2026-10-11T07:46:08.8970468+09:00" endTime="2026-10-11T07:46:08.8996969+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9f2fe0da-c630-4862-9bec-863376039ec3" />
+    <UnitTestResult executionId="67d99cab-7f38-4654-ad9c-61628104f83a" testId="45c6249d-268c-6fee-d7ff-b6c7b8c8043e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;unknown\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0038367" startTime="2026-10-11T07:46:08.8318870+09:00" endTime="2026-10-11T07:46:08.8356257+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="67d99cab-7f38-4654-ad9c-61628104f83a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f07a99f4-6acf-4408-a2a9-e511329e6a3f" testId="0bb678a8-161a-702e-214c-51b2a6226b4b" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;cliVersion&quot;, value: &quot;\&quot;\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0043772" startTime="2026-10-11T07:46:08.9229541+09:00" endTime="2026-10-11T07:46:08.9271675+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f07a99f4-6acf-4408-a2a9-e511329e6a3f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9e74e104-33a6-4a5c-ba79-efdf958a2d53" testId="996b3b61-a4c4-62aa-6f45-f44e0a5bc1cf" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;id\&quot;:99,\&quot;method\&quot;:\&quot;item/commandExecution/requ&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0136535" startTime="2026-10-11T07:46:08.8711773+09:00" endTime="2026-10-11T07:46:08.8848482+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9e74e104-33a6-4a5c-ba79-efdf958a2d53" />
+    <UnitTestResult executionId="7ffdc483-bbcc-4a29-b121-cabb1fc307ea" testId="4e2b9d87-05b7-ba14-a90e-d0f953274915" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;cliVersion&quot;, value: &quot;\&quot;0.149.0\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0055718" startTime="2026-10-11T07:46:08.9088415+09:00" endTime="2026-10-11T07:46:08.9143237+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ffdc483-bbcc-4a29-b121-cabb1fc307ea">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="41867185-0820-4aff-9d69-160153e8b326" testId="7f0e4804-8726-2a2f-dc81-e5e94e2e7f36" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;notLoaded\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0036668" startTime="2026-10-11T07:46:08.9191113+09:00" endTime="2026-10-11T07:46:08.9226277+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="41867185-0820-4aff-9d69-160153e8b326">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ac671aa5-a7ef-490a-b7a3-e8ac7925063e" testId="9f9d8af5-d16c-a8f3-1a49-b823a9af449e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;,\&quot;params\&quot;:{\&quot;threa&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0026876" startTime="2026-10-11T07:46:08.8684586+09:00" endTime="2026-10-11T07:46:08.8711139+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ac671aa5-a7ef-490a-b7a3-e8ac7925063e" />
+    <UnitTestResult executionId="b184002d-3e3b-43fa-a914-bf67e856ea41" testId="784be835-a2ca-0936-09b3-bdc13d4c0824" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: &quot;turn/plan/updated&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0039321" startTime="2026-10-11T07:46:08.7978062+09:00" endTime="2026-10-11T07:46:08.8015236+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b184002d-3e3b-43fa-a914-bf67e856ea41">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 353&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="125792be-59ee-4d3c-9b22-340cd0f244a6" testId="4a9c1c8c-3ccd-a294-46ea-ace45036e76a" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;cliVersion&quot;, value: &quot;\&quot;0.150.10\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0043353" startTime="2026-10-11T07:46:08.8998236+09:00" endTime="2026-10-11T07:46:08.9042413+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="125792be-59ee-4d3c-9b22-340cd0f244a6">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e3779180-5766-4cfb-9847-3b2544a9aa61" testId="ab535d23-f45a-e904-48a6-4d197fc579d4" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformFamily&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0040545" startTime="2026-10-11T07:46:08.8276479+09:00" endTime="2026-10-11T07:46:08.8276732+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e3779180-5766-4cfb-9847-3b2544a9aa61">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 436&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6523eaf6-890c-4b68-a0ce-b0463ce91a70" testId="5e6ec44f-55be-310a-c39e-d904b774cce2" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;active\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042833" startTime="2026-10-11T07:46:08.8498116+09:00" endTime="2026-10-11T07:46:08.8533339+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6523eaf6-890c-4b68-a0ce-b0463ce91a70">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7430505c-21d7-47cd-b1fd-4f8030d2f0bf" testId="d09bf273-b4b4-b016-9629-af0caa2b31e7" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;items&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0044179" startTime="2026-10-11T07:46:08.7848391+09:00" endTime="2026-10-11T07:46:08.7889611+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7430505c-21d7-47cd-b1fd-4f8030d2f0bf">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="18bef002-4f3e-47ee-b873-538475ed673f" testId="4b484f3d-d1c8-4a23-47f3-c92917b26715" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: &quot;item/agentMessage/delta&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0080850" startTime="2026-10-11T07:46:08.7900247+09:00" endTime="2026-10-11T07:46:08.7974427+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="18bef002-4f3e-47ee-b873-538475ed673f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 353&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="dedd6fba-b702-46c5-a695-6ef260e142b4" testId="f8002847-ca19-26de-830a-966096bd3a4d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:null,\&quot;params\&quot;:{}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042272" startTime="2026-10-11T07:46:08.8538302+09:00" endTime="2026-10-11T07:46:08.8578377+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dedd6fba-b702-46c5-a695-6ef260e142b4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 855&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6b1120fc-8361-4c9f-b74e-a65f0c3bfd31" testId="adbac8c4-a0bc-a349-1f80-c0b3158d9aad" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot; \&quot;,\&quot;params\&quot;:{}}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0040137" startTime="2026-10-11T07:46:08.8925356+09:00" endTime="2026-10-11T07:46:08.8967235+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6b1120fc-8361-4c9f-b74e-a65f0c3bfd31">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 855&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="895ae248-f62e-4ed1-8aad-fd6e92043756" testId="79602204-a054-c737-feb5-8c65f05b30c3" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;codexHome&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0165646" startTime="2026-10-11T07:46:08.8271797+09:00" endTime="2026-10-11T07:46:08.8272237+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="895ae248-f62e-4ed1-8aad-fd6e92043756">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 436&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5cd7f4da-eae4-4d6a-a10d-d1e96c3bc785" testId="c1673e9e-ef7d-b5ad-3f55-8f2af41e1715" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;}\n{}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0032644" startTime="2026-10-11T07:46:08.8900180+09:00" endTime="2026-10-11T07:46:08.8924493+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5cd7f4da-eae4-4d6a-a10d-d1e96c3bc785" />
+    <UnitTestResult executionId="0d0aa6eb-c270-4c1e-b2a6-2df1e26bbf4c" testId="59f8a176-593c-ab9b-a273-db2f7927d17f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;threadId&quot;, value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0065160" startTime="2026-10-11T07:46:08.8359927+09:00" endTime="2026-10-11T07:46:08.8423412+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0d0aa6eb-c270-4c1e-b2a6-2df1e26bbf4c">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="bbb41c96-714a-42f2-bfe8-a9136d3fb8cb" testId="e378ece1-a6cb-bc3d-2b8f-489aeeaf9c33" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;status&quot;, value: &quot;\&quot;completed\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042533" startTime="2026-10-11T07:46:08.7802100+09:00" endTime="2026-10-11T07:46:08.7843658+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bbb41c96-714a-42f2-bfe8-a9136d3fb8cb">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2056094b-66f0-42a0-80bf-98b5b89a7e78" testId="7490d38b-40e5-41da-678a-3c00f967c530" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;active\&quot;,\&quot;activeFlags\&quot;:[]}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042625" startTime="2026-10-11T07:46:08.9147239+09:00" endTime="2026-10-11T07:46:08.9187585+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2056094b-66f0-42a0-80bf-98b5b89a7e78">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;status&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="b070395d-13f2-b356-21b7-3a5d96645be4">
+      <Execution id="680a24ee-5847-488a-be3b-08fd3fde2aa6" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;id&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="87618c0b-6c96-54d1-9a37-9877adef624d">
+      <Execution id="37932093-f0c2-442a-98ca-048e235e42dd" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;id\&quot;:99,\&quot;method\&quot;:\&quot;item/commandExecution/requ&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="996b3b61-a4c4-62aa-6f45-f44e0a5bc1cf">
+      <Execution id="9e74e104-33a6-4a5c-ba79-efdf958a2d53" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;active\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5e6ec44f-55be-310a-c39e-d904b774cce2">
+      <Execution id="6523eaf6-890c-4b68-a0ce-b0463ce91a70" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;active\&quot;,\&quot;activeFlags\&quot;:[]}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="7490d38b-40e5-41da-678a-3c00f967c530">
+      <Execution id="2056094b-66f0-42a0-80bf-98b5b89a7e78" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;systemError\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="1d6778a3-d376-0268-190d-276cf3ea677a">
+      <Execution id="cd3df085-aa23-42cc-93f4-36edf81c8235" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;,\&quot;params\&quot;:{\&quot;threa&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="205b3743-e28c-06c6-7ab6-1c604483f818">
+      <Execution id="279c1890-4695-497e-9ce1-04fb7f36f9e2" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;threadId&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="59f8a176-593c-ab9b-a273-db2f7927d17f">
+      <Execution id="0d0aa6eb-c270-4c1e-b2a6-2df1e26bbf4c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot; \&quot;,\&quot;params\&quot;:{}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="adbac8c4-a0bc-a349-1f80-c0b3158d9aad">
+      <Execution id="6b1120fc-8361-4c9f-b74e-a65f0c3bfd31" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;codexHome&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="79602204-a054-c737-feb5-8c65f05b30c3">
+      <Execution id="895ae248-f62e-4ed1-8aad-fd6e92043756" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="AdjacentInitializeResponseRequiresCompletePinnedShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformFamily&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ab535d23-f45a-e904-48a6-4d197fc579d4">
+      <Execution id="e3779180-5766-4cfb-9847-3b2544a9aa61" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="AdjacentInitializeResponseRequiresCompletePinnedShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: &quot;turn/plan/updated&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="784be835-a2ca-0936-09b3-bdc13d4c0824">
+      <Execution id="b184002d-3e3b-43fa-a914-bf67e856ea41" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NeighboringPostResponseStreamNoticesRequireTurnCorrelation" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;items&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d09bf273-b4b4-b016-9629-af0caa2b31e7">
+      <Execution id="7430505c-21d7-47cd-b1fd-4f8030d2f0bf" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;id\&quot;:3,\&quot;result\&quot;:{}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="7b61b830-6c28-4a20-9cb9-0ab3e2af5489">
+      <Execution id="9f2fe0da-c630-4862-9bec-863376039ec3" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:null,\&quot;params\&quot;:{}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="f8002847-ca19-26de-830a-966096bd3a4d">
+      <Execution id="dedd6fba-b702-46c5-a695-6ef260e142b4" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;threadId&quot;, value: &quot;\&quot;other-thread\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="17da8056-07b6-db7e-664a-4af063db7f89">
+      <Execution id="fc3a0c53-84d1-4d97-a06f-97fa45fc3575" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;unknown\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="45c6249d-268c-6fee-d7ff-b6c7b8c8043e">
+      <Execution id="67d99cab-7f38-4654-ad9c-61628104f83a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;,\&quot;params\&quot;:{\&quot;threa&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9f9d8af5-d16c-a8f3-1a49-b823a9af449e">
+      <Execution id="ac671aa5-a7ef-490a-b7a3-e8ac7925063e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;status&quot;, value: &quot;\&quot;completed\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="e378ece1-a6cb-bc3d-2b8f-489aeeaf9c33">
+      <Execution id="bbb41c96-714a-42f2-bfe8-a9136d3fb8cb" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;status&quot;, value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="51701992-b5fc-3272-f00e-0279c5de355e">
+      <Execution id="b1bfdadb-1c03-414b-aea3-f19f830d8f7e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;partial JSON&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="571955a0-27f1-e29d-473e-abf4bb96d9e7">
+      <Execution id="a9cbedbc-ec12-4b75-871f-e9c571c82595" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformOs&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="233f9bd7-c0f9-3376-e957-11ad59e8a133">
+      <Execution id="7de62b26-2c60-4722-a371-735be455ee71" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="AdjacentInitializeResponseRequiresCompletePinnedShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;notLoaded\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="7f0e4804-8726-2a2f-dc81-e5e94e2e7f36">
+      <Execution id="41867185-0820-4aff-9d69-160153e8b326" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;id&quot;, value: &quot;\&quot;other-turn\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="22fee790-f1c0-6bea-302c-924935347fae">
+      <Execution id="d563b1f4-8b25-40f4-b259-6cadf7a47b3f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;cliVersion&quot;, value: &quot;\&quot;0.150.10\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="4a9c1c8c-3ccd-a294-46ea-ace45036e76a">
+      <Execution id="125792be-59ee-4d3c-9b22-340cd0f244a6" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: &quot;item/agentMessage/delta&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="4b484f3d-d1c8-4a23-47f3-c92917b26715">
+      <Execution id="18bef002-4f3e-47ee-b873-538475ed673f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NeighboringPostResponseStreamNoticesRequireTurnCorrelation" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: &quot;items&quot;, value: &quot;[null]&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="18eb66c6-b7b9-a2f9-b466-bbdb15e5f4f6">
+      <Execution id="6e7edfb5-bf79-46bb-af03-02a0334173ac" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;}\n{}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c1673e9e-ef7d-b5ad-3f55-8f2af41e1715">
+      <Execution id="5cd7f4da-eae4-4d6a-a10d-d1e96c3bc785" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;turn/completed\&quot;,\&quot;method\&quot;:\&quot;other\&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="25e6b2d2-97ac-dc1a-4f8f-48502dd4e82c">
+      <Execution id="5fa83b8f-09e5-4a48-ab5e-c595a5c37451" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: &quot;{\&quot;method\&quot;:\&quot;\&quot;,\&quot;params\&quot;:{}}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5df8a2e6-7a0f-f6b9-c914-55ae54c33fff">
+      <Execution id="d4f30d3d-ef91-4ae2-842e-1b79d3f9a027" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="MalformedDuplicateStaleOrCapabilityRequestClosesSession" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;cliVersion&quot;, value: &quot;\&quot;\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0bb678a8-161a-702e-214c-51b2a6226b4b">
+      <Execution id="f07a99f4-6acf-4408-a2a9-e511329e6a3f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: &quot;cliVersion&quot;, value: &quot;\&quot;0.149.0\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="4e2b9d87-05b7-ba14-a90e-d0f953274915">
+      <Execution id="7ffdc483-bbcc-4a29-b121-cabb1fc307ea" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="17da8056-07b6-db7e-664a-4af063db7f89" executionId="fc3a0c53-84d1-4d97-a06f-97fa45fc3575" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="25e6b2d2-97ac-dc1a-4f8f-48502dd4e82c" executionId="5fa83b8f-09e5-4a48-ab5e-c595a5c37451" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5df8a2e6-7a0f-f6b9-c914-55ae54c33fff" executionId="d4f30d3d-ef91-4ae2-842e-1b79d3f9a027" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d6778a3-d376-0268-190d-276cf3ea677a" executionId="cd3df085-aa23-42cc-93f4-36edf81c8235" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="18eb66c6-b7b9-a2f9-b466-bbdb15e5f4f6" executionId="6e7edfb5-bf79-46bb-af03-02a0334173ac" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="205b3743-e28c-06c6-7ab6-1c604483f818" executionId="279c1890-4695-497e-9ce1-04fb7f36f9e2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="51701992-b5fc-3272-f00e-0279c5de355e" executionId="b1bfdadb-1c03-414b-aea3-f19f830d8f7e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b070395d-13f2-b356-21b7-3a5d96645be4" executionId="680a24ee-5847-488a-be3b-08fd3fde2aa6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="87618c0b-6c96-54d1-9a37-9877adef624d" executionId="37932093-f0c2-442a-98ca-048e235e42dd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="22fee790-f1c0-6bea-302c-924935347fae" executionId="d563b1f4-8b25-40f4-b259-6cadf7a47b3f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="233f9bd7-c0f9-3376-e957-11ad59e8a133" executionId="7de62b26-2c60-4722-a371-735be455ee71" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="571955a0-27f1-e29d-473e-abf4bb96d9e7" executionId="a9cbedbc-ec12-4b75-871f-e9c571c82595" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7b61b830-6c28-4a20-9cb9-0ab3e2af5489" executionId="9f2fe0da-c630-4862-9bec-863376039ec3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="45c6249d-268c-6fee-d7ff-b6c7b8c8043e" executionId="67d99cab-7f38-4654-ad9c-61628104f83a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0bb678a8-161a-702e-214c-51b2a6226b4b" executionId="f07a99f4-6acf-4408-a2a9-e511329e6a3f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="996b3b61-a4c4-62aa-6f45-f44e0a5bc1cf" executionId="9e74e104-33a6-4a5c-ba79-efdf958a2d53" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4e2b9d87-05b7-ba14-a90e-d0f953274915" executionId="7ffdc483-bbcc-4a29-b121-cabb1fc307ea" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7f0e4804-8726-2a2f-dc81-e5e94e2e7f36" executionId="41867185-0820-4aff-9d69-160153e8b326" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9f9d8af5-d16c-a8f3-1a49-b823a9af449e" executionId="ac671aa5-a7ef-490a-b7a3-e8ac7925063e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="784be835-a2ca-0936-09b3-bdc13d4c0824" executionId="b184002d-3e3b-43fa-a914-bf67e856ea41" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4a9c1c8c-3ccd-a294-46ea-ace45036e76a" executionId="125792be-59ee-4d3c-9b22-340cd0f244a6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ab535d23-f45a-e904-48a6-4d197fc579d4" executionId="e3779180-5766-4cfb-9847-3b2544a9aa61" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5e6ec44f-55be-310a-c39e-d904b774cce2" executionId="6523eaf6-890c-4b68-a0ce-b0463ce91a70" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d09bf273-b4b4-b016-9629-af0caa2b31e7" executionId="7430505c-21d7-47cd-b1fd-4f8030d2f0bf" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4b484f3d-d1c8-4a23-47f3-c92917b26715" executionId="18bef002-4f3e-47ee-b873-538475ed673f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f8002847-ca19-26de-830a-966096bd3a4d" executionId="dedd6fba-b702-46c5-a695-6ef260e142b4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="adbac8c4-a0bc-a349-1f80-c0b3158d9aad" executionId="6b1120fc-8361-4c9f-b74e-a65f0c3bfd31" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="79602204-a054-c737-feb5-8c65f05b30c3" executionId="895ae248-f62e-4ed1-8aad-fd6e92043756" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c1673e9e-ef7d-b5ad-3f55-8f2af41e1715" executionId="5cd7f4da-eae4-4d6a-a10d-d1e96c3bc785" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="59f8a176-593c-ab9b-a273-db2f7927d17f" executionId="0d0aa6eb-c270-4c1e-b2a6-2df1e26bbf4c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e378ece1-a6cb-bc3d-2b8f-489aeeaf9c33" executionId="bbb41c96-714a-42f2-bfe8-a9136d3fb8cb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7490d38b-40e5-41da-678a-3c00f967c530" executionId="2056094b-66f0-42a0-80bf-98b5b89a7e78" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="32" executed="32" passed="8" failed="24" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.26]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.54]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.54]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.54]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.54]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.54]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(332,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.54]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.54]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.54]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.54]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.54]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.54]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(332,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.54]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.54]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.54]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.54]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.54]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.54]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(332,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.54]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.55]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.55]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.55]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(332,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.55]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.55]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.55]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(332,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.56]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.56]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.56]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.56]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.56]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(332,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.56]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.56]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.56]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.56]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.56]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(353,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(String method)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(353,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(String method)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(436,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.59]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.59]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.59]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.59]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(436,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field)&#xD;
+[xUnit.net 00:00:00.59]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.60]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.60]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(436,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.60]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.60]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(373,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.60]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.60]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(373,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.61]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.61]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.61]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.61]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.61]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(373,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.61]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.62]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.62]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.62]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.62]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.62]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(373,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value)&#xD;
+[xUnit.net 00:00:00.62]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.63]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.63]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.63]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.63]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.63]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(855,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame)&#xD;
+[xUnit.net 00:00:00.63]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.66]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.66]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.66]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.66]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(855,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame)&#xD;
+[xUnit.net 00:00:00.66]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.66]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.66]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.66]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.66]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(855,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame)&#xD;
+[xUnit.net 00:00:00.66]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.67]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.67]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.67]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.67]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(399,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.68]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.68]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.68]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.68]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.68]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(399,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.68]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.68]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.68]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.68]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.68]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(399,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.69]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.69]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.69]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.69]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.69]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(399,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.69]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.69]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.69]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.69]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.69]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.69]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(399,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.69]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.69]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.69]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.69]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.69]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.69]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(399,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value)&#xD;
+[xUnit.net 00:00:00.69]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.70]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7687155+09:00">
+        <Text>[xUnit.net 00:00:00.54]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "id", value: "\"other-turn\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7767081+09:00">
+        <Text>[xUnit.net 00:00:00.54]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "status", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7773580+09:00">
+        <Text>[xUnit.net 00:00:00.54]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "id", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7800289+09:00">
+        <Text>[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "items", value: "[null]") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7845781+09:00">
+        <Text>[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "status", value: "\"completed\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7891532+09:00">
+        <Text>[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "items", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.7976474+09:00">
+        <Text>[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: "item/agentMessage/delta") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8016852+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: "turn/plan/updated") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8061732+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformOs") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8541720+09:00">
+        <Text>[xUnit.net 00:00:00.59]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "codexHome") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8541962+09:00">
+        <Text>[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformFamily") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8542130+09:00">
+        <Text>[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8542304+09:00">
+        <Text>[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "{\"type\":\"unknown\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8542487+09:00">
+        <Text>[xUnit.net 00:00:00.61]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "threadId", value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8542676+09:00">
+        <Text>[xUnit.net 00:00:00.62]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "{\"type\":\"active\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8580196+09:00">
+        <Text>[xUnit.net 00:00:00.63]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":null,\"params\":{}}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8895599+09:00">
+        <Text>[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":\"\",\"params\":{}}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.8969199+09:00">
+        <Text>[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":\" \",\"params\":{}}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.9044314+09:00">
+        <Text>[xUnit.net 00:00:00.67]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"0.150.10\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.9086778+09:00">
+        <Text>[xUnit.net 00:00:00.68]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"systemError\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.9145364+09:00">
+        <Text>[xUnit.net 00:00:00.68]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"0.149.0\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.9189500+09:00">
+        <Text>[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"active\",\"activeFlags\":[]}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.9228060+09:00">
+        <Text>[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"notLoaded\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:46:08.9273383+09:00">
+        <Text>[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"\"") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

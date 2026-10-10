@@ -134,3 +134,66 @@ for this byte-preserved evidence directory; other whitespace checks remain enabl
 The complete ae6eb05-to-published-source diff and attribute/doc changes then passed
 git diff --check. Original artifact bytes and manifests are unchanged. This
 attribute/document-only correction required content/hash/diff checks, no runtime rerun.
+
+## Consolidated post-response lifecycle and adjacent RPC correction
+
+Actual Codex review of `19fafb32385a12bc24ba31ac69f865747fa795d6` completed at
+2026-10-10 22:41:09 UTC with three concrete additional findings. They were
+validated and consolidated with the neighboring initialize-response shape gap
+identified while following the earlier complete-RPC-response failure pattern.
+
+| Finding / pattern | Correction | Regression assertion |
+| --- | --- | --- |
+| 4239460741 | Post-response turn/started now uses the same complete turn shape, inProgress state and nested ID checks as pre-response notices. Neighboring item/turn streams require current thread/turn IDs; thread/status shares validation in both paths. Empty/null/whitespace method names refuse output. PLANNER-002/008. | `TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse`, valid post-response start case, `NeighboringPostResponseStreamNoticesRequireTurnCorrelation`, `ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse`, existing malformed-frame regression. |
+| 4239460746 | Fresh thread and matching thread-start notices must be idle before input; systemError/notLoaded/active are unavailable connections rather than proposal sources. PLANNER-008/010. | `FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput`: safe ConnectionFailure, no input/start-turn write, permanently closed instance. |
+| 4239460749 | Fresh thread cliVersion must equal initialized pinned 0.150.1; older, prefix-compatible-but-different, and empty versions refuse input. PACK-004/PLANNER-008. | Same fresh-thread regression checks response and notice paths. Existing supported leading user-agent tests remain. |
+| Same complete-response pattern as 4239426152 | Official pinned v1 InitializeResponse requires codexHome/platformFamily/platformOs strings in addition to userAgent. All are checked before initialized/thread/input writes. | `AdjacentInitializeResponseRequiresCompletePinnedShape`: missing/null/number/object refuses output, exactly one initialize write, no later request. [Official fixed schema](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v1/InitializeResponse.json). |
+
+Artifact group numbers are execution groups, **not new audit batches or budget
+resets**. Ordinary independent audit remains **2/2 consumed** throughout. No new
+independent audit covers these backend/test/protocol-doc/public-evidence changes.
+
+The intermediate initialize-only behavior was validated before the remaining
+review arrived: [manifest](docs/evidence/issue-13/batch-3/manifest.json),
+[source snapshot](docs/evidence/issue-13/batch-3/snapshot/CodexProtocolBackend.cs.txt),
+[test snapshot](docs/evidence/issue-13/batch-3/snapshot/CodexProtocolTests.cs.txt),
+[focused TRX](docs/evidence/issue-13/batch-3/focused.trx),
+[pre-fix TRX](docs/evidence/issue-13/batch-3/pre-fix.trx), and
+[full test log](docs/evidence/issue-13/batch-3/tests.log).
+It had 174 focused passes, 130/528/1101 full-project passes, three intended
+pre-fix failures, and successful build/boundary/archive/tool/contract smoke.
+It was not pushed separately and does not replace final consolidated validation.
+
+Final consolidated local validation uses pushed base 19fafb3 plus the source
+blob hashes in [manifest](docs/evidence/issue-13/batch-4/manifest.json).
+Runtime/test source was complete before final checks; only evidence/docs were
+added later. Same Windows/.NET environment and UTC/host-local provenance apply.
+
+- [Focused TRX](docs/evidence/issue-13/batch-4/focused.trx) and
+  [log](docs/evidence/issue-13/batch-4/focused.log): 197 pass, 0 fail/skip.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-4/pre-fix.trx) and
+  [log](docs/evidence/issue-13/batch-4/pre-fix.log): 24 intended assertion failures,
+  8 existing refusal passes, 0 skip with 19fafb3 backend; fixed source restored
+  in finally. Failures show accepted Completed evidence where invalid/unavailable
+  status is required, not build/environment failures.
+- [Locked restore](docs/evidence/issue-13/batch-4/restore.log),
+  [Release build](docs/evidence/issue-13/batch-4/build.log),
+  [boundaries](docs/evidence/issue-13/batch-4/boundaries.log): pass; 0 build warnings/errors.
+- [Sequential tests](docs/evidence/issue-13/batch-4/tests.log),
+  [Bridge](docs/evidence/issue-13/batch-4/bridge.trx),
+  [Contracts](docs/evidence/issue-13/batch-4/contracts.trx),
+  [Foundation](docs/evidence/issue-13/batch-4/foundation.trx):
+  130 + 528 + 1124 = **1782 pass, 0 fail/skip**.
+- [Archive/tool log](docs/evidence/issue-13/batch-4/package.log) and
+  [JSON](docs/evidence/issue-13/batch-4/package-evidence.json): pass.
+- [Native-free consumer log](docs/evidence/issue-13/batch-4/contracts.log) and
+  [JSON](docs/evidence/issue-13/batch-4/contracts-evidence.json): pass.
+
+Full cumulative/post-fix diff, public links, artifact byte hashes and staged
+snapshot/source blob hashes are checked before push. Smoke's transient RID lock
+changes converge back to the original tracked locks; no dependency changes are
+part of this correction. Fake/schema/native-package/consumer evidence remains
+separate from real transport, real Planner, OS isolation, Trace/game acceptance.
+Production provider and OPEN-09/11 remain unavailable/unverified; issue #13 stays
+open. Final-HEAD CI/review success and parent ordering approval remain the merge
+gate; earlier-HEAD reports and CI cannot substitute for them.

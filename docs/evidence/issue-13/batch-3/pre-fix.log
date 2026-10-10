@@ -1,0 +1,38 @@
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.52]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformOs") [FAIL]
+[xUnit.net 00:00:00.53]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "codexHome") [FAIL]
+[xUnit.net 00:00:00.53]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformFamily") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformOs") [231 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 343
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "codexHome") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 343
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformFamily") [14 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 343
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\codex-review-followup\pass3-pre-fix\testk_DESKTOP-3CJOU9S_2026-10-11_07_39_20_net10.0.trx
+
+失敗!   -失敗:     3、合格:     0、スキップ:     0、合計:     3、期間: 262 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

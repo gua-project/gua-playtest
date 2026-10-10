@@ -309,6 +309,99 @@ public sealed class CodexProtocolTests
         }
     }
 
+    [Theory]
+    [InlineData("id", "\"other-turn\"")]
+    [InlineData("id", "missing")]
+    [InlineData("status", "missing")]
+    [InlineData("status", "\"completed\"")]
+    [InlineData("items", "missing")]
+    [InlineData("items", "[null]")]
+    public async Task TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(string field, string value)
+    {
+        foreach (var beforeResponse in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            var turn = new JsonObject { ["id"] = "turn-1", ["items"] = new JsonArray(), ["status"] = "inProgress" };
+            if (value == "missing") turn.Remove(field); else turn[field] = JsonNode.Parse(value);
+            transport.Add(new JsonObject { ["method"] = "turn/started", ["params"] = new JsonObject
+                { ["threadId"] = "thread-1", ["turn"] = turn } }.ToJsonString());
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]);
+            transport.Add(Completed(Decision())); var backend = Backend(transport); var reply = await backend.DecideAsync(Input(), default);
+            Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status); Assert.Null(reply.CompletedJson);
+            Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+        }
+    }
+
+    [Fact]
+    public async Task ValidPostResponseTurnStartedAllowsCorrelatedCompletion()
+    {
+        var transport = Started(); transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+        transport.Add(Completed(Decision()));
+        Assert.Equal(CodexReplyStatus.Completed, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+
+    [Theory]
+    [InlineData("item/agentMessage/delta")]
+    [InlineData("turn/plan/updated")]
+    public async Task NeighboringPostResponseStreamNoticesRequireTurnCorrelation(string method)
+    {
+        var transport = Started(); transport.Add(new JsonObject { ["method"] = method, ["params"] = new JsonObject
+            { ["threadId"] = "thread-1", ["turnId"] = "other-turn", ["itemId"] = "message-1", ["delta"] = "text", ["plan"] = new JsonArray() } }.ToJsonString());
+        transport.Add(Completed(Decision()));
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+
+    [Theory]
+    [InlineData("threadId", "missing")]
+    [InlineData("threadId", "\"other-thread\"")]
+    [InlineData("status", "missing")]
+    [InlineData("status", "{\"type\":\"active\"}")]
+    [InlineData("status", "{\"type\":\"unknown\"}")]
+    public async Task ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(string field, string value)
+    {
+        foreach (var beforeResponse in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            var parameters = new JsonObject { ["threadId"] = "thread-1", ["status"] = new JsonObject { ["type"] = "idle" } };
+            if (value == "missing") parameters.Remove(field); else parameters[field] = JsonNode.Parse(value);
+            transport.Add(new JsonObject { ["method"] = "thread/status/changed", ["params"] = parameters }.ToJsonString());
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+            Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+        }
+    }
+
+    [Theory]
+    [InlineData("status", "{\"type\":\"systemError\"}")]
+    [InlineData("status", "{\"type\":\"notLoaded\"}")]
+    [InlineData("status", "{\"type\":\"active\",\"activeFlags\":[]}")]
+    [InlineData("cliVersion", "\"0.149.0\"")]
+    [InlineData("cliVersion", "\"0.150.10\"")]
+    [InlineData("cliVersion", "\"\"")]
+    public async Task FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(string field, string value)
+    {
+        foreach (var noticeFirst in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); var result = ThreadStartResult(); result["thread"]![field] = JsonNode.Parse(value);
+            if (noticeFirst)
+            {
+                transport.Add(new JsonObject { ["method"] = "thread/started", ["params"] = new JsonObject
+                    { ["thread"] = result["thread"]!.DeepClone() } }.ToJsonString());
+                transport.Frames.Enqueue(frames[1]);
+            }
+            else transport.Add(new JsonObject { ["id"] = 2, ["result"] = result }.ToJsonString());
+            transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+            var backend = Backend(transport); var reply = await backend.DecideAsync(Input(), default);
+            Assert.Equal(CodexReplyStatus.ConnectionFailure, reply.Status); Assert.Null(reply.CompletedJson);
+            Assert.DoesNotContain(transport.Writes, x => x.Contains("turn/start") || x.Contains("public objective"));
+            Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+        }
+    }
+
     private static JsonObject ThreadStartResult() => new()
     {
         ["approvalPolicy"] = "never", ["approvalsReviewer"] = "user", ["cwd"] = "/public",
@@ -322,10 +415,33 @@ public sealed class CodexProtocolTests
             ["status"] = new JsonObject { ["type"] = "idle" }, ["turns"] = new JsonArray()
         }
     };
+    private static string InitializeResult(string agent) => new JsonObject
+    {
+        ["id"] = 1, ["result"] = new JsonObject { ["userAgent"] = agent, ["codexHome"] = "/codex",
+            ["platformFamily"] = "unix", ["platformOs"] = "linux" }
+    }.ToJsonString();
+    [Theory]
+    [InlineData("codexHome")]
+    [InlineData("platformFamily")]
+    [InlineData("platformOs")]
+    public async Task AdjacentInitializeResponseRequiresCompletePinnedShape(string field)
+    {
+        foreach (var value in new[] { "missing", "null", "42", "{}" })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            var response = JsonNode.Parse(Encoding.UTF8.GetString(frames[0]!))!; var result = response["result"]!.AsObject();
+            if (value == "missing") result.Remove(field); else result[field] = JsonNode.Parse(value);
+            transport.Add(response.ToJsonString()); transport.Frames.Enqueue(frames[1]); transport.Frames.Enqueue(frames[2]);
+            transport.Add(Completed(Decision())); var backend = Backend(transport); var reply = await backend.DecideAsync(Input(), default);
+            Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status); Assert.Null(reply.CompletedJson);
+            Assert.Single(transport.Writes); Assert.Contains("initialize", transport.Writes[0]);
+            Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+        }
+    }
     private static Transport Started()
     {
         var transport = new Transport();
-        transport.Add("{\"id\":1,\"result\":{\"userAgent\":\"codex/0.150.1\"}}");
+        transport.Add(InitializeResult("codex/0.150.1"));
         transport.Add(new JsonObject { ["id"] = 2, ["result"] = ThreadStartResult() }.ToJsonString());
         transport.Add("{\"id\":3,\"result\":{\"turn\":{\"id\":\"turn-1\",\"status\":\"inProgress\",\"items\":[]}}}");
         return transport;
@@ -630,7 +746,7 @@ public sealed class CodexProtocolTests
     {
         var transport = Started(); transport.Frames.Dequeue();
         var remaining = transport.Frames.ToArray(); transport.Frames.Clear();
-        transport.Add(new JsonObject { ["id"] = 1, ["result"] = new JsonObject { ["userAgent"] = agent } }.ToJsonString());
+        transport.Add(InitializeResult(agent));
         foreach (var frame in remaining) transport.Frames.Enqueue(frame);
         transport.Add(Completed(Decision()));
         Assert.Equal(CodexReplyStatus.Completed, (await Backend(transport).DecideAsync(Input(), default)).Status);
@@ -728,6 +844,9 @@ public sealed class CodexProtocolTests
     [InlineData("{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"old-turn\"}}}")]
     [InlineData("{\"method\":\"turn/completed\",\"method\":\"other\",\"params\":{}}")]
     [InlineData("{\"method\":\"turn/completed\"}\n{}")]
+    [InlineData("{\"method\":null,\"params\":{}}") ]
+    [InlineData("{\"method\":\"\",\"params\":{}}") ]
+    [InlineData("{\"method\":\" \",\"params\":{}}") ]
     [InlineData("partial JSON")]
     public async Task MalformedDuplicateStaleOrCapabilityRequestClosesSession(string frame)
     {

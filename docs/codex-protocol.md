@@ -56,10 +56,16 @@ thread with a complete pinned ThreadStartResponse/Thread shape, approval policy
 `never`, and effective `readOnly` sandbox with network
 access false (including the schema default when omitted). Broader, missing or
 malformed effective restrictions close the converter as a connection failure.
-These response checks do not prove OS enforcement or close OPEN-09.
+The fresh thread must be idle and its cliVersion must agree with the initialized
+0.150.1 version. An unusable status or contradictory version closes the converter
+as a connection failure before input; equivalent thread-start notices are checked
+as well. These response checks do not prove OS enforcement or close OPEN-09.
 
 Start responses and turn-start notices validate the required Turn fields and
-in-progress status. Every terminal item is checked against the pinned 0.150.1
+in-progress status before and after RPC responses. Thread/status notices use the
+same thread/shape checks in both paths, and all item/turn stream notices require
+matching thread and turn IDs even when their fragments are discarded.
+Empty/null/whitespace method names refuse output. Every terminal item is checked against the pinned 0.150.1
 ThreadItem schema before failure classification, including non-assistant items.
 Canonical item completion envelopes require the pinned integer completedAtMs
 timestamp before caching/hydration, both before and after the start response.
@@ -103,6 +109,9 @@ matrix or real provider acceptance.
 The initialize response must advertise `0.150.1` in its leading user-agent
 product before the converter sends `initialized` or starts a thread. Missing
 or incompatible version evidence returns a connection failure.
+After confirming the version, the initialize result must also include the pinned
+string fields `codexHome`, `platformFamily` and `platformOs`. Missing or malformed
+initialize evidence is refused before sending `initialized` or opening a thread.
 
 The 0.150.1 `InitializeParams` has `capabilities.experimentalApi`.
 `PermissionProfileListParams/Response` and the `permissionProfile/list` request
