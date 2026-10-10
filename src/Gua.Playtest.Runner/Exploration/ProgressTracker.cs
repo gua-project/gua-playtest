@@ -44,7 +44,10 @@ public sealed class ProgressTracker
             limits.StagnationActionLimit > 100000 || limits.StagnationRepeatLimit > 100000 ||
             limits.MaxObservationBytes is <= 0 or > 1048576 || limits.MaxObservationNodes is <= 0 or > 100000)
             throw new ArgumentException("ExploreLimitsInvalid");
-        clock = conditionClock; lastCapture = initial.CapturedAt;
+        clock = conditionClock;
+        if (initial.CapturedAt < TimeSpan.Zero || initial.CapturedAt > clock.Elapsed)
+            throw new ArgumentException("ProgressCaptureInvalid");
+        lastCapture = initial.CapturedAt;
         actionLimit = limits.StagnationActionLimit; repeatLimit = limits.StagnationRepeatLimit;
         maxHistory = 1000;
         maxObservationBytes = (int)limits.MaxObservationBytes; maxObservationNodes = (int)limits.MaxObservationNodes;

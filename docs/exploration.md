@@ -13,16 +13,26 @@ reads from the same capture time. `IExploreWork` executes an adopted decision
 using existing host operations. Its synchronous reads and sends use
 `IExploreCalls` to marshal onto the Run owner; a send invokes `beforeSend` exactly
 once immediately before dispatch and returns its actual acknowledgement.
+An acknowledgement that omitted this guard consumes an uncertain attempt and
+terminates as unconfirmed; recording that evidence grants no dispatch permission.
 `Completed` requires a confirmed result and neutral owned inputs. A missing or
 uncertain receipt terminates through the existing failure rules. Worker callbacks
 must be short and synchronous. Elapsed waits use the authoritative condition
 clock and retain their full duration before their finite observation window.
+Before the first adopted action can own input, Explore registers the supplied
+owner-scoped release callback with the existing cleanup owner. Final cleanup
+attempts it even when work is interrupted or returns no neutral-input receipt.
+The callback must release only this Run's inputs and tolerate already neutral
+inputs. Failed release remains post-processing evidence under the existing rules.
 
 ## Progress and stall detection
 
 `ProgressDefinitions` is optional trusted configuration. No definitions, missing
 reads and unavailable values are Unknown; they cannot establish improvement or
 invent numeric zero. Progress never substitutes for the configured Goal.
+Initial and live private capture timestamps are contract validated before use.
+Every live frame updates private progress immediately; only the latest pending
+frame is retained for the next action boundary, independent of capture frequency.
 
 Milestones use existing prepared conditions and temporal evaluation. Initially
 True milestones establish a baseline. Each later first False-to-True attainment

@@ -11,13 +11,14 @@ namespace Gua.Playtest.Runner.Exploration;
 /// Preparation, primary arbitration, budgets, approved dispatch and final cleanup remain their existing owners.</summary>
 public static class ExploreDriver
 {
-    private sealed record State(ProgressDefinitions Definitions, ResourceLimits Limits, ProgressTracker Tracker);
+    private sealed record State(ProgressDefinitions Definitions, ResourceLimits Limits, ProgressTracker Tracker)
+    { public bool InputCleanupRegistered; }
     private static readonly ConditionalWeakTable<RunSession, State> States = new();
 
-    private sealed class Feed(IExploreObservationFeed source, RunSession run, int capacity,
+    private sealed class Feed(IExploreObservationFeed source, RunSession run,
         Action<ProgressObservation> validateProgress, Func<TimeSpan?> nextProgressEvaluation) : IRunObservationFeed, IRunConditionSchedule
     {
-        private readonly Queue<ExploreObservation> pending = new();
+        private ExploreObservation? pending;
         private readonly object sync = new();
         public ExploreObservation? Latest;
         public ExploreCalls? Calls;
@@ -37,13 +38,12 @@ public static class ExploreDriver
             validateProgress(frame.Progress);
             lock (sync)
             {
-                if (pending.Count >= capacity) throw new RunFailureException(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract));
-                pending.Enqueue(frame); Latest = frame;
+                pending = frame; Latest = frame;
             }
             return frame.Run;
         }
-        public ExploreObservation[] Drain()
-        { lock (sync) { var result = pending.ToArray(); pending.Clear(); return result; } }
+        public ExploreObservation? Drain()
+        { lock (sync) { var result = pending; pending = null; return result; } }
         public async ValueTask WaitForChangeAsync(CancellationToken token)
         {
             if (Calls is not { } calls) { await SourceChangeAsync(token).ConfigureAwait(false); return; }
@@ -80,13 +80,22 @@ public static class ExploreDriver
     {
         if (run.State != ExecutionState.Running) throw new InvalidOperationException("RunStateInvalid");
         if (limits.RecoveryDecisionLimit != run.Limits.RecoveryDecisions) throw new ArgumentException("EffectiveLimitsMismatch");
-        if (initial.Run.CapturedAt != initial.Progress.CapturedAt) throw new ArgumentException("ProgressCaptureInvalid");
-        var state = States.GetValue(run, _ => new(definitions, limits,
-            new ProgressTracker(definitions, limits, run.AuthoritativeConditionClock, initial.Progress)));
+        State state;
+        try
+        {
+            if (initial is null || initial.Run is null || initial.Progress is null || initial.Public is null ||
+                initial.Run.CapturedAt != initial.Progress.CapturedAt || initial.Progress.CapturedAt < TimeSpan.Zero ||
+                initial.Progress.CapturedAt > run.AuthoritativeConditionClock.Elapsed)
+                throw new ArgumentException("ProgressCaptureInvalid");
+            state = States.GetValue(run, _ => new(definitions, limits,
+                new ProgressTracker(definitions, limits, run.AuthoritativeConditionClock, initial.Progress)));
+        }
+        catch (ArgumentException exception) when (exception.Message == "ProgressCaptureInvalid")
+        { throw new RunFailureException(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract), exception); }
         if (!ReferenceEquals(state.Definitions, definitions) || state.Limits != limits)
             throw new ArgumentException("ExploreHistoryCannotBeReplaced");
         var tracker = state.Tracker;
-        var feed = new Feed(observations, run, run.Limits.MaxEvidenceItems, progress =>
+        var feed = new Feed(observations, run, progress =>
         {
             ProgressSummary sample;
             try { sample = tracker.ObserveSample(progress); }
@@ -130,6 +139,13 @@ public static class ExploreDriver
             }
             var decision = approved.CopyDecision();
             var kind = decision["kind"]!.GetValue<string>();
+            if (kind == "execute" && !state.InputCleanupRegistered)
+            {
+                // The trusted owner-scoped callback is also the final fallback when work cannot
+                // acknowledge neutral inputs. Register before any approved action can acquire them.
+                cleanup.Register(CleanupStage.InputRelease, releaseOwnedInputs);
+                state.InputCleanupRegistered = true;
+            }
             using var calls = new ExploreCalls(approved);
             feed.Calls = calls;
             ExploreReceipt? receipt = null;
@@ -165,10 +181,10 @@ public static class ExploreDriver
 
         void UpdateProgress(JsonObject? action = null, bool reported = false)
         {
-            var frames = feed.Drain();
-            if (frames.Length != 0)
+            var frame = feed.Drain();
+            if (frame is not null)
             {
-                summary = tracker.ObserveBoundary(frames[^1].Progress, action, reported);
+                summary = tracker.ObserveBoundary(frame.Progress, action, reported);
                 recordProgress?.Invoke(summary);
                 if (summary.ObservationViolation)
                     run.Evaluate(candidates: [new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract)]);

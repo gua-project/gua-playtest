@@ -22,7 +22,11 @@ internal sealed class ExploreCalls(ApprovedDecision decision) : IExploreCalls, I
                     throw new RunFailureException(new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host));
                 began = true;
             });
-            if (reply.Sent && !began) throw new RunFailureException(new(RunReason.ActionUnconfirmed, RunPhase.Execution, RunOrigin.Host));
+            if (reply.Sent && !began)
+            {
+                decision.RecordUnconfirmedSend(index);
+                throw new RunFailureException(new(RunReason.ActionUnconfirmed, RunPhase.Execution, RunOrigin.Host));
+            }
             if (reply.Sent) decision.ConfirmSent(index);
             return reply.Value;
         }, token);

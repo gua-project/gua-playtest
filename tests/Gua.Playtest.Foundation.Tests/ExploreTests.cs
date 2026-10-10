@@ -225,9 +225,10 @@ public sealed class ExploreTests
             Run.BeginPreparation(); Run.BeginRunning();
             Gate = new(Run, Clock, new Authority(), "run-1", "public objective", Limits); Feed = new(Clock);
         }
-        public ValueTask<bool> Execute(Planner planner, Work work, CancellationToken token = default, Action<ProgressSummary>? record = null)
-            => ExploreDriver.ExecuteRunningAsync(Run, Gate, planner, Feed, work, Definitions, Limits, Feed.Frame(),
-                _ => ValueTask.FromResult(true), Cleanup, token, record);
+        public ValueTask<bool> Execute(Planner planner, Work work, CancellationToken token = default, Action<ProgressSummary>? record = null,
+            Func<CancellationToken, ValueTask<bool>>? release = null, ExploreObservation? initial = null)
+            => ExploreDriver.ExecuteRunningAsync(Run, Gate, planner, Feed, work, Definitions, Limits, initial ?? Feed.Frame(),
+                release ?? (_ => ValueTask.FromResult(true)), Cleanup, token, record);
     }
     [Theory]
     [InlineData(false, ResultStatus.Unverified, RunReason.ExplorationFinished)]
@@ -520,6 +521,99 @@ public sealed class ExploreTests
         Assert.NotEqual(ResultStatus.Passed, s.Run.Primary.Status);
         Assert.Contains(s.Run.Exceptions, x => x.Type == typeof(ArgumentException).FullName && x.StackTrace is not null);
         Assert.Equal(duringPlanner ? 0 : 1, work.Calls);
+    }
+    [Fact]
+    public async Task HealthyCaptureBurstDoesNotConsumeEvidenceCapacity()
+    {
+        var s = new Setup(); var started = false;
+        var captured = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Feed.WaitOverride = token => started && s.Feed.Captures < 1100
+            ? ValueTask.CompletedTask : new(Task.Delay(Timeout.Infinite, token));
+        s.Feed.TransformCapture = frame => { if (s.Feed.Captures >= 1100) captured.TrySetResult(); return frame; };
+        var planner = new Planner(i => i == 1 ? Action() : Finish());
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); started = true; return new ExploreSend<bool>(true, true); }, token);
+            await captured.Task.WaitAsync(token); return new(ExploreWorkStatus.Completed, true);
+        });
+        Assert.True(await s.Execute(planner, work).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(s.Feed.Captures >= 1100); Assert.Null(s.Run.Primary); Assert.Equal(1, s.Run.Budget.Snapshot.Actions);
+    }
+    [Fact]
+    public async Task AcknowledgedSendWithoutGuardConsumesUncertainAttempt()
+    {
+        var s = new Setup(); var planner = new Planner(_ => Action());
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, _ => new ExploreSend<bool>(true, true), token);
+            return new(ExploreWorkStatus.Completed, true);
+        });
+        Assert.False(await s.Execute(planner, work));
+        Assert.Equal(RunReason.ActionUnconfirmed, s.Run.Primary!.Cause.Reason);
+        Assert.Equal(1, s.Run.Budget.Snapshot.Actions); Assert.Equal(0, s.Run.Budget.Snapshot.ReservedActions);
+        Assert.Single(planner.Inputs); Assert.Equal(1, work.Calls);
+    }
+    [Theory] [InlineData(true)] [InlineData(false)]
+    public async Task UnconfirmedOwnedInputAlwaysReceivesFallbackCleanup(bool released)
+    {
+        var s = new Setup(); bool held = false; int releases = 0;
+        var planner = new Planner(_ => Action());
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); held = true; return new ExploreSend<bool>(true, true); }, token);
+            return new(ExploreWorkStatus.Unconfirmed, false);
+        });
+        Assert.False(await s.Execute(planner, work, release: _ => { releases++; if (released) held = false; return ValueTask.FromResult(released); }));
+        var primary = s.Run.Primary;
+        var outcome = await s.Cleanup.CompleteAsync(s.Run, s.Clock);
+        Assert.Equal(1, releases); Assert.Equal(!released, held); Assert.Equal(primary, s.Run.Primary);
+        Assert.Equal(!released, outcome.PostProcessing.Any(x => x.Reason == PostProcessingReason.InputReleaseUnconfirmed));
+    }
+    [Theory] [InlineData(-1)] [InlineData(1)]
+    public async Task InitialPrivateTimestampIsTypedContractFailureBeforePlanner(int milliseconds)
+    {
+        var s = new Setup(); var frame = s.Feed.Frame(); var invalid = TimeSpan.FromMilliseconds(milliseconds);
+        frame = frame with { Run = frame.Run with { CapturedAt = invalid }, Progress = frame.Progress with { CapturedAt = invalid } };
+        var planner = new Planner(_ => Finish()); var work = new Work((_, _, _) => throw new InvalidOperationException());
+        var failure = await Assert.ThrowsAsync<RunFailureException>(() => s.Execute(planner, work, initial: frame).AsTask());
+        Assert.Equal(new RunEvent(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract), failure.Cause);
+        Assert.IsType<ArgumentException>(failure.InnerException); Assert.NotNull(failure.InnerException!.StackTrace);
+        Assert.Empty(planner.Inputs); Assert.Equal(0, work.Calls);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task InterruptedSendWithoutReceiptStillAttemptsOwnedRelease(bool releaseThrows)
+    {
+        var s = new Setup(); using var cancel = new CancellationTokenSource(); bool held = false; int releases = 0;
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); held = true; cancel.Cancel(); return new ExploreSend<bool>(true, true); }, token);
+            await Task.Delay(Timeout.Infinite, token); return new(ExploreWorkStatus.Completed, true);
+        });
+        Assert.False(await s.Execute(new Planner(_ => Action()), work, cancel.Token, release: _ =>
+        { releases++; if (releaseThrows) throw new IOException("release-fault"); held = false; return ValueTask.FromResult(true); }));
+        var primary = s.Run.Primary; Assert.Equal(1, s.Run.Budget.Snapshot.Actions);
+        var outcome = await s.Cleanup.CompleteAsync(s.Run, s.Clock, cancel.Token);
+        Assert.Equal(1, releases); Assert.Equal(releaseThrows, held); Assert.Equal(primary, outcome.Primary);
+        Assert.Equal(releaseThrows, outcome.PostProcessing.Any(x => x.Reason == PostProcessingReason.InputReleaseUnconfirmed));
+    }
+    [Theory] [InlineData(-1)] [InlineData(1)]
+    public async Task InitialPrivateTimestampRetainsContractCauseThroughRunExecutor(int milliseconds)
+    {
+        var s = new Setup(); var run = new RunSession(s.Run.Limits, s.Clock, s.Clock);
+        var cleanup = new OwnedCleanup(); var planner = new Planner(_ => Finish());
+        var work = new Work((_, _, _) => throw new InvalidOperationException());
+        var outcome = await RunExecutor.ExecuteAsync(run, s.Clock, cleanup, (_, _) => ValueTask.FromResult(true),
+            (owner, token) =>
+            {
+                var frame = s.Feed.Frame(); var invalid = TimeSpan.FromMilliseconds(milliseconds);
+                frame = frame with { Run = frame.Run with { CapturedAt = invalid }, Progress = frame.Progress with { CapturedAt = invalid } };
+                return ExploreDriver.ExecuteRunningAsync(owner, new(owner, s.Clock, new Authority(), "run-1", "objective", s.Limits),
+                    planner, s.Feed, work, s.Definitions, s.Limits, frame, _ => ValueTask.FromResult(true), cleanup, token);
+            });
+        Assert.Equal(ResultStatus.Invalid, outcome.Primary.Status);
+        Assert.Equal(RunReason.ObservationContractViolation, outcome.Primary.Cause.Reason);
+        Assert.Contains(outcome.Exceptions, x => x.Type == typeof(ArgumentException).FullName && x.StackTrace is not null);
+        Assert.Empty(planner.Inputs);
     }
 }
 
