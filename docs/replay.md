@@ -66,14 +66,15 @@ authorize a send, confirm a result, refund the attempt or permit a retry.
 
 ## Published Gua adapters and timing
 
-`GuaUiReplay` delegates v1 UI playback to public `GuaReplayer`. `recorded` keeps Gua's
-sequential inter-step delays; those delays can include response time and do not prove
-original host application times. `conditionSynchronized` uses the Recording's existing
-wait when present and otherwise its delay. The same selector is resolved strictly again
+`GuaUiReplay` delegates v1 UI playback to public `GuaReplayer` only for
+`conditionSynchronized`, using the Recording's existing wait when present and otherwise
+its delay. `recorded` is Unsupported before admission: Gua's public UI PreserveDelays
+scheduler adds previous result latency to the next dispatch and cannot supply CLOCK-003's
+common origin. Direct playback also refuses this mode without sending. The same selector is resolved strictly again
 at actual dispatch, with query membership checked against the revision-bound tree.
 There is no first-match choice, alternate target, coordinate fallback or route repair.
-Because public Gua's recorded mode would ignore an existing wait, that combination is
-explicitly Unsupported. The adapter does not silently remove the wait.
+The adapter does not silently remove existing waits or switch an unsupported recorded
+Plan to condition-synchronized timing.
 Only the seven public UI actions are admitted; game-input-only and mixed batches are
 Unsupported before operation approval.
 

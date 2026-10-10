@@ -78,6 +78,22 @@ public sealed class ReplayAdapterTests
     }
 
     [Fact]
+    public async Task UiRecordedPreflightRejectsResponseCoupledSchedule()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy"); using var context = new GuaWebSocketContext(Start(runtime));
+        var admissions = 0;
+        var replay = new GuaUiReplay(context, () => new Lease(lifecycle), (_, _) => { admissions++; return ReplayCheck.Approved; }, TimeSpan.FromMilliseconds(5));
+        var first = Batch("recorded"); var json = System.Text.Json.Nodes.JsonNode.Parse(first.RecordingJson)!;
+        var second = json["steps"]![0]!.DeepClone(); second["relativeMilliseconds"] = 100;
+        json["steps"]!.AsArray().Add(second);
+        var batch = first with { Count = 2, RecordingJson = json.ToJsonString() };
+        GuaRecordingFile.Validate(JsonSerializer.Deserialize<GuaRecording>(batch.RecordingJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!);
+        Assert.Equal(ReplayCheck.Unsupported, replay.Check(batch)); Assert.Equal(0, admissions);
+        var calls = new Calls(); var receipt = await replay.PlayAsync(batch, calls, default);
+        Assert.Equal(ReplayReceiptStatus.Failed, receipt.Status); Assert.Equal(0, receipt.CompletedSteps);
+        Assert.IsType<NotSupportedException>(receipt.OriginalException); Assert.Equal(0, calls.Sends);
+    }
+    [Fact]
     public async Task PublishedPlaybackPreservesWaitAndConfirmsRealNativeAction()
     {
         using var runtime = new GuaRuntime(); Ui(runtime, "buy");

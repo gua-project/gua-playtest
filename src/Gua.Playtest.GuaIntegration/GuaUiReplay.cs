@@ -35,24 +35,25 @@ public sealed class GuaUiReplay : IReplayPlayback
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or OverflowException)
         { return ReplayCheck.Unsupported; }
-        if (batch.Timing is not ("recorded" or "conditionSynchronized") ||
+        if (batch.Timing != "conditionSynchronized" ||
             recording.Steps.Any(s => s.Action is not (GuaRecordedAction.click or GuaRecordedAction.focus or
                 GuaRecordedAction.set_value or GuaRecordedAction.set_checked or GuaRecordedAction.select or
-                GuaRecordedAction.scroll or GuaRecordedAction.press_key) || s.CoordinateFallback is not null ||
-                batch.Timing == "recorded" && s.WaitCondition is not null))
+                GuaRecordedAction.scroll or GuaRecordedAction.press_key) || s.CoordinateFallback is not null))
             return ReplayCheck.Unsupported;
         return admit(batch, starting);
     }
     public ValueTask<ReplayReceipt> PlayAsync(ReplayBatch batch, IReplayCalls calls, CancellationToken token)
         => new(Task.Run(async () =>
         {
+            if (batch.Timing != "conditionSynchronized")
+                return new ReplayReceipt(ReplayReceiptStatus.Failed, 0, true, new NotSupportedException("UiRecordedTimingUnsupported"));
             var recording = Parse(batch);
             var queued = new QueuedContext(context, lifecycleLease, calls, recording, () => admit(batch, false), token);
             try
             {
                 await GuaReplayer.ReplayAsync(queued, recording, new GuaReplayOptions
                 {
-                    TimingMode = batch.Timing == "recorded" ? GuaReplayTimingMode.PreserveDelays : GuaReplayTimingMode.PreferConditions,
+                    TimingMode = GuaReplayTimingMode.PreferConditions,
                     ActionTimeout = batch.Timeout, PollInterval = pollInterval,
                     SecretResolver = secretResolver, FailOnCoordinateFallback = true
                 }, token).ConfigureAwait(false);
