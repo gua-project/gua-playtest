@@ -4,7 +4,7 @@
 
 この層は Run の判定と成果物の参照を保存します。Gua Trace のイベント形式やViewerを再実装する層ではありません。例えば購入のGoalが成立しても、必須Traceのflushや入力解放が失敗したら、その事実を一次結果とは別に残します。`Passed` と必須後処理未完了の組合せは終了11で、通常の成功終了にはしません。
 
-[RunArtifactStore](../src/Gua.Playtest.Runner/Persistence/RunArtifactStore.cs)の `BeginPreparation` → `ConfirmPrimary` → 完了処理の順に読むと、準備情報、確定済み結果、後処理の保存境界を追えます。[ArtifactContracts](../src/Gua.Playtest.Runner/Persistence/ArtifactContracts.cs)の `ArtifactReceipt` は未取得・省略・取得失敗・保存失敗・保存済みを分けます。空ファイルで「保存済み」を作りません。[RunArtifactReader](../src/Gua.Playtest.Runner/Persistence/RunArtifactReader.cs)はファイルidentity、長さ、hash、参照を読み戻して確認します。
+[RunArtifactStore](../src/Gua.Playtest.Runner/Persistence/RunArtifactStore.cs)の `BeginPreparation` → `ConfirmPrimary` → `Complete` の順に読むと、準備情報、確定済み結果、後処理の保存境界を追えます。`Complete` は成果物のidentity、長さ、hash、参照を保存時に検査します。[ArtifactContracts](../src/Gua.Playtest.Runner/Persistence/ArtifactContracts.cs)の `ArtifactReceipt` は未取得・省略・取得失敗・保存失敗・保存済みを分け、空ファイルで「保存済み」を作りません。[RunArtifactReader.ReadResultAsync](../src/Gua.Playtest.Runner/Persistence/RunArtifactReader.cs)は `result.json` の形式・サイズ・Run identityを検証します。`Verified` でも `completion.json` やTrace／Recording本体を再読してhash確認するわけではなく、保存後の成果物の無改変を証明しません。
 
 [ArtifactTests](../tests/Gua.Playtest.Foundation.Tests/ArtifactTests.cs)は実ファイルの保存・読戻しと拒否例です。保存先は信頼されたprivate rootを用意し、秘密値は保存bufferやhashに入る前に処理します。既存Runの上書きや別ファイルへのlinkでの代用はできません。具体的な限界、過去の障害記録と未達のGua統合条件は下記を参照してください。判定とのつながりは [execution.md](execution.md)、全体は [開発者ガイド](developer-guide.ja.md)です。
 

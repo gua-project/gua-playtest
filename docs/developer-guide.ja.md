@@ -9,7 +9,7 @@ Gua Playtest は、ゲームの外で動き、公開された操作を使って�
 例えば「店で品物を一つ購入する」を試す場合、次の役割を分けます。これは仕組みを説明する例であり、完成したゲーム実行CLIの例ではありません。
 
 1. **Scenario** に目的を記述します。人間や Planner に伝える `goal.objective` と、機械が判定する `goal.success` は別です。購入の合否には、信頼できる観測で購入数が増えたことなど、ゲームに対応した条件が必要です。
-2. **Environment** に実行条件を置きます。接続先、許可する入力、fixture、時計、有限の予算などです。fixture は承認された開始状態の準備で、Planner が任意のコードを実行する入口にはしません。
+2. **Environment** に接続先、許可する入力、fixture、有限の予算などを置きます。fixture は承認された開始状態の準備で、Planner が任意のコードを実行する入口にはしません。時計はEnvironment JSONのフィールドではなく、信頼された実行policyが供給します。
 3. **静的検証** で形、型、明示参照、ファイルの SHA-256 を調べます。文書が正しくても、店のボタンが存在することやゲームが起動できることはまだ分かりません。
 4. **Preparing** で接続・ゲームの識別・開始状態・観測の同期を確認します。launch なら自分が起動したプロセスを管理し、attach なら他者のプロセスを所有したことにはしません。
 5. **Running** では観測と判定を続けながら入力します。Planner は公開観測から次の操作を提案します。Runner は古い提案、権限不足、予算超過を拒否し、送信直前にも現在の対象と許可を確認します。
@@ -93,6 +93,8 @@ node --test tools/fixture-oracle.test.mjs
 **自然言語の達成報告は合否を決めません。** 成功条件のない探索は、Planner が finish を返しても Passed にできません。判定用の期待値・失敗条件と公開Planner観測は別に保持し、Debug接続の結果を後から間引くだけで公開profileの境界を作ったことにしません。
 
 **公開packageの能力と接続経路の完成は別です。** Gua.Testing 1.1.1を使用します。送信直前チェックとホスト側enqueueを一体に守る guarded 経路や、実 Planner の隔離、実エンジンの受け入れ条件は [gua-bridge.md](gua-bridge.md)、[planning.md](planning.md)、[fixture-evidence.md](fixture-evidence.md)の制限を確認します。未公開APIを使える前提でfallbackを作らないでください。
+
+**保存時の検査と結果の読戻しにも境界があります。** `RunArtifactStore.Complete` は成果物の長さ・hash・参照を保存時に検査します。`RunArtifactReader.ReadResultAsync` の `Verified` は `result.json` の形式・サイズ・Run identityの確認で、Trace／Recording本体の事後改変がないことまで再検証した結果ではありません。
 
 **CLIの入口とライブラリの実装範囲は別です。** 公開CLIのコマンドは `--help` と `CliApplication` で確認してください。run/replay/report の正式なCLI compositionは #15 の統合作業です。ライブラリに準備・判定APIがあっても、それだけで `run` コマンドを使えることにはなりません。
 
