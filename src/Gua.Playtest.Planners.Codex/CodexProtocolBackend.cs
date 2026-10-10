@@ -40,6 +40,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     private int active;
     private bool closed;
     private int messages;
+    private CodexUsage usageHighWater = new(0, 0, 0);
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public CodexProtocolBackend(string runId, ICodexProtocolTransport transport, JsonObject outputSchema,
@@ -89,6 +90,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 }, token).ConfigureAwait(false);
                 threadId = Identifier(started.GetProperty("thread").GetProperty("id"));
             }
+            var usageBaseline = usageHighWater;
             var result = await RequestAsync("turn/start", new JsonObject
             {
                 ["threadId"] = threadId,
@@ -112,8 +114,15 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 {
                     if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
                     if (parameters.GetProperty("turnId").GetString() != turnId) throw new ProtocolException();
-                    var last = parameters.GetProperty("tokenUsage").GetProperty("last");
-                    usage = new(Nonnegative(last, "inputTokens"), Nonnegative(last, "outputTokens"), Nonnegative(last, "totalTokens"));
+                    // `last` is one model response; `total` accumulates the thread.
+                    // Duplicate or regressive snapshots must not erase already observed usage.
+                    var total = parameters.GetProperty("tokenUsage").GetProperty("total");
+                    usageHighWater = new(Math.Max(usageHighWater.InputTokens, Nonnegative(total, "inputTokens")),
+                        Math.Max(usageHighWater.OutputTokens, Nonnegative(total, "outputTokens")),
+                        Math.Max(usageHighWater.TotalTokens, Nonnegative(total, "totalTokens")));
+                    usage = new(usageHighWater.InputTokens - usageBaseline.InputTokens,
+                        usageHighWater.OutputTokens - usageBaseline.OutputTokens,
+                        usageHighWater.TotalTokens - usageBaseline.TotalTokens);
                 }
                 else if (method == "turn/completed")
                 {

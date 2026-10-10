@@ -10,6 +10,13 @@ references the other's implementation; no Core or Decision schema changes are
 required. Usage is available on `CodexReply`, not invented as zero or added to the
 Runner exchange.
 
+When token notifications are present, usage is the delta from the pre-turn
+cumulative high-water counters, so all model responses in that turn contribute
+and repeated snapshots do not double count. Counters come from `tokenUsage.total`,
+not `last` (the latest model response), following the
+[0.150.1 protocol implementation](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/protocol/src/protocol.rs).
+Absent notifications leave usage unavailable.
+
 The protocol port is not a live provider. There is no process launcher, credential
 resolver, authentication operation or production factory here. The existing
 `CodexPlanner<TInput,TDecision>` still refuses invocation, and Replay does not

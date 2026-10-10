@@ -128,12 +128,58 @@ public sealed class CodexProtocolTests
     public async Task UsageIsOptionalCorrelatedAndLimitIsTyped()
     {
         var transport = Started();
-        transport.Add("{\"method\":\"thread/tokenUsage/updated\",\"params\":{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"tokenUsage\":{\"last\":{\"inputTokens\":3,\"outputTokens\":2,\"totalTokens\":5}}}}");
+        transport.Add(Usage("turn-1", 3, 2, 5));
         transport.Add("{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"status\":\"failed\",\"error\":{\"message\":\"PRIVATE_SECRET\",\"codexErrorInfo\":\"usageLimitExceeded\"}}}}");
         var reply = await Backend(transport).DecideAsync(Input(), default);
         Assert.Equal(CodexReplyStatus.UsageLimit, reply.Status); Assert.Equal(new CodexUsage(3, 2, 5), reply.Usage);
         Assert.Equal(PlannerReplyStatus.UsageLimit, (await new CodexPlannerAdapter(new ReplyBackend(reply)).DecideAsync(Input(), default)).Status);
         Assert.DoesNotContain("PRIVATE_SECRET", reply.ToString());
+    }
+    private static string Usage(string turn, long input, long output, long total) => new JsonObject
+    {
+        ["method"] = "thread/tokenUsage/updated", ["params"] = new JsonObject
+        {
+            ["threadId"] = "thread-1", ["turnId"] = turn, ["tokenUsage"] = new JsonObject
+            {
+                ["total"] = new JsonObject { ["inputTokens"] = input, ["outputTokens"] = output, ["totalTokens"] = total },
+                ["last"] = new JsonObject { ["inputTokens"] = 1, ["outputTokens"] = 1, ["totalTokens"] = 2 }
+            }
+        }
+    }.ToJsonString();
+    [Fact]
+    public async Task UsageAccumulatesModelResponsesWithoutCountingPreviousTurnsOrDuplicateSnapshots()
+    {
+        var transport = Started();
+        transport.Add(Usage("turn-1", 3, 2, 5));
+        transport.Add(Usage("turn-1", 7, 5, 12));
+        transport.Add(Usage("turn-1", 7, 5, 12));
+        transport.Add(Usage("turn-1", 3, 2, 5));
+        transport.Add(Completed(Decision()));
+        var backend = Backend(transport);
+        var first = await backend.DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.Completed, first.Status);
+        Assert.Equal(new CodexUsage(7, 5, 12), first.Usage);
+        transport.Add("{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-2\",\"status\":\"inProgress\"}}}");
+        transport.Add(Usage("turn-2", 10, 7, 17));
+        transport.Add(Usage("turn-2", 15, 11, 26));
+        transport.Add(Completed(Decision("request-2"), "turn-2"));
+        var second = await backend.DecideAsync(Input("request-2"), default);
+        Assert.Equal(CodexReplyStatus.Completed, second.Status);
+        Assert.Equal(new CodexUsage(8, 6, 14), second.Usage);
+    }
+    [Theory]
+    [InlineData("inputTokens")]
+    [InlineData("outputTokens")]
+    [InlineData("totalTokens")]
+    public async Task InvalidCumulativeUsageClosesTheExchange(string counter)
+    {
+        var transport = Started();
+        var message = JsonNode.Parse(Usage("turn-1", 3, 2, 5))!;
+        message["params"]!["tokenUsage"]!["total"]![counter] = -1;
+        transport.Add(message.ToJsonString());
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status);
+        Assert.Null(reply.CompletedJson);
     }
     [Fact]
     public async Task DisconnectAndRawTransportExceptionsAreSafeFailures()
