@@ -71,6 +71,44 @@ public sealed class CodexProtocolTests
     { public ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken token) => new(reply); }
 
     [Fact]
+    public async Task MissingTurnUsageCannotBeChargedToLaterDecisions()
+    {
+        var transport = Started(); transport.Add(Completed(Decision()));
+        var backend = Backend(transport);
+        Assert.Null((await backend.DecideAsync(Input(), default)).Usage);
+        for (var turn = 2; turn <= 3; turn++)
+        {
+            transport.Add(new JsonObject { ["id"] = turn + 2, ["result"] = new JsonObject
+                { ["turn"] = new JsonObject { ["id"] = "turn-" + turn, ["status"] = "inProgress" } } }.ToJsonString());
+            transport.Add(Usage("turn-" + turn, 10 * turn, 5 * turn, 15 * turn));
+            transport.Add(Completed(Decision("request-" + turn), "turn-" + turn));
+            var reply = await backend.DecideAsync(Input("request-" + turn), default);
+            Assert.Equal(CodexReplyStatus.Completed, reply.Status);
+            Assert.Null(reply.Usage);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedTurnWithMissingOrNullErrorIsAConnectionFailure(bool nullError)
+    {
+        var transport = Started();
+        var message = JsonNode.Parse(Completed(Decision()))!;
+        var turn = message["params"]!["turn"]!.AsObject();
+        turn["status"] = "failed";
+        if (nullError) turn["error"] = null;
+        transport.Add(message.ToJsonString());
+        var backend = Backend(transport);
+        var reply = await backend.DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.ConnectionFailure, reply.Status);
+        Assert.Null(reply.CompletedJson);
+        Assert.Equal(PlannerReplyStatus.ConnectionFailure,
+            (await new CodexPlannerAdapter(new ReplyBackend(reply)).DecideAsync(Input(), default)).Status);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+    }
+
+    [Fact]
     public async Task OneThreadPerRunAndFreshTurnsWithoutDuplicateDecisionRequests()
     {
         var transport = Started(); transport.Add(Completed(Decision()));

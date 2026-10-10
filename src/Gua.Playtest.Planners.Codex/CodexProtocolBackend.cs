@@ -41,6 +41,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     private bool closed;
     private int messages;
     private CodexUsage usageHighWater = new(0, 0, 0);
+    private bool usageBaselineKnown = true;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public CodexProtocolBackend(string runId, ICodexProtocolTransport transport, JsonObject outputSchema,
@@ -120,9 +121,9 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     usageHighWater = new(Math.Max(usageHighWater.InputTokens, Nonnegative(total, "inputTokens")),
                         Math.Max(usageHighWater.OutputTokens, Nonnegative(total, "outputTokens")),
                         Math.Max(usageHighWater.TotalTokens, Nonnegative(total, "totalTokens")));
-                    usage = new(usageHighWater.InputTokens - usageBaseline.InputTokens,
+                    usage = usageBaselineKnown ? new(usageHighWater.InputTokens - usageBaseline.InputTokens,
                         usageHighWater.OutputTokens - usageBaseline.OutputTokens,
-                        usageHighWater.TotalTokens - usageBaseline.TotalTokens);
+                        usageHighWater.TotalTokens - usageBaseline.TotalTokens) : null;
                 }
                 else if (method == "turn/completed")
                 {
@@ -130,11 +131,14 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     var turn = parameters.GetProperty("turn");
                     if (Identifier(turn.GetProperty("id")) != turnId) throw new ProtocolException();
                     token.ThrowIfCancellationRequested();
+                    // A later cumulative snapshot cannot separate an unobserved earlier turn.
+                    if (usage is null) usageBaselineKnown = false;
                     var status = turn.GetProperty("status").GetString();
                     if (status == "failed")
                     {
                         closed = true;
-                        var error = turn.GetProperty("error");
+                        if (!turn.TryGetProperty("error", out var error) || error.ValueKind == JsonValueKind.Null)
+                            return new(CodexReplyStatus.ConnectionFailure, Usage: usage);
                         if (error.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
                         return new(error.TryGetProperty("codexErrorInfo", out var info) &&
                             info.ValueKind == JsonValueKind.String && info.GetString() == "usageLimitExceeded"

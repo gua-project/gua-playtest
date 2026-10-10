@@ -15,7 +15,9 @@ cumulative high-water counters, so all model responses in that turn contribute
 and repeated snapshots do not double count. Counters come from `tokenUsage.total`,
 not `last` (the latest model response), following the
 [0.150.1 protocol implementation](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/protocol/src/protocol.rs).
-Absent notifications leave usage unavailable.
+Absent notifications leave usage unavailable. After any completed turn without
+notifications, subsequent turn usage also remains unavailable: thread cumulative
+counters cannot separate the missing turn's consumption from the next turn.
 
 The protocol port is not a live provider. There is no process launcher, credential
 resolver, authentication operation or production factory here. The existing
@@ -57,12 +59,12 @@ must cap a frame before allocating it, not only after this converter receives it
 
 ## Version and isolation investigation
 
-The locally installed Windows CLI reported `codex-cli 0.150.1` on 2026-10-10.
-`codex app-server generate-json-schema` generated that binary's actual contract.
-The converter uses this version's nonexperimental fields. This records a protocol
-inspection, not a supported OS matrix or a live model test.
+The converter targets `codex-cli 0.150.1` and uses its nonexperimental fields.
+Use `codex app-server generate-json-schema` to inspect the selected binary's
+actual contract. Protocol compatibility alone does not establish a supported OS
+matrix or real provider acceptance.
 
-That generated `InitializeParams` has `capabilities.experimentalApi`.
+The 0.150.1 `InitializeParams` has `capabilities.experimentalApi`.
 `PermissionProfileListParams/Response` and the `permissionProfile/list` request
 exist; their response lists profile IDs and `allowed` flags. Generated
 nonexperimental `ThreadStartParams` has legacy `sandbox` and free-form `config`.
@@ -72,8 +74,7 @@ to experimental clients; absence from the default schema is not evidence that
 the binary lacks it. Both generated variants' `TurnStartParams` `readOnly` policy
 have `networkAccess`, without read roots. Profile configuration, effective
 restrictions, inherited tools and actual Windows enforcement still need separate
-verification. No config file, global setting or account credential was read or
-changed, and this converter does not enable experimental profile selection.
+verification. This converter does not enable experimental profile selection.
 
 Current [App Server documentation](https://learn.chatgpt.com/docs/app-server)
 describes named profiles for beta clients; [permissions documentation](https://learn.chatgpt.com/docs/permissions)
@@ -85,9 +86,9 @@ prove that external isolation is the only solution.
 OPEN-09 remains unresolved. Acceptance must cover inherited config/environment,
 MCP/connectors, browser/computer-use, local Gua sockets and all other bypass paths,
 as well as source/save writes and private expected-value reads. Model service
-communication is distinct from command sandbox network access. No live inference,
-authentication, game connection, CLI update or OS/global security change is
-performed by this implementation. The owner must select the supported version,
+communication is distinct from command sandbox network access. The converter
+provides no authentication, game connection, CLI update or OS/global security
+configuration. The owner must select the supported version,
 permission/isolation strategy and authentication reference, then independently
 verify enforcement before production composition can open the provider.
 
