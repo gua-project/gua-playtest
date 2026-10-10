@@ -70,6 +70,40 @@ public sealed class CodexProtocolTests
     private sealed class ReplyBackend(CodexReply reply) : ICodexDecisionBackend
     { public ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken token) => new(reply); }
 
+    [Fact]
+    public async Task PostInitializeNotificationsAreConsumedWithinMessageBounds()
+    {
+        Transport WithNotices()
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]);
+            transport.Add("{\"method\":\"configWarning\",\"params\":{\"summary\":\"PRIVATE_CONFIG\",\"details\":null}}");
+            transport.Add("{\"method\":\"remoteControl/status/changed\",\"params\":{\"status\":{\"status\":\"disabled\"}}}");
+            foreach (var frame in frames.Skip(1)) transport.Frames.Enqueue(frame);
+            transport.Add(Completed(Decision())); return transport;
+        }
+        var reply = await Backend(WithNotices()).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.Completed, reply.Status);
+        Assert.DoesNotContain("PRIVATE_CONFIG", reply.ToString());
+        Assert.Equal(CodexReplyStatus.OutputInvalid,
+            (await Backend(WithNotices(), limits: new(10000, 3, TimeSpan.FromSeconds(5))).DecideAsync(Input(), default)).Status);
+    }
+
+    [Theory]
+    [InlineData("failed", false)]
+    [InlineData("failed", true)]
+    [InlineData("interrupted", false)]
+    [InlineData("interrupted", true)]
+    public async Task MalformedTerminalItemsAreInvalidBeforeFailureClassification(string status, bool wrongType)
+    {
+        var transport = Started(); var message = JsonNode.Parse(Completed(Decision()))!;
+        var turn = message["params"]!["turn"]!.AsObject(); turn["status"] = status;
+        if (wrongType) turn["items"] = new JsonObject(); else turn.Remove("items");
+        turn["error"] = new JsonObject { ["message"] = "PRIVATE_ERROR", ["codexErrorInfo"] = "usageLimitExceeded" };
+        transport.Add(message.ToJsonString()); var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, reply.Status); Assert.Null(reply.CompletedJson);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("codex/0.149.0")]
@@ -228,7 +262,7 @@ public sealed class CodexProtocolTests
     {
         var transport = Started();
         transport.Add(Usage("turn-1", 3, 2, 5));
-        transport.Add("{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"status\":\"failed\",\"error\":{\"message\":\"PRIVATE_SECRET\",\"codexErrorInfo\":\"usageLimitExceeded\"}}}}");
+        transport.Add("{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"failed\",\"error\":{\"message\":\"PRIVATE_SECRET\",\"codexErrorInfo\":\"usageLimitExceeded\"}}}}");
         var reply = await Backend(transport).DecideAsync(Input(), default);
         Assert.Equal(CodexReplyStatus.UsageLimit, reply.Status); Assert.Equal(new CodexUsage(3, 2, 5), reply.Usage);
         Assert.Equal(PlannerReplyStatus.UsageLimit, (await new CodexPlannerAdapter(new ReplyBackend(reply)).DecideAsync(Input(), default)).Status);
@@ -384,7 +418,7 @@ public sealed class CodexProtocolTests
     {
         var transport = rpc ? new Transport() : Started();
         transport.Add(rpc ? "{\"id\":1,\"error\":{\"code\":-32603,\"message\":\"PRIVATE_ERROR\"}}" :
-            "{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"status\":\"failed\",\"error\":{\"message\":\"PRIVATE_ERROR\"}}}}");
+            "{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"failed\",\"error\":{\"message\":\"PRIVATE_ERROR\"}}}}");
         var reply = await Backend(transport).DecideAsync(Input(), default);
         Assert.Equal(CodexReplyStatus.ConnectionFailure, reply.Status); Assert.Null(reply.CompletedJson);
         Assert.DoesNotContain("PRIVATE_ERROR", reply.ToString());

@@ -132,6 +132,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
                     var turn = parameters.GetProperty("turn");
                     if (Identifier(turn.GetProperty("id")) != turnId) throw new ProtocolException();
+                    var turnItems = turn.GetProperty("items");
+                    if (turnItems.ValueKind != JsonValueKind.Array) throw new ProtocolException();
                     token.ThrowIfCancellationRequested();
                     // A later cumulative snapshot cannot separate an unobserved earlier turn.
                     if (usage is null) usageBaselineKnown = false;
@@ -149,7 +151,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                             ? CodexReplyStatus.UsageLimit : CodexReplyStatus.ConnectionFailure, Usage: usage);
                     }
                     if (status != "completed") throw new ProtocolException();
-                    var items = turn.GetProperty("items").EnumerateArray().Where(x =>
+                    var items = turnItems.EnumerateArray().Where(x =>
                         x.GetProperty("type").GetString() == "agentMessage" &&
                         (!x.TryGetProperty("delivery", out var delivery) || delivery.ValueKind == JsonValueKind.Null) &&
                         (!x.TryGetProperty("phase", out var phase) || phase.ValueKind == JsonValueKind.Null || phase.GetString() == "final_answer")).ToArray();
@@ -193,8 +195,11 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             var message = await ReadAsync(token).ConfigureAwait(false);
             if (!message.TryGetProperty("id", out var received))
             {
-                // Only lifecycle announcements may precede the corresponding start response.
-                if (message.GetProperty("method").GetString() is "thread/started" or "turn/started") continue;
+                if (message.GetProperty("params").ValueKind != JsonValueKind.Object) throw new ProtocolException();
+                // 0.150.1 sends benign configuration/remote-control status notices
+                // after initialize. They grant no capabilities and still consume bounds.
+                if (message.GetProperty("method").GetString() is "thread/started" or "turn/started" or
+                    "configWarning" or "remoteControl/status/changed") continue;
                 throw new ProtocolException();
             }
             if (!received.TryGetInt64(out var number) || number != id || message.TryGetProperty("method", out _)) throw new ProtocolException();
