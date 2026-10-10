@@ -274,6 +274,7 @@ public sealed class ApprovedDecision
         gate.Record(Reference with { Code = PlannerFeedbackCode.ResponseClosed }); return true;
     }
     public void ConfirmSent(int index) => operation.Actions!.ConfirmSent(index);
+    public void RecordUnconfirmedSend(int index) => operation.RecordUnconfirmedSend(index);
     public bool ConfirmResult() => Deliveries.All(x => x is DeliveryState.Sent or DeliveryState.Uncertain)
         && operation.ConfirmResult();
     public PlannerFeedbackCode Complete()

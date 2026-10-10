@@ -6,6 +6,20 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Fact]
+    public void ReportedSendEvidenceConsumesOneAttemptWithoutApprovingDispatch()
+    {
+        var run = Running(new Clock(), success: false); var operation = run.ApproveOperation(2, TimeSpan.FromSeconds(2))!;
+        operation.RecordUnconfirmedSend(0); operation.RecordUnconfirmedSend(0);
+        Assert.Equal(1, run.Budget.Snapshot.Actions); Assert.Equal(1, run.Budget.Snapshot.ReservedActions);
+        Assert.Equal(DeliveryState.Uncertain, operation.Actions!.Deliveries[0]);
+        Assert.Throws<InvalidOperationException>(() => operation.BeginDispatch(0));
+        operation.Complete();
+        Assert.Equal(0, run.Budget.Snapshot.ReservedActions); Assert.Equal(DeliveryState.NotSent, operation.Actions.Deliveries[1]);
+        Assert.Equal(RunReason.ActionUnconfirmed, run.Evaluate()!.Cause.Reason);
+        Assert.Throws<InvalidOperationException>(() => operation.RecordUnconfirmedSend(1));
+        Assert.Equal(1, run.Budget.Snapshot.Actions);
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

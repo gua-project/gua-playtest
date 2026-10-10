@@ -69,6 +69,14 @@ public sealed class ActionReservation
         if (states[index] != DeliveryState.Uncertain) throw new InvalidOperationException("ActionNotDispatched");
         states[index] = DeliveryState.Sent;
     }
+    internal void RecordUnconfirmedSend(int index)
+    {
+        if (budget.Closed) throw new InvalidOperationException("RunActionsClosed");
+        if (states[index] is DeliveryState.Uncertain or DeliveryState.Sent) return;
+        if (states[index] != DeliveryState.Reserved) throw new InvalidOperationException("ActionAlreadySettled");
+        states[index] = DeliveryState.Uncertain;
+        budget.Resolve(DeliveryState.Uncertain);
+    }
     public void ConfirmNotSent(int index)
     {
         // Only before dispatch. Timeout/abort or a missing reply cannot refund a possibly applied action.
