@@ -344,6 +344,56 @@ public sealed class CodexProtocolTests
         var second = await backend.DecideAsync(Input("request-2"), default);
         Assert.Equal(CodexReplyStatus.Completed, second.Status); Assert.Null(second.Usage);
     }
+    private static string StartupNotice(string method) => new JsonObject
+    {
+        ["method"] = method, ["params"] = method == "guardianWarning"
+            ? new JsonObject { ["message"] = "PRIVATE_NOTICE", ["threadId"] = "thread-1" }
+            : new JsonObject { ["summary"] = "PRIVATE_NOTICE", ["details"] = null }
+    }.ToJsonString();
+    [Theory]
+    [InlineData("deprecationNotice")]
+    [InlineData("guardianWarning")]
+    [InlineData("configWarning")]
+    public async Task NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(string method)
+    {
+        foreach (var phase in new[] { "threadBefore", "threadAfter", "turnBefore", "turnAfter" })
+        foreach (var invalid in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            var notice = JsonNode.Parse(StartupNotice(method))!;
+            if (invalid) notice["params"]!.AsObject().Remove(method == "guardianWarning" ? "message" : "summary");
+            transport.Frames.Enqueue(frames[0]);
+            if (phase == "threadBefore")
+            {
+                transport.Add(new JsonObject { ["method"] = "thread/started", ["params"] = new JsonObject { ["thread"] = ThreadStartResult()["thread"]!.DeepClone() } }.ToJsonString());
+                transport.Add(notice.ToJsonString());
+            }
+            transport.Frames.Enqueue(frames[1]);
+            if (phase == "threadAfter" || phase == "turnBefore") transport.Add(notice.ToJsonString());
+            transport.Frames.Enqueue(frames[2]);
+            if (phase == "turnAfter") transport.Add(notice.ToJsonString());
+            transport.Add(Completed(Decision())); var backend = Backend(transport);
+            var reply = await backend.DecideAsync(Input(), default);
+            Assert.Equal(invalid ? CodexReplyStatus.OutputInvalid : CodexReplyStatus.Completed, reply.Status);
+            Assert.DoesNotContain("PRIVATE_NOTICE", reply.ToString());
+            if (invalid) Assert.Null(reply.CompletedJson);
+        }
+    }
+    [Theory]
+    [InlineData("deprecationNotice")]
+    [InlineData("guardianWarning")]
+    [InlineData("configWarning")]
+    public async Task NonfatalStartupNoticeFloodConsumesExistingMessageBound(string method)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]);
+        transport.Add(new JsonObject { ["method"] = "thread/started", ["params"] = new JsonObject { ["thread"] = ThreadStartResult()["thread"]!.DeepClone() } }.ToJsonString());
+        for (var i = 0; i < 20; i++) transport.Add(StartupNotice(method));
+        transport.Frames.Enqueue(frames[1]); transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+        var backend = Backend(transport, limits: new(10000, 10, TimeSpan.FromSeconds(5)));
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input(), default)).Status);
+        Assert.DoesNotContain(transport.Writes, x => x.Contains("public objective"));
+    }
     private static string RetryNotice() => new JsonObject
     {
         ["method"] = "error", ["params"] = new JsonObject { ["threadId"] = "thread-1", ["turnId"] = "turn-1",

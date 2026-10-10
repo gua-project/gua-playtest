@@ -97,7 +97,12 @@ The same bounded, schema-validated correlation applies to nonexperimental
 `model/safetyBuffering/updated` telemetry. Raw response usage never substitutes
 for cumulative thread usage, and raw response items never hydrate a proposal.
 Their pinned schemas are copied unchanged and evaluated offline; interpreting
-these notices grants no model, hook, tool or game capabilities. Pinned nonfatal `warning` notices
+these notices grants no model, hook, tool or game capabilities.
+Nonfatal `deprecationNotice`, `guardianWarning` and `configWarning` notices are
+validated offline with unchanged pinned schemas and consumed before/after thread
+and turn start responses within existing bounds. Guardian targets must match the
+known/announced thread. These notices neither change configuration nor authorize
+capabilities, and their raw contents are not returned in the backend reply. Pinned nonfatal `warning` notices
 require a string message and, when present/non-null, the current thread ID. Global
 or correlated warnings are consumed before/after RPC responses within frame,
 message and deadline bounds and grant no output authority. Aggregate

@@ -135,6 +135,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 var method = message.GetProperty("method").GetString();
                 if (string.IsNullOrWhiteSpace(method)) throw new ProtocolException();
                 var parameters = message.GetProperty("params");
+                if (CodexItemSchema.IsStartupNotice(method)) { ValidateStartupNotice(method!, parameters, threadId); continue; }
                 if (method == "warning") { ValidateWarning(parameters, threadId); continue; }
                 if (parameters.TryGetProperty("threadId", out var thread) && thread.GetString() != threadId)
                     throw new ProtocolException();
@@ -290,9 +291,11 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // 0.150.1 sends benign configuration/remote-control status notices
                 // after initialize. They grant no capabilities and still consume bounds.
                 var notification = message.GetProperty("method").GetString();
+                if (CodexItemSchema.IsStartupNotice(notification))
+                { ValidateStartupNotice(notification!, message.GetProperty("params"), threadId ?? announcedThread); continue; }
                 if (notification == "warning")
                 { ValidateWarning(message.GetProperty("params"), threadId ?? announcedThread); continue; }
-                if (notification is "configWarning" or "remoteControl/status/changed" or "account/rateLimits/updated") continue;
+                if (notification is "remoteControl/status/changed" or "account/rateLimits/updated") continue;
                 if (notification is "thread/started" or "turn/started" or "thread/status/changed")
                 {
                     var notice = message.GetProperty("params");
@@ -486,6 +489,12 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         if (parameters.GetProperty("fromModel").ValueKind != JsonValueKind.String ||
             parameters.GetProperty("toModel").ValueKind != JsonValueKind.String ||
             parameters.GetProperty("reason").GetString() != "highRiskCyberActivity") throw new ProtocolException();
+    }
+    private static void ValidateStartupNotice(string method, JsonElement parameters, string? expectedThread)
+    {
+        if (!CodexItemSchema.ValidStartupNotice(method, parameters)) throw new ProtocolException();
+        if (method == "guardianWarning" && Identifier(parameters.GetProperty("threadId")) != expectedThread)
+            throw new ProtocolException();
     }
     private static void ValidateWarning(JsonElement parameters, string? expectedThread)
     {

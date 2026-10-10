@@ -11,6 +11,14 @@ namespace Gua.Playtest.Planners.Codex;
 internal static class CodexItemSchema
 {
     private static readonly object Gate = new();
+    private static readonly Dictionary<string, JsonSchema> StartupSchemas = new(StringComparer.Ordinal)
+    {
+        ["deprecationNotice"] = Load("DeprecationNoticeNotification"),
+        ["guardianWarning"] = Load("GuardianWarningNotification"),
+        ["configWarning"] = Load("ConfigWarningNotification")
+    };
+    public static bool IsStartupNotice(string? method) => method is not null && StartupSchemas.ContainsKey(method);
+    public static bool ValidStartupNotice(string method, JsonElement parameters) => Evaluate(StartupSchemas[method], parameters);
     private static readonly Dictionary<string, JsonSchema> TelemetrySchemas = new(StringComparer.Ordinal)
     {
         ["rawResponse/completed"] = Load("RawResponseCompletedNotification"),

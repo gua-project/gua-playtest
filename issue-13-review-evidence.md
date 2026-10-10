@@ -367,3 +367,54 @@ Final HEAD actual CI/review and parent sequencing approval remain mandatory;
 earlier reviews prove only their snapshots. Production, OPEN-09/11 and real
 transport/Planner/OS/inherited-capability/Trace/game acceptance remain unverified.
 Issue #13 stays open. Execution group numbers never reset the audit budget.
+## Nonfatal startup notice finding (evidence group 8)
+
+Actual Codex review 5481189421 of 6067a4f at 2026-10-10 23:30:33 UTC raised
+4239584832 (inherited legacy-feature deprecationNotice can race thread/start).
+Pinned [event handling](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/bespoke_event_handling.rs)
+and [DeprecationNoticeNotification schema](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v2/DeprecationNoticeNotification.json)
+confirm a nonexperimental nonfatal notice with required string summary and optional
+string/null details. The neighboring GuardianWarning and existing ConfigWarning
+share the same nonfatal startup pattern and are consolidated with pinned offline
+schemas. Guardian thread targets are checked against the known/announced thread.
+No configuration, authentication, persistent permissions, security or capability
+settings are changed. Notice text never returns as backend proposal/error evidence.
+
+- `NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses` exercises
+  valid and missing-required-member refusal for all three notice families before/
+  after thread/start and turn/start responses, including full announced thread
+  validation and no private notice text in reply.
+- `NonfatalStartupNoticeFloodConsumesExistingMessageBound` verifies existing
+  message limits still close before Planner input is sent.
+- [Focused TRX](docs/evidence/issue-13/batch-8/focused.trx)/[log](docs/evidence/issue-13/batch-8/focused.log):
+  241 pass, 0 fail/skip. Command `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter FullyQualifiedName~CodexProtocolTests`.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-8/pre-fix.trx)/[log](docs/evidence/issue-13/batch-8/pre-fix.log):
+  6067a4f backend gives 3 intended assertion failures, 0 pass/skip. Deprecation/
+  guardian valid early notices yield OutputInvalid instead of Completed; malformed
+  config warning yields Completed instead of OutputInvalid. Exact fixed source
+  restored in finally; no unrelated build/environment failure.
+- [Restore](docs/evidence/issue-13/batch-8/restore.log), [build](docs/evidence/issue-13/batch-8/build.log),
+  [boundaries](docs/evidence/issue-13/batch-8/boundaries.log), [tests](docs/evidence/issue-13/batch-8/tests.log):
+  locked restore, Release build 0 warnings/errors and boundaries pass;
+  Bridge 130 + Contracts 528 + Foundation 1169 = 1827 pass, 0 fail/skip.
+  [Bridge TRX](docs/evidence/issue-13/batch-8/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-8/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-8/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-8/package.log)/[JSON](docs/evidence/issue-13/batch-8/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-8/contracts.log)/[JSON](docs/evidence/issue-13/batch-8/contracts-evidence.json)
+  pass actual archive/tool install/execute and native-free packaged consumer.
+  Commands `./scripts/package-smoke.ps1 -Rid win-x64`, `./scripts/contract-smoke.ps1`;
+  [pack](docs/evidence/issue-13/batch-8/pack.log) restores normal tracked lock state.
+  [Manifest](docs/evidence/issue-13/batch-8/manifest.json) pins backend/helper/project/
+  resources/test source blobs and original raw artifact bytes. Windows 10.0.26300
+  / SDK 10.0.401, host Oct11 UTC+09 = Oct10 UTC.
+
+Runtime/test sources were final before these executions; later edits are only
+docs/evidence. Independent audit remains 2/2 consumed; no further agent/reset.
+Entire post-audit startup-notice/backend/helper/resource/project/test/docs/evidence
+diff received NO further independent audit under concrete external-review defect
+correction path. Final HEAD actual CI and completed Codex review without unresolved
+actionable findings and parent sequencing approval are mandatory. Production,
+OPEN-09/11 and real provider/transport/Planner/OS/inherited-capability/Trace/game
+acceptance remain unavailable/unverified; issue #13 stays open. Execution groups
+are artifact provenance groups, never a reset of the finite audit budget.

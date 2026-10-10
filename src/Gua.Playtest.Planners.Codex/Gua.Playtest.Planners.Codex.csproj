@@ -9,6 +9,9 @@
     <EmbeddedResource Include="protocol-0.150.1/raw-response-item-completed.schema.json" LogicalName="Gua.Playtest.Codex.RawResponseItemCompletedNotification" />
     <EmbeddedResource Include="protocol-0.150.1/model-verification.schema.json" LogicalName="Gua.Playtest.Codex.ModelVerificationNotification" />
     <EmbeddedResource Include="protocol-0.150.1/model-safety-buffering.schema.json" LogicalName="Gua.Playtest.Codex.ModelSafetyBufferingUpdatedNotification" />
+    <EmbeddedResource Include="protocol-0.150.1/deprecation-notice.schema.json" LogicalName="Gua.Playtest.Codex.DeprecationNoticeNotification" />
+    <EmbeddedResource Include="protocol-0.150.1/guardian-warning.schema.json" LogicalName="Gua.Playtest.Codex.GuardianWarningNotification" />
+    <EmbeddedResource Include="protocol-0.150.1/config-warning.schema.json" LogicalName="Gua.Playtest.Codex.ConfigWarningNotification" />
     <None Include="protocol-0.150.1/LICENSE" Pack="true" PackagePath="notices/Codex.LICENSE" CopyToOutputDirectory="PreserveNewest" Link="notices/Codex.LICENSE" />
   </ItemGroup>
 </Project>
