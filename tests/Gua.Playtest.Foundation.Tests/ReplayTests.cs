@@ -566,7 +566,9 @@ public sealed class ReplayTests
     {
         using var files = new Fixture(gameInput: true); var replay = await files.Load(); var clock = new MonotonicClock();
         using var cancellation = new CancellationTokenSource();
-        var host = new SimulationHost { MissingReceipts = !cancel, OnSend = cancel ? cancellation.Cancel : null };
+        // Both rows require a missing ordinary receipt. Cancellation must not make
+        // the fixture acknowledge that action during Gua's fresh safety cleanup.
+        var host = new SimulationHost { MissingReceipts = true, OnSend = cancel ? cancellation.Cancel : null };
         var playback = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved,
             new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
         var result = await Run(replay, new(clock), playback, clock, token: cancellation.Token).WaitAsync(TimeSpan.FromSeconds(3));
@@ -577,6 +579,7 @@ public sealed class ReplayTests
         Assert.Equal(RunReason.ActionUnconfirmed, result.Run.Primary.Cause.Reason);
         if (cancel) Assert.Contains(result.Run.Events, e => e.Reason == RunReason.Cancelled);
         await host.Ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); Assert.True(host.Releases > 0); Assert.Equal(1, host.Ends);
+        Assert.Equal(0, host.OrdinaryReceipts); Assert.True(host.CleanupReceipts > 0);
     }
     [Fact]
     public async Task UnsentTimedStartupExpiryDoesNotManufactureActionUnconfirmed()
@@ -694,10 +697,15 @@ public sealed class ReplayTests
         public double SimulationMilliseconds => 0;
         public string? ExecutionFailureCode => null;
         public bool IsNeutral => true;
-        public int Begins, Sends, Ends, Releases;
+        public int Begins, Sends, Ends, Releases, OrdinaryReceipts, CleanupReceipts;
         public void Begin(GuaTimedSegment segment) { Begins++; }
         public ulong Send(GuaTimedInput input, JsonElement? value, Action boundary) { boundary(); Sends++; OnSend?.Invoke(); return (ulong)Sends; }
-        public GuaTimedCompletion? Poll(ulong id) => MissingReceipts ? null : new(true);
+        public GuaTimedCompletion? Poll(ulong id)
+        {
+            if (id == 100) { CleanupReceipts++; return new(true); }
+            if (MissingReceipts) return null;
+            OrdinaryReceipts++; return new(true);
+        }
         public ulong ReleaseAll() { Releases++; return 100; }
         public void End() { Ends++; Ended.TrySetResult(); }
     }
