@@ -66,7 +66,8 @@ public sealed class RunArtifactStore
                 inputs.Add(new { name = input.Name, sha256 = Hash(safe), document = JsonSerializer.Deserialize<JsonElement>(safe) });
             }
             Publish("run.json", Encode(new { kind = "playtestRunStorage", storageVersion = 1, runId = RunId,
-                executionState = ExecutionState.Preparing, metadata.Profile, metadata.Settings, metadata.Versions, inputs }), cancellationToken);
+                executionState = ExecutionState.Preparing, metadata.Profile, metadata.Settings, metadata.Versions, inputs,
+                metadata.Identity, metadata.StartedAt }), cancellationToken);
         });
     /// <summary>Snapshot machine authority at confirmation, before diagnostics or input/resource release.</summary>
     public PersistenceResult ConfirmPrimary(RunSnapshot snapshot, IReadOnlyList<ObservationReference> observations,

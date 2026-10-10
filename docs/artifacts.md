@@ -4,6 +4,12 @@
 
 ## Integration boundary
 
+Read-only consumption uses the [dashboard adapter](dashboard.md). `RunArtifactMetadata`
+accepts optional `Identity` and `StartedAt` from the trusted execution owner;
+the storage envelope retains these under the same sanitization policy. Missing
+legacy values remain unknown. These fields do not replace the public Run schema
+or verify the actual game build/effective Environment on the owner's behalf.
+
 1. Create `RunArtifactStore` with an explicit root, `ArtifactLimits` and host-only `PersistenceRedactor`. A random Run identity, separate directory and exclusive owner marker prevent Run reuse. Creation can fail before any file exists; the host must classify that as persistence failure, not infer a Run result.
 2. At Preparing entry, before launch/connect, call `BeginPreparation`. It publishes `run.json`: profile/public scope, effective settings with source, used versions, sanitized fixed input copies and SHA-256 of those copies. Source inputs, environment variables, resolved secret values and raw pre-redaction hashes are never copied. Secret references/availability may be explicit safe settings. The existing public Run wire document is assembled by #15; this storage envelope does not replace its schema.
 3. At primary confirmation, before cleanup, call `ConfirmPrimary` with #6's immutable `PrimaryResult`, exception evidence and observation/decision references. `primary.json` is create-only. Before/After/PrimaryDecision references cannot contain AfterCleanup; cleanup references are written separately. No result is derived from an observation. A failed primary write still freezes the in-memory primary and marks persistence incomplete.

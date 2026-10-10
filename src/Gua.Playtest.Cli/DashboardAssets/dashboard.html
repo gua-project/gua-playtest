@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gua Playtest • Saved runs</title><link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script></head>
+<body><header><span class="brand">GUA PLAYTEST</span><h1>Saved runs</h1><p>Registered Scenarios and saved Runner results. Read only.</p></header>
+<main><div id="notice" role="status" aria-live="polite">Loading saved artifacts…</div>
+<section class="filters" aria-label="Filters"><label>Game build<input id="build" list="builds" placeholder="Select or enter build"><datalist id="builds"></datalist></label>
+<label>Effective Environment<input id="environment" list="environments" placeholder="Select or enter SHA-256"><datalist id="environments"></datalist></label>
+<label>Scenario name<input id="search" type="search" placeholder="Search registered Scenarios"></label>
+<label>Result<select id="status"><option value="">All results</option>Unrun</option><option>Passed</option><option>PassedPostProcessingIncomplete</option><option>Failed</option><option>TimedOut</option><option>Aborted</option><option>Invalid</option><option>Unverified</option><option>Unsettled</option><option>ResultUnreadable</option><option>RunUnreadable</option><option>LatestUnknown</option><option>IndexIncomplete</option></select></label>
+<button id="refresh" type="button">Refresh artifacts</button></section>
+<section aria-labelledby="scenarios-heading"><h2 id="scenarios-heading">Registered Scenarios</h2><p id="scope">Choose a build and Environment to inspect the current definitions.</p>
+<div class="table-scroll"><table><thead><tr><th>Scenario</th><th>Latest result</th><th>Started</th><th>Run</th><th>History</th></tr></thead><tbody id="scenarios"></tbody></table></div></section>
+<section id="history-section" hidden><h2 id="history-heading">Run history</h2><p>History includes other builds, previous definitions and unknown identities. These do not verify the selected target.</p><div id="history"></div></section>
+<section id="run-section" hidden><h2>Run detail</h2><div id="run"></div></section>
+<details><summary>All indexed runs, including unknown or unregistered identities</summary><div id="all-runs"></div></details>
+<footer>This list describes registered Scenarios. It does not measure all game paths or guarantee game quality. Saved results are displayed without regrading.</footer></main></body></html>

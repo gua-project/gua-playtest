@@ -761,3 +761,8 @@ GitHubの本文/ラベル/PR/リポジトリは、この文書の作成では変
 - P-26: https://github.com/gua-project/gua-playtest/issues/26
 
 #26は#2の登録/識別契約、#9のRun/result、#15の入口、Gua#127の共通Viewerを統合する。#17へ説明、#18と親#1へ実Runner/browser/配布物証拠を追加する。#2のコード接続は#3基盤を取り込む。着手依存と統合/リリース証拠を区別する。
+
+#26 の読取・索引・UI契約と #15 向け接続 API は [dashboard.md](dashboard.md)。
+#9 の storage envelope は公開 RunDocument と別 adapter で読み、実行 owner が記録する optional identity/start timestamp を消費する。
+#15 は明示 registry/artifact/allowed roots と loopback port を渡し、#17 は対象選択と結果の読み方を説明する。
+#18 と親#1の DASH-001..004 は unit/保存fixture、Gua common report、実Runner、実game build、browser、配布consumerを別の証拠レーンとして対応させる。

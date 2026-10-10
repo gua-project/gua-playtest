@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Gua.Playtest.Runner.Execution;
+using Gua.Playtest.Core.Contracts;
 
 namespace Gua.Playtest.Runner.Artifacts;
 
@@ -12,7 +13,8 @@ public sealed record DecisionReference(string DecisionId, string ObservationId, 
 public sealed record EffectiveSetting(string Name, string Value, string Source);
 public sealed record InputCopy(string Name, JsonElement Document);
 public sealed record RunArtifactMetadata(string Profile, IReadOnlyList<EffectiveSetting> Settings,
-    IReadOnlyDictionary<string, string> Versions, IReadOnlyList<InputCopy> Inputs);
+    IReadOnlyDictionary<string, string> Versions, IReadOnlyList<InputCopy> Inputs,
+    RunIdentity? Identity = null, DateTimeOffset? StartedAt = null);
 /// <summary>Receipt from a Gua-owned writer. Saved bytes must already be redacted by that writer.
 /// SHA-256 covers those fixed bytes, never the original secret-bearing input.</summary>
 public sealed record ArtifactFileReference(string FileName, long Bytes, string Sha256);
