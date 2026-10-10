@@ -249,8 +249,13 @@ public sealed class RunSession
     /// <summary>Replay/approved non-Planner work. The complete segment reserves before any transport.</summary>
     public ApprovedOperation? ApproveOperation(int actionCount, TimeSpan observationWindow)
         => Approve(actionCount, observationWindow, false);
+    /// <summary>Owner-controlled finite authority for an already reached observation boundary.
+    /// Charges no action or decision, never grants dispatch, and retains settlement through Goal.
+    /// Complete the preceding operation first; every window stays within the original Run deadline.</summary>
+    public ApprovedOperation? ApproveObservation(TimeSpan observationWindow)
+        => Approve(0, observationWindow, true, requiresSettlement: true);
     private ApprovedOperation? Approve(int count, TimeSpan window, bool finalPlannerPermit, TimeSpan? authorityDeadline = null, RunEvent? expiryCause = null,
-        TimeSpan? elapsedWait = null)
+        TimeSpan? elapsedWait = null, bool requiresSettlement = false)
     {
         Require(ExecutionState.Running);
         operations.RemoveAll(x => !x.IsOpen);
@@ -273,7 +278,7 @@ public sealed class RunSession
             if (count > 0 && reservation is null) return null;
             var operation = new ApprovedOperation(this, Min(now + window + (elapsedWait ?? TimeSpan.Zero), RunningOrigin.Value + Limits.MaxDuration), reservation,
                 count > 0 ? Min(now + Limits.ActionTimeout, RunningOrigin.Value + Limits.MaxDuration) : null,
-                waitCompletesAt: waitCompletesAt, observationWindow: elapsedWait.HasValue ? window : null);
+                waitCompletesAt: waitCompletesAt, observationWindow: elapsedWait.HasValue ? window : null, requiresSettlement: requiresSettlement);
             operations.Add(operation);
             if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
             return operation;
@@ -312,6 +317,8 @@ public sealed class RunSession
         public TimeSpan ResultDeadline { get; }
         private TimeSpan resultConfirmedAt;
         private readonly TimeSpan? waitCompletesAt, observationWindow;
+        private readonly bool requiresSettlement;
+        public bool DispatchClosedByGoal { get; private set; }
         public TimeSpan NextDeadline => ResultConfirmed ? IsPlanner
             ? Min(resultConfirmedAt + owner.Limits.WaitTimeout, owner.RunningOrigin!.Value + owner.Limits.MaxDuration)
             : observationWindow is { } window ? Min(resultConfirmedAt + window, Deadline) : Deadline : ResultDeadline;
@@ -319,14 +326,23 @@ public sealed class RunSession
         public bool IsOpen { get; private set; } = true;
         public bool ResultConfirmed { get; private set; }
         internal bool IsPlanner { get; }
-        internal bool AwaitsSettlement => IsOpen && !ResultConfirmed && (waitCompletesAt.HasValue ||
+        internal bool AwaitsSettlement => IsOpen && !ResultConfirmed && (requiresSettlement || waitCompletesAt.HasValue ||
             Actions?.Deliveries.Any(d => d is DeliveryState.Sent or DeliveryState.Uncertain) == true);
         internal ApprovedOperation(RunSession owner, TimeSpan deadline, ActionReservation? actions, TimeSpan? resultDeadline = null, bool planner = false,
-            TimeSpan? waitCompletesAt = null, TimeSpan? observationWindow = null)
+            TimeSpan? waitCompletesAt = null, TimeSpan? observationWindow = null, bool requiresSettlement = false)
         { this.owner = owner; Deadline = deadline; ResultDeadline = Min(deadline, resultDeadline ?? deadline); Actions = actions; IsPlanner = planner;
-            this.waitCompletesAt = waitCompletesAt; this.observationWindow = observationWindow; }
+            this.waitCompletesAt = waitCompletesAt; this.observationWindow = observationWindow; this.requiresSettlement = requiresSettlement; }
+        internal void CloseDispatchForGoal()
+        {
+            if (!IsOpen || Actions is null) return;
+            DispatchClosedByGoal = true; Actions.CancelUnsent();
+        }
         public void Complete()
-            => CompleteAt(owner.State == ExecutionState.Running ? owner.ReadReal() : TimeSpan.Zero);
+        {
+            if (requiresSettlement && !ResultConfirmed && IsOpen && owner.State == ExecutionState.Running)
+                owner.pendingEvents.Add(new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Host));
+            CompleteAt(owner.State == ExecutionState.Running ? owner.ReadReal() : TimeSpan.Zero);
+        }
         internal void CompleteAt(TimeSpan now)
         {
             if (IsOpen && owner.State == ExecutionState.Running)
@@ -361,12 +377,12 @@ public sealed class RunSession
         }
         public void BeginDispatch(int index)
         {
-            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running)
+            if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running)
                 throw new InvalidOperationException("OperationClosed");
             var now = owner.ReadReal();
             lock (owner.postedExceptionGate)
             {
-                if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || owner.State != ExecutionState.Running || now >= ResultDeadline)
+                if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running || now >= ResultDeadline)
                     throw new InvalidOperationException("OperationClosed");
                 Actions!.BeginDispatch(index);
             }
@@ -523,6 +539,11 @@ public sealed class RunSession
             }
             // Retain the whole Goal fact while a dispatched result or legitimate elapsed wait is pending.
             // Do not abandon a normal in-flight receipt just because its side effect became observable first.
+            if (goalVerified && policy == CompletionPolicy.OnGoal)
+            {
+                approvalsClosing = true;
+                foreach (var operation in operations) operation.CloseDispatchForGoal();
+            }
             var settling = operations.Any(x => x.AwaitsSettlement);
             if (goalVerified && policy == CompletionPolicy.OnGoal && !settling) Add(RunReason.GoalSatisfied, RunOrigin.Condition);
             if (operations.Any(x => x.IsOpen)) return;

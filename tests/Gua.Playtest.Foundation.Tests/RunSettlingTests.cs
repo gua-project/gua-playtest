@@ -7,6 +7,61 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Fact]
+    public void OnGoalClosesReservedSuffixWhileSentReceiptRetainsSettlement()
+    {
+        var run = Running(new Clock()); var operation = run.ApproveOperation(2, TimeSpan.FromSeconds(2))!;
+        operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0);
+        Assert.Null(run.Evaluate(Unit(), TimeSpan.Zero));
+        Assert.Equal(DeliveryState.NotSent, operation.Actions.Deliveries[1]);
+        Assert.Throws<InvalidOperationException>(() => operation.BeginDispatch(1));
+        Assert.True(operation.IsOpen); Assert.Equal(1, run.Budget.Snapshot.Actions); Assert.Equal(0, run.Budget.Snapshot.ReservedActions);
+        Assert.True(operation.ConfirmResult()); operation.Complete();
+        Assert.Equal(ResultStatus.Passed, run.Evaluate()!.Status);
+    }
+    private static RunSession.ApprovedOperation? ObservationAuthority(RunSession run, TimeSpan window)
+        => run.ApproveObservation(window);
+    [Fact]
+    public void ReachedObservationRenewsFiniteAuthorityAfterLastActionWithoutReopeningBudget()
+    {
+        var clock = new Clock(); var run = Running(clock, limits: Limits(actions: 1));
+        var action = run.ApproveOperation(1, TimeSpan.FromSeconds(2))!;
+        action.BeginDispatch(0); action.Actions!.ConfirmSent(0); Assert.True(action.ConfirmResult()); action.Complete();
+        clock.At(500);
+        var observation = ObservationAuthority(run, TimeSpan.FromSeconds(2)); Assert.NotNull(observation);
+        Assert.Equal(TimeSpan.FromMilliseconds(2500), observation.Deadline);
+        Assert.Null(run.ApproveOperation(1, TimeSpan.FromSeconds(2))); Assert.Null(run.RequestPlanner());
+        Assert.Null(run.Evaluate()); clock.At(2499); Assert.Null(run.Evaluate());
+        clock.At(2500); Assert.Equal(RunReason.ActionsExhausted, run.Evaluate()!.Cause.Reason);
+        // Preserve the normative equal-priority budget tie while retaining the checkpoint expiry fact.
+        Assert.Contains(run.Events, x => x.Reason == RunReason.WaitExpired);
+        Assert.Equal(ResultStatus.Failed, run.Primary!.Status);
+        Assert.Equal(new BudgetSnapshot(1, 0, 0, 1, 0), run.Budget.Snapshot);
+    }
+    [Theory] [InlineData(true)] [InlineData(false)]
+    public void ReachedObservationBlocksGoalUntilActualConfirmationOrExpiry(bool confirmed)
+    {
+        var clock = new Clock(); var run = Running(clock);
+        var observation = ObservationAuthority(run, TimeSpan.FromSeconds(2))!;
+        Assert.Null(run.Evaluate(Unit(), TimeSpan.Zero)); Assert.True(run.GoalVerified);
+        if (confirmed) { Assert.True(observation.ConfirmResult()); observation.Complete(); Assert.Equal(ResultStatus.Passed, run.Evaluate()!.Status); }
+        else { clock.At(2000); Assert.Equal(RunReason.WaitExpired, run.Evaluate()!.Cause.Reason); }
+        Assert.Equal(0, run.Budget.Snapshot.Actions); Assert.Equal(0, run.Budget.Snapshot.Decisions);
+    }
+    [Fact]
+    public void ObservationAuthorityCannotRebaseGlobalDeadlineOrHideCancellation()
+    {
+        var clock = new Clock(); var run = Running(clock, success: false);
+        Assert.Throws<ArgumentOutOfRangeException>(() => run.ApproveObservation(TimeSpan.FromMilliseconds(2001)));
+        var first = run.ApproveObservation(TimeSpan.FromSeconds(2))!;
+        Assert.Null(run.ApproveObservation(TimeSpan.FromSeconds(1)));
+        Assert.True(first.ConfirmResult()); first.Complete(); clock.At(4900);
+        var final = run.ApproveObservation(TimeSpan.FromSeconds(2))!;
+        Assert.Equal(TimeSpan.FromMilliseconds(5000), final.Deadline);
+        Assert.Equal(RunReason.Cancelled, run.Evaluate(cancelled: true)!.Cause.Reason);
+        Assert.False(final.ConfirmResult()); Assert.False(final.IsOpen);
+        Assert.Throws<InvalidOperationException>(() => run.ApproveObservation(TimeSpan.FromSeconds(1)));
+    }
+    [Fact]
     public void ReportedSendEvidenceConsumesOneAttemptWithoutApprovingDispatch()
     {
         var run = Running(new Clock(), success: false); var operation = run.ApproveOperation(2, TimeSpan.FromSeconds(2))!;
