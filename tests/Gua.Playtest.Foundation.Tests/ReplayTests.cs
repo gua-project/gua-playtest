@@ -14,6 +14,13 @@ using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
 
+// Gua worker reads block until the owner pump runs. Fixed physical deadlines must
+// not compete with unrelated collections deliberately blocking thread-pool workers.
+// The races inside each Replay test remain concurrent; no timeout is enlarged.
+[CollectionDefinition("Replay owner timing", DisableParallelization = true)]
+public sealed class ReplayOwnerTimingCollection { }
+
+[Collection("Replay owner timing")]
 public sealed class ReplayTests
 {
     private const string Assertion = """{"kind":"assertion","read":{"region":"standard","target":{"source":"ui","selector":{"id":{"value":"buy"}}},"field":"visible","valueType":{"type":"bool"}},"quantifier":"one","operator":"equals","expected":{"type":"bool","value":true}}""";
@@ -565,9 +572,23 @@ public sealed class ReplayTests
         // Cancellation after dispatch cannot erase an unconfirmed ordinary action, which
         // has the existing higher failure priority. Both causes remain in the event ledger.
         Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status);
+        Assert.True(host.Sends > 0, $"Missing-receipt prerequisite was not reached: sends={host.Sends}, primary={result.Run.Primary}, events={JsonSerializer.Serialize(result.Run.Events)}");
         Assert.Equal(RunReason.ActionUnconfirmed, result.Run.Primary.Cause.Reason);
         if (cancel) Assert.Contains(result.Run.Events, e => e.Reason == RunReason.Cancelled);
         await host.Ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); Assert.True(host.Releases > 0); Assert.Equal(1, host.Ends);
+    }
+    [Fact]
+    public async Task UnsentTimedStartupExpiryDoesNotManufactureActionUnconfirmed()
+    {
+        using var files = new Fixture(gameInput: true); var clock = new CheckpointBoundaryClock();
+        var host = new SimulationHost { OnPlaybackCapability = () => clock.MoveTo(TimeSpan.FromSeconds(1)) };
+        var playback = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved,
+            new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
+        var result = await Run(await files.Load(), new(clock), playback, clock);
+        Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason); Assert.Equal(0, host.Sends);
+        Assert.Equal(0, result.Progress.DispatchedSteps);
+        Assert.DoesNotContain(result.Run.Events, e => e.Reason == RunReason.ActionUnconfirmed);
+        Assert.Equal(0, host.Begins); Assert.Equal(0, host.Sends);
     }
     [Theory]
     [InlineData(true)]
@@ -608,18 +629,28 @@ public sealed class ReplayTests
     private sealed class SimulationHost : IGuaTimedSegmentHost
     {
         public Exception? CapabilityFault { get; set; }
+        public Action? OnPlaybackCapability { get; set; }
+        private int capabilityReads;
         public Action? OnSend { get; set; }
         public bool MissingReceipts { get; set; }
         public TaskCompletionSource Ended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public bool OrderedApplication => CapabilityFault is { } failure ? throw failure : true;
+        public bool OrderedApplication
+        {
+            get
+            {
+                if (CapabilityFault is { } failure) throw failure;
+                if (++capabilityReads == 2) OnPlaybackCapability?.Invoke();
+                return true;
+            }
+        }
         public bool ApplicationTimes => false;
         public bool SameTickApplication => false;
         public string? SimulationScope => "controlled-fixture";
         public double SimulationMilliseconds => 0;
         public string? ExecutionFailureCode => null;
         public bool IsNeutral => true;
-        public int Sends, Ends, Releases;
-        public void Begin(GuaTimedSegment segment) { }
+        public int Begins, Sends, Ends, Releases;
+        public void Begin(GuaTimedSegment segment) { Begins++; }
         public ulong Send(GuaTimedInput input, JsonElement? value, Action boundary) { boundary(); Sends++; OnSend?.Invoke(); return (ulong)Sends; }
         public GuaTimedCompletion? Poll(ulong id) => MissingReceipts ? null : new(true);
         public ulong ReleaseAll() { Releases++; return 100; }
