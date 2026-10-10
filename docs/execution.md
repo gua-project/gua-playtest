@@ -166,3 +166,22 @@ The same internal queue distinguishes secondary callback diagnostics from actual
 
 Final primary confirmation closes the posted-evidence gate and samples the already-armed exact lifecycle watch inside that same lock. An earlier Running poll is not final readiness proof; the close sample retains known lifecycle failure before primary assignment. Later completion belongs after the confirmation boundary and cannot rewrite the primary.
 Queued causal evidence and queue overflow immediately close ActionsClosing, Planner requests, operation approval and dispatch through the shared terminal-evidence gate, before the next owner evaluation. That owner gate also samples the already-armed exact lifecycle watch under the posting lock: a completed exit/fault closes authority without depending on a feed call or async notification. Their final authority checks and reservation transitions share the posting lock; provider clock reads precede that lock, and the check repeats afterward. This linearizes internal reservation authority with causal posting; the external transport's check/enqueue guard remains separate. Diagnostic-only posts preserve those gates; workers never mutate Run state or budgets.
+
+When OnGoal latches while a sent result is pending, the existing operation closes
+its Reserved suffix as NotSent immediately. `DispatchClosedByGoal` identifies
+that owner decision; no new action or Planner request is admitted. Sent or
+uncertain deliveries retain their original settlement deadline. A trusted adapter
+may confirm only its actual executed prefix after result and neutral-input
+confirmation; a Goal-cancelled suffix is not an executed action. Other partial
+execution remains unconfirmed.
+
+`RunSession.ApproveObservation(window)` grants the trusted owner one finite
+observation-only opportunity at an already reached boundary. Complete the prior
+operation before requesting it. The window must be positive and no greater than
+WaitTimeout, and is clamped to the original Run deadline. It charges no action,
+decision or recovery budget and cannot dispatch; exhausted action budgets stay
+closed. Each reached boundary obtains its own window. Pending observation
+settlement blocks OnGoal completion until actual `ConfirmResult`, expiry, or
+higher-priority terminal evidence. Early owner completion without confirmation
+retains WaitExpired. Ordinary arbitration, cancellation and global deadlines
+remain authoritative.
