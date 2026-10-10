@@ -1,0 +1,276 @@
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Gua.Playtest.Core.Contracts;
+
+namespace Gua.Playtest.Planners.Codex;
+
+public enum CodexReplyStatus { Completed, UsageLimit, ConnectionFailure, OutputInvalid }
+public sealed record CodexUsage(long InputTokens, long OutputTokens, long TotalTokens);
+public sealed record CodexReply(CodexReplyStatus Status, byte[]? CompletedJson = null, CodexUsage? Usage = null);
+public interface ICodexDecisionBackend
+{
+    ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken cancellationToken);
+}
+
+/// <summary>One owned protocol connection. Reads return a complete UTF-8 JSONL frame without LF,
+/// or null on EOF. Implementations must enforce the byte limit before allocating the frame,
+/// honor cancellation and return promptly. This port does not authorize process launch or inference.</summary>
+public interface ICodexProtocolTransport
+{
+    ValueTask WriteAsync(ReadOnlyMemory<byte> jsonLine, CancellationToken cancellationToken);
+    ValueTask<byte[]?> ReadAsync(int maximumBytes, CancellationToken cancellationToken);
+}
+
+public sealed record CodexProtocolLimits(int MaximumFrameBytes, int MaximumMessages, TimeSpan Timeout);
+
+/// <summary>Version-specific 0.150.1 protocol conversion, with no process launcher, credentials,
+/// filesystem or game capabilities. Production composition remains unavailable pending OPEN-09.
+/// One instance belongs to one Run; faults/cancellation permanently close it.</summary>
+public sealed class CodexProtocolBackend : ICodexDecisionBackend
+{
+    private readonly ICodexProtocolTransport transport;
+    private readonly CodexProtocolLimits limits;
+    private readonly Func<string, string> redact;
+    private readonly JsonObject outputSchema;
+    private readonly string runId;
+    private readonly HashSet<string> requests = new(StringComparer.Ordinal);
+    private string? threadId;
+    private long nextId;
+    private int active;
+    private bool closed;
+    private int messages;
+    private static readonly UTF8Encoding Utf8 = new(false, true);
+
+    public CodexProtocolBackend(string runId, ICodexProtocolTransport transport, JsonObject outputSchema,
+        CodexProtocolLimits limits, Func<string, string> redact)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        ArgumentNullException.ThrowIfNull(transport);
+        ArgumentNullException.ThrowIfNull(outputSchema);
+        ArgumentNullException.ThrowIfNull(redact);
+        ArgumentNullException.ThrowIfNull(limits);
+        if (limits.MaximumFrameBytes is < 1 or > 1048576 || limits.MaximumMessages is < 1 or > 10000 ||
+            limits.Timeout <= TimeSpan.Zero || limits.Timeout > TimeSpan.FromDays(1))
+            throw new ArgumentException("CodexProtocolLimitsInvalid");
+        this.runId = runId; this.transport = transport; this.redact = redact;
+        this.outputSchema = (JsonObject)outputSchema.DeepClone(); this.limits = limits;
+    }
+
+    public async ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        cancellationToken.ThrowIfCancellationRequested();
+        // A second caller never reads or writes the current exchange.
+        if (Interlocked.CompareExchange(ref active, 1, 0) != 0) return new(CodexReplyStatus.ConnectionFailure);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(limits.Timeout);
+        var token = timeout.Token;
+        try
+        {
+            if (closed || input.RunId != runId || requests.Count >= 10000 || !requests.Add(input.DecisionRequestId))
+                return new(CodexReplyStatus.OutputInvalid);
+            messages = 0;
+            var projected = JsonNode.Parse(ContractJson.Serialize(input)) ?? throw new ProtocolException();
+            RedactInput(projected);
+            var publicInput = projected.ToJsonString();
+            // Observation/game text is data in a user message, never developer/system instructions.
+            if (threadId is null)
+            {
+                await RequestAsync("initialize", new JsonObject
+                {
+                    ["clientInfo"] = new JsonObject { ["name"] = "gua-playtest", ["version"] = "0.1.0" },
+                    ["capabilities"] = new JsonObject { ["experimentalApi"] = false }
+                }, token).ConfigureAwait(false);
+                await WriteAsync(new JsonObject { ["method"] = "initialized" }, token).ConfigureAwait(false);
+                var started = await RequestAsync("thread/start", new JsonObject
+                {
+                    ["ephemeral"] = true, ["approvalPolicy"] = "never", ["sandbox"] = "read-only"
+                }, token).ConfigureAwait(false);
+                threadId = Identifier(started.GetProperty("thread").GetProperty("id"));
+            }
+            var result = await RequestAsync("turn/start", new JsonObject
+            {
+                ["threadId"] = threadId,
+                ["input"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = publicInput }),
+                ["approvalPolicy"] = "never",
+                ["sandboxPolicy"] = new JsonObject { ["type"] = "readOnly", ["networkAccess"] = false },
+                ["outputSchema"] = outputSchema.DeepClone()
+            }, token).ConfigureAwait(false);
+            var turnId = Identifier(result.GetProperty("turn").GetProperty("id"));
+            CodexUsage? usage = null;
+            while (true)
+            {
+                var message = await ReadAsync(token).ConfigureAwait(false);
+                // Server requests are capabilities we never grant (including approvals and tools).
+                if (message.TryGetProperty("id", out _)) throw new ProtocolException();
+                var method = message.GetProperty("method").GetString();
+                var parameters = message.GetProperty("params");
+                if (parameters.TryGetProperty("threadId", out var thread) && thread.GetString() != threadId)
+                    throw new ProtocolException();
+                if (method == "thread/tokenUsage/updated")
+                {
+                    if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
+                    if (parameters.GetProperty("turnId").GetString() != turnId) throw new ProtocolException();
+                    var last = parameters.GetProperty("tokenUsage").GetProperty("last");
+                    usage = new(Nonnegative(last, "inputTokens"), Nonnegative(last, "outputTokens"), Nonnegative(last, "totalTokens"));
+                }
+                else if (method == "turn/completed")
+                {
+                    if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
+                    var turn = parameters.GetProperty("turn");
+                    if (Identifier(turn.GetProperty("id")) != turnId) throw new ProtocolException();
+                    token.ThrowIfCancellationRequested();
+                    var status = turn.GetProperty("status").GetString();
+                    if (status == "failed")
+                    {
+                        closed = true;
+                        var error = turn.GetProperty("error");
+                        if (error.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
+                        return new(error.TryGetProperty("codexErrorInfo", out var info) &&
+                            info.ValueKind == JsonValueKind.String && info.GetString() == "usageLimitExceeded"
+                            ? CodexReplyStatus.UsageLimit : CodexReplyStatus.ConnectionFailure, Usage: usage);
+                    }
+                    if (status != "completed") throw new ProtocolException();
+                    var items = turn.GetProperty("items").EnumerateArray().Where(x =>
+                        x.GetProperty("type").GetString() == "agentMessage" &&
+                        (!x.TryGetProperty("phase", out var phase) || phase.ValueKind == JsonValueKind.Null || phase.GetString() == "final_answer")).ToArray();
+                    if (items.Length != 1) throw new ProtocolException();
+                    var text = items[0].GetProperty("text").GetString() ?? throw new ProtocolException();
+                    if (redact(text) != text) throw new ProtocolException();
+                    var bytes = Utf8.GetBytes(text);
+                    if (bytes.Length == 0 || bytes.Length > limits.MaximumFrameBytes) throw new ProtocolException();
+                    var decision = Parse(bytes);
+                    CheckRedaction(decision);
+                    if (decision.GetProperty("runId").GetString() != input.RunId ||
+                        decision.GetProperty("decisionRequestId").GetString() != input.DecisionRequestId ||
+                        decision.GetProperty("basedOnObservationId").GetString() != input.BasedOnObservationId)
+                        throw new ProtocolException();
+                    token.ThrowIfCancellationRequested();
+                    // Runner's pinned exchange validator, not this converter, grants adoption.
+                    return new(CodexReplyStatus.Completed, bytes, usage);
+                }
+                // Deltas, reasoning and intermediate item notifications never form a Decision.
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            closed = true;
+            if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
+            return new(CodexReplyStatus.ConnectionFailure);
+        }
+        catch (Exception exception) when (exception is ProtocolException or JsonException or
+            InvalidOperationException or KeyNotFoundException or DecoderFallbackException or FormatException or OverflowException)
+        { closed = true; return new(CodexReplyStatus.OutputInvalid); }
+        catch { closed = true; return new(CodexReplyStatus.ConnectionFailure); }
+        finally { Volatile.Write(ref active, 0); }
+    }
+
+    private async ValueTask<JsonElement> RequestAsync(string method, JsonObject parameters, CancellationToken token)
+    {
+        var id = checked(++nextId);
+        await WriteAsync(new JsonObject { ["id"] = id, ["method"] = method, ["params"] = parameters }, token).ConfigureAwait(false);
+        while (true)
+        {
+            var message = await ReadAsync(token).ConfigureAwait(false);
+            if (!message.TryGetProperty("id", out var received))
+            {
+                // Only lifecycle announcements may precede the corresponding start response.
+                if (message.GetProperty("method").GetString() is "thread/started" or "turn/started") continue;
+                throw new ProtocolException();
+            }
+            if (!received.TryGetInt64(out var number) || number != id || message.TryGetProperty("method", out _)) throw new ProtocolException();
+            if (message.TryGetProperty("error", out var error))
+            {
+                if (message.TryGetProperty("result", out _) || !error.GetProperty("code").TryGetInt64(out _) ||
+                    error.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
+                throw new BackendException();
+            }
+            return message.GetProperty("result");
+        }
+    }
+    private async ValueTask WriteAsync(JsonObject message, CancellationToken token)
+    {
+        var bytes = Utf8.GetBytes(message.ToJsonString() + "\n");
+        if (bytes.Length > limits.MaximumFrameBytes) throw new ProtocolException();
+        CheckRedaction(Parse(bytes));
+        await BoundedAsync(transport.WriteAsync(bytes, token).AsTask(), token).ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+    }
+    private async ValueTask<JsonElement> ReadAsync(CancellationToken token)
+    {
+        if (++messages > limits.MaximumMessages) throw new ProtocolException();
+        var pending = transport.ReadAsync(limits.MaximumFrameBytes, token).AsTask();
+        await BoundedAsync(pending, token).ConfigureAwait(false);
+        var bytes = await pending.ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+        if (bytes is null) throw new IOException();
+        if (bytes.Length == 0 || bytes.Length > limits.MaximumFrameBytes || bytes.Contains((byte)'\n')) throw new ProtocolException();
+        return Parse(bytes);
+    }
+    private static JsonElement Parse(byte[] bytes)
+    {
+        // Reject invalid UTF-8 and duplicate keys rather than choosing a permissive last value.
+        _ = Utf8.GetString(bytes);
+        using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 });
+        CheckKeys(document.RootElement);
+        return document.RootElement.Clone();
+    }
+    private static void CheckKeys(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in element.EnumerateObject())
+            { if (!keys.Add(property.Name)) throw new ProtocolException(); CheckKeys(property.Value); }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+            foreach (var item in element.EnumerateArray()) CheckKeys(item);
+    }
+    private static string Identifier(JsonElement value)
+    {
+        var text = value.GetString();
+        return !string.IsNullOrEmpty(text) && text.Length <= 128 ? text : throw new ProtocolException();
+    }
+    private static long Nonnegative(JsonElement value, string name)
+    { var count = value.GetProperty(name).GetInt64(); return count >= 0 ? count : throw new ProtocolException(); }
+    private void RedactInput(JsonNode node)
+    {
+        if (node is JsonObject obj)
+            foreach (var property in obj.ToArray())
+            {
+                if (redact(property.Key) != property.Key) throw new ProtocolException();
+                if (property.Value is JsonValue value && value.TryGetValue<string>(out var text))
+                    obj[property.Key] = redact(text);
+                else if (property.Value is { } child) RedactInput(child);
+            }
+        else if (node is JsonArray array)
+            for (var index = 0; index < array.Count; index++)
+            {
+                if (array[index] is JsonValue value && value.TryGetValue<string>(out var text)) array[index] = redact(text);
+                else if (array[index] is { } child) RedactInput(child);
+            }
+    }
+    private void CheckRedaction(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String && redact(element.GetString()!) != element.GetString()) throw new ProtocolException();
+        if (element.ValueKind == JsonValueKind.Object)
+            foreach (var property in element.EnumerateObject())
+            { if (redact(property.Name) != property.Name) throw new ProtocolException(); CheckRedaction(property.Value); }
+        else if (element.ValueKind == JsonValueKind.Array)
+            foreach (var item in element.EnumerateArray()) CheckRedaction(item);
+    }
+    private static async Task BoundedAsync(Task task, CancellationToken token)
+    {
+        try { await task.WaitAsync(token).ConfigureAwait(false); }
+        catch
+        {
+            // The abandoned session can never read/write again; observe any noncooperative late fault.
+            _ = task.ContinueWith(completed => { _ = completed.Exception; }, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
+    }
+    private sealed class ProtocolException : Exception;
+    private sealed class BackendException : Exception;
+}
