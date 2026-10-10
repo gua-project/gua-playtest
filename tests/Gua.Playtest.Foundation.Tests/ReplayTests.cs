@@ -23,14 +23,14 @@ public sealed class ReplayTests
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "playtest-replay-" + Guid.NewGuid().ToString("N"));
         public string PlanPath => Path.Combine(Root, "plan.json");
-        public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false, bool gameInput = false)
+        public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false, bool gameInput = false, int maxActions = 1000)
         {
             Directory.CreateDirectory(Root);
             var scenario = new JsonObject
             {
                 ["kind"] = "scenario", ["schemaVersion"] = 1, ["scenarioId"] = "purchase", ["definitionVersion"] = "v1", ["name"] = "purchase",
                 ["goal"] = new JsonObject { ["objective"] = "purchase", ["success"] = JsonNode.Parse(Assertion) },
-                ["constraints"] = new JsonObject { ["maxDurationMilliseconds"] = 10000, ["maxActions"] = 1000 }
+                ["constraints"] = new JsonObject { ["maxDurationMilliseconds"] = 10000, ["maxActions"] = maxActions }
             };
             if (failure) scenario["goal"]!["failure"] = JsonNode.Parse(Assertion);
             var recording = new JsonObject { ["schemaVersion"] = 1, ["steps"] = new JsonArray(Enumerable.Range(0, steps).Select(i => (JsonNode)new JsonObject
@@ -225,6 +225,34 @@ public sealed class ReplayTests
         var result = await Run(await files.Load(), feed, playback, clock, actions: 1);
         Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status);
         Assert.True(result.Progress.GoalVerified); Assert.Equal(1, playback.Sends);
+        Assert.True(result.Progress.PlanCompleted); Assert.Null(result.Progress.OmittedFromStep);
+    }
+    [Theory]
+    [InlineData(0, "afterPlan", true)]
+    [InlineData(2, "onGoal", true)]
+    [InlineData(2, "afterPlan", false)]
+    public async Task ZeroScenarioActionCeilingNeverDispatches(int steps, string completion, bool passes)
+    {
+        using var files = new Fixture(steps, completion, maxActions: 0); var clock = new MonotonicClock();
+        var playback = new Playback();
+        var result = await Run(await files.Load(), new(clock), playback, clock, actions: 1);
+        Assert.Equal(passes ? ResultStatus.Passed : ResultStatus.Failed, result.Run.Primary.Status);
+        Assert.Equal(0, playback.Sends); Assert.Equal(0, result.Progress.DispatchedSteps);
+        if (!passes) Assert.Equal(RunReason.ActionsExhausted, result.Run.Primary.Cause.Reason);
+    }
+    [Fact]
+    public async Task AlreadyFaultedLosingNotificationCannotPassAfterQueueWake()
+    {
+        var clock = new MonotonicClock(); var run = new RunSession(Limits(), clock, clock);
+        run.BeginPreparation(); run.BeginRunning();
+        var losing = new IOException("authoritative observation notification failed");
+        Func<CancellationToken, ValueTask>[] waits = [ _ => ValueTask.CompletedTask, _ => new(Task.FromException(losing)) ];
+        var method = typeof(ReplayDriver).GetMethod("WaitAnyAsync", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        await ((ValueTask)method.Invoke(null, [run, CancellationToken.None, waits])!);
+        run.Evaluate();
+        Assert.Equal(ResultStatus.Failed, run.Primary?.Status);
+        Assert.Equal(RunReason.ExecutionError, run.Primary?.Cause.Reason);
+        Assert.Contains(run.Exceptions, e => e.Type == typeof(IOException).FullName);
     }
     [Fact]
     public async Task CompletedRecordingWithoutGoalCannotPass()

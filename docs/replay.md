@@ -25,6 +25,11 @@ steps. A batch reserves its whole action count before any dispatch. Existing app
 work can settle after the last action budget is consumed; a new operation cannot reopen
 that exhausted budget.
 
+A Scenario with `maxActions: 0` can observe checkpoints and Goal, including an empty
+Recording. The positive effective `RunLimits` object remains a compatibility requirement;
+Replay enforces the Scenario's zero ceiling before any action approval. A required
+nonempty batch fails with ActionsExhausted; an already verified `onGoal` omits it.
+
 `afterPlan` retains an earlier whole Goal success fact and continues all steps,
 checkpoints, completion confirmations and mandatory failure monitoring. Completing all
 steps alone cannot produce Passed. `onGoal` reports the first omitted step in
@@ -37,6 +42,8 @@ immediately. The adapter receives `ReplayDispatchClosedException` on a later sen
 settles the actual prefix with required input neutralization. A partial successful receipt
 is accepted only for this explicit Goal closure and the exact dispatched count; failed or
 unconfirmed prefix results still fail. Impossible completion counts do not enter progress.
+Confirmed final-batch coverage enters progress even when its receipt settles Goal in the
+same owner turn. A fully covered Plan without pending checkpoints has no omitted suffix.
 
 `IReplayPlayback` is a trusted adapter. Gua resumes playback on a worker; `IReplayCalls`
 marshals its reads and actual sends back to the serialized execution owner. Every send

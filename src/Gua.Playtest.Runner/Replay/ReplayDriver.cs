@@ -23,7 +23,9 @@ public sealed class ReplayDriver
         ArgumentNullException.ThrowIfNull(prepare);
         if (Interlocked.Exchange(ref used, 1) != 0) throw new InvalidOperationException("ReplayAlreadyUsed");
         var scenario = replay.CopyScenario();
-        if (limits.MaxActions > scenario.Constraints.MaxActions || limits.MaxDuration.TotalMilliseconds > scenario.Constraints.MaxDurationMilliseconds)
+        // RunLimits retains its positive action-limit contract; a zero Scenario ceiling
+        // is enforced below before any action approval, including an omitted onGoal plan.
+        if ((scenario.Constraints.MaxActions != 0 && limits.MaxActions > scenario.Constraints.MaxActions) || limits.MaxDuration.TotalMilliseconds > scenario.Constraints.MaxDurationMilliseconds)
             throw new ArgumentException("ReplayLimitsMismatch");
         var run = new RunSession(limits, realClock, conditionClock, replay.Success, replay.Failure, replay.Completion);
         IReplayObservationFeed? feed = null;
@@ -79,6 +81,8 @@ public sealed class ReplayDriver
                         return true;
                     }
                     active?.Complete(); active = null;
+                    if (scenario.Constraints.MaxActions == 0)
+                        throw Failure(RunReason.ActionsExhausted, RunOrigin.Budget);
                     // At most 1000 requests per Gua segment. Coverage remains contiguous and ordered.
                     var end = Math.Min(cursor + 1000, replay.Checkpoints.Where(p => p.BeforeStep > cursor)
                         .Select(p => p.BeforeStep).Append(replay.StepCount).Min());
@@ -102,6 +106,11 @@ public sealed class ReplayDriver
                     if (result.Value is { } received && received.CompletedSteps >= 0 && received.CompletedSteps <= batch.Count &&
                         received.CompletedSteps <= active.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain))
                         completed += received.CompletedSteps;
+                    if (result.Value is { Status: ReplayReceiptStatus.Succeeded, NeutralConfirmed: true } settled && active.ResultConfirmed)
+                    {
+                        cursor += settled.CompletedSteps;
+                        if (cursor == replay.StepCount && !replay.Checkpoints.Any(p => p.BeforeStep == cursor)) planCompleted = true;
+                    }
                     if (!result.Completed || result.Value?.Status != ReplayReceiptStatus.Succeeded || !active.ResultConfirmed) return false;
                     cursor = end;
                     if (cursor < replay.StepCount && !replay.Checkpoints.Any(p => p.BeforeStep == cursor))
@@ -216,8 +225,15 @@ public sealed class ReplayDriver
         }
         finally
         {
+            // Faults already present at the wake boundary are authoritative monitoring
+            // failures. Faults caused only by cancellation of obsolete waits stay diagnostics.
+            var failed = tasks.Where(task => task.IsFaulted).ToHashSet();
+            foreach (var task in failed)
+                foreach (var exception in task.Exception!.InnerExceptions)
+                    run.PostProviderException(exception is RunFailureException ? exception :
+                        new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), exception));
             FiniteOperation.CancelSafely(cancelled, run.PostException);
-            foreach (var task in tasks)
+            foreach (var task in tasks.Where(task => !failed.Contains(task)))
                 _ = task.ContinueWith(fault =>
                 {
                     foreach (var exception in fault.Exception!.InnerExceptions) run.PostProviderException(exception);
