@@ -271,6 +271,79 @@ public sealed class CodexProtocolTests
         var second = await backend.DecideAsync(Input("request-2"), default);
         Assert.Equal(CodexReplyStatus.Completed, second.Status); Assert.Null(second.Usage);
     }
+    private static string PassiveTelemetry(string method) => new JsonObject
+    {
+        ["method"] = method, ["params"] = method switch
+        {
+            "rawResponse/completed" => new JsonObject { ["responseId"] = "response-1" },
+            "rawResponseItem/completed" => new JsonObject { ["item"] = new JsonObject { ["type"] = "message", ["role"] = "assistant", ["content"] = new JsonArray() } },
+            "model/verification" => new JsonObject { ["verifications"] = new JsonArray("trustedAccessForCyber") },
+            _ => new JsonObject { ["model"] = "a", ["reasons"] = new JsonArray(), ["useCases"] = new JsonArray(), ["showBufferingUi"] = false }
+        }
+    }.ToJsonString();
+    [Theory]
+    [InlineData("rawResponse/completed")]
+    [InlineData("rawResponseItem/completed")]
+    [InlineData("model/verification")]
+    [InlineData("model/safetyBuffering/updated")]
+    public async Task PassiveTelemetryIsValidatedBeforeAndAfterResponse(string method)
+    {
+        foreach (var beforeResponse in new[] { true, false })
+        foreach (var variant in new[] { "valid", "wrongThread", "wrongTurn", "missing", "null" })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            var notice = JsonNode.Parse(PassiveTelemetry(method))!; var parameters = notice["params"]!.AsObject();
+            parameters["threadId"] = variant == "wrongThread" ? "wrong" : "thread-1";
+            parameters["turnId"] = variant == "wrongTurn" ? "wrong" : "turn-1";
+            var required = method switch { "rawResponse/completed" => "responseId", "rawResponseItem/completed" => "item", "model/verification" => "verifications", _ => "showBufferingUi" };
+            if (variant == "missing") parameters.Remove(required); else if (variant == "null") parameters[required] = null;
+            transport.Add(notice.ToJsonString());
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+            var reply = await Backend(transport).DecideAsync(Input(), default);
+            Assert.Equal(variant == "valid" ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+            if (variant == "valid") Assert.Null(reply.Usage); else Assert.Null(reply.CompletedJson);
+        }
+    }
+    [Theory]
+    [InlineData("rawResponse/completed")]
+    [InlineData("rawResponseItem/completed")]
+    [InlineData("model/verification")]
+    [InlineData("model/safetyBuffering/updated")]
+    public async Task PassiveTelemetryCannotHydrateProposalOrExceedBuffer(string method)
+    {
+        foreach (var flood in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+            var notice = JsonNode.Parse(PassiveTelemetry(method))!; notice["params"]!["threadId"] = "thread-1"; notice["params"]!["turnId"] = "turn-1";
+            if (flood && method == "rawResponse/completed") notice["params"]!["responseId"] = new string('r', 500);
+            for (var i = 0; i < (flood ? 90 : 1); i++) transport.Add(notice.ToJsonString());
+            transport.Frames.Enqueue(frames[2]); transport.Add(Summary(Decision()));
+            var reply = await Backend(transport).DecideAsync(Input(), default);
+            Assert.Equal(flood ? CodexReplyStatus.OutputInvalid : CodexReplyStatus.ConnectionFailure, reply.Status);
+            Assert.Null(reply.CompletedJson);
+        }
+    }
+    [Theory]
+    [InlineData(6, 6, 12)]
+    [InlineData(8, 4, 12)]
+    [InlineData(8, 5, 11)]
+    [InlineData(6, 6, 11)]
+    public async Task OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(long input, long output, long total)
+    {
+        var transport = Started(); transport.Add(Usage("turn-1", 7, 5, 12));
+        transport.Add(Usage("turn-1", input, output, total)); transport.Add(Completed(Decision()));
+        var backend = Backend(transport); var first = await backend.DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.Completed, first.Status); Assert.Null(first.Usage);
+        transport.Add("{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-2\",\"status\":\"inProgress\",\"items\":[]}}}");
+        transport.Add(Usage("turn-2", 10, 8, 18)); transport.Add(Completed(Decision("request-2"), "turn-2"));
+        var second = await backend.DecideAsync(Input("request-2"), default);
+        Assert.Equal(CodexReplyStatus.Completed, second.Status); Assert.Null(second.Usage);
+    }
     private static string RetryNotice() => new JsonObject
     {
         ["method"] = "error", ["params"] = new JsonObject { ["threadId"] = "thread-1", ["turnId"] = "turn-1",

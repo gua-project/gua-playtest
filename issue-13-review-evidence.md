@@ -303,3 +303,67 @@ completed Codex review without unresolved actionable findings and parent order
 approval. Production/OPEN-09/11 and real transport/Planner/OS/Trace/game acceptance
 remain unavailable/unverified. Issue #13 stays open. Group numbers are execution
 artifact groups, never a finite audit-budget reset.
+## Raw response/mixed-counter findings (evidence group 7)
+
+Actual Codex review 5481164206 of 2abc8e8 at 2026-10-10 23:19:55 UTC
+raised 4239559314 (rawResponse/completed before response) and 4239559317
+(opposing counter movement at equal total). Both were independently checked by
+the implementer against pinned [event handling](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/bespoke_event_handling.rs)
+and a concrete `(7,5,12)` then `(6,6,12)` trace. The same raw/model telemetry
+pattern was investigated in pinned [notification mappings](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/src/protocol/common.rs):
+rawResponseItem/completed, model/verification and model/safetyBuffering/updated
+also use thread/turn-correlated nonexperimental envelopes. Consolidated all four
+with unchanged pinned schemas (embedded offline, Apache notice already packaged),
+current ID validation before/after response and existing aggregate/frame/message/
+deadline bounds. Raw response usage/items never establish decision usage or
+hydrate canonical output. Experimental and optional-turn capability/hook lifecycle
+APIs are not enabled; real inherited capability/OS acceptance remains unverified.
+Opposing movement of any exposed cumulative component invalidates the epoch,
+including equal/decreasing total. Pure duplicate/regressive snapshots still pass
+existing regressions; current/subsequent usage stays unavailable after ambiguity.
+
+- `PassiveTelemetryIsValidatedBeforeAndAfterResponse` covers all four families,
+  valid pre/post-response, wrong thread/turn and missing/null required members.
+- `PassiveTelemetryCannotHydrateProposalOrExceedBuffer` requires missing-canonical
+  output refusal and actual aggregate-byte overflow for each family.
+- `OpposingUsageComponentsInvalidateCurrentAndLaterEpoch` covers opposite input/
+  output changes, equal/decreasing totals and subsequent turns.
+- [Focused TRX](docs/evidence/issue-13/batch-7/focused.trx)/[log](docs/evidence/issue-13/batch-7/focused.log):
+  235 pass, 0 fail/skip. Command `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter FullyQualifiedName~CodexProtocolTests`.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-7/pre-fix.trx)/[log](docs/evidence/issue-13/batch-7/pre-fix.log):
+  reviewed 2abc8e8 backend gives 8 intended assertion failures, 0 pass/skip.
+  Valid early telemetry reports OutputInvalid instead of Completed; mixed usage
+  reports synthetic CodexUsage instead of null. Fixed exact bytes restored in
+  finally. [Initial pre-fix](docs/evidence/issue-13/batch-7/initial-pre-fix.trx)
+  retained 8 correlation/usage assertion failures before test-order refinement.
+- [Initial focused TRX](docs/evidence/issue-13/batch-7/initial-focused.trx)/[log](docs/evidence/issue-13/batch-7/initial-focused.log)
+  retained 234 pass/1 fail: shortest raw-response flood was below 10000-byte
+  limit, yielding legitimate missing-canonical ConnectionFailure. Enlarged its
+  schema-valid response ID; limits and assertions unchanged. Earlier tool output
+  also reported CS8604 nullable telemetry predicate and a missing artifact output
+  directory; both concrete local causes corrected before successful executions.
+  Neither failure is acceptance evidence; no unchanged rerun was used to erase it.
+- [Restore](docs/evidence/issue-13/batch-7/restore.log), [build](docs/evidence/issue-13/batch-7/build.log),
+  [boundaries](docs/evidence/issue-13/batch-7/boundaries.log), [tests](docs/evidence/issue-13/batch-7/tests.log):
+  locked restore, Release build 0 warnings/errors and boundary checks pass;
+  Bridge 130 + Contracts 528 + Foundation 1163 = 1821 pass, 0 fail/skip.
+  [Bridge TRX](docs/evidence/issue-13/batch-7/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-7/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-7/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-7/package.log)/[JSON](docs/evidence/issue-13/batch-7/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-7/contracts.log)/[JSON](docs/evidence/issue-13/batch-7/contracts-evidence.json)
+  pass actual win-x64 archive/tool install/execute and native-free consumer;
+  commands `./scripts/package-smoke.ps1 -Rid win-x64`, `./scripts/contract-smoke.ps1`.
+  [Pack](docs/evidence/issue-13/batch-7/pack.log) restores normal lock state.
+  [Manifest](docs/evidence/issue-13/batch-7/manifest.json) includes backend, helper,
+  project/resources and tests source blob hashes plus original artifact bytes;
+  environment Windows 10.0.26300 / SDK 10.0.401, host Oct11 UTC+09 = Oct10 UTC.
+
+Source was final before validation; later changes are docs/evidence only.
+Independent audit remains 2/2 consumed, with no new agent/reset. Entire
+post-audit raw/model/usage/helper/resource/project/test/docs/evidence diff received
+NO further independent audit under concrete external-review correction path.
+Final HEAD actual CI/review and parent sequencing approval remain mandatory;
+earlier reviews prove only their snapshots. Production, OPEN-09/11 and real
+transport/Planner/OS/inherited-capability/Trace/game acceptance remain unverified.
+Issue #13 stays open. Execution group numbers never reset the audit budget.

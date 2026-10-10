@@ -165,7 +165,10 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     // Neither can provide measured decision usage, including subsequent turns.
                     if ((currentTotal > 0 && currentInput == 0 && currentOutput == 0) ||
                         ((currentInput < usageHighWater.InputTokens || currentOutput < usageHighWater.OutputTokens) &&
-                         currentTotal > usageHighWater.TotalTokens)) usageBaselineKnown = false;
+                         (currentTotal > usageHighWater.TotalTokens || currentInput > usageHighWater.InputTokens ||
+                          currentOutput > usageHighWater.OutputTokens)) ||
+                        (currentTotal < usageHighWater.TotalTokens && (currentInput > usageHighWater.InputTokens ||
+                         currentOutput > usageHighWater.OutputTokens))) usageBaselineKnown = false;
                     usageHighWater = new(Math.Max(usageHighWater.InputTokens, Nonnegative(total, "inputTokens")),
                         Math.Max(usageHighWater.OutputTokens, Nonnegative(total, "outputTokens")),
                         Math.Max(usageHighWater.TotalTokens, Nonnegative(total, "totalTokens")));
@@ -173,6 +176,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                         usageHighWater.OutputTokens - usageBaseline.OutputTokens,
                         usageHighWater.TotalTokens - usageBaseline.TotalTokens) : null;
                 }
+                else if (CodexItemSchema.IsTelemetry(method)) ValidateTelemetry(message, threadId, turnId);
                 else if (method == "model/rerouted") ValidateModelRerouted(message, threadId, turnId);
                 else if (method == "error")
                 {
@@ -312,9 +316,10 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 }
                 if (method == "turn/start" && announcedTurn is not null && notification is not null &&
                     (notification.StartsWith("item/", StringComparison.Ordinal) ||
-                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification is "thread/tokenUsage/updated" or "error" or "model/rerouted"))
+                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification is "thread/tokenUsage/updated" or "error" or "model/rerouted" || CodexItemSchema.IsTelemetry(notification)))
                 {
                     ValidateTurnNotice(message, threadId!, announcedTurn);
+                    if (CodexItemSchema.IsTelemetry(notification)) ValidateTelemetry(message, threadId!, announcedTurn);
                     if (notification == "model/rerouted") ValidateModelRerouted(message, threadId!, announcedTurn);
                     if (notification == "error") ValidateErrorNotice(message, threadId!, announcedTurn);
                     if (notification == "item/completed") ValidateItemCompleted(message, threadId!, announcedTurn);
@@ -464,6 +469,15 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         var parameters = message.GetProperty("params");
         if (!CodexItemSchema.ValidItemCompleted(parameters) || !parameters.GetProperty("completedAtMs").TryGetInt64(out _))
             throw new ProtocolException();
+    }
+    private static void ValidateTelemetry(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        ValidateTurnNotice(message, expectedThread, expectedTurn);
+        var method = message.GetProperty("method").GetString()!;
+        var parameters = message.GetProperty("params");
+        if (!CodexItemSchema.ValidTelemetry(method, parameters)) throw new ProtocolException();
+        if (method == "rawResponse/completed" && parameters.TryGetProperty("usage", out var usage) &&
+            usage.ValueKind != JsonValueKind.Null) ValidateUsage(usage);
     }
     private static void ValidateModelRerouted(JsonElement message, string expectedThread, string expectedTurn)
     {

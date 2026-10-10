@@ -7,10 +7,19 @@ namespace Gua.Playtest.Planners.Codex;
 // Derived from rust-v0.150.1 ThreadStartResponse.json,
 // ItemCompletedNotification.json and ErrorNotification.json (TurnError),
 // including reachable references.
-// Only annotations were removed. Apache-2.0.
+// Existing derived schemas remove annotations; additional telemetry schemas are copied unchanged. Apache-2.0.
 internal static class CodexItemSchema
 {
     private static readonly object Gate = new();
+    private static readonly Dictionary<string, JsonSchema> TelemetrySchemas = new(StringComparer.Ordinal)
+    {
+        ["rawResponse/completed"] = Load("RawResponseCompletedNotification"),
+        ["rawResponseItem/completed"] = Load("RawResponseItemCompletedNotification"),
+        ["model/verification"] = Load("ModelVerificationNotification"),
+        ["model/safetyBuffering/updated"] = Load("ModelSafetyBufferingUpdatedNotification")
+    };
+    public static bool IsTelemetry(string? method) => method is not null && TelemetrySchemas.ContainsKey(method);
+    public static bool ValidTelemetry(string method, JsonElement parameters) => Evaluate(TelemetrySchemas[method], parameters);
     private static readonly JsonSchema Schema = Load("ThreadItem");
     private static readonly JsonSchema ErrorSchema = Load("TurnError");
     private static readonly JsonSchema ThreadStartSchema = Load("ThreadStartResponse");
