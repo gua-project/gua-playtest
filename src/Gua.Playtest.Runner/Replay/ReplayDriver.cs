@@ -130,13 +130,23 @@ public sealed class ReplayDriver
         return result.Completed && result.Value?.Count == 0;
     }
     private sealed class CheckpointFeed(IReplayObservationFeed feed, RunSession run, PreparedCondition condition, ConditionSession session,
-        TaskCompletionSource<IReadOnlyList<RunEvent>> completion, TimeSpan deadline) : IRunObservationFeed
+        TaskCompletionSource<IReadOnlyList<RunEvent>> completion, TimeSpan deadline) : IRunObservationFeed, IRunConditionSchedule
     {
         private TimeSpan? next;
+        public TimeSpan? NextConditionEvaluationAt => next;
         public async ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         {
             var unit = await feed.CaptureAsync(condition, token).ConfigureAwait(false);
-            var evaluated = session.EvaluateAt(unit.Checkpoint, unit.Run.CapturedAt);
+            ConditionEvaluation evaluated;
+            try
+            {
+                if (unit?.Run is null || unit.Checkpoint is null) throw new ArgumentException("ReplayObservationMissing");
+                evaluated = session.EvaluateAt(unit.Checkpoint, unit.Run.CapturedAt);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                throw new RunFailureException(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract), exception);
+            }
             next = evaluated.NextEvaluationAt;
             IReadOnlyList<RunEvent>? events = evaluated.Evaluation.Error != EvaluationError.None
                 ? [new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract)]
@@ -154,9 +164,14 @@ public sealed class ReplayDriver
         }
         public ValueTask WaitForChangeAsync(CancellationToken token) => WaitAnyAsync(run, token,
             feed.WaitForChangeAsync,
-            cancellation => run.AuthoritativeRealClock.DelayAsync(Positive(deadline - run.AuthoritativeRealClock.Elapsed), cancellation),
-            cancellation => next is { } at ? run.AuthoritativeConditionClock.DelayAsync(Positive(at - run.AuthoritativeConditionClock.Elapsed), cancellation)
-                : new ValueTask(Task.Delay(Timeout.InfiniteTimeSpan, cancellation)));
+            cancellation => DelayValidatedAsync(run.AuthoritativeRealClock, deadline, cancellation));
+    }
+    private static async ValueTask DelayValidatedAsync(IClock clock, TimeSpan target, CancellationToken token)
+    {
+        await clock.DelayAsync(Positive(target - clock.Elapsed), token).ConfigureAwait(false);
+        if (clock.Elapsed >= target) return;
+        await FiniteOperation.DelayIndependentAsync(target - clock.Elapsed, token).ConfigureAwait(false);
+        if (clock.Elapsed < target) throw new ClockProviderException();
     }
     private sealed class GoalFeed(IRunObservationFeed feed, RunSession run, TaskCompletionSource<bool> reached) : IRunObservationFeed
     {

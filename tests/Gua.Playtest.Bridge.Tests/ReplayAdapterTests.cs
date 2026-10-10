@@ -147,6 +147,33 @@ public sealed class ReplayAdapterTests
     private static GuaReplayTimingPolicy Timing(bool strict = false) => new(1000, 100, 100, GuaSegmentClock.Realtime, strict, strict);
 
     [Fact]
+    public void SemanticTypeProviderFaultKeepsOriginalException()
+    {
+        var original = new ArgumentException("semantic provider fault");
+        var batch = new ReplayBatch(0, 1,
+            """{"schemaVersion":2,"steps":[{"action":"game_input","operation":"press_game_input_action","arguments":{"actionId":"jump"},"relativeMilliseconds":0,"sensitive":false}]}""",
+            "recorded", 0, TimeSpan.FromSeconds(2));
+        var host = new TimedHost();
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing(), _ => throw original);
+        Assert.Same(original, Assert.Throws<ArgumentException>(() => replay.Check(batch)));
+        Assert.Empty(host.Sent); Assert.Null(host.Segment);
+    }
+    [Fact]
+    public async Task SecretProviderFaultSurvivesPublicGuaSanitization()
+    {
+        var original = new IOException("secret provider fault");
+        var batch = new ReplayBatch(0, 1,
+            """{"schemaVersion":2,"steps":[{"action":"game_input","operation":"text_input","arguments":{},"relativeMilliseconds":0,"sensitive":true,"secretKey":"input"}]}""",
+            "recorded", 0, TimeSpan.FromSeconds(2));
+        var host = new TimedHost();
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing(), secretResolver: _ => throw original);
+        Assert.Equal(ReplayCheck.Approved, replay.Check(batch));
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => replay.PlayAsync(batch, new Calls(), default).AsTask()));
+        Assert.Contains(nameof(SecretProviderFaultSurvivesPublicGuaSanitization), original.StackTrace);
+        Assert.Empty(host.Sent); Assert.Null(host.Segment);
+    }
+
+    [Fact]
     public async Task PublicTimedImportKeepsEqualOffsetOrderAndNormalRelease()
     {
         var host = new TimedHost(); var calls = new Calls();

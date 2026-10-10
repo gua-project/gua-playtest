@@ -32,12 +32,17 @@ public sealed class GuaTimedReplay : IReplayPlayback
     }
     public ReplayCheck Check(ReplayBatch batch, bool starting = true)
     {
+        Exception? providerFault = null;
         GuaTimedSegment segment;
         try
         {
-            segment = Import(batch);
+            segment = Import(batch, valueType is null ? null : name =>
+            {
+                try { return valueType(name); }
+                catch (Exception exception) { providerFault = exception; throw; }
+            });
         }
-        catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or OverflowException or InvalidOperationException)
+        catch (Exception exception) when (providerFault is null && exception is (JsonException or InvalidDataException or ArgumentException or OverflowException or InvalidOperationException))
         { return ReplayCheck.Unsupported; }
         if (!host.OrderedApplication || segment.Clock == GuaSegmentClock.Simulation && string.IsNullOrWhiteSpace(host.SimulationScope) ||
             (segment.RequireApplicationTimes || segment.RequireSameTickApplication) && !host.ApplicationTimes ||
@@ -48,14 +53,28 @@ public sealed class GuaTimedReplay : IReplayPlayback
         => new(Task.Run(async () =>
         {
             var queued = new QueuedHost(host, calls, () => admit(batch, false), token);
-            var result = await GuaTimedSegmentReplay.ReplayAsync(queued, Import(batch), secretResolver, token).ConfigureAwait(false);
+            Exception? secretFault = null;
+            GuaTimedSegmentResult result;
+            try
+            {
+                result = await GuaTimedSegmentReplay.ReplayAsync(queued, Import(batch), secretResolver is null ? null : name =>
+                {
+                    try { return secretResolver(name); }
+                    catch (Exception exception) { secretFault = exception; throw; }
+                }, token).ConfigureAwait(false);
+            }
+            catch when (secretFault is not null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(secretFault).Throw();
+                throw;
+            }
             var count = result.Inputs.Count(i => i.ResultReceivedMilliseconds is not null && i.Succeeded is not null);
             var status = result.Outcome == GuaSegmentOutcome.Succeeded ? ReplayReceiptStatus.Succeeded
                 : result.Inputs.Any(i => i.SentMilliseconds is not null && i.ResultReceivedMilliseconds is null)
                     ? ReplayReceiptStatus.Unconfirmed : ReplayReceiptStatus.Failed;
             return new ReplayReceipt(status, count, result.NeutralConfirmed && result.CleanupSucceeded, queued.OriginalException);
         }, token));
-    private GuaTimedSegment Import(ReplayBatch batch)
+    private GuaTimedSegment Import(ReplayBatch batch, Func<string, GuaGameInputValueType?>? importValueType = null)
     {
         if (batch.Timing is not ("recorded" or "conditionSynchronized") || batch.OffsetBaseMilliseconds < 0)
             throw new InvalidDataException("ReplayTimingInvalid");
@@ -71,7 +90,7 @@ public sealed class GuaTimedReplay : IReplayPlayback
         if (duration > policy.MaxSegmentMilliseconds) throw new InvalidDataException("ReplaySegmentTooLong");
         var execution = checked((long)batch.Timeout.TotalMilliseconds - policy.CleanupMilliseconds);
         var segment = GuaTimedSegmentImport.FromRecording(json.ToJsonString(), duration, policy.MaxLatenessMilliseconds,
-            execution, policy.CleanupMilliseconds, valueType) with
+            execution, policy.CleanupMilliseconds, importValueType ?? valueType) with
         {
             Clock = policy.Clock, RequireApplicationTimes = policy.RequireApplicationTimes,
             RequireSameTickApplication = policy.RequireSameTickApplication

@@ -71,11 +71,12 @@ public sealed class ReplayTests
         public Action? OnCapture { get; set; }
         public Action? OnWait { get; set; }
         public ConditionObservationUnit? PointOverride { get; set; }
+        public Func<ReplayObservation, ReplayObservation>? EnvelopeOverride { get; set; }
         public int CheckpointCaptures;
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { OnCapture?.Invoke(); return ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit(Goal), Unit(Failure))); }
         public async ValueTask<ReplayObservation> CaptureAsync(PreparedCondition point, CancellationToken token)
-        { CheckpointCaptures++; return new(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); }
+        { CheckpointCaptures++; var unit = new ReplayObservation(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); return EnvelopeOverride?.Invoke(unit) ?? unit; }
         public ValueTask WaitForChangeAsync(CancellationToken token)
         { if (OnWait is { } wake) { wake(); return ValueTask.CompletedTask; } return new(Task.Delay(Timeout.InfiniteTimeSpan, token)); }
     }
@@ -110,8 +111,8 @@ public sealed class ReplayTests
     private static RunLimits Limits(long actions = 10) => new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1),
         TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1), actions, 2, 1, 1024);
     private static async Task<ReplayOutcome> Run(ResolvedReplay replay, Feed feed, IReplayPlayback playback, IClock clock,
-        OwnedCleanup? cleanup = null, long actions = 10, bool initial = true, CancellationToken token = default)
-        => await new ReplayDriver().ExecuteAsync(replay, Limits(actions), clock, clock, cleanup ?? new(), playback,
+        OwnedCleanup? cleanup = null, long actions = 10, bool initial = true, CancellationToken token = default, IClock? conditionClock = null)
+        => await new ReplayDriver().ExecuteAsync(replay, Limits(actions), clock, conditionClock ?? clock, cleanup ?? new(), playback,
             async (run, _, cancellation) =>
             {
                 var capture = run.ArmRunningBoundary(); var observation = await feed.CaptureAsync(cancellation);
@@ -253,6 +254,54 @@ public sealed class ReplayTests
             var playback = new Playback(); var result = await Run(replay, feed, playback, clock);
             Assert.Equal(ResultStatus.Invalid, result.Run.Primary.Status); Assert.Equal(0, playback.Sends);
         }
+    }
+    [Theory]
+    [InlineData("future")]
+    [InlineData("beforeArrival")]
+    [InlineData("nullCheckpoint")]
+    [InlineData("nullRun")]
+    public async Task InvalidCheckpointEnvelopeIsContractFailure(string fault)
+    {
+        using var files = new Fixture(checkpoints: [0]); var clock = new MonotonicClock();
+        var feed = new Feed(clock)
+        {
+            EnvelopeOverride = unit => fault switch
+            {
+                "future" => unit with { Run = unit.Run with { CapturedAt = TimeSpan.FromDays(1) } },
+                "beforeArrival" => unit with { Run = unit.Run with { CapturedAt = TimeSpan.Zero } },
+                "nullCheckpoint" => unit with { Checkpoint = null! },
+                _ => unit with { Run = null! }
+            }
+        };
+        var playback = new Playback(); var result = await Run(await files.Load(), feed, playback, clock);
+        Assert.Equal(ResultStatus.Invalid, result.Run.Primary.Status);
+        Assert.Equal(RunReason.ObservationContractViolation, result.Run.Primary.Cause.Reason);
+        Assert.Equal(0, playback.Sends);
+    }
+    private sealed class EarlyFrozenClock : IClock
+    {
+        public TimeSpan Elapsed => TimeSpan.Zero;
+        public int Delays;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token = default)
+        { token.ThrowIfCancellationRequested(); Delays++; return ValueTask.CompletedTask; }
+    }
+    [Fact]
+    public async Task PrivateTemporalCheckpointRejectsEarlyFrozenClockWake()
+    {
+        using var files = new Fixture(checkpoints: [0]);
+        var plan = JsonNode.Parse(File.ReadAllText(files.PlanPath))!;
+        plan["checkpoints"]![0]!["condition"] = new JsonObject
+        { ["kind"] = "time", ["forMilliseconds"] = 20, ["condition"] = JsonNode.Parse(Assertion) };
+        File.WriteAllText(files.PlanPath, plan.ToJsonString());
+        var real = new MonotonicClock(); var condition = new EarlyFrozenClock();
+        var childUnit = new ConditionObservationUnit([KeyValuePair.Create("$/condition", Unit(true).Leaves["$"])]);
+        var feed = new Feed(condition) { PointOverride = childUnit }; var playback = new Playback();
+        var result = await Run(await files.Load(), feed, playback, real, conditionClock: condition);
+        Assert.Equal(ResultStatus.Invalid, result.Run.Primary.Status);
+        Assert.Equal(RunOrigin.Clock, result.Run.Primary.Cause.Origin);
+        Assert.Equal(RunReason.InvalidContract, result.Run.Primary.Cause.Reason);
+        Assert.InRange(condition.Delays, 1, 2); Assert.InRange(feed.CheckpointCaptures, 1, 3);
+        Assert.Equal(0, playback.Sends);
     }
     [Fact]
     public async Task SimulationGuardUsesSerializedOwnerWithoutNestedQueueDeadlock()
