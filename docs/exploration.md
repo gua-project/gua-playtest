@@ -27,6 +27,9 @@ invent numeric zero. Progress never substitutes for the configured Goal.
 Milestones use existing prepared conditions and temporal evaluation. Initially
 True milestones establish a baseline. Each later first False-to-True attainment
 counts once, including transient attainment observed between decision boundaries.
+Private temporal deadlines join the existing RunMonitor condition clock wakes;
+each wake requests fresh capture without interrupting approved work or granting
+result authority.
 Metrics have a stable configured ID, direction and positive `MinImprovement`.
 Only a certified change from the best value reaching that threshold replaces the
 best. Small changes accumulate against that best; deterioration, recovery and

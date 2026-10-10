@@ -15,12 +15,13 @@ public static class ExploreDriver
     private static readonly ConditionalWeakTable<RunSession, State> States = new();
 
     private sealed class Feed(IExploreObservationFeed source, RunSession run, int capacity,
-        Action<ProgressObservation> validateProgress) : IRunObservationFeed
+        Action<ProgressObservation> validateProgress, Func<TimeSpan?> nextProgressEvaluation) : IRunObservationFeed, IRunConditionSchedule
     {
         private readonly Queue<ExploreObservation> pending = new();
         private readonly object sync = new();
         public ExploreObservation? Latest;
         public ExploreCalls? Calls;
+        public TimeSpan? NextConditionEvaluationAt => nextProgressEvaluation();
         public async ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         {
             Calls?.Pump();
@@ -52,7 +53,7 @@ public static class ExploreDriver
             try { await await Task.WhenAny(change, pending).ConfigureAwait(false); }
             finally
             {
-                obsolete.Cancel();
+                FiniteOperation.CancelSafely(obsolete, run.RecordException);
                 // A losing notification's real failure remains causal evidence; it cannot be hidden by queue readiness.
                 _ = change.ContinueWith(t =>
                 {
@@ -91,7 +92,7 @@ public static class ExploreDriver
             recordProgress?.Invoke(sample);
             if (sample.ObservationViolation)
                 run.PostProviderException(new RunFailureException(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract)));
-        }) { Latest = initial };
+        }, () => tracker.NextEvaluationAt) { Latest = initial };
         var summary = tracker.Initial;
         recordProgress?.Invoke(summary);
         if (summary.ObservationViolation)

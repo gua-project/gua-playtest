@@ -20,6 +20,8 @@ public sealed class ExploreTests
         public TimeSpan Elapsed { get; private set; }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
+            if (duration <= TimeSpan.Zero) return ValueTask.CompletedTask;
             var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             token.Register(() => completion.TrySetCanceled(token));
             timers.Add((Elapsed + duration, completion)); return new(completion.Task);
@@ -167,6 +169,8 @@ public sealed class ExploreTests
         public bool Goal;
         public bool Failure;
         public double? PrivateMetric;
+        public ConditionObservationUnit? PrivateMilestone;
+        public Func<CancellationToken, ValueTask>? WaitOverride;
         public Func<ExploreObservation, ExploreObservation>? TransformCapture;
         public ExploreObservation Frame()
         {
@@ -178,10 +182,12 @@ public sealed class ExploreTests
             };
             var state = new ProjectedPlannerState("observation-" + Captures, observation,
                 JsonNode.Parse("""{"schemaVersion":1,"sessionEpoch":1,"revision":1,"context":"fixture","actions":[]}""")!.AsObject(), [], []);
-            return new(new(clock.Elapsed, Unit(Goal), Unit(Failure)), state, Progress(clock, PrivateMetric, situation: Situation()));
+            var progress = Progress(clock, PrivateMetric, situation: Situation());
+            if (PrivateMilestone is not null) progress = progress with { Milestones = new Dictionary<string, ConditionObservationUnit> { ["milestone"] = PrivateMilestone } };
+            return new(new(clock.Elapsed, Unit(Goal), Unit(Failure)), state, progress);
         }
         public ValueTask<ExploreObservation> CaptureAsync(CancellationToken token) { token.ThrowIfCancellationRequested(); Captures++; var frame = Frame(); return ValueTask.FromResult(TransformCapture?.Invoke(frame) ?? frame); }
-        public async ValueTask WaitForChangeAsync(CancellationToken token) { await Task.Delay(Timeout.Infinite, token); }
+        public async ValueTask WaitForChangeAsync(CancellationToken token) { if (WaitOverride is { } wait) await wait(token); else await Task.Delay(Timeout.Infinite, token); }
     }
     private sealed class Planner(Func<int, JsonObject> proposal) : IPlanner<PlannerInputDocument, PlannerReply>
     {
@@ -219,9 +225,9 @@ public sealed class ExploreTests
             Run.BeginPreparation(); Run.BeginRunning();
             Gate = new(Run, Clock, new Authority(), "run-1", "public objective", Limits); Feed = new(Clock);
         }
-        public ValueTask<bool> Execute(Planner planner, Work work, CancellationToken token = default)
+        public ValueTask<bool> Execute(Planner planner, Work work, CancellationToken token = default, Action<ProgressSummary>? record = null)
             => ExploreDriver.ExecuteRunningAsync(Run, Gate, planner, Feed, work, Definitions, Limits, Feed.Frame(),
-                _ => ValueTask.FromResult(true), Cleanup, token);
+                _ => ValueTask.FromResult(true), Cleanup, token, record);
     }
     [Theory]
     [InlineData(false, ResultStatus.Unverified, RunReason.ExplorationFinished)]
@@ -427,6 +433,71 @@ public sealed class ExploreTests
             { ["hp"] = new("scope", true, [new("target", Unavailable: code)]) } };
         var sample = tracker.ObserveSample(frame);
         Assert.False(sample.Known); Assert.Equal(code == EvaluationCode.None, sample.ObservationViolation);
+    }
+    [Fact]
+    public async Task PrivateMilestoneTimerCapturesAttainmentWithoutInterruptingApprovedWork()
+    {
+        var held = PreparedCondition.Create(new JsonObject { ["kind"] = "time", ["forMilliseconds"] = 100,
+            ["condition"] = new JsonObject { ["kind"] = "assertion", ["read"] = Read("bool"), ["quantifier"] = "one", ["operator"] = "equals",
+                ["expected"] = new JsonObject { ["type"] = "bool", ["value"] = true } } }, new(100, 1024));
+        var s = new Setup(definitions: new([new("milestone", held)], []));
+        static ConditionObservationUnit HeldUnit(bool value) => new([KeyValuePair.Create("$/condition",
+            new ConditionLeafObservation("scope", true, [new("target", "{\"type\":\"bool\",\"value\":" + (value ? "true" : "false") + "}")], true))]);
+        s.Feed.PrivateMilestone = HeldUnit(false);
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var improvement = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Feed.TransformCapture = frame => { if (frame.Run.CapturedAt == TimeSpan.FromMilliseconds(10)) first.TrySetResult();
+            if (frame.Run.CapturedAt == TimeSpan.FromMilliseconds(110)) attained.TrySetResult(); return frame; };
+        var summaries = new List<ProgressSummary>(); var planner = new Planner(i => i == 1 ? Action() : Finish());
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); s.Clock.At(10); s.Feed.PrivateMilestone = HeldUnit(true); return new ExploreSend<bool>(true, true); }, token);
+            await finish.Task.WaitAsync(token); return new(ExploreWorkStatus.Completed, true);
+        });
+        var pending = s.Execute(planner, work, record: summary => { summaries.Add(summary); if (summary.Improved) improvement.TrySetResult(); }).AsTask();
+        try
+        {
+            await first.Task.WaitAsync(TimeSpan.FromSeconds(5)); s.Clock.At(110);
+            Assert.Same(attained.Task, await Task.WhenAny(attained.Task, Task.Delay(1000)));
+            await improvement.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(pending.IsCompleted); Assert.Single(planner.Inputs);
+            Assert.Contains(summaries, x => x.Improved);
+            s.Clock.At(150); s.Feed.PrivateMilestone = HeldUnit(false); finish.TrySetResult();
+            Assert.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(0, s.Run.Budget.Snapshot.RecoveryDecisions); Assert.Equal(1, work.Calls);
+        }
+        finally { finish.TrySetResult(); if (!pending.IsCompleted) { s.Clock.At(5000); await pending.WaitAsync(TimeSpan.FromSeconds(5)); } }
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task QueueWakeContainsCancellationCallbackFaultAndRetainsLosingProviderFault(bool providerFault)
+    {
+        var s = new Setup(); var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); bool registered = false;
+        s.Feed.WaitOverride = token =>
+        {
+            if (registered) return new ValueTask(Task.Delay(Timeout.Infinite, token));
+            registered = true;
+            token.Register(() => { if (providerFault) source.TrySetException(new InvalidDataException("actual-source")); else source.TrySetCanceled(token);
+                throw new IOException("callback-diagnostic"); });
+            entered.TrySetResult(); return new(source.Task);
+        };
+        var planner = new Planner(i => i == 1 ? Action() : Finish());
+        var work = new Work(async (_, calls, token) =>
+        {
+            await entered.Task.WaitAsync(token);
+            await calls.SendAsync(0, before => { before(); return new ExploreSend<bool>(true, true); }, token);
+            return new(ExploreWorkStatus.Completed, true);
+        });
+        var completed = await s.Execute(planner, work).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains(s.Run.Exceptions, x => x.Type == typeof(AggregateException).FullName);
+        if (providerFault)
+        {
+            Assert.False(completed); Assert.Equal(RunOrigin.Host, s.Run.Primary!.Cause.Origin);
+            Assert.Contains(s.Run.Exceptions, x => x.Type == typeof(InvalidDataException).FullName);
+        }
+        else { Assert.True(completed); Assert.Null(s.Run.Primary); Assert.Equal(1, s.Run.Budget.Snapshot.Actions); }
     }
 }
 

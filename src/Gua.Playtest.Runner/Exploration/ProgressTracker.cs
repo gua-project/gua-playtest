@@ -35,6 +35,7 @@ public sealed class ProgressTracker
     private JsonObject? situation;
     public ExplorePhase Phase { get; private set; }
     public StallSignal Signal { get; private set; }
+    public TimeSpan? NextEvaluationAt { get; private set; }
 
     public ProgressTracker(ProgressDefinitions definitions, ResourceLimits limits, IClock conditionClock,
         ProgressObservation initial)
@@ -73,10 +74,14 @@ public sealed class ProgressTracker
             throw new ArgumentException("ProgressCaptureInvalid");
         lastCapture = observation.CapturedAt;
         bool defined = milestones.Length + metrics.Length != 0, known = defined, improved = false, violation = false;
+        NextEvaluationAt = null;
         foreach (var state in milestones)
         {
             var unit = observation.Milestones.GetValueOrDefault(state.Definition.Id) ?? new ConditionObservationUnit([]);
-            var result = state.Session.EvaluateAt(unit, observation.CapturedAt).Evaluation;
+            var evaluation = state.Session.EvaluateAt(unit, observation.CapturedAt);
+            if (evaluation.NextEvaluationAt is { } next && (!NextEvaluationAt.HasValue || next < NextEvaluationAt.Value))
+                NextEvaluationAt = next;
+            var result = evaluation.Evaluation;
             violation |= result.Error != EvaluationError.None;
             known &= result.Error == EvaluationError.None && result.Truth != TruthValue.Unknown;
             if (result.Error != EvaluationError.None || result.Truth == TruthValue.Unknown) continue;
