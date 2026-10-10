@@ -104,7 +104,15 @@ public sealed class ReplayDriver
                     var end = Math.Min(cursor + 1000, replay.Checkpoints.Where(p => p.BeforeStep > cursor)
                         .Select(p => p.BeforeStep).Append(replay.StepCount).Min());
                     var batch = replay.Batch(cursor, end, Min(limits.ActionTimeout, limits.WaitTimeout));
-                    if (playback.Check(batch) != ReplayCheck.Approved)
+                    ReplayCheck preflight;
+                    try { preflight = playback.Check(batch); }
+                    catch (RunFailureException) { throw; }
+                    catch (OperationCanceledException interrupted) when (token.IsCancellationRequested &&
+                        (interrupted.CancellationToken == token || cancellationToken.IsCancellationRequested && interrupted.CancellationToken == cancellationToken))
+                    { throw; }
+                    catch (Exception exception)
+                    { throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), exception); }
+                    if (preflight != ReplayCheck.Approved)
                         throw Failure(RunReason.ActionFailed, RunOrigin.Host);
                     active = owner.ApproveOperation(batch.Count, limits.WaitTimeout);
                     if (active is null) return false;

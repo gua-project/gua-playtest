@@ -88,11 +88,12 @@ public sealed class ReplayTests
         public ReplayReceiptStatus Status = ReplayReceiptStatus.Succeeded;
         public bool Neutral = true, SkipSend, Duplicate, GuardTwice, OmitGuard;
         public Action? AfterPlayback;
+        public Func<ReplayCheck>? PreflightOverride;
         public Action? OnSend { get; set; }
         public Func<CancellationToken, ValueTask>? BeforeResult { get; set; }
         public Func<CancellationToken, ValueTask>? BetweenSends { get; set; }
         public List<int> Order { get; } = [];
-        public ReplayCheck Check(ReplayBatch batch, bool starting = true) { Checks++; return RejectAfter is { } at && Sends >= at ? ReplayCheck.PermissionDenied : ReplayCheck.Approved; }
+        public ReplayCheck Check(ReplayBatch batch, bool starting = true) { Checks++; return PreflightOverride is { } preflight ? preflight() : RejectAfter is { } at && Sends >= at ? ReplayCheck.PermissionDenied : ReplayCheck.Approved; }
         public async ValueTask<ReplayReceipt> PlayAsync(ReplayBatch batch, IReplayCalls calls, CancellationToken token)
         {
             Plays++;
@@ -580,7 +581,29 @@ public sealed class ReplayTests
             new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
         var result = await Run(await files.Load(), new(clock), playback, clock);
         Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status); Assert.Equal(0, host.Sends);
+        Assert.Equal(RunOrigin.Host, result.Run.Primary.Cause.Origin); Assert.Equal(1, result.Run.ExitCode);
         Assert.Contains(result.Run.Exceptions, e => e.Type == typeof(ArgumentException).FullName && e.StackTrace is not null);
+    }
+    [Theory]
+    [InlineData("caller", RunReason.Cancelled, RunOrigin.User, 4)]
+    [InlineData("alien", RunReason.ExecutionError, RunOrigin.Host, 1)]
+    [InlineData("typed", RunReason.ActionFailed, RunOrigin.Condition, 1)]
+    [InlineData("clock", RunReason.InvalidContract, RunOrigin.Clock, 2)]
+    public async Task PreflightRetainsClassifiedCauseAndCallerIdentity(string mode, RunReason reason, RunOrigin origin, int exit)
+    {
+        using var files = new Fixture(); var clock = new MonotonicClock(); using var cancellation = new CancellationTokenSource();
+        var original = new IOException("preflight boundary");
+        var playback = new Playback { PreflightOverride = () =>
+        {
+            if (mode == "caller") { cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token); }
+            if (mode == "alien") throw new OperationCanceledException(new CancellationToken(true));
+            if (mode == "clock") throw new ClockProviderException(original);
+            throw new RunFailureException(new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Condition), original);
+        } };
+        var result = await Run(await files.Load(), new(clock), playback, clock, token: cancellation.Token);
+        Assert.Equal(reason, result.Run.Primary.Cause.Reason); Assert.Equal(origin, result.Run.Primary.Cause.Origin);
+        Assert.Equal(exit, result.Run.ExitCode); Assert.Equal(0, playback.Plays); Assert.Equal(0, playback.Sends);
+        if (mode is "typed" or "clock") Assert.Contains(result.Run.Exceptions, e => e.Type == typeof(IOException).FullName);
     }
     private sealed class SimulationHost : IGuaTimedSegmentHost
     {

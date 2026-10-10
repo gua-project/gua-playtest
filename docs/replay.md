@@ -59,6 +59,10 @@ bounded by the concrete transport's request policy.
 Caller cancellation retains the supplied token through queued reads, sends and blocked
 queue writers. Queue revocation and unrelated provider cancellation do not impersonate
 caller cancellation.
+Adapter capability/admission exceptions during preflight are Host ExecutionError with
+the original exception retained, matching queued dispatch faults. Existing typed causes
+and requested caller cancellation remain authoritative; a failed preflight starts no
+playback and consumes no action.
 
 If an adapter reports enqueue without invoking `beforeSend`, the owner records an
 uncertain consumed attempt and rejects the adapter contract. That evidence cannot
