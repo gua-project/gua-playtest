@@ -51,6 +51,15 @@
           "JsonSchema.Net": "7.3.4"
         }
       },
+      "Gua.Testing.Recording": {
+        "type": "Transitive",
+        "resolved": "1.1.1",
+        "contentHash": "iMKFDHIJek8xNEvj/grxDbCcn3oqTDySYCA8BBf9AIldZp5xBkuP+HKxuI16+7sReUoyjJMEAHxlz3aP5/aWOQ==",
+        "dependencies": {
+          "Gua.Runtime": "1.1.1",
+          "Gua.Testing": "1.1.1"
+        }
+      },
       "Humanizer.Core": {
         "type": "Transitive",
         "resolved": "2.14.1",
@@ -159,7 +168,8 @@
         "dependencies": {
           "Gua.Playtest.Core": "[0.1.0-dev, )",
           "Gua.Runtime": "[1.1.1, 1.1.1]",
-          "Gua.Testing": "[1.1.1, 1.1.1]"
+          "Gua.Testing": "[1.1.1, 1.1.1]",
+          "Gua.Testing.Recording": "[1.1.1, 1.1.1]"
         }
       }
     }
