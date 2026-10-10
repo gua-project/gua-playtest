@@ -394,6 +394,36 @@ public sealed class CodexProtocolTests
         Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input(), default)).Status);
         Assert.DoesNotContain(transport.Writes, x => x.Contains("public objective"));
     }
+    [Theory]
+    [InlineData("hook/started", false)]
+    [InlineData("hook/started", true)]
+    [InlineData("hook/completed", false)]
+    [InlineData("hook/completed", true)]
+    public async Task InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(string method, bool beforeResponse)
+    {
+        foreach (var threadScoped in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            transport.Add(new JsonObject { ["method"] = method, ["params"] = new JsonObject
+            {
+                ["threadId"] = "thread-1", ["turnId"] = threadScoped ? null : "turn-1",
+                ["run"] = new JsonObject { ["id"] = "hook-1", ["displayOrder"] = 1,
+                    ["entries"] = new JsonArray(), ["eventName"] = "userPromptSubmit",
+                    ["executionMode"] = "sync", ["handlerType"] = "command",
+                    ["scope"] = threadScoped ? "thread" : "turn", ["sourcePath"] = "/public/hooks.json",
+                    ["startedAt"] = 1, ["status"] = method == "hook/started" ? "running" : "completed" }
+            } }.ToJsonString());
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+            var backend = Backend(transport); var reply = await backend.DecideAsync(Input(), default);
+            Assert.Equal(CodexReplyStatus.ConnectionFailure, reply.Status); Assert.Null(reply.CompletedJson); Assert.Null(reply.Usage);
+            Assert.Equal(PlannerReplyStatus.ConnectionFailure, (await new CodexPlannerAdapter(new ReplyBackend(reply)).DecideAsync(Input(), default)).Status);
+            Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+            Assert.DoesNotContain(transport.Writes, x => x.Contains("hooks.json"));
+        }
+    }
     private static string RetryNotice() => new JsonObject
     {
         ["method"] = "error", ["params"] = new JsonObject { ["threadId"] = "thread-1", ["turnId"] = "turn-1",

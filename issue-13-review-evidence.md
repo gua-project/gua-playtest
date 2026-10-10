@@ -465,3 +465,58 @@ sequencing approval; prior HEAD results cannot authorize it. Production and
 OPEN-09/11, real Planner/provider/OS/inherited-capability/Trace/game acceptance
 remain unavailable/unverified and issue #13 stays open. Execution artifact group
 9 is provenance only, not a new audit task/batch or budget reset.
+## Inherited hook ordering finding (evidence group 10)
+
+Actual Codex review 5481221862 of integrated 0bc5270 at
+2026-10-10 23:44:41 UTC raised 4239618003: valid hook/started/completed can
+race turn/start response and were rejected before/ignored afterward. Pinned
+[publisher](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/bespoke_event_handling.rs)
+and [start ordering](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/request_processors/turn_processor.rs)
+support the finding. Chose the review's conservative consistent-refusal option:
+every Codex hook/* lifecycle notice returns ConnectionFailure before/after RPC
+responses, with no proposal/usage, and permanently closes the converter. This
+does not change inherited configuration or permissions and cannot prevent an
+upstream hook that has already executed; no real provider/OS capability boundary
+is claimed. Shared RunExecutor initial-observation hook from PR41 is separate,
+unchanged, and not duplicated.
+
+`InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse` covers both lifecycle
+methods, both RPC orderings, thread-scoped nullable turn ID and correlated turn
+scope, absent output/usage, Planner adapter status and closed reuse. Fixture uses
+the pinned HookRunSummary required fields/enums and only Fake transport; no hook
+command/file is executed. Fixed protocol schemas:
+[started](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v2/HookStartedNotification.json),
+[completed](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v2/HookCompletedNotification.json).
+
+- [Focused TRX](docs/evidence/issue-13/batch-10/focused.trx)/[log](docs/evidence/issue-13/batch-10/focused.log):
+  245 pass, 0 fail/skip; command `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter FullyQualifiedName~CodexProtocolTests`.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-10/pre-fix.trx)/[log](docs/evidence/issue-13/batch-10/pre-fix.log):
+  0bc5270 backend gives 4 intended assertion failures, 0 pass/skip; early notices
+  give OutputInvalid and later notices Completed instead of consistent
+  ConnectionFailure. Exact fixed bytes restored in finally. These are intended
+  status assertions, not build/environment errors.
+- [Restore](docs/evidence/issue-13/batch-10/restore.log), [build](docs/evidence/issue-13/batch-10/build.log),
+  [boundaries](docs/evidence/issue-13/batch-10/boundaries.log), [tests](docs/evidence/issue-13/batch-10/tests.log):
+  locked restore, Release build 0 warnings/errors and boundaries pass;
+  integrated Bridge 153 + Contracts 528 + Foundation 1244 =
+  **1925 pass, 0 fail/skip**, including shared Execution/Explore/Replay regressions.
+  [Bridge TRX](docs/evidence/issue-13/batch-10/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-10/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-10/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-10/package.log)/[JSON](docs/evidence/issue-13/batch-10/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-10/contracts.log)/[JSON](docs/evidence/issue-13/batch-10/contracts-evidence.json)
+  pass actual archive/tool install/execute and native-free packaged consumer.
+  Commands `./scripts/package-smoke.ps1 -Rid win-x64`, `./scripts/contract-smoke.ps1`;
+  [pack](docs/evidence/issue-13/batch-10/pack.log) preserves merged normal lock state.
+  [Manifest](docs/evidence/issue-13/batch-10/manifest.json) pins tested integrated base,
+  merged main, changed source blobs and original artifact bytes. Windows 10.0.26300
+  / SDK 10.0.401; host Oct11 UTC+09 = Oct10 UTC.
+
+Runtime/tests were final before execution; subsequent edits are docs/evidence.
+Independent audit remains 2/2 consumed, no new agent/reset. Post-audit hook refusal
+and prior corrections/integration received NO additional independent audit under
+the concrete external-review correction path. New final HEAD requires actual CI,
+completed actual Codex review with no actionable findings and parent sequencing
+approval. Production, OPEN-09/11 and real provider/OS/inherited-capability/Planner/
+Trace/game acceptance remain unverified; issue #13 stays open. Execution artifact
+groups never reset the finite audit counter.

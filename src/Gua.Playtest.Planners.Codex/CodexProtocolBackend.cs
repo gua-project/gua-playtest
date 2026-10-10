@@ -133,6 +133,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // Server requests are capabilities we never grant (including approvals and tools).
                 if (message.TryGetProperty("id", out _)) throw new ProtocolException();
                 var method = message.GetProperty("method").GetString();
+                RejectInheritedHook(method);
                 if (string.IsNullOrWhiteSpace(method)) throw new ProtocolException();
                 var parameters = message.GetProperty("params");
                 if (CodexItemSchema.IsStartupNotice(method)) { ValidateStartupNotice(method!, parameters, threadId); continue; }
@@ -291,6 +292,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // 0.150.1 sends benign configuration/remote-control status notices
                 // after initialize. They grant no capabilities and still consume bounds.
                 var notification = message.GetProperty("method").GetString();
+                RejectInheritedHook(notification);
                 if (CodexItemSchema.IsStartupNotice(notification))
                 { ValidateStartupNotice(notification!, message.GetProperty("params"), threadId ?? announcedThread); continue; }
                 if (notification == "warning")
@@ -489,6 +491,12 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         if (parameters.GetProperty("fromModel").ValueKind != JsonValueKind.String ||
             parameters.GetProperty("toModel").ValueKind != JsonValueKind.String ||
             parameters.GetProperty("reason").GetString() != "highRiskCyberActivity") throw new ProtocolException();
+    }
+    private static void RejectInheritedHook(string? method)
+    {
+        // Notice refusal cannot prevent upstream execution. No production host isolation
+        // or inherited hook capability has been accepted under OPEN-09.
+        if (method?.StartsWith("hook/", StringComparison.Ordinal) == true) throw new BackendException();
     }
     private static void ValidateStartupNotice(string method, JsonElement parameters, string? expectedThread)
     {

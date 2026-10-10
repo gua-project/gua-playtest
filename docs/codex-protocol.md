@@ -102,7 +102,12 @@ Nonfatal `deprecationNotice`, `guardianWarning` and `configWarning` notices are
 validated offline with unchanged pinned schemas and consumed before/after thread
 and turn start responses within existing bounds. Guardian targets must match the
 known/announced thread. These notices neither change configuration nor authorize
-capabilities, and their raw contents are not returned in the backend reply. Pinned nonfatal `warning` notices
+capabilities, and their raw contents are not returned in the backend reply.
+Codex `hook/*` lifecycle notices instead refuse the exchange with
+ConnectionFailure before or after RPC responses and permanently close the
+converter. Inherited hook execution is not accepted under OPEN-09. This refusal
+cannot prevent execution already performed by upstream; it is no OS isolation
+proof. It does not modify the separate bounded Runner initial-observation hook. Pinned nonfatal `warning` notices
 require a string message and, when present/non-null, the current thread ID. Global
 or correlated warnings are consumed before/after RPC responses within frame,
 message and deadline bounds and grant no output authority. Aggregate
