@@ -127,7 +127,7 @@ public sealed class ReplayDriver
                         RegisterPoint(owner, replay.Checkpoints.First(p => p.BeforeStep == end).Timeout);
                     });
                     var result = await RunMonitor.AwaitAsync(owner, realClock, conditionClock, pump,
-                        workToken => playback.PlayAsync(batch, calls, workToken), receipt => ReceiptEvents(receipt, batch.Count,
+                        workToken => PlayAsync(playback, batch, calls, workToken, cancellationToken), receipt => ReceiptEvents(receipt, batch.Count,
                             batchOperation.Actions!.Deliveries.Count(x => x is DeliveryState.Sent or DeliveryState.Uncertain), batchOperation.DispatchClosedByGoal), token,
                         receipt =>
                         {
@@ -163,6 +163,19 @@ public sealed class ReplayDriver
         }).ConfigureAwait(false);
         return new(outcome, new(replay.StepCount, dispatched, completed, checkpoints, planCompleted,
             outcome.Primary.Status == ResultStatus.Passed && !planCompleted ? dispatched : null, run.GoalVerified));
+    }
+
+    private static async ValueTask<ReplayReceipt> PlayAsync(IReplayPlayback playback, ReplayBatch batch, IReplayCalls calls,
+        CancellationToken workToken, CancellationToken callerToken)
+    {
+        try { return await playback.PlayAsync(batch, calls, workToken).ConfigureAwait(false); }
+        catch (RunFailureException) { throw; }
+        catch (OperationCanceledException interrupted) when (workToken.IsCancellationRequested && interrupted.CancellationToken == workToken)
+        { throw; }
+        catch (OperationCanceledException interrupted) when (workToken.IsCancellationRequested && callerToken.IsCancellationRequested && interrupted.CancellationToken == callerToken)
+        { throw new OperationCanceledException("ReplayPlaybackInterrupted", interrupted, workToken); }
+        catch (Exception exception)
+        { throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), exception); }
     }
 
     private static IReadOnlyList<RunEvent> ReceiptEvents(ReplayReceipt? receipt, int count, int actual, bool goalClosed)

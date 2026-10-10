@@ -30,7 +30,7 @@ public sealed class ReplayTests
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "playtest-replay-" + Guid.NewGuid().ToString("N"));
         public string PlanPath => Path.Combine(Root, "plan.json");
-        public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false, bool gameInput = false, int maxActions = 1000)
+        public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false, bool gameInput = false, int maxActions = 1000, bool secretInput = false)
         {
             Directory.CreateDirectory(Root);
             var scenario = new JsonObject
@@ -53,6 +53,7 @@ public sealed class ReplayTests
                     var step = recording["steps"]![i]!.AsObject(); step.Remove("target");
                     step["action"] = "game_input"; step["operation"] = i == 0 ? "key_down" : "key_up";
                     step["relativeMilliseconds"] = 0; step["arguments"] = new JsonObject { ["code"] = "KeyA", ["leaseMs"] = 5000 };
+                    if (secretInput) { step["operation"] = "text_input"; step["arguments"] = new JsonObject(); step["sensitive"] = true; step["secretKey"] = "input"; }
                 }
             }
             File.WriteAllText(Path.Combine(Root, "scenario.json"), scenario.ToJsonString());
@@ -625,6 +626,50 @@ public sealed class ReplayTests
         Assert.Equal(reason, result.Run.Primary.Cause.Reason); Assert.Equal(origin, result.Run.Primary.Cause.Origin);
         Assert.Equal(exit, result.Run.ExitCode); Assert.Equal(0, playback.Plays); Assert.Equal(0, playback.Sends);
         if (mode is "typed" or "clock") Assert.Contains(result.Run.Exceptions, e => e.Type == typeof(IOException).FullName);
+    }
+    [Fact]
+    public async Task ApprovedTimedSecretFaultRetainsHostOriginAndOriginalEvidence()
+    {
+        using var files = new Fixture(steps: 1, gameInput: true, secretInput: true); var clock = new MonotonicClock();
+        var original = new IOException("approved secret provider fault"); var host = new SimulationHost(); var approvals = 0;
+        var playback = new GuaTimedReplay(host, (_, _) => { approvals++; return ReplayCheck.Approved; },
+            new(1000, 100, 100, GuaSegmentClock.Simulation, false, false), secretResolver: _ => throw original);
+        var result = await Run(await files.Load(), new(clock), playback, clock);
+        Assert.True(approvals > 0); Assert.Equal(0, host.Begins); Assert.Equal(0, host.Sends);
+        Assert.Equal(RunReason.ExecutionError, result.Run.Primary.Cause.Reason);
+        Assert.Equal(RunOrigin.Host, result.Run.Primary.Cause.Origin); Assert.Equal(1, result.Run.ExitCode);
+        Assert.Contains(result.Run.Exceptions, e => e.Type == typeof(IOException).FullName && e.StackTrace!.Contains(nameof(ApprovedTimedSecretFaultRetainsHostOriginAndOriginalEvidence)));
+    }
+    private sealed class FaultPlayback(Func<CancellationToken, ValueTask<ReplayReceipt>> play) : IReplayPlayback
+    {
+        public ReplayCheck Check(ReplayBatch batch, bool starting = true) => ReplayCheck.Approved;
+        public ValueTask<ReplayReceipt> PlayAsync(ReplayBatch batch, IReplayCalls calls, CancellationToken token) => play(token);
+    }
+    [Theory]
+    [InlineData("sync", RunReason.ExecutionError, RunOrigin.Host, 1)]
+    [InlineData("async", RunReason.ExecutionError, RunOrigin.Host, 1)]
+    [InlineData("caller", RunReason.Cancelled, RunOrigin.User, 4)]
+    [InlineData("work", RunReason.Cancelled, RunOrigin.User, 4)]
+    [InlineData("alien", RunReason.ExecutionError, RunOrigin.Host, 1)]
+    [InlineData("typed", RunReason.ActionFailed, RunOrigin.Condition, 1)]
+    [InlineData("clock", RunReason.InvalidContract, RunOrigin.Clock, 2)]
+    public async Task ApprovedPlaybackRetainsFaultCauseAndRequestedCancellation(string mode, RunReason reason, RunOrigin origin, int exit)
+    {
+        using var files = new Fixture(); var clock = new MonotonicClock(); using var cancellation = new CancellationTokenSource();
+        var original = new IOException("approved playback boundary");
+        var playback = new FaultPlayback(token =>
+        {
+            if (mode == "async") return ValueTask.FromException<ReplayReceipt>(original);
+            if (mode is "caller" or "work") { cancellation.Cancel(); throw new OperationCanceledException(mode == "caller" ? cancellation.Token : token); }
+            if (mode == "alien") throw new OperationCanceledException(new CancellationToken(true));
+            if (mode == "typed") throw new RunFailureException(new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Condition), original);
+            if (mode == "clock") throw new ClockProviderException(original);
+            throw original;
+        });
+        var result = await Run(await files.Load(), new(clock), playback, clock, token: cancellation.Token);
+        Assert.Equal(reason, result.Run.Primary.Cause.Reason); Assert.Equal(origin, result.Run.Primary.Cause.Origin);
+        Assert.Equal(exit, result.Run.ExitCode); Assert.Equal(0, result.Progress.DispatchedSteps);
+        if (mode is "sync" or "async" or "typed" or "clock") Assert.Contains(result.Run.Exceptions, e => e.Type == typeof(IOException).FullName);
     }
     private sealed class SimulationHost : IGuaTimedSegmentHost
     {
