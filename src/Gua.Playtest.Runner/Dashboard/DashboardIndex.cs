@@ -20,7 +20,11 @@ public sealed record DashboardScenario(string ScenarioId, string DefinitionVersi
 public sealed record DashboardDetail(string Kind, string State, string? Report = null);
 public sealed record DashboardRun(string Key, string RunId, string? ScenarioId, string? DefinitionVersion,
     string? ScenarioSha256, string? BuildId, string? EnvironmentSha256, DateTimeOffset? StartedAt,
-    string State, ResultDocument? Result, IReadOnlyList<DashboardDetail> Details);
+    string State, ResultDocument? Result, IReadOnlyList<DashboardDetail> Details)
+{
+    // Fixed-width decimal string preserves .NET 100 ns precision through JavaScript JSON.
+    public string? StartedOrder => StartedAt?.UtcTicks.ToString("D19", System.Globalization.CultureInfo.InvariantCulture);
+}
 public sealed record DashboardSnapshot(string RegistryState, IReadOnlyList<DashboardScenario> Scenarios,
     IReadOnlyList<DashboardRun> Runs, IReadOnlyList<string> Warnings, bool Truncated);
 public sealed record DashboardSelection(DashboardScenario Scenario, DashboardRun? Latest, string State);
@@ -52,6 +56,8 @@ public sealed class DashboardIndex
         try
         {
             CheckAllowed(registry);
+            using (var admission = ReadContract(registry))
+                AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal));
             var report = await new StaticContractValidator(allowedRoots).ValidateFileAsync(registry, token);
             if (!report.IsValid || report.Document is not ScenarioRegistryDocument population)
                 return new(report.Code == "Valid" ? "RegistryInvalid" : report.Code, [], [], [], false);
@@ -243,18 +249,36 @@ public sealed class DashboardIndex
     }
     private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited)
     {
+        if (Text(document, "kind") == "scenarioRegistry")
+        {
+            foreach (var scenario in document.GetProperty("scenarios").EnumerateArray())
+                AdmitReference(scenario.GetProperty("file"), directory, visited);
+            return;
+        }
         string[] fields = Text(document, "kind") switch
         { "run" => ["scenario", "environment", "plan"], "replayPlan" => ["scenario", "recording"], _ => [] };
         foreach (var field in fields)
         {
             if (!document.TryGetProperty(field, out var reference) || reference.ValueKind == JsonValueKind.Null) continue;
-            var path = Path.GetFullPath(reference.GetProperty("path").GetString()!, directory);
-            CheckAllowed(path);
-            if (!visited.Add(path)) continue;
-            if (visited.Count > 16) throw new InvalidDataException();
-            using var source = ReadJson(path);
-            AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited);
+            AdmitReference(reference, directory, visited);
         }
+    }
+    private void AdmitReference(JsonElement reference, string directory, HashSet<string> visited)
+    {
+        var path = Path.GetFullPath(reference.GetProperty("path").GetString()!, directory);
+        CheckAllowed(path);
+        if (!visited.Add(path)) return;
+        if (visited.Count > 1000) throw new InvalidDataException();
+        using var source = ReadContract(path);
+        AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited);
+    }
+    private JsonDocument ReadContract(string path)
+    {
+        using var stream = Open(path); Charge(stream.Length);
+        var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
+        var inspected = ContractJson.Inspect(bytes, Path.GetExtension(path));
+        if (inspected.Document is null) throw new InvalidDataException();
+        return JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(inspected.Document), new() { MaxDepth = 64 });
     }
     private static void RejectDuplicates(JsonElement node)
     {
@@ -275,7 +299,8 @@ public sealed class DashboardIndex
     private void CheckAllowed(string path)
     {
         var full = Path.GetFullPath(path);
-        if (!allowedRoots.Any(root => full == Path.TrimEndingDirectorySeparator(root) ||
+        if (!allowedRoots.Any(root => full.Equals(Path.TrimEndingDirectorySeparator(root),
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
             full.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar,
                 OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))) throw new InvalidDataException();
         RunArtifactStore.CheckPath(full);

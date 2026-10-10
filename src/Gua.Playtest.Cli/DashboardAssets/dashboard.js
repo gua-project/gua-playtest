@@ -5,8 +5,8 @@ const element=(tag,text)=>{const n=document.createElement(tag); if(text!==undefi
 const date=value=>value?new Date(value).toISOString():'Unknown';
 const badge=state=>{const n=element('span',state);n.className='badge '+state;return n;};
 const matches=(r,s)=>r.scenarioId===s.scenarioId&&r.definitionVersion===s.definitionVersion&&r.scenarioSha256===s.sha256&&r.buildId===$('build').value&&r.environmentSha256===$('environment').value;
-const order=(a,b)=>(!b.startedAt)-(!a.startedAt)||(Date.parse(b.startedAt)||0)-(Date.parse(a.startedAt)||0)||a.key.localeCompare(b.key);
-function selection(s){const candidates=snapshot.runs.filter(r=>matches(r,s)).sort(order);const r=candidates[0];let state=r?r.state:'Unrun';if(candidates.length>1&&(candidates.some(c=>!c.startedAt)||candidates.filter(c=>c.startedAt===r.startedAt).length>1))state='LatestUnknown';if(snapshot.truncated||snapshot.warnings.length)state='IndexIncomplete';return {r,state};}
+const order=(a,b)=>(!b.startedOrder)-(!a.startedOrder)||(b.startedOrder||'').localeCompare(a.startedOrder||'')||a.key.localeCompare(b.key);
+function selection(s){const candidates=snapshot.runs.filter(r=>matches(r,s)).sort(order);const r=candidates[0];let state=r?r.state:'Unrun';if(candidates.length>1&&(candidates.some(c=>!c.startedOrder)||candidates.filter(c=>c.startedOrder===r.startedOrder).length>1))state='LatestUnknown';if(snapshot.truncated||snapshot.warnings.length)state='IndexIncomplete';return {r,state};}
 function button(text,action){const b=element('button',text);b.type='button';b.addEventListener('click',action);return b;}
 function render(){
  if(!snapshot)return;

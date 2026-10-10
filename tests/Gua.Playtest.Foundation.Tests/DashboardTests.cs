@@ -125,6 +125,58 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("LatestUnknown", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
     }
     [Fact]
+    public async Task Registry_yaml_and_references_obey_regular_file_admission()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        var yaml = Path.Combine(root, "registry.yaml");
+        File.WriteAllText(yaml, $"kind: scenarioRegistry\nschemaVersion: 1\nregistryId: registry\nscenarios:\n  - scenarioId: s1\n    definitionVersion: v1\n    file:\n      path: s1.json\n      sha256: {Identity().ScenarioSha256}\nartifactRoots:\n  - runs\n");
+        Assert.Equal("Ready", (await new DashboardIndex(yaml, [Artifacts], [root]).ReadAsync()).RegistryState);
+        var source = Path.Combine(root, "s1.json"); var link = Path.Combine(root, "linked.json");
+        if (OperatingSystem.IsWindows())
+        {
+            // Junctions do not require developer-mode symlink privilege.
+            var linkedDirectory = Path.Combine(root, "linked");
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe")
+            { Arguments = $"/c mklink /J \"{linkedDirectory}\" \"{root}\"", UseShellExecute = false, CreateNoWindow = true });
+            Assert.NotNull(process); process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+            json["scenarios"]![0]!["file"]!["path"] = "linked/s1.json";
+            File.WriteAllText(Registry, json.ToJsonString());
+            try { Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState); }
+            finally { Directory.Delete(linkedDirectory); }
+        }
+        else
+        {
+            File.CreateSymbolicLink(link, source); json["scenarios"]![0]!["file"]!["path"] = "linked.json";
+            File.WriteAllText(Registry, json.ToJsonString());
+            Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState); File.Delete(link);
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("mkfifo")
+            { ArgumentList = { link }, UseShellExecute = false });
+            Assert.NotNull(process); process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+            try { Assert.Equal("RegistryUnreadable", (await Index().ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3))).RegistryState); }
+            finally { File.Delete(link); }
+        }
+    }
+    [Fact]
+    public async Task Timestamp_order_keeps_100ns_precision_and_normalizes_offsets()
+    {
+        var first = Save(); var second = Save(ResultStatus.Failed);
+        var instant = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        void SetStart(RunArtifactStore store, DateTimeOffset start)
+        {
+            var file = Path.Combine(store.DirectoryPath, "run.json");
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!; json["startedAt"] = start;
+            File.WriteAllText(file, json.ToJsonString());
+        }
+        SetStart(first, instant.AddTicks(1)); SetStart(second, instant.AddTicks(2));
+        var snapshot = await Index().ReadAsync();
+        Assert.Equal("Failed", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+        Assert.True(string.CompareOrdinal(snapshot.Runs.Single(r => r.RunId == second.RunId).StartedOrder,
+            snapshot.Runs.Single(r => r.RunId == first.RunId).StartedOrder) > 0);
+        SetStart(first, instant); SetStart(second, instant.ToOffset(TimeSpan.FromHours(1)));
+        snapshot = await Index().ReadAsync(); Assert.Equal(snapshot.Runs[0].StartedOrder, snapshot.Runs[1].StartedOrder);
+        Assert.Equal("LatestUnknown", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
     public async Task Equal_start_times_do_not_claim_which_result_is_latest()
     {
         Save(); Save(ResultStatus.Failed);
@@ -223,7 +275,8 @@ public sealed class DashboardTests : IDisposable
         using var cancellation = new CancellationTokenSource(); var ready = new TaskCompletionSource<Uri>();
         var server = DashboardApplication.RunAsync(Index(), port, uri => ready.SetResult(uri), cancellation.Token);
         var origin = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)); using var client = new HttpClient { BaseAddress = origin };
-        Assert.Contains("Registered Scenarios", await client.GetStringAsync("/"));
+        var html = await client.GetStringAsync("/"); Assert.Contains("Registered Scenarios", html);
+        Assert.Contains("<option>Unrun</option>", html);
         Assert.Contains("textContent", await client.GetStringAsync("/dashboard.js"));
         Assert.Contains("color-scheme", await client.GetStringAsync("/dashboard.css"));
         for (var i = 0; i < 3; i++) Assert.Contains("Passed", await client.GetStringAsync("/api/refresh"));

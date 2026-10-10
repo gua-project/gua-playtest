@@ -47,9 +47,12 @@ The CLI composition owner resolves its explicit inputs and calls
 `DashboardApplication.RunAsync(DashboardIndex, port, readyCallback, token)`.
 `DashboardIndex` takes the registry path, artifact roots, caller allowed roots
 and `DashboardLimits`. It indexes immediate Run directories only. Defaults bound
-the index to 1000 Runs, 16 roots, 1 MiB per opened file and 32 MiB total Run
+the index to 1000 Runs, 16 roots, 1 MiB per opened file and 32 MiB total index
 read bytes; configuration can lower these limits within hard ceilings.
 Registry validation uses the existing bounded static contract validator.
+JSON and YAML registry/Scenario references pass regular-file, no-link and byte
+admission before static reference validation. UI ordering uses fixed-width UTC
+tick strings to preserve .NET's 100 ns precision and normalize timezone offsets.
 
 The server binds only `127.0.0.1` on an explicit port, serves generated assets
 embedded in the CLI assembly, rejects cross-origin and non-GET requests and
