@@ -86,7 +86,7 @@ public sealed class ReplayTests
         public int Sends, Plays, Checks;
         public int? RejectAfter;
         public ReplayReceiptStatus Status = ReplayReceiptStatus.Succeeded;
-        public bool Neutral = true, SkipSend, Duplicate, GuardTwice;
+        public bool Neutral = true, SkipSend, Duplicate, GuardTwice, OmitGuard;
         public Action? AfterPlayback;
         public Action? OnSend { get; set; }
         public Func<CancellationToken, ValueTask>? BeforeResult { get; set; }
@@ -100,7 +100,7 @@ public sealed class ReplayTests
                 var index = Duplicate ? 0 : i;
                 await calls.SendAsync(index, beforeSend =>
                 {
-                    beforeSend(); if (GuardTwice) beforeSend();
+                    if (!OmitGuard) beforeSend(); if (GuardTwice) beforeSend();
                     Sends++; Order.Add(batch.BeforeStep + i); OnSend?.Invoke(); return new ReplaySend<bool>(true, true);
                 }, token);
             }
@@ -112,10 +112,11 @@ public sealed class ReplayTests
     private static RunLimits Limits(long actions = 10) => new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1),
         TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1), actions, 2, 1, 1024);
     private static async Task<ReplayOutcome> Run(ResolvedReplay replay, Feed feed, IReplayPlayback playback, IClock clock,
-        OwnedCleanup? cleanup = null, long actions = 10, bool initial = true, CancellationToken token = default, IClock? conditionClock = null)
+        OwnedCleanup? cleanup = null, long actions = 10, bool initial = true, CancellationToken token = default, IClock? conditionClock = null, Action<RunSession>? inspect = null)
         => await new ReplayDriver().ExecuteAsync(replay, Limits(actions), clock, conditionClock ?? clock, cleanup ?? new(), playback,
             async (run, _, cancellation) =>
             {
+                inspect?.Invoke(run);
                 var capture = run.ArmRunningBoundary(); var observation = await feed.CaptureAsync(cancellation);
                 var boundary = capture.Certify(capture.RequestId, clock.Elapsed, observation, "fixture-synchronized", true);
                 return new(new PreparedHost(boundary, feed, true), Unit(initial));
@@ -302,6 +303,17 @@ public sealed class ReplayTests
         Assert.Equal(RunReason.WaitExpired, result.Run.Primary.Cause.Reason);
         Assert.Equal(boundary, playback.Sends); Assert.Equal(0, result.Progress.CompletedCheckpoints);
         Assert.False(result.Progress.PlanCompleted);
+    }
+    [Fact]
+    public async Task AcknowledgedSendWithoutGuardConsumesUncertainAttempt()
+    {
+        using var files = new Fixture(); var clock = new MonotonicClock(); var playback = new Playback { OmitGuard = true };
+        RunSession? owner = null;
+        var result = await Run(await files.Load(), new(clock), playback, clock, inspect: run => owner = run);
+        Assert.Equal(ResultStatus.Invalid, result.Run.Primary.Status);
+        Assert.Equal(1, owner!.Budget.Snapshot.Actions); Assert.Equal(0, owner.Budget.Snapshot.ReservedActions);
+        Assert.Equal(1, result.Progress.DispatchedSteps); Assert.Equal(0, result.Progress.CompletedSteps);
+        Assert.Equal(1, playback.Sends); Assert.False(result.Progress.PlanCompleted);
     }
     [Fact]
     public async Task PrivateTemporalCheckpointRejectsEarlyFrozenClockWake()

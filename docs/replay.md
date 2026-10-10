@@ -38,6 +38,10 @@ current admission, delivery state and authority. An enqueue acknowledgement is n
 action completion. Closed queues revoke late work. All synchronous callbacks must be
 bounded by the concrete transport's request policy.
 
+If an adapter reports enqueue without invoking `beforeSend`, the owner records an
+uncertain consumed attempt and rejects the adapter contract. That evidence cannot
+authorize a send, confirm a result, refund the attempt or permit a retry.
+
 ## Published Gua adapters and timing
 
 `GuaUiReplay` delegates v1 UI playback to public `GuaReplayer`. `recorded` keeps Gua's

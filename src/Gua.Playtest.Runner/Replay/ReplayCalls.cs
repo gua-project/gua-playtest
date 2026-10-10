@@ -31,7 +31,13 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
                 if (check() != ReplayCheck.Approved) throw Failure(RunReason.ActionFailed, RunOrigin.Host);
                 operation.BeginDispatch(index); began = true; next++; dispatched();
             });
-            if (receipt.Enqueued && !began) throw Failure(RunReason.InvalidContract, RunOrigin.Contract);
+            if (receipt.Enqueued && !began)
+            {
+                // This is evidence of a possible side effect, never retrospective send authority.
+                // Consume the attempt before immediately rejecting the missing boundary contract.
+                operation.RecordUnconfirmedSend(index); dispatched();
+                throw Failure(RunReason.InvalidContract, RunOrigin.Contract);
+            }
             if (receipt.Enqueued) operation.Actions.ConfirmSent(index);
             return receipt.Value;
         }, token);
