@@ -540,6 +540,23 @@ public sealed class ExploreTests
         Assert.True(s.Feed.Captures >= 1100); Assert.Null(s.Run.Primary); Assert.Equal(1, s.Run.Budget.Snapshot.Actions);
     }
     [Fact]
+    public async Task OnGoalCancelledSuffixAllowsOnlyActualPrefixSettlement()
+    {
+        var s = new Setup(success: true); int sends = 0;
+        var decision = JsonNode.Parse("""{"kind":"execute","mode":"timed","segment":{"schemaVersion":1,"durationMilliseconds":100,"maxLatenessMilliseconds":0,"executionTimeoutMilliseconds":1000,"cleanupTimeoutMilliseconds":1000,"inputs":[{"offsetMilliseconds":0,"kind":1,"operation":1,"target":"attack"},{"offsetMilliseconds":1,"kind":1,"operation":3,"target":"attack"}]}}""")!.AsObject();
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); sends++; s.Feed.Goal = true; return new ExploreSend<bool>(true, true); }, token);
+            while (!await calls.ReadAsync(() => s.Run.GoalVerified, token)) await Task.Yield();
+            Assert.True(await calls.ReadAsync(() => s.Run.ActionsClosing, token));
+            return new(ExploreWorkStatus.Completed, true);
+        });
+        Assert.False(await s.Execute(new Planner(_ => decision), work).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(ResultStatus.Passed, s.Run.Primary!.Status); Assert.Equal(1, sends);
+        Assert.Equal(1, s.Run.Budget.Snapshot.Actions); Assert.Equal(0, s.Run.Budget.Snapshot.ReservedActions);
+        Assert.DoesNotContain(s.Run.Events, x => x.Reason == RunReason.ActionUnconfirmed);
+    }
+    [Fact]
     public async Task AcknowledgedSendWithoutGuardConsumesUncertainAttempt()
     {
         var s = new Setup(); var planner = new Planner(_ => Action());
