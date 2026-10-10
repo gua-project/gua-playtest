@@ -79,11 +79,13 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             // Observation/game text is data in a user message, never developer/system instructions.
             if (threadId is null)
             {
-                await RequestAsync("initialize", new JsonObject
+                var initialized = await RequestAsync("initialize", new JsonObject
                 {
                     ["clientInfo"] = new JsonObject { ["name"] = "gua-playtest", ["version"] = "0.1.0" },
                     ["capabilities"] = new JsonObject { ["experimentalApi"] = false }
                 }, token).ConfigureAwait(false);
+                if (!initialized.TryGetProperty("userAgent", out var agent) || agent.ValueKind != JsonValueKind.String ||
+                    !SupportedUserAgent(agent.GetString()!)) throw new BackendException();
                 await WriteAsync(new JsonObject { ["method"] = "initialized" }, token).ConfigureAwait(false);
                 var started = await RequestAsync("thread/start", new JsonObject
                 {
@@ -134,6 +136,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     // A later cumulative snapshot cannot separate an unobserved earlier turn.
                     if (usage is null) usageBaselineKnown = false;
                     var status = turn.GetProperty("status").GetString();
+                    if (status == "interrupted")
+                    { closed = true; return new(CodexReplyStatus.ConnectionFailure, Usage: usage); }
                     if (status == "failed")
                     {
                         closed = true;
@@ -141,12 +145,13 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                             return new(CodexReplyStatus.ConnectionFailure, Usage: usage);
                         if (error.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
                         return new(error.TryGetProperty("codexErrorInfo", out var info) &&
-                            info.ValueKind == JsonValueKind.String && info.GetString() == "usageLimitExceeded"
+                            info.ValueKind == JsonValueKind.String && info.GetString() is "usageLimitExceeded" or "sessionBudgetExceeded"
                             ? CodexReplyStatus.UsageLimit : CodexReplyStatus.ConnectionFailure, Usage: usage);
                     }
                     if (status != "completed") throw new ProtocolException();
                     var items = turn.GetProperty("items").EnumerateArray().Where(x =>
                         x.GetProperty("type").GetString() == "agentMessage" &&
+                        (!x.TryGetProperty("delivery", out var delivery) || delivery.ValueKind == JsonValueKind.Null) &&
                         (!x.TryGetProperty("phase", out var phase) || phase.ValueKind == JsonValueKind.Null || phase.GetString() == "final_answer")).ToArray();
                     if (items.Length != 1) throw new ProtocolException();
                     var text = items[0].GetProperty("text").GetString() ?? throw new ProtocolException();
@@ -244,6 +249,14 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     {
         var text = value.GetString();
         return !string.IsNullOrEmpty(text) && text.Length <= 128 ? text : throw new ProtocolException();
+    }
+    private static bool SupportedUserAgent(string userAgent)
+    {
+        // 0.150.1 emits originator/version followed by OS/client details; the
+        // client-controlled suffix is not evidence of the server build version.
+        var product = userAgent.Split(' ', 2)[0];
+        var slash = product.IndexOf('/');
+        return slash > 0 && product[(slash + 1)..] == "0.150.1";
     }
     private static long Nonnegative(JsonElement value, string name)
     { var count = value.GetProperty(name).GetInt64(); return count >= 0 ? count : throw new ProtocolException(); }

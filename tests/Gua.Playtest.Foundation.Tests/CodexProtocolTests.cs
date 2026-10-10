@@ -70,6 +70,67 @@ public sealed class CodexProtocolTests
     private sealed class ReplyBackend(CodexReply reply) : ICodexDecisionBackend
     { public ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken token) => new(reply); }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("codex/0.149.0")]
+    [InlineData("codex/0.150.10")]
+    [InlineData("codex/0.149.0 (client/0.150.1)")]
+    public async Task IncompatibleVersionNeverStartsAThread(string? agent)
+    {
+        var transport = new Transport();
+        var result = new JsonObject();
+        if (agent is not null) result["userAgent"] = agent;
+        transport.Add(new JsonObject { ["id"] = 1, ["result"] = result }.ToJsonString());
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.ConnectionFailure, reply.Status);
+        Assert.Single(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData("gua-playtest/0.150.1 (Windows 10.0; x86_64) client (gua-playtest; 0.1.0)")]
+    [InlineData("codex/0.150.1")]
+    public async Task SupportedVersionAllowsClientAndOsUserAgentDetails(string agent)
+    {
+        var transport = Started(); transport.Frames.Dequeue();
+        var remaining = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Add(new JsonObject { ["id"] = 1, ["result"] = new JsonObject { ["userAgent"] = agent } }.ToJsonString());
+        foreach (var frame in remaining) transport.Frames.Enqueue(frame);
+        transport.Add(Completed(Decision()));
+        Assert.Equal(CodexReplyStatus.Completed, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+
+    [Theory]
+    [InlineData("interrupted")]
+    [InlineData("sessionBudgetExceeded")]
+    public async Task BackendTerminalConditionsHaveTypedFailureAndCloseSession(string condition)
+    {
+        var transport = Started(); var message = JsonNode.Parse(Completed(Decision()))!;
+        var turn = message["params"]!["turn"]!;
+        turn["status"] = condition == "interrupted" ? "interrupted" : "failed";
+        if (condition != "interrupted") turn["error"] = new JsonObject { ["message"] = "PRIVATE_ERROR", ["codexErrorInfo"] = condition };
+        transport.Add(message.ToJsonString());
+        var backend = Backend(transport); var reply = await backend.DecideAsync(Input(), default);
+        Assert.Equal(condition == "interrupted" ? CodexReplyStatus.ConnectionFailure : CodexReplyStatus.UsageLimit, reply.Status);
+        Assert.Null(reply.CompletedJson);
+        Assert.DoesNotContain("PRIVATE_ERROR", reply.ToString());
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AsynchronousDeliveryCannotBecomeAFinalProposal(bool includeFinal)
+    {
+        var transport = Started(); var message = JsonNode.Parse(Completed(Decision()))!;
+        var items = message["params"]!["turn"]!["items"]!.AsArray();
+        var asyncItem = items[0]!.DeepClone(); asyncItem["delivery"] = "async";
+        if (!includeFinal) items.Clear();
+        items.Add(asyncItem); transport.Add(message.ToJsonString());
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(includeFinal ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+        if (!includeFinal) Assert.Null(reply.CompletedJson);
+    }
+
     [Fact]
     public async Task MissingTurnUsageCannotBeChargedToLaterDecisions()
     {

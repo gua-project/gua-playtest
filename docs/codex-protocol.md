@@ -63,6 +63,9 @@ The converter targets `codex-cli 0.150.1` and uses its nonexperimental fields.
 Use `codex app-server generate-json-schema` to inspect the selected binary's
 actual contract. Protocol compatibility alone does not establish a supported OS
 matrix or real provider acceptance.
+The initialize response must advertise `0.150.1` in its leading user-agent
+product before the converter sends `initialized` or starts a thread. Missing
+or incompatible version evidence returns a connection failure.
 
 The 0.150.1 `InitializeParams` has `capabilities.experimentalApi`.
 `PermissionProfileListParams/Response` and the `permissionProfile/list` request
