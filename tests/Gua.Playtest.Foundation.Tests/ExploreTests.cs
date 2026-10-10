@@ -539,8 +539,8 @@ public sealed class ExploreTests
         Assert.True(await s.Execute(planner, work).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.True(s.Feed.Captures >= 1100); Assert.Null(s.Run.Primary); Assert.Equal(1, s.Run.Budget.Snapshot.Actions);
     }
-    [Fact]
-    public async Task OnGoalCancelledSuffixAllowsOnlyActualPrefixSettlement()
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task OnGoalCancelledSuffixAllowsOnlyActualPrefixSettlement(bool attemptsSuffix)
     {
         var s = new Setup(success: true); int sends = 0;
         var decision = JsonNode.Parse("""{"kind":"execute","mode":"timed","segment":{"schemaVersion":1,"durationMilliseconds":100,"maxLatenessMilliseconds":0,"executionTimeoutMilliseconds":1000,"cleanupTimeoutMilliseconds":1000,"inputs":[{"offsetMilliseconds":0,"kind":1,"operation":1,"target":"attack"},{"offsetMilliseconds":1,"kind":1,"operation":3,"target":"attack"}]}}""")!.AsObject();
@@ -549,6 +549,12 @@ public sealed class ExploreTests
             await calls.SendAsync(0, before => { before(); sends++; s.Feed.Goal = true; return new ExploreSend<bool>(true, true); }, token);
             while (!await calls.ReadAsync(() => s.Run.GoalVerified, token)) await Task.Yield();
             Assert.True(await calls.ReadAsync(() => s.Run.ActionsClosing, token));
+            if (attemptsSuffix)
+            {
+                var exception = await Record.ExceptionAsync(() => calls.SendAsync(1, before =>
+                    { before(); sends++; return new ExploreSend<bool>(true, true); }, token).AsTask());
+                Assert.NotNull(exception); Assert.Equal("ExploreDispatchClosedByGoalException", exception.GetType().Name);
+            }
             return new(ExploreWorkStatus.Completed, true);
         });
         Assert.False(await s.Execute(new Planner(_ => decision), work).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));

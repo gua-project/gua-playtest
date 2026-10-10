@@ -15,6 +15,9 @@ public interface IExploreObservationFeed
 public enum ExploreWorkStatus { Completed, NotSent, Failed, Unconfirmed }
 public sealed record ExploreReceipt(ExploreWorkStatus Status, bool InputsNeutral, Exception? OriginalException = null);
 public sealed record ExploreSend<T>(T Value, bool Sent);
+/// <summary>The owner verified OnGoal and cancelled this still-unsent suffix.
+/// Stop sending, settle only the actual prefix, and release owned inputs before returning Completed.</summary>
+public sealed class ExploreDispatchClosedByGoalException() : Exception("ExploreDispatchClosedByGoal");
 
 /// <summary>Worker calls are marshalled onto the serialized Run owner. The send callback invokes beforeSend
 /// immediately before its actual side effect, exactly once. Callbacks must return promptly and perform no async work.</summary>

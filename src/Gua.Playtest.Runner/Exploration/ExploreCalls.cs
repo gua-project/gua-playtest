@@ -14,12 +14,16 @@ internal sealed class ExploreCalls(ApprovedDecision decision) : IExploreCalls, I
     public ValueTask<T> SendAsync<T>(int index, Func<Action, ExploreSend<T>> send, CancellationToken token)
         => Enqueue(() =>
         {
+            if (decision.DispatchClosedByGoal) throw new ExploreDispatchClosedByGoalException();
             bool began = false;
             var reply = send(() =>
             {
                 if (began) throw new InvalidOperationException("ExploreSendRepeated");
                 if (decision.BeginDispatch(index) != PlannerFeedbackCode.Approved)
+                {
+                    if (decision.DispatchClosedByGoal) throw new ExploreDispatchClosedByGoalException();
                     throw new RunFailureException(new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host));
+                }
                 began = true;
             });
             if (reply.Sent && !began)

@@ -15,6 +15,10 @@ using existing host operations. Its synchronous reads and sends use
 once immediately before dispatch and returns its actual acknowledgement.
 An acknowledgement that omitted this guard consumes an uncertain attempt and
 terminates as unconfirmed; recording that evidence grants no dispatch permission.
+OnGoal closes the unsent suffix. `ExploreDispatchClosedByGoalException` signals
+that owner decision before the next send callback runs. A trusted work adapter
+stops sending and confirms only the actual prefix and neutral input cleanup
+before returning Completed; other failures remain Failed or Unconfirmed.
 `Completed` requires a confirmed result and neutral owned inputs. A missing or
 uncertain receipt terminates through the existing failure rules. Worker callbacks
 must be short and synchronous. Elapsed waits use the authoritative condition
