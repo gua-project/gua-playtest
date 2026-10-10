@@ -1,5 +1,13 @@
 # Run execution contract: OPEN-06 and runtime OPEN-10
 
+## Run の合否と終了処理を追う
+
+Run は一回の試行です。Created → Preparing → Running → Completing → Finished の状態と、Passed／Failedなどの判定結果を区別します。購入成功と失敗・取消が同じ評価単位に届いた場合、通知の到着順で結果を選ばず、下記の優先規則で処理します。入力の受付、完了、Goalの成立も別の証拠です。
+
+[RunExecutor.ExecuteAsync](../src/Gua.Playtest.Runner/Execution/RunExecutor.cs)の準備・実行・終了処理を入口に、[RunSession.Evaluate](../src/Gua.Playtest.Runner/Execution/RunSession.cs)で一次結果の確定、[RunMonitor.AwaitAsync](../src/Gua.Playtest.Runner/Execution/RunMonitor.cs)で待機中の観測・時計・取消を追います。[OwnedCleanup](../src/Gua.Playtest.Runner/Execution/OwnedCleanup.cs)は確定済みの結果を保持し、自分が取得した入力や資源を解放します。
+
+OnGoal／AfterPlanの厳密な完了条件、送信後不明、最後の操作の予算、時計の境界は下記の契約を参照してください。[RunTests](../tests/Gua.Playtest.Foundation.Tests/RunTests.cs)、[RunReviewTests](../tests/Gua.Playtest.Foundation.Tests/RunReviewTests.cs)、[RunClockBoundaryTests](../tests/Gua.Playtest.Foundation.Tests/RunClockBoundaryTests.cs)が再現例です。保存は [artifacts.md](artifacts.md)、起動前の責務は [preparation.md](preparation.md)、読む順番は [開発者ガイド](developer-guide.ja.md)にあります。
+
 Issue #6 provides native-free `Gua.Playtest.Runner.Execution`. One trusted execution owner serializes all calls. Transport callbacks return evidence; they cannot mutate primary results. `RunSession` is a per-Run object, never a shared cross-Run controller. #8/#10 assemble Explore/Replay adapters; #11 authorizes current reads/actions. No unavailable upstream guarded API or new Gua release is inferred. Gua.Testing remains pinned to 1.1.1; capability checks and unsupported action rejection stay in the concrete adapter/gate.
 
 ## States and result boundary

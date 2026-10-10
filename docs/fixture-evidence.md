@@ -1,5 +1,13 @@
 # Fixture and independent evidence contract (#16)
 
+## 製品の判定を外から確かめる
+
+fixture は開始状態と故障条件を固定し、製品自身の採点だけに頼らず結果を検証するためのテスト環境です。例えば購入応答を取引成立後に落とした場合、ゲーム側では一度購入済みでも Runner は完了を確認できません。独立した取引数と元のTraceを見て、二重送信していないこと、不明な結果を成功と扱っていないことを確かめます。
+
+[FixtureSupport](../tests/Gua.Playtest.Foundation.Tests/FixtureSupport.cs)の `FaultHarness.ApplyAt` は事前承認した境界で実際に故障を適用したreceiptを残します。[cases.json](../tests/fixtures/playtest/cases.json)がcaseのidentityと期待値、[fixture-oracle.mjs](../tools/fixture-oracle.mjs)が固定入力と独立事実を突き合わせる検証器です。catalogとrun-configのhashは実行前に固定し、事後に期待値を合わせてはいけません。
+
+人工bundleによる検証器テストと実ゲームの受け入れは別です。実行方法と必要な原本は下記を参照してください。oracle の終了0はそのcaseの証拠の一致で、製品全体のE2E合格ではありません。Node／.NETのテスト入口と証拠の読み方は [開発者ガイド](developer-guide.ja.md)にあります。
+
 This increment supplies test-only scripted Planner and immutable, preauthorized fault hooks,
 fixed case data, and an external Node oracle. It does **not** complete issue #16.
 No contractFake run establishes real bridge, real input, Godot, Unity or product E2E acceptance.

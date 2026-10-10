@@ -1,5 +1,13 @@
 # Condition engine: OPEN-05
 
+## 比較を「対象」と「時間」に広げる
+
+Condition は比較、対象数、all／any、時間条件を組み合わせます。購入ボタンを一つだけ期待する `one` で二つ見つかった場合、先頭を選ぶと別のボタンを試してしまうため曖昧性の違反になります。`all` も、別々の時刻に一度ずつ成立した普通の条件を集めて成功にはしません。同じ観測単位で全てが成立する必要があります。
+
+時間条件の `withinMilliseconds` は保持区間の**開始期限**、`forMilliseconds` は**連続保持時間**です。within=5000、for=2000 なら、4500msで初めてTrueになった区間は6500msに成立できます。準備中の時間は加算しません。同じ値を二回読めただけでは、その間に変化がなかった証拠にはなりません。gap、対象差替え、欠落は継続中の保持を切ります。
+
+[PreparedCondition.Create / Start](../src/Gua.Playtest.Runner/Conditions/PreparedCondition.cs)が条件木を準備し、[ConditionSession.Evaluate / EvaluateAt](../src/Gua.Playtest.Runner/Conditions/ConditionSession.cs)が一実行の履歴を持ちます。[ConditionObservation](../src/Gua.Playtest.Runner/Conditions/ConditionObservation.cs)のidentityと連続性が時間判定の入力です。[ConditionTests](../tests/Gua.Playtest.Foundation.Tests/ConditionTests.cs)と [condition-state-table.json](../tests/fixtures/playtest/condition-state-table.json)を表と照合できます。比較は [assertions.md](assertions.md)、全体と実行手順は [開発者ガイド](developer-guide.ja.md)を参照してください。
+
 This is the normative condition contract for issue #5. `docs/assertions.md` owns comparison semantics and ordinary three-valued truth. No Run status, budget priority, action authorization or profile escalation is defined here.
 
 ## Preparation and evaluation units

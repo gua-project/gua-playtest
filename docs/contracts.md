@@ -1,5 +1,15 @@
 # Playtest configuration and exchange contracts
 
+## この契約を読む前に
+
+この文書は「目的」「実行条件」「記録した経路」「結果」を混ぜないためのファイル契約です。購入テストでは、Scenario が何を達成するか、Environment がどの接続先・許可・上限で動かすか、Replay Plan がどの記録を使うかを表します。同じ目的を別環境で試すため、Plan は Scenario と Recording を固定参照し、Environment 自体を固定しません。
+
+Models → Targets → Fixed references → Paths の順に読むと構造を追えます。`schemaVersion: 1` は文書形式の版で、package版やゲームの版とは別です。SHA-256 は改行を含む元bytesの一致を確認するので、整形し直すと参照更新が必要になります。hash一致だけでは実行済みの証拠になりません。
+
+[StaticContractValidator.ValidateFileAsync](../src/Gua.Playtest.Core/Contracts/StaticContractValidator.cs)から [ContractDecoder](../src/Gua.Playtest.Core/Contracts/ContractDecoder.cs)、schema、意味検査、参照検査へ進みます。[StaticContractsTests](../tests/Gua.Playtest.Contracts.Tests/StaticContractsTests.cs)と [fixtures/contracts](../fixtures/contracts)で正常形と拒否例を対にして読めます。実行手順は [開発者ガイド](developer-guide.ja.md)にあります。成功は形式と固定参照の確認で、ゲームの合格判定ではありません。
+
+以下がフィールド・identity・制限の詳細契約です。
+
 Playtest schema version 1 separates a Scenario's single Goal, an Environment's execution conditions, and a Replay Plan's operation references. These contracts implement issue #2; they do not execute a game, score a Goal, or accept a Planner proposal. Schemas and static validation are offline. The pure Core assembly never loads Gua native libraries.
 
 ## Models and schema names

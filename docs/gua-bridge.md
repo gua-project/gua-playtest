@@ -1,5 +1,13 @@
 # Gua observation and action bridge (issue #7)
 
+## ゲームの事実を Runner へ渡す
+
+bridge は Gua の観測・入力を Playtest の判断へ接続する具体的な層です。「購入ボタンが一つ見つかった」「入力が完了した」という事実を渡します。購入数が増えたかの採点は Runner が行い、bridge の成功応答だけでGoalを成立させません。
+
+観測は値に加え、対象・登録の寿命、source/session/epoch、完全性、収集時刻を持ちます。店のUIが再生成された場合、同じ名前や再利用されたIDでも以前の保持履歴を引き継げません。判定用とPlanner公開用は別の承認接続を使い、Debugで取得した秘密をあとから削るだけの構成にしません。
+
+[BridgeObservations.ReadBatch](../src/Gua.Playtest.GuaIntegration/BridgeObservations.cs)は評価passで必要なreadsをまとめ、Observe cursorからの変化を扱います。[BridgeUiActions](../src/Gua.Playtest.GuaIntegration/BridgeUiActions.cs)と [OwnedGameInput](../src/Gua.Playtest.GuaIntegration/OwnedGameInput.cs)では送信前拒否と送信後不明、所有入力の解放を追えます。[Bridge.Tests](../tests/Gua.Playtest.Bridge.Tests)の試験と、下記の公開 Gua 1.1.1・guard・transportの制限を一緒に読んでください。通信と実エンジン受け入れの違いは [fixture-evidence.md](fixture-evidence.md)、全体の入口は [開発者ガイド](developer-guide.ja.md)です。
+
 Core remains native-free. `Gua.Playtest.GuaIntegration` alone owns Gua.Testing/
 Gua.Runtime 1.1.1 dependencies. No Gua sources, native libraries, protocol schemas,
 Selector implementation, input scheduler or World command interpreter are copied.
