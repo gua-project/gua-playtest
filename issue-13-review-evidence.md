@@ -248,3 +248,58 @@ requires its own actual CI and completed Codex review, plus parent ordering
 approval. Production, OPEN-09/11 and real transport/Planner/OS/Trace/game scope
 remain unverified; issue #13 is still open. Evidence group numbering is not an
 audit counter or a reset of the finite review budget.
+## Final payload/reroute/context-reset findings (evidence group 6)
+
+Actual Codex review 5481139683 of cee9c75 at 2026-10-10 23:09:41 UTC
+raised 4239533715 (terminal error payload identity), 4239533723 (pre-response
+model/rerouted), and 4239533727 (context-full usage reset). Fixed-version
+[handler](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/bespoke_event_handling.rs),
+[reroute schema](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v2/ModelReroutedNotification.json)
+and [fill_to_context_window](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/protocol/src/protocol.rs)
+support all three. Keep latest non-retryable error and compare JsonElement.DeepEquals
+before failed classification, refusing different/missing/null payloads; test
+matching latest errors with reordered properties and later retry telemetry.
+Model reroute requires fromModel/toModel strings, pinned reason and current
+thread/turn IDs before buffer and after response. Missing/wrong IDs, fields,
+reason and aggregate flood are refused. Synthetic context-full snapshots and
+mixed regression/increasing-total snapshots make current/subsequent usage
+unavailable, preserving old duplicate/regressive-snapshot tests. The reset
+fixture includes exact zero breakdown, synthetic last delta and modelContextWindow.
+
+- `TerminalErrorPayloadMustMatchLatestNonRetryableNotice`,
+  `ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape`,
+  `RerouteTelemetryConsumesPreResponseAggregateBound`,
+  `SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable` map the
+  violations to assertions before/after RPC responses and across subsequent turns.
+- [Focused TRX](docs/evidence/issue-13/batch-6/focused.trx)/[log](docs/evidence/issue-13/batch-6/focused.log):
+  223 pass, 0 fail/skip. Command `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter FullyQualifiedName~CodexProtocolTests`.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-6/pre-fix.trx)/[log](docs/evidence/issue-13/batch-6/pre-fix.log):
+  cee9c75 backend gives 10 intended assertion failures and 2 matching-latest
+  passes. Actual UsageLimit vs expected OutputInvalid proves changed terminal
+  error authority; actual invalid vs expected Completed proves reroute loss;
+  actual synthetic CodexUsage vs expected null proves incorrect token evidence.
+  Fixed exact bytes restored in finally; no environment/build failure.
+- [Restore](docs/evidence/issue-13/batch-6/restore.log), [build](docs/evidence/issue-13/batch-6/build.log),
+  [boundaries](docs/evidence/issue-13/batch-6/boundaries.log), [tests](docs/evidence/issue-13/batch-6/tests.log):
+  locked restore, Release build 0 warnings/errors and boundary checks pass;
+  Bridge 130 + Contracts 528 + Foundation 1151 = 1809 pass, 0 fail/skip.
+  [Bridge TRX](docs/evidence/issue-13/batch-6/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-6/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-6/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-6/package.log)/[JSON](docs/evidence/issue-13/batch-6/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-6/contracts.log)/[JSON](docs/evidence/issue-13/batch-6/contracts-evidence.json)
+  pass actual win-x64 archive/tool installation/execution and native-free consumer;
+  commands `./scripts/package-smoke.ps1 -Rid win-x64`, `./scripts/contract-smoke.ps1`.
+  [Pack](docs/evidence/issue-13/batch-6/pack.log) restores normal tracked lock state.
+  [Manifest](docs/evidence/issue-13/batch-6/manifest.json) pins tested source blobs,
+  raw artifact bytes and Windows/.NET environment. Local Oct11 UTC+09 is Oct10 UTC.
+
+Backend/tests were final before validation; subsequent edits are docs/evidence.
+Independent audit remains 2/2 consumed, no fresh agent/reset. This entire
+post-audit payload/reroute/usage/backend/tests/docs/evidence diff received NO
+additional independent audit; concrete actual review defects were consolidated
+and verified under the known-defect path. New HEAD requires actual final CI and
+completed Codex review without unresolved actionable findings and parent order
+approval. Production/OPEN-09/11 and real transport/Planner/OS/Trace/game acceptance
+remain unavailable/unverified. Issue #13 stays open. Group numbers are execution
+artifact groups, never a finite audit-budget reset.

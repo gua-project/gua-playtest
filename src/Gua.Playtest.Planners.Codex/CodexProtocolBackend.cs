@@ -124,7 +124,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             if (startedTurn.GetProperty("status").GetString() != "inProgress") throw new ProtocolException();
             var turnId = Identifier(startedTurn.GetProperty("id"));
             CodexUsage? usage = null;
-            var terminalErrorSeen = false;
+            JsonElement? terminalError = null;
             var completedItems = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             var completedItemBytes = 0;
             while (true)
@@ -157,6 +157,15 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     var tokenUsage = parameters.GetProperty("tokenUsage");
                     ValidateUsage(tokenUsage.GetProperty("last"));
                     var total = tokenUsage.GetProperty("total"); ValidateUsage(total);
+                    var currentInput = Nonnegative(total, "inputTokens");
+                    var currentOutput = Nonnegative(total, "outputTokens");
+                    var currentTotal = Nonnegative(total, "totalTokens");
+                    // Context-full snapshots replace counters with zero breakdown and a synthetic
+                    // context-window total. A mixed regression/increase also loses epoch identity.
+                    // Neither can provide measured decision usage, including subsequent turns.
+                    if ((currentTotal > 0 && currentInput == 0 && currentOutput == 0) ||
+                        ((currentInput < usageHighWater.InputTokens || currentOutput < usageHighWater.OutputTokens) &&
+                         currentTotal > usageHighWater.TotalTokens)) usageBaselineKnown = false;
                     usageHighWater = new(Math.Max(usageHighWater.InputTokens, Nonnegative(total, "inputTokens")),
                         Math.Max(usageHighWater.OutputTokens, Nonnegative(total, "outputTokens")),
                         Math.Max(usageHighWater.TotalTokens, Nonnegative(total, "totalTokens")));
@@ -164,11 +173,13 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                         usageHighWater.OutputTokens - usageBaseline.OutputTokens,
                         usageHighWater.TotalTokens - usageBaseline.TotalTokens) : null;
                 }
+                else if (method == "model/rerouted") ValidateModelRerouted(message, threadId, turnId);
                 else if (method == "error")
                 {
                     ValidateErrorNotice(message, threadId, turnId);
                     // A retry can recover; non-retryable failure cannot be erased by later completion.
-                    terminalErrorSeen |= parameters.GetProperty("willRetry").ValueKind == JsonValueKind.False;
+                    if (parameters.GetProperty("willRetry").ValueKind == JsonValueKind.False)
+                        terminalError = parameters.GetProperty("error").Clone();
                 }
                 else if (method == "item/completed")
                 {
@@ -200,7 +211,9 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     // A later cumulative snapshot cannot separate an unobserved earlier turn.
                     if (usage is null) usageBaselineKnown = false;
                     var status = turn.GetProperty("status").GetString();
-                    if (terminalErrorSeen && status != "failed") throw new ProtocolException();
+                    if (terminalError is { } observedError && (status != "failed" ||
+                        !turn.TryGetProperty("error", out var repeatedError) ||
+                        !JsonElement.DeepEquals(observedError, repeatedError))) throw new ProtocolException();
                     if (status == "interrupted")
                     { closed = true; return new(CodexReplyStatus.ConnectionFailure, Usage: usage); }
                     if (status == "failed")
@@ -299,9 +312,10 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 }
                 if (method == "turn/start" && announcedTurn is not null && notification is not null &&
                     (notification.StartsWith("item/", StringComparison.Ordinal) ||
-                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification is "thread/tokenUsage/updated" or "error"))
+                     notification.StartsWith("turn/", StringComparison.Ordinal) || notification is "thread/tokenUsage/updated" or "error" or "model/rerouted"))
                 {
                     ValidateTurnNotice(message, threadId!, announcedTurn);
+                    if (notification == "model/rerouted") ValidateModelRerouted(message, threadId!, announcedTurn);
                     if (notification == "error") ValidateErrorNotice(message, threadId!, announcedTurn);
                     if (notification == "item/completed") ValidateItemCompleted(message, threadId!, announcedTurn);
                     pendingBytes = checked(pendingBytes + Utf8.GetByteCount(message.GetRawText()));
@@ -450,6 +464,14 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         var parameters = message.GetProperty("params");
         if (!CodexItemSchema.ValidItemCompleted(parameters) || !parameters.GetProperty("completedAtMs").TryGetInt64(out _))
             throw new ProtocolException();
+    }
+    private static void ValidateModelRerouted(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        ValidateTurnNotice(message, expectedThread, expectedTurn);
+        var parameters = message.GetProperty("params");
+        if (parameters.GetProperty("fromModel").ValueKind != JsonValueKind.String ||
+            parameters.GetProperty("toModel").ValueKind != JsonValueKind.String ||
+            parameters.GetProperty("reason").GetString() != "highRiskCyberActivity") throw new ProtocolException();
     }
     private static void ValidateWarning(JsonElement parameters, string? expectedThread)
     {

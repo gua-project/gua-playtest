@@ -181,6 +181,96 @@ public sealed class CodexProtocolTests
         var backend = new CodexProtocolBackend("run-1", transport, new JsonObject(), new(100000, 10, TimeSpan.FromSeconds(5)), x => x);
         Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input(), default)).Status);
     }
+    [Theory]
+    [InlineData(false, "different")]
+    [InlineData(true, "different")]
+    [InlineData(false, "missing")]
+    [InlineData(true, "missing")]
+    [InlineData(false, "null")]
+    [InlineData(true, "null")]
+    [InlineData(false, "latest")]
+    [InlineData(true, "latest")]
+    public async Task TerminalErrorPayloadMustMatchLatestNonRetryableNotice(bool beforeResponse, string variant)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+        if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+        var notice = JsonNode.Parse(RetryNotice())!; notice["params"]!["willRetry"] = false; transport.Add(notice.ToJsonString());
+        var second = JsonNode.Parse(RetryNotice())!; second["params"]!["willRetry"] = false;
+        second["params"]!["error"] = new JsonObject { ["codexErrorInfo"] = "usageLimitExceeded", ["message"] = "PRIVATE_ERROR" };
+        if (variant == "latest") transport.Add(second.ToJsonString());
+        transport.Add(RetryNotice());
+        if (beforeResponse) transport.Frames.Enqueue(frames[2]);
+        var completion = JsonNode.Parse(Completed(Decision()))!; var turn = completion["params"]!["turn"]!;
+        turn["status"] = "failed";
+        if (variant == "different" || variant == "latest")
+            turn["error"] = new JsonObject { ["message"] = "PRIVATE_ERROR", ["codexErrorInfo"] = "usageLimitExceeded" };
+        else if (variant == "null") turn["error"] = null;
+        transport.Add(completion.ToJsonString()); var backend = Backend(transport);
+        var reply = await backend.DecideAsync(Input(), default);
+        Assert.Equal(variant == "latest" ? CodexReplyStatus.UsageLimit : CodexReplyStatus.OutputInvalid, reply.Status);
+        Assert.Null(reply.CompletedJson); Assert.DoesNotContain("PRIVATE_ERROR", reply.ToString());
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+    }
+
+    private static string RerouteNotice() => "{\"method\":\"model/rerouted\",\"params\":{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"fromModel\":\"a\",\"toModel\":\"b\",\"reason\":\"highRiskCyberActivity\"}}";
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(bool beforeResponse)
+    {
+        foreach (var field in new[] { "valid", "threadId", "turnId", "fromModel", "toModel", "reason", "wrongThread", "wrongTurn", "wrongReason", "nullModel" })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            var notice = JsonNode.Parse(RerouteNotice())!;
+            if (field == "wrongThread") notice["params"]!["threadId"] = "wrong";
+            else if (field == "wrongTurn") notice["params"]!["turnId"] = "wrong";
+            else if (field == "wrongReason") notice["params"]!["reason"] = "unknown";
+            else if (field == "nullModel") notice["params"]!["toModel"] = null;
+            else if (field != "valid") notice["params"]!.AsObject().Remove(field);
+            transport.Add(notice.ToJsonString());
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+            var reply = await Backend(transport).DecideAsync(Input(), default);
+            Assert.Equal(field == "valid" ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+        }
+    }
+    [Fact]
+    public async Task RerouteTelemetryConsumesPreResponseAggregateBound()
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+        for (var i = 0; i < 80; i++) transport.Add(RerouteNotice());
+        transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(bool beforeResponse)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+        if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+        transport.Add(Usage("turn-1", 7, 5, 12));
+        var reset = JsonNode.Parse(Usage("turn-1", 0, 0, 100000))!;
+        reset["params"]!["tokenUsage"]!["last"] = JsonNode.Parse("{\"inputTokens\":0,\"cachedInputTokens\":0,\"outputTokens\":0,\"reasoningOutputTokens\":0,\"totalTokens\":99988}");
+        reset["params"]!["tokenUsage"]!["modelContextWindow"] = 100000;
+        transport.Add(reset.ToJsonString());
+        transport.Add(Usage("turn-1", 3, 2, 100005));
+        if (beforeResponse) transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+        var backend = Backend(transport); var first = await backend.DecideAsync(Input(), default);
+        Assert.Equal(CodexReplyStatus.Completed, first.Status); Assert.Null(first.Usage);
+        transport.Add("{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-2\",\"status\":\"inProgress\",\"items\":[]}}}");
+        transport.Add(Usage("turn-2", 10, 8, 100018)); transport.Add(Completed(Decision("request-2"), "turn-2"));
+        var second = await backend.DecideAsync(Input("request-2"), default);
+        Assert.Equal(CodexReplyStatus.Completed, second.Status); Assert.Null(second.Usage);
+    }
     private static string RetryNotice() => new JsonObject
     {
         ["method"] = "error", ["params"] = new JsonObject { ["threadId"] = "thread-1", ["turnId"] = "turn-1",

@@ -18,6 +18,9 @@ not `last` (the latest model response), following the
 Absent notifications leave usage unavailable. After any completed turn without
 notifications, subsequent turn usage also remains unavailable: thread cumulative
 counters cannot separate the missing turn's consumption from the next turn.
+Context-full zero-breakdown/synthetic-total resets and mixed regression/increase
+snapshots also leave current and subsequent usage unavailable. Synthetic totals
+are not measured token charges; an unknown epoch cannot regain known usage.
 
 The protocol port is not a live provider. There is no process launcher, credential
 resolver, authentication operation or production factory here. The existing
@@ -84,7 +87,10 @@ in order. Paired account rate-limit telemetry is consumed within message/frame/
 deadline limits and never contributes a proposal. Retry notices are validated
 before and after the response; they do not cause client resends. A correlated
 `willRetry:false` error persists through the exchange and requires failed terminal
-status; later retry telemetry cannot erase it. Pinned nonfatal `warning` notices
+status and a semantically identical completion error payload. The latest
+non-retryable error replaces earlier terminal evidence; retry telemetry cannot
+erase it. Correlated `model/rerouted` notices require pinned fields/reason and
+are buffered before the response and validated again after response correlation. Pinned nonfatal `warning` notices
 require a string message and, when present/non-null, the current thread ID. Global
 or correlated warnings are consumed before/after RPC responses within frame,
 message and deadline bounds and grant no output authority. Aggregate
