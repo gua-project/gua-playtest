@@ -2,4 +2,4 @@ docs/schemas/gua-1.1.1/* -text
 fixtures/contracts/* -text
 
 # Preserve published execution evidence byte-for-byte for hash verification.
-docs/evidence/issue-13/** -text
+docs/evidence/issue-13/** -text whitespace=cr-at-eol

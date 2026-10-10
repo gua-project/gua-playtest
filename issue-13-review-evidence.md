@@ -122,8 +122,15 @@ annotation removal. No independent audit was added; budget remains **2/2**.
 - [Native-free consumer log](docs/evidence/issue-13/batch-2/contracts.log) and
   [evidence](docs/evidence/issue-13/batch-2/contracts-evidence.json): pass.
 
-This further backend/helper/schema/resource/test/protocol-doc/evidence diff also
+This further backend/helper/schema/resource/test/protocol-doc/evidence/attribute diff also
 received **no additional independent audit**. Production provider, OPEN-09/11,
 real transport/Planner/OS enforcement/Trace/game acceptance remain unverified.
 Final-HEAD actual CI and completed actual Codex review with zero unresolved
 actionable findings, plus parent sequencing approval, are still required.
+
+Published evidence originally triggered diff-check reports because retained CRLF
+was treated as trailing whitespace.  .gitattributes  now recognizes cr-at-eol
+for this byte-preserved evidence directory; other whitespace checks remain enabled.
+The complete ae6eb05-to-published-source diff and attribute/doc changes then passed
+git diff --check. Original artifact bytes and manifests are unchanged. This
+attribute/document-only correction required content/hash/diff checks, no runtime rerun.
