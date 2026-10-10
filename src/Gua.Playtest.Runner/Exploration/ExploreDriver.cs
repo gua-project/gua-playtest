@@ -88,7 +88,10 @@ public static class ExploreDriver
         var tracker = state.Tracker;
         var feed = new Feed(observations, run, run.Limits.MaxEvidenceItems, progress =>
         {
-            var sample = tracker.ObserveSample(progress);
+            ProgressSummary sample;
+            try { sample = tracker.ObserveSample(progress); }
+            catch (ArgumentException exception) when (exception.Message == "ProgressCaptureInvalid")
+            { throw new RunFailureException(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract), exception); }
             recordProgress?.Invoke(sample);
             if (sample.ObservationViolation)
                 run.PostProviderException(new RunFailureException(new(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract)));

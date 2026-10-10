@@ -499,6 +499,28 @@ public sealed class ExploreTests
         }
         else { Assert.True(completed); Assert.Null(s.Run.Primary); Assert.Equal(1, s.Run.Budget.Snapshot.Actions); }
     }
+    [Theory] [InlineData(true, true)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(false, false)]
+    public async Task PrivateCaptureTimestampViolationRetainsContractCauseAndOriginalException(bool duringPlanner, bool future)
+    {
+        var s = new Setup(success: true, definitions: Metric()); s.Clock.At(10);
+        s.Feed.TransformCapture = frame =>
+        {
+            if (!duringPlanner && !s.Feed.Goal) return frame;
+            var rejected = TimeSpan.FromMilliseconds(future ? 11 : 9);
+            return frame with { Run = frame.Run with { CapturedAt = rejected, Success = Unit(true) }, Progress = frame.Progress with { CapturedAt = rejected } };
+        };
+        var planner = new Planner(_ => Action());
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); s.Feed.Goal = true; return new ExploreSend<bool>(true, true); }, token);
+            return new(ExploreWorkStatus.Completed, true);
+        });
+        Assert.False(await s.Execute(planner, work));
+        Assert.Equal(new RunEvent(RunReason.ObservationContractViolation, RunPhase.Execution, RunOrigin.Contract), s.Run.Primary!.Cause);
+        Assert.NotEqual(ResultStatus.Passed, s.Run.Primary.Status);
+        Assert.Contains(s.Run.Exceptions, x => x.Type == typeof(ArgumentException).FullName && x.StackTrace is not null);
+        Assert.Equal(duringPlanner ? 0 : 1, work.Calls);
+    }
 }
 
 internal static class ExploreTestJson
