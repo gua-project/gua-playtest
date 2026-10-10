@@ -97,7 +97,7 @@ public sealed class GuaTimedReplay : IReplayPlayback
         public bool SameTickApplication => Read(() => host.SameTickApplication);
         public string? SimulationScope => Read(() => host.SimulationScope);
         public double SimulationMilliseconds => Read(() => host.SimulationMilliseconds);
-        public string? ExecutionFailureCode => cleaning ? host.ExecutionFailureCode : Read(() => host.ExecutionFailureCode);
+        public string? ExecutionFailureCode => cleaning ? Retain(() => host.ExecutionFailureCode) : Read(() => host.ExecutionFailureCode);
         public void Begin(GuaTimedSegment segment) => Read(() => { host.Begin(segment); return true; });
         public void Begin(GuaTimedSegment segment, IReadOnlyList<JsonElement?> values)
             => Read(() => { if (host is IGuaTimedSegmentValueHost valueHost) valueHost.Begin(segment, values); else host.Begin(segment); return true; });
@@ -115,11 +115,11 @@ public sealed class GuaTimedReplay : IReplayPlayback
             }, token).AsTask().GetAwaiter().GetResult();
             next++; return request;
         }
-        public GuaTimedCompletion? Poll(ulong requestId) => cleaning ? host.Poll(requestId) : Read(() => host.Poll(requestId));
+        public GuaTimedCompletion? Poll(ulong requestId) => cleaning ? Retain(() => host.Poll(requestId)) : Read(() => host.Poll(requestId));
         // Gua's bounded cleanup has fresh authority after caller cancellation/Run closure.
         // It never invokes Plan play requests or touches RunSession; this exact host owns its input.
-        public ulong ReleaseAll() { cleaning = true; return host.ReleaseAll(); }
-        public bool IsNeutral => cleaning ? host.IsNeutral : Read(() => host.IsNeutral);
-        public void End() => host.End();
+        public ulong ReleaseAll() { cleaning = true; return Retain(host.ReleaseAll); }
+        public bool IsNeutral => cleaning ? Retain(() => host.IsNeutral) : Read(() => host.IsNeutral);
+        public void End() => Retain(() => { host.End(); return true; });
     }
 }

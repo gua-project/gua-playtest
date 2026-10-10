@@ -227,6 +227,25 @@ public sealed class ReplayTests
         Assert.Equal(0, result.Progress.CompletedCheckpoints); Assert.False(result.Progress.PlanCompleted);
     }
     [Fact]
+    public async Task SynchronousWaitStartupFailureCancelsStartedWaitAndRetainsLosingFault()
+    {
+        var clock = new MonotonicClock(); var run = new RunSession(Limits(), clock, clock);
+        run.BeginPreparation(); run.BeginRunning();
+        var cancelled = false; var started = new TaskCompletionSource();
+        var losing = new IOException("notification fault while shutting down");
+        var startup = new InvalidOperationException("timer startup fault");
+        Func<CancellationToken, ValueTask>[] waits =
+        [
+            token => { token.Register(() => { cancelled = true; started.TrySetException(losing); }); return new(started.Task); },
+            _ => throw startup
+        ];
+        var method = typeof(ReplayDriver).GetMethod("WaitAnyAsync", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var waiting = (ValueTask)method.Invoke(null, [run, CancellationToken.None, waits])!;
+        Assert.Same(startup, await Assert.ThrowsAsync<InvalidOperationException>(() => waiting.AsTask()));
+        Assert.True(cancelled); run.Evaluate();
+        Assert.Contains(run.Exceptions, e => e.Type == typeof(IOException).FullName);
+    }
+    [Fact]
     public async Task PrimarySuccessAndUnconfirmedCleanupRemainSeparate()
     {
         using var files = new Fixture(); var clock = new MonotonicClock(); var cleanup = new OwnedCleanup();

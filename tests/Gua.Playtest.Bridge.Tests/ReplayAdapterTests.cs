@@ -113,11 +113,13 @@ public sealed class ReplayAdapterTests
         public bool SameTickApplication => false;
         public string? SimulationScope => null;
         public double SimulationMilliseconds => 0;
-        public string? ExecutionFailureCode => null;
-        public bool IsNeutral => true;
+        public string? ExecutionFailureCode { get { CleanupFault("health"); return null; } }
+        public bool IsNeutral { get { CleanupFault("neutral"); return true; } }
         public GuaTimedSegment? Segment;
         public int Releases, Ends;
         public Exception? SendFault { get; set; }
+        public string? CleanupFaultAt { get; set; }
+        public Exception? OriginalCleanupFault { get; set; }
         public Action? OnSend { get; set; }
         public List<GuaTimedInput> Sent { get; } = [];
         public void Begin(GuaTimedSegment segment) => Segment = segment;
@@ -126,9 +128,10 @@ public sealed class ReplayAdapterTests
             boundary(); if (SendFault is { } fault) throw fault;
             Sent.Add(input); OnSend?.Invoke(); return (ulong)Sent.Count;
         }
-        public GuaTimedCompletion? Poll(ulong id) => new(true);
-        public ulong ReleaseAll() { Releases++; return 100; }
-        public void End() => Ends++;
+        private void CleanupFault(string phase) { if (Releases > 0 && CleanupFaultAt == phase) throw OriginalCleanupFault!; }
+        public GuaTimedCompletion? Poll(ulong id) { CleanupFault("poll"); return new(true); }
+        public ulong ReleaseAll() { Releases++; CleanupFault("release"); return 100; }
+        public void End() { Ends++; CleanupFault("end"); }
     }
     private static ReplayBatch GameBatch() => new(0, 2,
         """{"schemaVersion":2,"steps":[{"action":"game_input","operation":"key_down","arguments":{"code":"KeyA","leaseMs":5000},"relativeMilliseconds":100,"sensitive":false},{"action":"game_input","operation":"key_up","arguments":{"code":"KeyA"},"relativeMilliseconds":100,"sensitive":false}]}""",
@@ -164,6 +167,21 @@ public sealed class ReplayAdapterTests
         Assert.Equal(ReplayReceiptStatus.Unconfirmed, receipt.Status); Assert.Same(original, receipt.OriginalException);
         // A dispatch fault without a request ID cannot settle the ordinary request or prove neutral.
         Assert.Equal(1, host.Releases); Assert.Equal(1, host.Ends); Assert.False(receipt.NeutralConfirmed);
+    }
+    [Theory]
+    [InlineData("release")]
+    [InlineData("end")]
+    [InlineData("poll")]
+    [InlineData("health")]
+    [InlineData("neutral")]
+    public async Task TimedCleanupPreservesOriginalAbsorbedHostFault(string phase)
+    {
+        var original = new IOException("cleanup host fault");
+        var host = new TimedHost { CleanupFaultAt = phase, OriginalCleanupFault = original };
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing());
+        var receipt = await replay.PlayAsync(GameBatch(), new Calls(), default);
+        Assert.Equal(ReplayReceiptStatus.Failed, receipt.Status); Assert.False(receipt.NeutralConfirmed);
+        Assert.Same(original, receipt.OriginalException); Assert.Equal(1, host.Ends);
     }
     [Fact]
     public async Task CancellationAfterHoldStillRunsIndependentGuaSafetyRelease()

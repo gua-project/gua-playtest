@@ -169,8 +169,12 @@ public sealed class ReplayDriver
     private static async ValueTask WaitAnyAsync(RunSession run, CancellationToken token, params Func<CancellationToken, ValueTask>[] waits)
     {
         using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
-        var tasks = waits.Select(wait => wait(cancelled.Token).AsTask()).ToArray();
-        try { await (await Task.WhenAny(tasks).ConfigureAwait(false)).ConfigureAwait(false); }
+        var tasks = new List<Task>(waits.Length);
+        try
+        {
+            foreach (var wait in waits) tasks.Add(wait(cancelled.Token).AsTask());
+            await (await Task.WhenAny(tasks).ConfigureAwait(false)).ConfigureAwait(false);
+        }
         finally
         {
             FiniteOperation.CancelSafely(cancelled, run.PostException);
