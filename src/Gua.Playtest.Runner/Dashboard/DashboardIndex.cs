@@ -95,7 +95,8 @@ public sealed class DashboardIndex
             var latest = candidates.OrderByDescending(r => r.StartedAt is null).ThenByDescending(r => r.StartedAt)
                 .ThenBy(r => r.Key, StringComparer.Ordinal).FirstOrDefault();
             var state = latest?.State ?? (snapshot.Truncated || snapshot.Warnings.Count != 0 ? "IndexIncomplete" : "Unrun");
-            if (latest?.StartedAt is null && candidates.Length > 1) state = "LatestUnknown";
+            if (candidates.Length > 1 && (latest?.StartedAt is null ||
+                candidates.Count(r => r.StartedAt == latest?.StartedAt) > 1)) state = "LatestUnknown";
             if (snapshot.Truncated || snapshot.Warnings.Count != 0) state = "IndexIncomplete";
             return new DashboardSelection(s, latest, state);
         }).ToArray();
@@ -129,8 +130,10 @@ public sealed class DashboardIndex
             }
             else if (kind == "run")
             {
-                var validation = await new StaticContractValidator([directory]).ValidateFileAsync(Path.Combine(directory, "run.json"), token);
+                AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal));
+                var validation = await new StaticContractValidator(allowedRoots).ValidateFileAsync(Path.Combine(directory, "run.json"), token);
                 if (!validation.IsValid || validation.Document is not RunDocument wire) throw new InvalidDataException();
+                foreach (var file in validation.Files.Values) { CheckAllowed(file.Path); Charge(file.ByteLength); }
                 identity = wire.Identity; started = wire.StartedAt;
             }
             else throw new InvalidDataException();
@@ -171,7 +174,8 @@ public sealed class DashboardIndex
             if (Text(completion, "kind") != "playtestCompletionStorage" || completion.GetProperty("storageVersion").GetInt32() != 1 ||
                 Text(completion, "runId") != Path.GetFileName(directory)) throw new InvalidDataException();
             var receipts = JsonSerializer.Deserialize<ArtifactReceipt[]>(completion.GetProperty("artifacts"), Json);
-            if (receipts is null || receipts.Length != 2 || receipts.Select(x => x.Kind).Distinct().Count() != 2) throw new InvalidDataException();
+            if (receipts is null || receipts.Length != 2 || receipts.Any(x => x is null) ||
+                receipts.Select(x => x.Kind).Distinct().Count() != 2) throw new InvalidDataException();
             var details = new List<DashboardDetail>();
             foreach (var receipt in receipts)
             {
@@ -184,6 +188,7 @@ public sealed class DashboardIndex
                 }
                 var entries = new[] { new ArtifactFileReference(receipt.FileName!, receipt.Bytes ?? 0, receipt.Sha256!) }
                     .Concat(receipt.AdditionalFiles ?? []).ToArray();
+                if (entries.Any(x => x is null)) throw new InvalidDataException();
                 string? link = null;
                 try
                 {
@@ -235,6 +240,21 @@ public sealed class DashboardIndex
         using var validation = JsonDocument.Parse(bytes, new() { MaxDepth = 32 });
         RejectDuplicates(validation.RootElement);
         return JsonDocument.Parse(bytes, new() { MaxDepth = 32 });
+    }
+    private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited)
+    {
+        string[] fields = Text(document, "kind") switch
+        { "run" => ["scenario", "environment", "plan"], "replayPlan" => ["scenario", "recording"], _ => [] };
+        foreach (var field in fields)
+        {
+            if (!document.TryGetProperty(field, out var reference) || reference.ValueKind == JsonValueKind.Null) continue;
+            var path = Path.GetFullPath(reference.GetProperty("path").GetString()!, directory);
+            CheckAllowed(path);
+            if (!visited.Add(path)) continue;
+            if (visited.Count > 16) throw new InvalidDataException();
+            using var source = ReadJson(path);
+            AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited);
+        }
     }
     private static void RejectDuplicates(JsonElement node)
     {

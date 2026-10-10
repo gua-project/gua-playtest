@@ -125,6 +125,12 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("LatestUnknown", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
     }
     [Fact]
+    public async Task Equal_start_times_do_not_claim_which_result_is_latest()
+    {
+        Save(); Save(ResultStatus.Failed);
+        Assert.Equal("LatestUnknown", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
     public async Task Real_executor_and_persistence_results_match_independent_expected_unverified()
     {
         var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
@@ -179,6 +185,36 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal(["ArtifactRootUnreadable"], (await outside.ReadAsync()).Warnings);
     }
     [Fact]
+    public async Task Public_run_references_use_caller_authority_and_bounded_admission()
+    {
+        var store = Save();
+        var environment = new EnvironmentDocument("env", "buildA", new("ws://127.0.0.1:9876", null), "Player",
+            new(1000, 2, 2, 1000, 1000, 1000, 1000, 1000, 10, 1000, 1000, 10, 64, 2, 2, 2, 1000, 10, 10, 1000),
+            new([], false, []), new("recent", "onFailure"), null);
+        var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(environment)); File.WriteAllBytes(Path.Combine(root, "environment.json"), bytes);
+        var run = new RunDocument(store.RunId, Identity(), "Explore", ExecutionState.Finished, DateTimeOffset.UtcNow,
+            new("../../s1.json", Identity().ScenarioSha256), new("../../environment.json", Convert.ToHexStringLower(SHA256.HashData(bytes))), null);
+        var file = Path.Combine(store.DirectoryPath, "run.json"); File.WriteAllText(file, ContractJson.Serialize(run));
+        Assert.Equal("Valid", (await new StaticContractValidator([root]).ValidateFileAsync(file)).Code);
+        var snapshot = await Index().ReadAsync(); Assert.Equal("Passed", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+        var outside = run with { Scenario = new("../../../outside.json", run.Scenario.Sha256) };
+        File.WriteAllText(file, ContractJson.Serialize(outside));
+        Assert.Equal("RunUnreadable", (await Index().ReadAsync()).Runs[0].State);
+    }
+    [Fact]
+    public async Task Corrupt_null_receipts_and_bundle_entries_do_not_crash_snapshot()
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json["artifacts"]![0] = null; File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs.Single(r => r.RunId == store.RunId).Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+        Save(ResultStatus.Failed, day: 2);
+        Assert.Equal("Failed", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse("""{"kind":"Trace","state":"Saved","fileName":"trace.gua","bytes":1,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","additionalFiles":[null]}""");
+        File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs.Single(r => r.RunId == store.RunId).Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+    }
+    [Fact]
     public async Task Packaged_assets_read_only_http_refresh_and_rejected_requests()
     {
         Save(); var before = Directory.GetFiles(Artifacts, "*", SearchOption.AllDirectories).ToDictionary(x => x, File.ReadAllBytes);
@@ -197,6 +233,13 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(hostile)).StatusCode);
         foreach (var entry in before) Assert.Equal(entry.Value, File.ReadAllBytes(entry.Key));
         Assert.Equal(before.Count, Directory.GetFiles(Artifacts, "*", SearchOption.AllDirectories).Length);
+        var completion = before.Keys.Single(file => Path.GetFileName(file) == "completion.json");
+        var broken = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(completion))!.AsObject(); broken["artifacts"]![0] = null;
+        File.WriteAllText(completion, broken.ToJsonString());
+        Assert.Contains("CompletionUnreadable", await client.GetStringAsync("/api/refresh"));
+        Save(ResultStatus.Failed, day: 2);
+        Assert.Contains("Failed", await client.GetStringAsync("/api/refresh"));
+        Assert.Contains("CompletionUnreadable", await client.GetStringAsync("/api/snapshot"));
         cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10));
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }

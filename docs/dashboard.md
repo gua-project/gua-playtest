@@ -23,7 +23,7 @@ inaccessible results are `ResultUnreadable`. Unreadable Run metadata is
 `PassedPostProcessingIncomplete` shows Passed and incomplete mandatory
 postprocessing together. It corresponds to exit 11 rather than normal completion.
 The latest Run uses its saved start timestamp, never a later cleanup completion
-time or a filesystem modification date. Multiple Runs with unknown ordering show
+time or a filesystem modification date. Equal start timestamps and multiple Runs with unknown ordering show
 `LatestUnknown`; earlier Passed results cannot hide later failures.
 
 Trace and Recording show independent receipt states: `NotExecuted`,
