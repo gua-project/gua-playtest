@@ -74,6 +74,14 @@ public sealed class ReplayAdapterTests
         Assert.Equal(1, calls.Sends); Assert.True(receipt.NeutralConfirmed);
     }
     [Fact]
+    public void TrustedUiAdmissionExceptionIsNotMisclassifiedAsUnsupported()
+    {
+        using var runtime = new GuaRuntime(); Ui(runtime, "buy");
+        using var context = new GuaWebSocketContext(Start(runtime)); var original = new ArgumentException("admission fault");
+        var replay = new GuaUiReplay(context, () => new Lease(lifecycle), (_, _) => throw original, TimeSpan.FromMilliseconds(5));
+        Assert.Same(original, Assert.Throws<ArgumentException>(() => replay.Check(Batch())));
+    }
+    [Fact]
     public void RecordedTimingCannotSilentlyDropExistingWait()
     {
         using var runtime = new GuaRuntime(); Ui(runtime, "buy");

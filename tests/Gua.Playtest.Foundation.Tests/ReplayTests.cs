@@ -7,6 +7,9 @@ using Gua.Playtest.Runner.Conditions;
 using Gua.Playtest.Runner.Execution;
 using Gua.Playtest.Runner.Preparation;
 using Gua.Playtest.Runner.Replay;
+using Gua.Playtest.GuaIntegration;
+using Gua.Testing.Recording;
+using System.Text.Json;
 using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
@@ -20,7 +23,7 @@ public sealed class ReplayTests
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "playtest-replay-" + Guid.NewGuid().ToString("N"));
         public string PlanPath => Path.Combine(Root, "plan.json");
-        public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false)
+        public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false, bool gameInput = false)
         {
             Directory.CreateDirectory(Root);
             var scenario = new JsonObject
@@ -35,6 +38,16 @@ public sealed class ReplayTests
                 ["action"] = "click", ["target"] = new JsonObject { ["id"] = "buy" }, ["relativeMilliseconds"] = i,
                 ["preRevision"] = i, ["postRevision"] = i + 1, ["sensitive"] = false
             }).ToArray()) };
+            if (gameInput)
+            {
+                recording["schemaVersion"] = 2;
+                for (var i = 0; i < steps; i++)
+                {
+                    var step = recording["steps"]![i]!.AsObject(); step.Remove("target");
+                    step["action"] = "game_input"; step["operation"] = i == 0 ? "key_down" : "key_up";
+                    step["relativeMilliseconds"] = 0; step["arguments"] = new JsonObject { ["code"] = "KeyA", ["leaseMs"] = 5000 };
+                }
+            }
             File.WriteAllText(Path.Combine(Root, "scenario.json"), scenario.ToJsonString());
             File.WriteAllText(Path.Combine(Root, "recording.json"), recording.ToJsonString());
             var plan = new JsonObject
@@ -57,11 +70,12 @@ public sealed class ReplayTests
         public bool Goal = true, Failure, Checkpoint = true;
         public Action? OnCapture { get; set; }
         public Action? OnWait { get; set; }
+        public ConditionObservationUnit? PointOverride { get; set; }
         public int CheckpointCaptures;
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { OnCapture?.Invoke(); return ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit(Goal), Unit(Failure))); }
         public async ValueTask<ReplayObservation> CaptureAsync(PreparedCondition point, CancellationToken token)
-        { CheckpointCaptures++; return new(await CaptureAsync(token), Unit(Checkpoint)); }
+        { CheckpointCaptures++; return new(await CaptureAsync(token), PointOverride ?? Unit(Checkpoint)); }
         public ValueTask WaitForChangeAsync(CancellationToken token)
         { if (OnWait is { } wake) { wake(); return ValueTask.CompletedTask; } return new(Task.Delay(Timeout.InfiniteTimeSpan, token)); }
     }
@@ -95,7 +109,7 @@ public sealed class ReplayTests
     }
     private static RunLimits Limits(long actions = 10) => new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1),
         TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1), actions, 2, 1, 1024);
-    private static async Task<ReplayOutcome> Run(ResolvedReplay replay, Feed feed, Playback playback, IClock clock,
+    private static async Task<ReplayOutcome> Run(ResolvedReplay replay, Feed feed, IReplayPlayback playback, IClock clock,
         OwnedCleanup? cleanup = null, long actions = 10, bool initial = true, CancellationToken token = default)
         => await new ReplayDriver().ExecuteAsync(replay, Limits(actions), clock, clock, cleanup ?? new(), playback,
             async (run, _, cancellation) =>
@@ -169,7 +183,7 @@ public sealed class ReplayTests
     public async Task FakeSuccessWithoutDispatchCannotCompletePlan()
     {
         using var files = new Fixture(); var clock = new MonotonicClock();
-        var result = await Run(await files.Load(), new(clock), new() { SkipSend = true }, clock);
+        var result = await Run(await files.Load(), new(clock), new Playback { SkipSend = true }, clock);
         Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status); Assert.False(result.Progress.PlanCompleted);
     }
     [Fact]
@@ -227,6 +241,84 @@ public sealed class ReplayTests
         Assert.Equal(0, result.Progress.CompletedCheckpoints); Assert.False(result.Progress.PlanCompleted);
     }
     [Fact]
+    public async Task SameCaptureMalformedCheckpointCannotBeHiddenByOnGoalSuccess()
+    {
+        using var files = new Fixture(completion: "onGoal", checkpoints: [0]); var replay = await files.Load();
+        var malformed = new ConditionObservationUnit([KeyValuePair.Create("$", new ConditionLeafObservation("source:epoch:scope", true,
+            [new ConditionTargetObservation("source:epoch:buy", "{\"type\":\"bool\",\"value\":\"bad\"}")], true))]);
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var clock = new MonotonicClock(); var feed = new Feed(clock) { Goal = false, PointOverride = malformed };
+            feed.OnCapture = () => { if (feed.CheckpointCaptures > 0) feed.Goal = true; };
+            var playback = new Playback(); var result = await Run(replay, feed, playback, clock);
+            Assert.Equal(ResultStatus.Invalid, result.Run.Primary.Status); Assert.Equal(0, playback.Sends);
+        }
+    }
+    [Fact]
+    public async Task SimulationGuardUsesSerializedOwnerWithoutNestedQueueDeadlock()
+    {
+        using var files = new Fixture(gameInput: true); var replay = await files.Load();
+        var clock = new MonotonicClock(); var host = new SimulationHost();
+        var playback = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved,
+            new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        var result = await Run(replay, new(clock), playback, clock, token: cancellation.Token).WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status); Assert.False(cancellation.IsCancellationRequested);
+        Assert.Equal(2, host.Sends); Assert.Equal(1, host.Ends); Assert.True(host.Releases > 0);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SimulationUsesRealDeadlineAndFreshCleanupWhenClockIsStopped(bool cancel)
+    {
+        using var files = new Fixture(gameInput: true); var replay = await files.Load(); var clock = new MonotonicClock();
+        using var cancellation = new CancellationTokenSource();
+        var host = new SimulationHost { MissingReceipts = !cancel, OnSend = cancel ? cancellation.Cancel : null };
+        var playback = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved,
+            new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
+        var result = await Run(replay, new(clock), playback, clock, token: cancellation.Token).WaitAsync(TimeSpan.FromSeconds(3));
+        // Cancellation after dispatch cannot erase an unconfirmed ordinary action, which
+        // has the existing higher failure priority. Both causes remain in the event ledger.
+        Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status);
+        Assert.Equal(RunReason.ActionUnconfirmed, result.Run.Primary.Cause.Reason);
+        if (cancel) Assert.Contains(result.Run.Events, e => e.Reason == RunReason.Cancelled);
+        await host.Ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); Assert.True(host.Releases > 0); Assert.Equal(1, host.Ends);
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TrustedTimedCapabilityAndAdmissionFaultRetainOriginalEvidence(bool capability)
+    {
+        using var files = new Fixture(gameInput: true); var clock = new MonotonicClock();
+        var original = new ArgumentException("trusted admission fault");
+        var host = new SimulationHost { CapabilityFault = capability ? original : null };
+        var playback = new GuaTimedReplay(host, (_, _) => throw original,
+            new(1000, 100, 100, GuaSegmentClock.Simulation, false, false));
+        var result = await Run(await files.Load(), new(clock), playback, clock);
+        Assert.Equal(ResultStatus.Failed, result.Run.Primary.Status); Assert.Equal(0, host.Sends);
+        Assert.Contains(result.Run.Exceptions, e => e.Type == typeof(ArgumentException).FullName && e.StackTrace is not null);
+    }
+    private sealed class SimulationHost : IGuaTimedSegmentHost
+    {
+        public Exception? CapabilityFault { get; set; }
+        public Action? OnSend { get; set; }
+        public bool MissingReceipts { get; set; }
+        public TaskCompletionSource Ended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool OrderedApplication => CapabilityFault is { } failure ? throw failure : true;
+        public bool ApplicationTimes => false;
+        public bool SameTickApplication => false;
+        public string? SimulationScope => "controlled-fixture";
+        public double SimulationMilliseconds => 0;
+        public string? ExecutionFailureCode => null;
+        public bool IsNeutral => true;
+        public int Sends, Ends, Releases;
+        public void Begin(GuaTimedSegment segment) { }
+        public ulong Send(GuaTimedInput input, JsonElement? value, Action boundary) { boundary(); Sends++; OnSend?.Invoke(); return (ulong)Sends; }
+        public GuaTimedCompletion? Poll(ulong id) => MissingReceipts ? null : new(true);
+        public ulong ReleaseAll() { Releases++; return 100; }
+        public void End() { Ends++; Ended.TrySetResult(); }
+    }
+    [Fact]
     public async Task SynchronousWaitStartupFailureCancelsStartedWaitAndRetainsLosingFault()
     {
         var clock = new MonotonicClock(); var run = new RunSession(Limits(), clock, clock);
@@ -250,7 +342,7 @@ public sealed class ReplayTests
     {
         using var files = new Fixture(); var clock = new MonotonicClock(); var cleanup = new OwnedCleanup();
         cleanup.Register(CleanupStage.InputRelease, _ => ValueTask.FromResult(false));
-        var result = await Run(await files.Load(), new(clock), new(), clock, cleanup);
+        var result = await Run(await files.Load(), new(clock), new Playback(), clock, cleanup);
         Assert.Equal(ResultStatus.Passed, result.Run.Primary.Status); Assert.Equal(11, result.Run.ExitCode);
         Assert.Contains(result.Run.PostProcessing, p => p.Reason == PostProcessingReason.InputReleaseUnconfirmed);
     }

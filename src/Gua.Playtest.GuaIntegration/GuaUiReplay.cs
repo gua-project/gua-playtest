@@ -28,16 +28,17 @@ public sealed class GuaUiReplay : IReplayPlayback
     }
     public ReplayCheck Check(ReplayBatch batch, bool starting = true)
     {
+        GuaRecording recording;
         try
         {
-            var recording = Parse(batch);
-            if (batch.Timing is not ("recorded" or "conditionSynchronized") ||
-                recording.Steps.Any(s => s.CoordinateFallback is not null || batch.Timing == "recorded" && s.WaitCondition is not null))
-                return ReplayCheck.Unsupported;
-            return admit(batch, starting);
+            recording = Parse(batch);
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or OverflowException)
         { return ReplayCheck.Unsupported; }
+        if (batch.Timing is not ("recorded" or "conditionSynchronized") ||
+            recording.Steps.Any(s => s.CoordinateFallback is not null || batch.Timing == "recorded" && s.WaitCondition is not null))
+            return ReplayCheck.Unsupported;
+        return admit(batch, starting);
     }
     public ValueTask<ReplayReceipt> PlayAsync(ReplayBatch batch, IReplayCalls calls, CancellationToken token)
         => new(Task.Run(async () =>

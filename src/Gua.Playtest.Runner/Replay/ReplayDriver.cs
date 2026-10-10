@@ -143,7 +143,13 @@ public sealed class ReplayDriver
                 : evaluated.Evaluation.Truth == TruthValue.True ? []
                 : evaluated.Completion == ConditionCompletion.Expired || run.AuthoritativeRealClock.Elapsed >= deadline
                     ? [new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Condition)] : null;
-            if (events is not null) completion.TrySetResult(events);
+            if (events is not null)
+            {
+                // Private checkpoint validation belongs to this same captured unit. Post its
+                // terminal evidence before OnGoal can arbitrate, independent of task delivery.
+                foreach (var evidence in events) run.PostProviderException(new RunFailureException(evidence));
+                completion.TrySetResult(events);
+            }
             return unit.Run;
         }
         public ValueTask WaitForChangeAsync(CancellationToken token) => WaitAnyAsync(run, token,

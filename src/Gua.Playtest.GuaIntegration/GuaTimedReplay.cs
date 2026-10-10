@@ -32,16 +32,17 @@ public sealed class GuaTimedReplay : IReplayPlayback
     }
     public ReplayCheck Check(ReplayBatch batch, bool starting = true)
     {
+        GuaTimedSegment segment;
         try
         {
-            var segment = Import(batch);
-            if (!host.OrderedApplication || segment.Clock == GuaSegmentClock.Simulation && string.IsNullOrWhiteSpace(host.SimulationScope) ||
-                (segment.RequireApplicationTimes || segment.RequireSameTickApplication) && !host.ApplicationTimes ||
-                segment.RequireSameTickApplication && !host.SameTickApplication) return ReplayCheck.Unsupported;
-            return admit(batch, starting);
+            segment = Import(batch);
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or OverflowException or InvalidOperationException)
         { return ReplayCheck.Unsupported; }
+        if (!host.OrderedApplication || segment.Clock == GuaSegmentClock.Simulation && string.IsNullOrWhiteSpace(host.SimulationScope) ||
+            (segment.RequireApplicationTimes || segment.RequireSameTickApplication) && !host.ApplicationTimes ||
+            segment.RequireSameTickApplication && !host.SameTickApplication) return ReplayCheck.Unsupported;
+        return admit(batch, starting);
     }
     public ValueTask<ReplayReceipt> PlayAsync(ReplayBatch batch, IReplayCalls calls, CancellationToken token)
         => new(Task.Run(async () =>
@@ -85,6 +86,7 @@ public sealed class GuaTimedReplay : IReplayPlayback
     {
         private int next;
         private bool cleaning;
+        private bool dispatchingOnOwner;
         public Exception? OriginalException { get; private set; }
         private T Retain<T>(Func<T> callback)
         {
@@ -96,7 +98,9 @@ public sealed class GuaTimedReplay : IReplayPlayback
         public bool ApplicationTimes => Read(() => host.ApplicationTimes);
         public bool SameTickApplication => Read(() => host.SameTickApplication);
         public string? SimulationScope => Read(() => host.SimulationScope);
-        public double SimulationMilliseconds => Read(() => host.SimulationMilliseconds);
+        // Gua's send guard samples its simulation clock inside the already serialized owner
+        // callback. Queueing that nested read would block the owner that must pump it.
+        public double SimulationMilliseconds => dispatchingOnOwner ? Retain(() => host.SimulationMilliseconds) : Read(() => host.SimulationMilliseconds);
         public string? ExecutionFailureCode => cleaning ? Retain(() => host.ExecutionFailureCode) : Read(() => host.ExecutionFailureCode);
         public void Begin(GuaTimedSegment segment) => Read(() => { host.Begin(segment); return true; });
         public void Begin(GuaTimedSegment segment, IReadOnlyList<JsonElement?> values)
@@ -105,13 +109,18 @@ public sealed class GuaTimedReplay : IReplayPlayback
         {
             var request = calls.SendAsync(next, beforeSend =>
             {
-                var id = Retain(() => host.Send(input, secret, () =>
+                dispatchingOnOwner = true;
+                try
                 {
-                    verifySendBoundary();
-                    if (admit() != ReplayCheck.Approved) throw new InvalidOperationException("ReplayAdmissionChanged");
-                    beforeSend();
-                }));
-                return new ReplaySend<ulong>(id, id != 0);
+                    var id = Retain(() => host.Send(input, secret, () =>
+                    {
+                        verifySendBoundary();
+                        if (admit() != ReplayCheck.Approved) throw new InvalidOperationException("ReplayAdmissionChanged");
+                        beforeSend();
+                    }));
+                    return new ReplaySend<ulong>(id, id != 0);
+                }
+                finally { dispatchingOnOwner = false; }
             }, token).AsTask().GetAwaiter().GetResult();
             next++; return request;
         }
