@@ -418,3 +418,50 @@ actionable findings and parent sequencing approval are mandatory. Production,
 OPEN-09/11 and real provider/transport/Planner/OS/inherited-capability/Trace/game
 acceptance remain unavailable/unverified; issue #13 stays open. Execution groups
 are artifact provenance groups, never a reset of the finite audit budget.
+## Parent-ordered post-Replay integration (evidence group 9)
+
+Parent instructed PR #41 to merge first, followed by main integration and final
+CI/review for #38. GitHub API confirmed #41 actually MERGED at
+2026-10-10 23:33:49 UTC, merge commit fd612b255e2764e8f8f0dc9a23065dfe5b51bce8
+from final 70ea2a3aa46f9e61591036511a3ddfe1737be8fe. Fetched and merged that
+exact main into saved #38 HEAD 7457ed4dfb5ecea139824b2d557add99166ab5f2,
+without reset/reconstruction/conflicts. Original base was 0b77154; the new resolved
+merge-base is fd612b2. Merge preserves the original Codex work and retains PR41
+Recording dependency/locks, Replay Core ports/adapters, docs and the shared
+RunExecutor initial-observation hook. Its existing overload remains available;
+Codex/Explore implementations do not duplicate the hook or request Planner work
+from it. No additional runtime feature implementation was required by integration.
+Read affected README/docs index, execution/replay contracts and changed callers.
+
+- [Focused TRX](docs/evidence/issue-13/batch-9/focused.trx)/[log](docs/evidence/issue-13/batch-9/focused.log):
+  `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter "FullyQualifiedName~CodexProtocolTests|FullyQualifiedName~Explore|FullyQualifiedName~Replay"`
+  gives 366 pass, 0 fail/skip. Reuses Codex, Explore, Replay and shared execution
+  assertions; this is integration regression evidence, not a new independent audit.
+- [Restore](docs/evidence/issue-13/batch-9/restore.log), [build](docs/evidence/issue-13/batch-9/build.log),
+  [boundaries](docs/evidence/issue-13/batch-9/boundaries.log), [tests](docs/evidence/issue-13/batch-9/tests.log):
+  locked restore, Release build 0 warnings/errors and the updated package/native
+  boundary rules pass; Bridge 153 + Contracts 528 + Foundation 1240 =
+  **1921 pass, 0 fail/skip**.
+  [Bridge TRX](docs/evidence/issue-13/batch-9/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-9/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-9/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-9/package.log)/[JSON](docs/evidence/issue-13/batch-9/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-9/contracts.log)/[JSON](docs/evidence/issue-13/batch-9/contracts-evidence.json)
+  pass actual archive/tool install/execute and native-free consumer after the
+  merged Recording dependency. Commands `./scripts/package-smoke.ps1 -Rid win-x64`,
+  `./scripts/contract-smoke.ps1`. [Pack](docs/evidence/issue-13/batch-9/pack.log)
+  restores normal merged lock state, retaining PR41 package pins without RID noise.
+- [Manifest](docs/evidence/issue-13/batch-9/manifest.json) pins saved branch HEAD,
+  merged main, integration source/lock blob hashes and original raw artifact bytes.
+  Windows 10.0.26300 / SDK 10.0.401; host Oct11 UTC+09 = Oct10 UTC. Runtime/tests
+  were final before execution; only evidence/docs were added afterward.
+
+Independent audit remains 2/2 consumed, with no new agent/reset. Parent-ordered
+integration plus all previous correction diffs received NO additional independent
+audit; PR41's separate review is not claimed to audit this combined snapshot.
+The exact integrated final HEAD must get all CI and actual completed Codex review
+with zero unresolved actionable findings. PR38 stays unmerged until parent
+sequencing approval; prior HEAD results cannot authorize it. Production and
+OPEN-09/11, real Planner/provider/OS/inherited-capability/Trace/game acceptance
+remain unavailable/unverified and issue #13 stays open. Execution artifact group
+9 is provenance only, not a new audit task/batch or budget reset.

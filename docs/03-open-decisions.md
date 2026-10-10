@@ -76,7 +76,7 @@ P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](a
 
 **固定する時点:** Timed Segment executorとRecording互換変換の実装前。
 
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**状態:** 公開 Gua 1.1.1 を消費する境界は [replay.md](replay.md) で固定。UI の記録時刻、legacy-unknown 変換、同 offset 順序、明示 clock/capability、実時間 lease/cleanup を区別し、厳密能力不足を拒否する。実 engine の適用時刻・simulation/lease 計測は引き続き受け入れ証拠が必要。
 
 ## OPEN-08 Replay Planの参照範囲・hash・採用証拠
 
@@ -86,7 +86,7 @@ P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](a
 
 **固定する時点:** plan create/acceptのファイル形式を公開する前。
 
-**状態:** bytes SHA-256、外部採用証拠、全Recording境界はcontracts.mdで確定。実完走/採用の受け入れは#10/#14。
+**状態:** bytes SHA-256、外部採用証拠、全Recording境界はcontracts.mdで確定。[replay.md](replay.md) の runtime は保持 bytes と全範囲・順序付き checkpoint を消費し、既存 wait を黙って削除しない。実完走/採用の受け入れは#10/#14。
 
 ## OPEN-09 Planner実行隔離と接続契約
 
