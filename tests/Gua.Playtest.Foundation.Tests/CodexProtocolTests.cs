@@ -70,6 +70,51 @@ public sealed class CodexProtocolTests
     private sealed class ReplyBackend(CodexReply reply) : ICodexDecisionBackend
     { public ValueTask<CodexReply> DecideAsync(PlannerInputDocument input, CancellationToken token) => new(reply); }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StatusAndTurnStartedBeforeRpcResponseAreCorrelated(bool stale)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+        transport.Add(new JsonObject { ["method"] = "thread/status/changed", ["params"] = new JsonObject
+            { ["threadId"] = stale ? "other-thread" : "thread-1", ["status"] = new JsonObject
+                { ["type"] = "active", ["activeFlags"] = new JsonArray() } } }.ToJsonString());
+        transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+        transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(stale ? CodexReplyStatus.OutputInvalid : CodexReplyStatus.Completed, reply.Status);
+        if (stale) Assert.Null(reply.CompletedJson);
+    }
+
+    [Theory]
+    [InlineData("full", true)]
+    [InlineData("summary", false)]
+    [InlineData("notLoaded", false)]
+    public async Task OnlyFullTurnViewCanSupplyFinalProposal(string view, bool valid)
+    {
+        var transport = Started(); var message = JsonNode.Parse(Completed(Decision()))!;
+        message["params"]!["turn"]!["itemsView"] = view; transport.Add(message.ToJsonString());
+        var reply = await Backend(transport).DecideAsync(Input(), default);
+        Assert.Equal(valid ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+        if (!valid) Assert.Null(reply.CompletedJson);
+    }
+
+    [Theory]
+    [InlineData("thread/started")]
+    [InlineData("turn/started")]
+    public async Task AnnouncedLifecycleIdentityMustMatchStartResponse(string method)
+    {
+        var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+        transport.Frames.Enqueue(frames[0]);
+        if (method == "turn/started") transport.Frames.Enqueue(frames[1]);
+        transport.Add(method == "thread/started"
+            ? "{\"method\":\"thread/started\",\"params\":{\"thread\":{\"id\":\"wrong-thread\"}}}"
+            : "{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"wrong-turn\"}}}");
+        transport.Frames.Enqueue(frames[method == "thread/started" ? 1 : 2]);
+        Assert.Equal(CodexReplyStatus.OutputInvalid, (await Backend(transport).DecideAsync(Input(), default)).Status);
+    }
+
     [Fact]
     public async Task PostInitializeNotificationsAreConsumedWithinMessageBounds()
     {

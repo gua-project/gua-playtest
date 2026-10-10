@@ -151,6 +151,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                             ? CodexReplyStatus.UsageLimit : CodexReplyStatus.ConnectionFailure, Usage: usage);
                     }
                     if (status != "completed") throw new ProtocolException();
+                    if (turn.TryGetProperty("itemsView", out var view) && view.GetString() != "full") throw new ProtocolException();
                     var items = turnItems.EnumerateArray().Where(x =>
                         x.GetProperty("type").GetString() == "agentMessage" &&
                         (!x.TryGetProperty("delivery", out var delivery) || delivery.ValueKind == JsonValueKind.Null) &&
@@ -189,6 +190,8 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
     private async ValueTask<JsonElement> RequestAsync(string method, JsonObject parameters, CancellationToken token)
     {
         var id = checked(++nextId);
+        string? announcedThread = null;
+        string? announcedTurn = null;
         await WriteAsync(new JsonObject { ["id"] = id, ["method"] = method, ["params"] = parameters }, token).ConfigureAwait(false);
         while (true)
         {
@@ -198,8 +201,37 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 if (message.GetProperty("params").ValueKind != JsonValueKind.Object) throw new ProtocolException();
                 // 0.150.1 sends benign configuration/remote-control status notices
                 // after initialize. They grant no capabilities and still consume bounds.
-                if (message.GetProperty("method").GetString() is "thread/started" or "turn/started" or
-                    "configWarning" or "remoteControl/status/changed") continue;
+                var notification = message.GetProperty("method").GetString();
+                if (notification is "configWarning" or "remoteControl/status/changed") continue;
+                if (notification is "thread/started" or "turn/started" or "thread/status/changed")
+                {
+                    var notice = message.GetProperty("params");
+                    var noticeThread = Identifier(notification == "thread/started"
+                        ? notice.GetProperty("thread").GetProperty("id") : notice.GetProperty("threadId"));
+                    if ((threadId is not null && noticeThread != threadId) ||
+                        (threadId is null && method != "thread/start") ||
+                        (announcedThread is not null && announcedThread != noticeThread)) throw new ProtocolException();
+                    announcedThread = noticeThread;
+                    if (notification == "thread/status/changed")
+                    {
+                        var status = notice.GetProperty("status");
+                        var kind = status.GetProperty("type").GetString();
+                        if (kind == "active")
+                        {
+                            foreach (var flag in status.GetProperty("activeFlags").EnumerateArray())
+                                if (flag.GetString() is not ("waitingOnApproval" or "waitingOnUserInput")) throw new ProtocolException();
+                        }
+                        else if (kind is not ("notLoaded" or "idle" or "systemError")) throw new ProtocolException();
+                    }
+                    if (notification == "turn/started")
+                    {
+                        if (method != "turn/start") throw new ProtocolException();
+                        var noticeTurn = Identifier(notice.GetProperty("turn").GetProperty("id"));
+                        if (announcedTurn is not null && announcedTurn != noticeTurn) throw new ProtocolException();
+                        announcedTurn = noticeTurn;
+                    }
+                    continue;
+                }
                 throw new ProtocolException();
             }
             if (!received.TryGetInt64(out var number) || number != id || message.TryGetProperty("method", out _)) throw new ProtocolException();
@@ -209,7 +241,12 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     error.GetProperty("message").ValueKind != JsonValueKind.String) throw new ProtocolException();
                 throw new BackendException();
             }
-            return message.GetProperty("result");
+            var result = message.GetProperty("result");
+            if (method == "thread/start" && announcedThread is not null &&
+                Identifier(result.GetProperty("thread").GetProperty("id")) != announcedThread) throw new ProtocolException();
+            if (method == "turn/start" && announcedTurn is not null &&
+                Identifier(result.GetProperty("turn").GetProperty("id")) != announcedTurn) throw new ProtocolException();
+            return result;
         }
     }
     private async ValueTask WriteAsync(JsonObject message, CancellationToken token)

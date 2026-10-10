@@ -42,6 +42,10 @@ message in the matching `turn/completed` notification can return bytes; its
 Run/request/observation correlation must match. Secret-bearing decoded output is
 refused, rather than edited into a different action. Runner still validates the
 complete proposal against its pinned schemas and current authority.
+The turn's items view must be absent (the protocol default is `full`) or explicitly
+`full`; display summaries and not-loaded views cannot supply a proposal.
+Asynchronous agent deliveries are excluded. Known lifecycle notices can precede
+start responses, but their thread/turn identities must match that exchange.
 
 Server capability requests, duplicate response IDs, malformed frames, wrong
 correlation, invalid usage and exceeded bounds close the connection's converter.
