@@ -100,7 +100,9 @@ public sealed class PlannerGate
         if (window > run.Limits.WaitTimeout || window <= TimeSpan.Zero)
             return Reject(request, PlannerFeedbackCode.BudgetDenied);
         // Even finish takes an approved finite final observation opportunity; it never establishes success.
-        var operation = request.Permit.Approve(count, window);
+        var operation = kind == "wait" && decision["durationMilliseconds"] is { } elapsed
+            ? request.Permit.ApproveElapsedWait(TimeSpan.FromMilliseconds(elapsed.GetValue<long>()), run.Limits.WaitTimeout)
+            : request.Permit.Approve(count, window);
         if (operation is null) return Reject(request, clock.Elapsed >= request.Deadline
             ? PlannerFeedbackCode.PlannerTimeout : PlannerFeedbackCode.BudgetDenied);
         request.Closed = true;

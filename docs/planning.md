@@ -57,6 +57,14 @@ wait or goalClaimed finish does not grade the Goal. Finish receives one finite
 final observation opportunity; the driver then reports execution complete to
 the existing machine arbiter.
 
+Duration waits use the execution owner's additive `ApproveElapsedWait` path:
+the specified duration and the subsequent WaitTimeout observation allowance
+are distinct. Confirmation cannot precede the elapsed condition-clock boundary,
+and the entire opportunity remains clamped to the original real Running
+deadline. The duration itself cannot exceed WaitTimeout. Conditional waits keep
+their proposed finite timeout; sent-action and Planner-response deadlines are
+unchanged. Neither kind allows recovery to interrupt its active opportunity.
+
 `IPlannerAuthority` is a trusted **host validation port**, not a new game
 Capability. Its seven independent checks cover current permissions, original
 Gua Action definition/type/range/active/confirmation policy, context/epoch/profile,
