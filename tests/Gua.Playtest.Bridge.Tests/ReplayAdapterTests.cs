@@ -5,6 +5,8 @@ using Gua.Runtime;
 using Gua.Testing;
 using Gua.Playtest.Core;
 using Gua.Playtest.GuaIntegration;
+using System.Text.Json;
+using Gua.Testing.Recording;
 using Xunit;
 
 namespace Gua.Playtest.Bridge.Tests;
@@ -102,5 +104,75 @@ public sealed class ReplayAdapterTests
         });
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Playback(context).PlayAsync(Batch(), calls, default).AsTask());
         Assert.Equal("ReplaySessionChanged", error.Message); Assert.Equal(1, calls.Sends);
+    }
+
+    private sealed class TimedHost : IGuaTimedSegmentHost
+    {
+        public bool OrderedApplication => true;
+        public bool ApplicationTimes => false;
+        public bool SameTickApplication => false;
+        public string? SimulationScope => null;
+        public double SimulationMilliseconds => 0;
+        public string? ExecutionFailureCode => null;
+        public bool IsNeutral => true;
+        public GuaTimedSegment? Segment;
+        public int Releases, Ends;
+        public Exception? SendFault { get; set; }
+        public Action? OnSend { get; set; }
+        public List<GuaTimedInput> Sent { get; } = [];
+        public void Begin(GuaTimedSegment segment) => Segment = segment;
+        public ulong Send(GuaTimedInput input, JsonElement? secret, Action boundary)
+        {
+            boundary(); if (SendFault is { } fault) throw fault;
+            Sent.Add(input); OnSend?.Invoke(); return (ulong)Sent.Count;
+        }
+        public GuaTimedCompletion? Poll(ulong id) => new(true);
+        public ulong ReleaseAll() { Releases++; return 100; }
+        public void End() => Ends++;
+    }
+    private static ReplayBatch GameBatch() => new(0, 2,
+        """{"schemaVersion":2,"steps":[{"action":"game_input","operation":"key_down","arguments":{"code":"KeyA","leaseMs":5000},"relativeMilliseconds":100,"sensitive":false},{"action":"game_input","operation":"key_up","arguments":{"code":"KeyA"},"relativeMilliseconds":100,"sensitive":false}]}""",
+        "recorded", 100, TimeSpan.FromSeconds(2));
+    private static GuaReplayTimingPolicy Timing(bool strict = false) => new(1000, 100, 100, GuaSegmentClock.Realtime, strict, strict);
+
+    [Fact]
+    public async Task PublicTimedImportKeepsEqualOffsetOrderAndNormalRelease()
+    {
+        var host = new TimedHost(); var calls = new Calls();
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing());
+        Assert.Equal(ReplayCheck.Approved, replay.Check(GameBatch()));
+        var receipt = await replay.PlayAsync(GameBatch(), calls, default);
+        Assert.Equal(ReplayReceiptStatus.Succeeded, receipt.Status); Assert.Equal(2, receipt.CompletedSteps);
+        Assert.Equal("legacy-unknown", host.Segment!.TimingProvenance);
+        Assert.Equal(new long[] { 0, 0 }, host.Sent.Select(x => x.OffsetMilliseconds));
+        Assert.Equal(new[] { GuaGameInputOperation.Down, GuaGameInputOperation.Up }, host.Sent.Select(x => x.Operation));
+        Assert.Equal(1, host.Releases); Assert.Equal(1, host.Ends); Assert.True(receipt.NeutralConfirmed);
+    }
+    [Fact]
+    public void StrictTimingRejectsHostWithoutMeasuredCapability()
+    {
+        var host = new TimedHost(); var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing(true));
+        Assert.Equal(ReplayCheck.Unsupported, replay.Check(GameBatch()));
+        Assert.Null(host.Segment); Assert.Empty(host.Sent);
+    }
+    [Fact]
+    public async Task PublicTimedExceptionRetainsOriginalAndStillRunsFreshSafetyRelease()
+    {
+        var original = new IOException("host dispatch fault"); var host = new TimedHost { SendFault = original };
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing());
+        var receipt = await replay.PlayAsync(GameBatch(), new Calls(), default);
+        Assert.Equal(ReplayReceiptStatus.Unconfirmed, receipt.Status); Assert.Same(original, receipt.OriginalException);
+        // A dispatch fault without a request ID cannot settle the ordinary request or prove neutral.
+        Assert.Equal(1, host.Releases); Assert.Equal(1, host.Ends); Assert.False(receipt.NeutralConfirmed);
+    }
+    [Fact]
+    public async Task CancellationAfterHoldStillRunsIndependentGuaSafetyRelease()
+    {
+        using var cancellation = new CancellationTokenSource(); var host = new TimedHost { OnSend = cancellation.Cancel };
+        var replay = new GuaTimedReplay(host, (_, _) => ReplayCheck.Approved, Timing());
+        var receipt = await replay.PlayAsync(GameBatch(), new Calls(), cancellation.Token);
+        Assert.NotEqual(ReplayReceiptStatus.Succeeded, receipt.Status);
+        Assert.Equal(GuaGameInputOperation.Down, Assert.Single(host.Sent).Operation);
+        Assert.Equal(2, host.Releases); Assert.Equal(1, host.Ends); Assert.True(receipt.NeutralConfirmed);
     }
 }
