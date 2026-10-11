@@ -424,6 +424,87 @@ public sealed class CodexProtocolTests
             Assert.DoesNotContain(transport.Writes, x => x.Contains("hooks.json"));
         }
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(bool beforeResponse)
+    {
+        foreach (var status in new[] { "starting", "ready", "failed", "cancelled" })
+        foreach (var target in new[] { "thread-1", "missing", "null" })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]);
+            if (!beforeResponse) { transport.Frames.Enqueue(frames[1]); transport.Frames.Enqueue(frames[2]); }
+            var parameters = new JsonObject { ["name"] = "inherited-tools", ["status"] = status };
+            if (target != "missing") parameters["threadId"] = target == "null" ? null : target;
+            transport.Add(new JsonObject { ["method"] = "mcpServer/startupStatus/updated", ["params"] = parameters }.ToJsonString());
+            if (beforeResponse) { transport.Frames.Enqueue(frames[1]); transport.Frames.Enqueue(frames[2]); }
+            transport.Add(Completed(Decision())); var backend = Backend(transport); var reply = await backend.DecideAsync(Input(), default);
+            Assert.Equal(CodexReplyStatus.ConnectionFailure, reply.Status); Assert.Null(reply.CompletedJson); Assert.Null(reply.Usage);
+            Assert.Equal(CodexReplyStatus.OutputInvalid, (await backend.DecideAsync(Input("request-2"), default)).Status);
+            if (beforeResponse) Assert.DoesNotContain(transport.Writes, x => x.Contains("public objective"));
+        }
+    }
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("itemMissing")]
+    [InlineData("itemIncomplete")]
+    [InlineData("timestampMissing")]
+    [InlineData("timestampNull")]
+    [InlineData("timestampString")]
+    [InlineData("timestampOverflow")]
+    public async Task ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(string variant)
+    {
+        foreach (var beforeResponse in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            var notice = JsonNode.Parse(CanonicalItem(Decision()))!; notice["method"] = "item/started";
+            var parameters = notice["params"]!.AsObject(); parameters.Remove("completedAtMs"); parameters["startedAtMs"] = 1;
+            if (variant == "itemMissing") parameters.Remove("item");
+            else if (variant == "itemIncomplete") parameters["item"]!.AsObject().Remove("text");
+            else if (variant == "timestampMissing") parameters.Remove("startedAtMs");
+            else if (variant == "timestampNull") parameters["startedAtMs"] = null;
+            else if (variant == "timestampString") parameters["startedAtMs"] = "1";
+            else if (variant == "timestampOverflow") parameters["startedAtMs"] = JsonNode.Parse("9223372036854775808");
+            transport.Add(notice.ToJsonString());
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]); transport.Add(Completed(Decision()));
+            var reply = await Backend(transport).DecideAsync(Input(), default);
+            Assert.Equal(variant == "valid" ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+            if (variant != "valid") Assert.Null(reply.CompletedJson);
+        }
+    }
+    [Theory]
+    [InlineData("full", "matching")]
+    [InlineData("full", "text")]
+    [InlineData("full", "identity")]
+    [InlineData("full", "extra")]
+    [InlineData("summary", "matching")]
+    [InlineData("summary", "text")]
+    [InlineData("summary", "identity")]
+    [InlineData("summary", "extra")]
+    public async Task CanonicalFinalItemsMustMatchEveryTerminalView(string view, string variant)
+    {
+        foreach (var beforeResponse in new[] { false, true })
+        {
+            var transport = Started(); var frames = transport.Frames.ToArray(); transport.Frames.Clear();
+            transport.Frames.Enqueue(frames[0]); transport.Frames.Enqueue(frames[1]);
+            transport.Add("{\"method\":\"turn/started\",\"params\":{\"threadId\":\"thread-1\",\"turn\":{\"id\":\"turn-1\",\"items\":[],\"status\":\"inProgress\"}}}");
+            if (!beforeResponse) transport.Frames.Enqueue(frames[2]);
+            transport.Add(CanonicalItem(Decision()));
+            if (variant == "extra") { var extra = JsonNode.Parse(CanonicalItem(Decision()))!; extra["params"]!["item"]!["id"] = "message-2"; transport.Add(extra.ToJsonString()); }
+            if (beforeResponse) transport.Frames.Enqueue(frames[2]);
+            var completion = JsonNode.Parse(view == "full" ? Completed(Decision()) : Summary(Decision()))!;
+            var item = completion["params"]!["turn"]!["items"]![0]!;
+            if (variant == "text") item["text"] = Decision().Replace("goalClaimed", "inconclusive");
+            else if (variant == "identity") item["id"] = "message-2";
+            transport.Add(completion.ToJsonString()); var reply = await Backend(transport).DecideAsync(Input(), default);
+            Assert.Equal(variant == "matching" ? CodexReplyStatus.Completed : CodexReplyStatus.OutputInvalid, reply.Status);
+            if (variant != "matching") Assert.Null(reply.CompletedJson);
+        }
+    }
     private static string RetryNotice() => new JsonObject
     {
         ["method"] = "error", ["params"] = new JsonObject { ["threadId"] = "thread-1", ["turnId"] = "turn-1",

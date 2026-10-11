@@ -32,6 +32,8 @@ internal static class CodexItemSchema
     private static readonly JsonSchema ErrorSchema = Load("TurnError");
     private static readonly JsonSchema ThreadStartSchema = Load("ThreadStartResponse");
     private static readonly JsonSchema ThreadSchema = Load("ThreadStartResponse", "Thread");
+    private static readonly JsonSchema ItemStartedSchema = Load("ItemStarted");
+    public static bool ValidItemStarted(JsonElement parameters) => Evaluate(ItemStartedSchema, parameters);
     private static readonly JsonSchema ItemCompletedSchema = Load("ItemCompleted");
     private static JsonSchema Load(string name, string? definition = null)
     {

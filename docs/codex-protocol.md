@@ -181,3 +181,12 @@ redaction. Byte/frame/message/deadline bounds are explicit; no clock or scoring
 rule is replaced. Requirements PLANNER-008/009, PACK-004, FIX-006 and OPEN-09/11
 still require real provider/OS/Trace/package/game acceptance. Fake tests cannot
 close issue #13 or certify isolation.
+
+The complete pinned item/started envelope (including its ThreadItem and int64
+startedAtMs) is validated before buffering and after the response. Recorded final
+canonical items must match terminal item identity and content in full and summary
+views; additional canonical final items refuse the proposal. Full views without
+any canonical notice retain their existing direct terminal-evidence path.
+Inherited mcpServer/* lifecycle notices, like hook/*, consistently refuse
+ConnectionFailure before/after responses and close the converter. Refusal does
+not disable or prevent upstream MCP startup/execution and proves no OS isolation.

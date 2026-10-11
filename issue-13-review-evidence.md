@@ -520,3 +520,61 @@ completed actual Codex review with no actionable findings and parent sequencing
 approval. Production, OPEN-09/11 and real provider/OS/inherited-capability/Planner/
 Trace/game acceptance remain unverified; issue #13 stays open. Execution artifact
 groups never reset the finite audit counter.
+## MCP/item-start/full-canonical findings (evidence group 11)
+
+Actual Codex review 5481250526 of 9ce91e7 at 2026-10-10 23:57:28 UTC
+raised 4239647006 (inherited MCP startup ordering), 4239647010 (incomplete
+item/started), 4239647011 (full view bypasses canonical reconciliation).
+Validated against pinned [MCP publisher](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server/src/bespoke_event_handling.rs),
+[ItemStartedNotification schema](https://github.com/openai/codex/blob/rust-v0.150.1/codex-rs/app-server-protocol/schema/json/v2/ItemStartedNotification.json)
+and existing canonical summary assertions. MCP namespace consistently refuses
+ConnectionFailure before/after startup/turn responses, with no output/usage and
+closed reuse. No inherited MCP is disabled by this converter and no upstream
+startup prevention/OS isolation is claimed. Item-start schema is copied unchanged,
+embedded offline with existing Apache notice; its required ThreadItem and int64
+startedAtMs are checked before buffering and in the main event loop. Any recorded
+canonical final item must match full/summary terminal identity/content; extra
+canonical final IDs refuse output. Full direct terminal evidence with no canonical
+notice remains supported. Existing matching summary/full paths are retained.
+
+- `InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse`: both response
+  orderings, four startup states and optional/missing/null thread targets,
+  no Planner input before early refusal, no proposal/usage, permanent close.
+- `ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse`: valid and missing/
+  incomplete item, missing/null/string/overflow timestamp before/after response.
+- `CanonicalFinalItemsMustMatchEveryTerminalView`: full/summary matching and
+  changed text, changed ID and extra final item, both response orderings.
+- [Focused TRX](docs/evidence/issue-13/batch-11/focused.trx)/[log](docs/evidence/issue-13/batch-11/focused.log):
+  262 pass, 0 fail/skip; command `dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter FullyQualifiedName~CodexProtocolTests`.
+- [Pre-fix TRX](docs/evidence/issue-13/batch-11/pre-fix.trx)/[log](docs/evidence/issue-13/batch-11/pre-fix.log):
+  9ce91e7 backend gives 13 intended assertion failures and 4 preserved normal/
+  existing-refusal passes. Actual Completed for malformed item-start/contradictory
+  canonical full output, inconsistent MCP statuses and unchanged extra-canonical
+  summary adoption trigger intended assertions. Exact fixed bytes restored in
+  finally; no build/environment error, no assertion/limit weakening.
+- [Restore](docs/evidence/issue-13/batch-11/restore.log), [build](docs/evidence/issue-13/batch-11/build.log),
+  [boundaries](docs/evidence/issue-13/batch-11/boundaries.log), [tests](docs/evidence/issue-13/batch-11/tests.log):
+  locked restore, Release build 0 warnings/errors and boundaries pass;
+  integrated Bridge 153 + Contracts 528 + Foundation 1261 =
+  **1942 pass, 0 fail/skip** (includes shared Execution/Explore/Replay).
+  [Bridge TRX](docs/evidence/issue-13/batch-11/bridge.trx),
+  [Contracts TRX](docs/evidence/issue-13/batch-11/contracts.trx),
+  [Foundation TRX](docs/evidence/issue-13/batch-11/foundation.trx).
+- [Package log](docs/evidence/issue-13/batch-11/package.log)/[JSON](docs/evidence/issue-13/batch-11/package-evidence.json),
+  [consumer log](docs/evidence/issue-13/batch-11/contracts.log)/[JSON](docs/evidence/issue-13/batch-11/contracts-evidence.json)
+  pass actual archive/tool install/execute and native-free consumer. Commands
+  `./scripts/package-smoke.ps1 -Rid win-x64`, `./scripts/contract-smoke.ps1`;
+  [pack](docs/evidence/issue-13/batch-11/pack.log) restores normal merged lock state.
+  [Manifest](docs/evidence/issue-13/batch-11/manifest.json) pins changed backend/
+  helper/project/resource/test blobs and original artifact bytes, tested base
+  9ce91e7 and merged main fd612b2. Windows 10.0.26300 / SDK 10.0.401. Execution
+  crosses 2026-10-10/11 UTC; host-local Oct11 UTC+09 is not uniformly Oct10 UTC.
+
+Runtime/tests final before executions; subsequent edits only docs/evidence.
+Independent audit remains 2/2 consumed, no new agent/reset. All post-audit
+corrections and integration, including this MCP/item/schema/canonical diff,
+received NO further independent audit under concrete external-review correction
+path. Final new HEAD actual CI/review with no actionable findings and parent
+order approval remain required. Production, OPEN-09/11 and real provider/OS/
+inherited-capability/Planner/Trace/game acceptance remain unverified; issue #13
+stays open. Execution groups are provenance and never reset the audit budget.

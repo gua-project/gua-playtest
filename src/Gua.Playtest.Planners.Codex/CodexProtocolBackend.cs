@@ -133,7 +133,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // Server requests are capabilities we never grant (including approvals and tools).
                 if (message.TryGetProperty("id", out _)) throw new ProtocolException();
                 var method = message.GetProperty("method").GetString();
-                RejectInheritedHook(method);
+                RejectInheritedCapability(method);
                 if (string.IsNullOrWhiteSpace(method)) throw new ProtocolException();
                 var parameters = message.GetProperty("params");
                 if (CodexItemSchema.IsStartupNotice(method)) { ValidateStartupNotice(method!, parameters, threadId); continue; }
@@ -150,6 +150,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (Identifier(parameters.GetProperty("thread").GetProperty("id")) != threadId) throw new ProtocolException();
                 }
                 else if (method == "thread/status/changed") ValidateThreadStatusNotice(parameters, threadId);
+                else if (method == "item/started") ValidateItemStarted(message, threadId, turnId);
                 else if (method == "thread/tokenUsage/updated")
                 {
                     if (Identifier(parameters.GetProperty("threadId")) != threadId) throw new ProtocolException();
@@ -237,6 +238,10 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (itemsView is not ("full" or "summary" or "notLoaded")) throw new ProtocolException();
                     var items = turnItems.EnumerateArray().Where(IsFinalAgent).ToArray();
                     if (items.Length != 1) throw new ProtocolException();
+                    var finalItemId = Identifier(items[0].GetProperty("id"));
+                    if (completedItems.Count > 0 && (completedItems.Count != 1 ||
+                        !completedItems.TryGetValue(finalItemId, out var recorded) ||
+                        !JsonElement.DeepEquals(items[0], recorded))) throw new ProtocolException();
                     if (itemsView != "full")
                     {
                         if (itemsView != "summary") throw new ProtocolException();
@@ -292,7 +297,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                 // 0.150.1 sends benign configuration/remote-control status notices
                 // after initialize. They grant no capabilities and still consume bounds.
                 var notification = message.GetProperty("method").GetString();
-                RejectInheritedHook(notification);
+                RejectInheritedCapability(notification);
                 if (CodexItemSchema.IsStartupNotice(notification))
                 { ValidateStartupNotice(notification!, message.GetProperty("params"), threadId ?? announcedThread); continue; }
                 if (notification == "warning")
@@ -327,6 +332,7 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
                     if (CodexItemSchema.IsTelemetry(notification)) ValidateTelemetry(message, threadId!, announcedTurn);
                     if (notification == "model/rerouted") ValidateModelRerouted(message, threadId!, announcedTurn);
                     if (notification == "error") ValidateErrorNotice(message, threadId!, announcedTurn);
+                    if (notification == "item/started") ValidateItemStarted(message, threadId!, announcedTurn);
                     if (notification == "item/completed") ValidateItemCompleted(message, threadId!, announcedTurn);
                     pendingBytes = checked(pendingBytes + Utf8.GetByteCount(message.GetRawText()));
                     if (pendingBytes > limits.MaximumFrameBytes) throw new ProtocolException();
@@ -468,6 +474,13 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
         foreach (var name in new[] { "createdAt", "updatedAt" })
             if (!thread.GetProperty(name).TryGetInt64(out _)) throw new ProtocolException();
     }
+    private static void ValidateItemStarted(JsonElement message, string expectedThread, string expectedTurn)
+    {
+        ValidateTurnNotice(message, expectedThread, expectedTurn);
+        var parameters = message.GetProperty("params");
+        if (!CodexItemSchema.ValidItemStarted(parameters) || !parameters.GetProperty("startedAtMs").TryGetInt64(out _))
+            throw new ProtocolException();
+    }
     private static void ValidateItemCompleted(JsonElement message, string expectedThread, string expectedTurn)
     {
         ValidateTurnNotice(message, expectedThread, expectedTurn);
@@ -492,11 +505,12 @@ public sealed class CodexProtocolBackend : ICodexDecisionBackend
             parameters.GetProperty("toModel").ValueKind != JsonValueKind.String ||
             parameters.GetProperty("reason").GetString() != "highRiskCyberActivity") throw new ProtocolException();
     }
-    private static void RejectInheritedHook(string? method)
+    private static void RejectInheritedCapability(string? method)
     {
-        // Notice refusal cannot prevent upstream execution. No production host isolation
-        // or inherited hook capability has been accepted under OPEN-09.
-        if (method?.StartsWith("hook/", StringComparison.Ordinal) == true) throw new BackendException();
+        // Notice refusal cannot prevent upstream execution or startup. No production host
+        // isolation or inherited hook/MCP capability has been accepted under OPEN-09.
+        if (method?.StartsWith("hook/", StringComparison.Ordinal) == true ||
+            method?.StartsWith("mcpServer/", StringComparison.Ordinal) == true) throw new BackendException();
     }
     private static void ValidateStartupNotice(string method, JsonElement parameters, string? expectedThread)
     {
