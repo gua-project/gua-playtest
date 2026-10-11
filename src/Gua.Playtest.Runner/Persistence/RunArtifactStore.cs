@@ -97,6 +97,7 @@ public sealed class RunArtifactStore
             var inputs = new List<object>();
             if (metadata.Inputs.Count > limits.MaxItems) throw new ArtifactLimitException();
             long inputBytes = 0;
+            long sourceBytesRead = 0;
             var inputNodes = 0;
             string? scenarioCopyHash = null;
             foreach (var input in metadata.Inputs)
@@ -121,11 +122,17 @@ public sealed class RunArtifactStore
                         {
                             var raw = System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(input.Document);
                             var source = input.SourceUtf8 is { } bytes ? bytes.Span : raw;
-                            if (source.Length > limits.MaxFileBytes) throw new ArtifactLimitException();
+                            sourceBytesRead += source.Length;
+                            if (sourceBytesRead > limits.MaxFileBytes) throw new ArtifactLimitException();
                             if (input.SourceUtf8 is { } sourceBytes)
                             {
-                                using var sourceDocument = JsonDocument.Parse(sourceBytes, new() { MaxDepth = 33 });
-                                if (!System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(sourceDocument.RootElement).SequenceEqual(raw))
+                                if (!string.Equals(input.SourceFormat, ".json", StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(input.SourceFormat, ".yaml", StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(input.SourceFormat, ".yml", StringComparison.OrdinalIgnoreCase))
+                                    throw new InvalidDataException("RunIdentitySourceFormatInvalid");
+                                var decoded = ContractJson.Inspect(sourceBytes.ToArray(), input.SourceFormat);
+                                if (decoded.Code != "Decoded" || decoded.Document is null ||
+                                    !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(decoded.Document), input.Document))
                                     throw new InvalidDataException("RunIdentitySourceMismatch");
                             }
                             sourceSha256 = Convert.ToHexStringLower(SHA256.HashData(source));

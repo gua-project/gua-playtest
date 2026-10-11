@@ -71,8 +71,11 @@ An identified storage Run must include a fixed Scenario copy with a writer-verif
 `sourceSha256` equal to the identity's exact source-byte hash, separately from
 the sanitized copy's `sha256`. Missing or mismatched binding is `RunUnreadable`;
 the independent saved result remains visible. `InputCopy.SourceUtf8` supplies exact
-UTF-8 file bytes, including surrounding whitespace, when root JSON bytes alone
-are not the source file. The writer verifies those bytes describe the supplied
+UTF-8 file bytes, including BOM, comments and surrounding whitespace, when root JSON bytes alone
+are not the source file. Its explicit `SourceFormat` accepts `.json`, `.yaml` or `.yml`;
+the existing bounded decoder verifies the source has the supplied document's content.
+Aggregate source bytes examined for identity bindings cannot exceed `ArtifactLimits.MaxFileBytes`.
+The writer verifies those bytes describe the supplied
 document and does not persist the unredacted source. The private output owner
 supplies this evidence; a caller-supplied digest alone cannot qualify a Scenario.
 An immediate directory with neither a valid Run nor a valid Result uses an opaque

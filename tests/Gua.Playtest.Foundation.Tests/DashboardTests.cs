@@ -1040,6 +1040,42 @@ public sealed class DashboardTests : IDisposable
         Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
     }
     [Theory]
+    [InlineData(".json", false)] [InlineData(".json", true)] [InlineData(".yaml", false)] [InlineData(".yml", true)]
+    public async Task Exact_source_binding_preserves_supported_format_bom_comments_and_whitespace(string format, bool bom)
+    {
+        var text = format == ".json" ? " \n" + ContractJson.Serialize(new ScenarioDocument("s1", "v1", "Source fixture",
+            new("private objective", null, null), new(1000, 2, null), null)) + "\r\n" :
+            "# exact source comment\nkind: scenario\nschemaVersion: 1\nscenarioId: s1\ndefinitionVersion: v1\nname: Source fixture\ngoal:\n  objective: private objective\nconstraints:\n  maxDurationMilliseconds: 1000\n  maxActions: 2\n";
+        var source = Encoding.UTF8.GetBytes((bom ? "\uFEFF" : "") + text);
+        var file = Path.Combine(root, "source" + format); File.WriteAllBytes(file, source);
+        var hash = Convert.ToHexStringLower(SHA256.HashData(source));
+        var registry = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Registry))!;
+        registry["scenarios"]![0]!["file"]!["path"] = Path.GetFileName(file);
+        registry["scenarios"]![0]!["file"]!["sha256"] = hash; File.WriteAllText(Registry, registry.ToJsonString());
+        var decoded = ContractJson.Inspect(source, format); Assert.Equal("Decoded", decoded.Code);
+        var document = JsonSerializer.SerializeToElement(decoded.Document); var store = RunArtifactStore.Create(Artifacts, Limits, new(["private"], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(),
+            [new("scenario", document, source, format)], Identity() with { ScenarioSha256 = hash })).Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(hash, saved.RootElement.GetProperty("inputs")[0].GetProperty("sourceSha256").GetString());
+        Assert.DoesNotContain("private", saved.RootElement.GetRawText());
+        var snapshot = await Index().ReadAsync(); Assert.Equal("Ready", snapshot.RegistryState);
+        Assert.Equal("Unsettled", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+    }
+    [Theory]
+    [InlineData(1, true)] [InlineData(2, false)]
+    public void Scenario_source_binding_bounds_aggregate_source_reads(int copies, bool accepted)
+    {
+        var source = Encoding.UTF8.GetBytes(File.ReadAllText(Path.Combine(root, "s1.json")) + new string(' ', 1500));
+        using var document = JsonDocument.Parse(source);
+        var store = RunArtifactStore.Create(Artifacts, new(2048, 4096, 10000, 2000), new([], []));
+        var identity = Identity() with { ScenarioSha256 = Convert.ToHexStringLower(SHA256.HashData(source)) };
+        var inputs = Enumerable.Range(0, copies).Select(i => new InputCopy("copy" + i, document.RootElement, source)).ToArray();
+        var saved = store.BeginPreparation(new("player", [], new Dictionary<string, string>(), inputs, identity));
+        Assert.Equal(accepted ? PersistenceFailure.None : PersistenceFailure.LimitExceeded, saved.Failure);
+        Assert.Equal(accepted, File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
     [InlineData("missing")] [InlineData("corrupt")] [InlineData("invalid")]
     public async Task Unauthenticated_directory_names_never_enter_browser_snapshot(string shape)
     {
