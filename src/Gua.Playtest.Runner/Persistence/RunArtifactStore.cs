@@ -102,8 +102,14 @@ public sealed class RunArtifactStore
             foreach (var input in metadata.Inputs)
             {
                 var safe = Encode(input.Document, out var nodeCount);
+                string? sourceSha256 = null;
                 using (var fixedInput = JsonDocument.Parse(safe))
                 {
+                    if (identity is not null && input.Document.ValueKind == JsonValueKind.Object &&
+                        input.Document.TryGetProperty("kind", out var sourceKind) && sourceKind.ValueKind == JsonValueKind.String && sourceKind.GetString() == "scenario" &&
+                        (fixedInput.RootElement.ValueKind != JsonValueKind.Object ||
+                         !fixedInput.RootElement.TryGetProperty("kind", out var retainedKind) || retainedKind.ValueKind != JsonValueKind.String || retainedKind.GetString() != "scenario"))
+                        throw new InvalidDataException("RunIdentityScenarioKindLost");
                     if (fixedInput.RootElement.ValueKind == JsonValueKind.Object &&
                         fixedInput.RootElement.TryGetProperty("kind", out var fixedKind) && fixedKind.ValueKind == JsonValueKind.String && fixedKind.GetString() == "scenario")
                     {
@@ -111,6 +117,20 @@ public sealed class RunArtifactStore
                         if (scenarioCopyHash is not null && scenarioCopyHash != copyHash)
                             throw new InvalidDataException("RunIdentityScenarioConflict");
                         scenarioCopyHash = copyHash;
+                        if (identity is not null)
+                        {
+                            var raw = System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(input.Document);
+                            var source = input.SourceUtf8 is { } bytes ? bytes.Span : raw;
+                            if (source.Length > limits.MaxFileBytes) throw new ArtifactLimitException();
+                            if (input.SourceUtf8 is { } sourceBytes)
+                            {
+                                using var sourceDocument = JsonDocument.Parse(sourceBytes, new() { MaxDepth = 33 });
+                                if (!System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(sourceDocument.RootElement).SequenceEqual(raw))
+                                    throw new InvalidDataException("RunIdentitySourceMismatch");
+                            }
+                            sourceSha256 = Convert.ToHexStringLower(SHA256.HashData(source));
+                            if (sourceSha256 != identity.ScenarioSha256) throw new InvalidDataException("RunIdentityScenarioHashMismatch");
+                        }
                     }
                     if (identity is not null && fixedInput.RootElement.ValueKind == JsonValueKind.Object &&
                         fixedInput.RootElement.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.GetString() == "scenario" &&
@@ -120,8 +140,8 @@ public sealed class RunArtifactStore
                 }
                 inputBytes += safe.Length; inputNodes += nodeCount;
                 if (inputBytes > limits.MaxFileBytes || inputNodes > limits.MaxItems) throw new ArtifactLimitException();
-                // Store as embedded fixed sanitized bytes; do not copy source files or original input hashes.
-                inputs.Add(new { name = input.Name, sha256 = Hash(safe), document = JsonSerializer.Deserialize<JsonElement>(safe) });
+                // The Scenario source digest binds the supplied identity; only sanitized bytes are stored.
+                inputs.Add(new { name = input.Name, sha256 = Hash(safe), sourceSha256, document = JsonSerializer.Deserialize<JsonElement>(safe) });
             }
             Publish("run.json", Encode(new { kind = "playtestRunStorage", storageVersion = 1, runId = RunId,
                 executionState = ExecutionState.Preparing, identity, metadata.Profile, metadata.Settings, metadata.Versions, inputs,

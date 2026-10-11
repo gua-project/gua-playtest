@@ -144,7 +144,7 @@ public sealed class DashboardIndex
             using var document = ReadJson(Path.Combine(directory, "run.json"));
             var run = document.RootElement;
             var kind = Text(run, "kind");
-            if (Text(run, "runId") != runId) throw new InvalidDataException();
+            if (!Token(runId) || Text(run, "runId") != runId) throw new InvalidDataException();
             if (kind == "playtestRunStorage")
             {
                 if (run.GetProperty("storageVersion").GetInt32() != 1) throw new InvalidDataException();
@@ -176,6 +176,8 @@ public sealed class DashboardIndex
                     {
                         if (scenarioCopyHash is not null && scenarioCopyHash != Text(input, "sha256")) throw new InvalidDataException();
                         scenarioCopyHash = Text(input, "sha256");
+                        if (identity is not null && (!Hash(Text(input, "sourceSha256")) ||
+                            Text(input, "sourceSha256") != identity.ScenarioSha256)) throw new InvalidDataException();
                         if (!copy.TryGetProperty("scenarioId", out var storedId) ||
                             storedId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
                         scenarioId = storedId.ValueKind == JsonValueKind.String ? storedId.GetString() : null;
@@ -188,6 +190,7 @@ public sealed class DashboardIndex
                             Text(copy, "definitionVersion") != identity.DefinitionVersion)) throw new InvalidDataException();
                     }
                 }
+                if (identity is not null && scenarioCopyHash is null) throw new InvalidDataException();
             }
             else if (kind == "run")
             {
@@ -224,7 +227,8 @@ public sealed class DashboardIndex
         catch (Exception e) when (ReadFailure(e)) { state = e is FileNotFoundException ? "Unsettled" : "ResultUnreadable"; }
         var details = ReadDetails(directory, key, result, token);
         if (metadataState == "RunUnreadable") { identity = null; scenarioId = null; state = "RunUnreadable"; }
-        return new(key, runId, identity?.ScenarioId ?? scenarioId, identity?.DefinitionVersion, identity?.ScenarioSha256,
+        var displayedRunId = result?.RunId ?? (metadataState == "Ready" ? runId : "Unknown-" + key);
+        return new(key, displayedRunId, identity?.ScenarioId ?? scenarioId, identity?.DefinitionVersion, identity?.ScenarioSha256,
             identity?.BuildId, identity?.EnvironmentSha256, started, state, result, details);
     }
 
@@ -329,9 +333,9 @@ public sealed class DashboardIndex
     {
         using var stream = Open(path); Charge(stream.Length);
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
-        using var validation = JsonDocument.Parse(bytes, new() { MaxDepth = 32 });
+        using var validation = JsonDocument.Parse(bytes, new() { MaxDepth = 33 });
         RejectDuplicates(validation.RootElement);
-        return JsonDocument.Parse(bytes, new() { MaxDepth = 32 });
+        return JsonDocument.Parse(bytes, new() { MaxDepth = 33 });
     }
     private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited, bool reserveValidationRead = false)
     {

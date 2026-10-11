@@ -240,7 +240,8 @@ public sealed class DashboardTests : IDisposable
     public async Task Real_executor_and_persistence_results_match_independent_expected_unverified()
     {
         var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
-        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], Identity(), DateTimeOffset.UtcNow)).Saved);
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity(), DateTimeOffset.UtcNow)).Saved);
         var clock = new MonotonicClock(); var duration = TimeSpan.FromSeconds(2);
         var run = new RunSession(new(duration, duration, duration, duration, duration, duration, 2, 2, 2, 100), clock, clock);
         var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true),
@@ -255,7 +256,8 @@ public sealed class DashboardTests : IDisposable
     public async Task Gua_common_report_links_revalidate_and_missing_detail_is_not_omission()
     {
         var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
-        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], Identity(), DateTimeOffset.UtcNow)).Saved);
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity(), DateTimeOffset.UtcNow)).Saved);
         var primary = new PrimaryResult(ResultStatus.Failed, new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host));
         Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
         using var trace = new GuaTraceSession(new GuaTraceOptions
@@ -964,15 +966,103 @@ public sealed class DashboardTests : IDisposable
     public async Task Storage_required_fields_accept_real_writer_redaction(bool redact)
     {
         var store = RunArtifactStore.Create(Artifacts, Limits, new(redact ? ["private"] : [], redact ? ["token", "secretVersion"] : []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
         Assert.True(store.BeginPreparation(new("private-profile",
             [new("token", "private-value", "host"), new("normal", "private-value", "private-source")],
-            new Dictionary<string, string> { ["gua"] = "private-version", ["secretVersion"] = "private-value" }, [], Identity())).Saved);
+            new Dictionary<string, string> { ["gua"] = "private-version", ["secretVersion"] = "private-value" }, [new("scenario", scenario.RootElement)], Identity())).Saved);
         var run = Assert.Single((await Index().ReadAsync()).Runs);
         Assert.Equal("Unsettled", run.State); Assert.Equal("buildA", run.BuildId);
         using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
         Assert.Equal(redact ? "" : "private-profile", saved.RootElement.GetProperty("profile").GetString());
         Assert.Equal(redact ? JsonValueKind.Null : JsonValueKind.String, saved.RootElement.GetProperty("settings")[0].GetProperty("value").ValueKind);
         Assert.Equal(redact ? JsonValueKind.Null : JsonValueKind.String, saved.RootElement.GetProperty("versions").GetProperty("secretVersion").ValueKind);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Scenario_identity_hash_must_match_pre_redaction_source_before_publication(bool replay)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var identity = Identity() with { ScenarioSha256 = new('b', 64) };
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity);
+        var saved = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, saved.Failure); Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Redaction_cannot_remove_the_scenario_source_binding(bool replay)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new(["scenario"], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var identity = Identity(); var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity);
+        var saved = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, saved.Failure); Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData("missing")] [InlineData("mismatch")] [InlineData("identity")] [InlineData("no-copy")]
+    public async Task Scenario_source_binding_is_required_during_readback(string corruption)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+        if (corruption == "no-copy") json["inputs"] = new System.Text.Json.Nodes.JsonArray();
+        else if (corruption == "missing") json["inputs"]![0]!.AsObject().Remove("sourceSha256");
+        else if (corruption == "mismatch") json["inputs"]![0]!["sourceSha256"] = new string('b', 64);
+        else json["identity"]!["scenarioSha256"] = new string('b', 64);
+        File.WriteAllText(file, json.ToJsonString()); var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioSha256); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Exact_source_whitespace_and_redaction_keep_distinct_verified_hashes()
+    {
+        Register("private objective"); var file = Path.Combine(root, "s1.json");
+        var source = Encoding.UTF8.GetBytes(" \n" + File.ReadAllText(file) + "\r\n"); File.WriteAllBytes(file, source);
+        var registry = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Registry))!;
+        registry["scenarios"]![0]!["file"]!["sha256"] = Identity().ScenarioSha256; File.WriteAllText(Registry, registry.ToJsonString());
+        using var scenario = JsonDocument.Parse(source); var store = RunArtifactStore.Create(Artifacts, Limits, new(["private"], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement, source)], Identity())).Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
+        var input = saved.RootElement.GetProperty("inputs")[0];
+        Assert.Equal(Identity().ScenarioSha256, input.GetProperty("sourceSha256").GetString());
+        Assert.NotEqual(input.GetProperty("sourceSha256").GetString(), input.GetProperty("sha256").GetString());
+        Assert.DoesNotContain("private", saved.RootElement.GetRawText());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Unsettled", run.State); Assert.Equal(Identity().ScenarioSha256, run.ScenarioSha256);
+        Assert.Equal("Unsettled", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
+    public void Supplied_source_bytes_must_describe_the_actual_fixed_input()
+    {
+        var bytes = File.ReadAllBytes(Path.Combine(root, "s1.json"));
+        using var wrong = JsonDocument.Parse(Encoding.UTF8.GetString(bytes).Replace("Reach target", "Different target", StringComparison.Ordinal));
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", wrong.RootElement, bytes)], Identity());
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(metadata).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData("missing")] [InlineData("corrupt")] [InlineData("invalid")]
+    public async Task Unauthenticated_directory_names_never_enter_browser_snapshot(string shape)
+    {
+        const string secretPath = "private-customer-password"; var directory = Path.Combine(Artifacts, secretPath); Directory.CreateDirectory(directory);
+        if (shape != "missing") File.WriteAllText(Path.Combine(directory, "run.json"), shape == "corrupt" ? "{broken" : "{\"kind\":\"other\",\"runId\":\"private-customer-password\"}");
+        var snapshot = await Index().ReadAsync(); var run = Assert.Single(snapshot.Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.StartsWith("Unknown-", run.RunId); Assert.DoesNotContain(secretPath, JsonSerializer.Serialize(snapshot));
+    }
+    [Theory]
+    [InlineData(29, true)] [InlineData(30, false)]
+    public async Task Writer_maximum_container_depth_matches_dashboard_reader(int nesting, bool accepted)
+    {
+        using var input = JsonDocument.Parse(new string('[', nesting) + "{}" + new string(']', nesting));
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var saved = store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("depth", input.RootElement)]));
+        Assert.Equal(accepted ? PersistenceFailure.None : PersistenceFailure.LimitExceeded, saved.Failure);
+        if (accepted)
+        {
+            using var envelope = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")), new() { MaxDepth = 33 });
+            Assert.ThrowsAny<JsonException>(() => JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")), new() { MaxDepth = 32 }));
+            Assert.Equal("Unsettled", Assert.Single((await Index().ReadAsync()).Runs).State);
+        }
+        else Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }

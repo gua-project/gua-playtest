@@ -11,7 +11,9 @@ public enum ObservationBoundary { Before, After, PrimaryDecision, AfterCleanup }
 public sealed record ObservationReference(ObservationBoundary Boundary, string ObservationId);
 public sealed record DecisionReference(string DecisionId, string ObservationId, string? ActionId, string ReasonCode);
 public sealed record EffectiveSetting(string Name, string Value, string Source);
-public sealed record InputCopy(string Name, JsonElement Document);
+/// <summary>Optional exact UTF-8 source bytes include surrounding whitespace and are never persisted.
+/// Without SourceUtf8, the original JsonElement root bytes are the source identity.</summary>
+public sealed record InputCopy(string Name, JsonElement Document, ReadOnlyMemory<byte>? SourceUtf8 = null);
 public sealed record RunArtifactMetadata(string Profile, IReadOnlyList<EffectiveSetting> Settings,
     IReadOnlyDictionary<string, string> Versions, IReadOnlyList<InputCopy> Inputs,
     RunIdentity? Identity = null, DateTimeOffset? StartedAt = null);

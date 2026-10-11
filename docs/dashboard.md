@@ -67,6 +67,16 @@ These fields are persisted under the existing redaction and create-only policy;
 the owner must verify the actual connected build and effective Environment before
 recording them. Legacy envelopes do not acquire fabricated identity fields.
 Their embedded Scenario ID is used only to group historical records.
+An identified storage Run must include a fixed Scenario copy with a writer-verified
+`sourceSha256` equal to the identity's exact source-byte hash, separately from
+the sanitized copy's `sha256`. Missing or mismatched binding is `RunUnreadable`;
+the independent saved result remains visible. `InputCopy.SourceUtf8` supplies exact
+UTF-8 file bytes, including surrounding whitespace, when root JSON bytes alone
+are not the source file. The writer verifies those bytes describe the supplied
+document and does not persist the unredacted source. The private output owner
+supplies this evidence; a caller-supplied digest alone cannot qualify a Scenario.
+An immediate directory with neither a valid Run nor a valid Result uses an opaque
+unknown identifier instead of exposing its filesystem name.
 Legitimate redaction can make that optional legacy grouping ID unavailable;
 it remains `Unknown` while a correctly hashed copy and saved result remain readable.
 `result.json` still uses the public independent result reader. The dashboard
