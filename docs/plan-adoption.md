@@ -32,6 +32,7 @@ issue a trial. ReplayDriver has no Planner port, certifying an AI-free trial.
 
 Trial publication copies immutable `run.json`, `result.json` and `completion.json` into the candidate,
 checks their hashes against the bytes originally published by the same live store,
+rechecks raw and decoded summary content with the host Plan secret policy,
 then signs their hashes, Run identity and progress in `proof.json`. Temporary Run
 storage can be removed afterwards. Plan never contains its own hash or adoption
 state. `AcceptAsync` verifies the current graph, signed proof and summaries,
@@ -39,6 +40,13 @@ requires explicit adoption and approval of expectations, and creates `accepted.j
 once. Its signed payload contains the existing `AdoptionEvidenceDocument`. Imported
 or hand-written evidence cannot confer authority. `IsAcceptedAsync` rechecks these
 identities. Publication never overwrites an existing file or adoption.
+
+Summary copies retain the Run store's explicit per-file limit (up to 16 MiB) in
+the signed proof; candidate inputs retain the 4 MiB contract limit. A cancellation
+recorded after primary confirmation permits adoption when mandatory cleanup and
+persistence succeed, following `RunOutcome.PostProcessingComplete`. Real cleanup
+failures remain disqualifying. Evidence preserves candidate-relative paths,
+including subdirectories, and rechecks them with the retained hashes.
 
 `PlanCommand.ExecuteAsync` supplies a separate CLI handler. The shared composition
 passes its secret policy and dispatches these exact forms:

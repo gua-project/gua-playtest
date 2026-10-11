@@ -30,7 +30,9 @@ public sealed class ReplayTests
         [new ConditionTargetObservation("source:epoch:buy", "{\"type\":\"bool\",\"value\":" + (value ? "true" : "false") + "}")], true))]);
     private sealed class Fixture : IDisposable
     {
-        public string Root { get; } = Path.Combine(Path.GetTempPath(), "playtest-replay-" + Guid.NewGuid().ToString("N"));
+        // Artifact storage rejects aliased roots. macOS /var temp is a symlink;
+        // use the same physical test-output policy as ArtifactTests on every OS.
+        public string Root { get; } = Path.Combine(AppContext.BaseDirectory, "playtest-replay-" + Guid.NewGuid().ToString("N"));
         public string PlanPath => Path.Combine(Root, "plan.json");
         public Fixture(int steps = 2, string completion = "afterPlan", int[]? checkpoints = null, bool initial = false, bool failure = false, bool gameInput = false, int maxActions = 1000, bool secretInput = false)
         {
@@ -146,16 +148,27 @@ public sealed class ReplayTests
     private static async Task<string> Candidate(Fixture files, PlanManager manager) => await manager.CreateAsync(
         Path.Combine(files.Root, "scenario.json"), Path.Combine(files.Root, "recording.json"), [files.Root], "conditionSynchronized");
     private static async Task<string> Trial(Fixture files, PlanManager manager, string path, bool cleanupFailure = false,
-        string? wrongIdentity = null, string? changedSummary = null)
+        string? wrongIdentity = null, string? changedSummary = null, bool cancelAfterPrimary = false, string? metadata = null)
     {
         var replay = await ResolvedReplay.LoadAsync(path, [files.Root], new(10, 1000));
-        var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(65536, 1048576, 1000, 8192), new([], []));
+        var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(8 * 1024 * 1024, 32 * 1024 * 1024, 1000, 8 * 1024 * 1024), new([], []));
         var scenario = replay.CopyScenario();
         var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, replay.ScenarioSha256, "build", new string('a', 64));
-        Assert.True(store.BeginReplayPreparation(new("public", [], new Dictionary<string, string>(), []), identity).Saved);
+        Assert.True(store.BeginReplayPreparation(new("public", metadata is null ? [] : [new("note", metadata, "public")], new Dictionary<string, string>(), []), identity).Saved);
         var clock = new MonotonicClock();
+        using var cancellation = new CancellationTokenSource();
         var outcome = await Run(replay, new(clock), new Playback(), clock,
-            confirmPrimary: (snapshot, token) => ValueTask.FromResult(store.ConfirmPrimary(snapshot, [], [], token).Saved), trialStore: store);
+            token: cancellation.Token, confirmPrimary: (snapshot, token) =>
+            {
+                var saved = store.ConfirmPrimary(snapshot, [], [], token).Saved;
+                if (cancelAfterPrimary) cancellation.Cancel();
+                return ValueTask.FromResult(saved);
+            }, trialStore: store);
+        if (cancelAfterPrimary)
+        {
+            Assert.Equal(0, outcome.Run.ExitCode);
+            Assert.Contains(outcome.Run.PostProcessing, x => x.Reason == PostProcessingReason.Cancelled);
+        }
         Assert.True(store.CompleteReplay(outcome, [new(ArtifactKind.Trace, cleanupFailure ? ArtifactState.SaveFailed : ArtifactState.NotExecuted),
             new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
         if (changedSummary is not null)
@@ -172,6 +185,84 @@ public sealed class ReplayTests
         var id = await manager.RecordTrialAsync(path, store, outcome, claimedIdentity);
         Directory.Delete(store.DirectoryPath, true);
         return id;
+    }
+
+    [Fact]
+    public async Task SuccessfulMandatoryCleanupWithLateCancellationCanBeAdopted()
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path, cancelAfterPrimary: true);
+        await manager.AcceptAsync(path, id, true, true); Assert.True(await manager.IsAcceptedAsync(path));
+    }
+
+    [Theory]
+    [InlineData("private-note")]
+    [InlineData("private\nnote")]
+    public async Task TrialRespectsStrongerManagerSecretPolicyBeforeCopying(string secret)
+    {
+        using var files = new Fixture(); var manager = new PlanManager(Path.Combine(files.Root, "managed"), new([secret], []));
+        var path = await Candidate(files, manager);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => Trial(files, manager, path, metadata: secret));
+        Assert.Equal("PlanSecretCollision", error.Message);
+        Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(path)!, "*trial-*"));
+    }
+
+    [Fact]
+    public async Task TrialRetainsSummariesAbovePlanSourceLimitWithinArtifactPolicy()
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path, metadata: new string('x', 4 * 1024 * 1024 + 1));
+        Assert.True(new FileInfo(Path.Combine(Path.GetDirectoryName(path)!, "trial-" + id, "run.json")).Length > 4 * 1024 * 1024);
+        await manager.AcceptAsync(path, id, true, true); Assert.True(await manager.IsAcceptedAsync(path));
+    }
+
+    [Fact]
+    public async Task AdoptionPreservesNestedManagedReferences()
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var directory = Path.GetDirectoryName(path)!; Directory.CreateDirectory(Path.Combine(directory, "inputs"));
+        var plan = JsonNode.Parse(File.ReadAllText(path))!;
+        foreach (var name in new[] { "scenario", "recording" })
+        {
+            File.Move(Path.Combine(directory, name + ".json"), Path.Combine(directory, "inputs", name + ".json"));
+            plan[name]!["path"] = "inputs/" + name + ".json";
+        }
+        File.WriteAllText(path, plan.ToJsonString());
+        var id = await Trial(files, manager, path); await manager.AcceptAsync(path, id, true, true);
+        var envelope = JsonNode.Parse(File.ReadAllText(Path.Combine(directory, "accepted.json")))!;
+        var evidence = JsonNode.Parse(Convert.FromBase64String(envelope["payload"]!.GetValue<string>()))!["evidence"]!;
+        Assert.Equal("inputs/scenario.json", evidence["scenario"]!["path"]!.GetValue<string>());
+        Assert.Equal("inputs/recording.json", evidence["recording"]!["path"]!.GetValue<string>());
+        var export = Path.Combine(directory, "adoption.json");
+        File.WriteAllText(export, evidence.ToJsonString());
+        Assert.True((await new StaticContractValidator([directory]).ValidateFileAsync(export)).IsValid);
+        Assert.True(await manager.IsAcceptedAsync(path));
+    }
+
+    [Fact]
+    public async Task WindowsPathCasingDoesNotInvalidateManagedCandidate()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var alternate = new PlanManager(Path.Combine(files.Root, "managed").ToUpperInvariant(), new([], []));
+        var id = await Trial(files, alternate, path.ToUpperInvariant());
+        await alternate.AcceptAsync(path.ToUpperInvariant(), id, true, true);
+        Assert.True(await alternate.IsAcceptedAsync(path));
+    }
+
+    [Theory]
+    [InlineData("scenarioId", "purchase")]
+    [InlineData("definitionVersion", "v1")]
+    [InlineData("buildId", "build")]
+    [InlineData("scenarioSha256", "cccc")]
+    [InlineData("environmentSha256", "aaaa")]
+    public void ReplayPreparationRejectsIdentitySecretCollisions(string field, string secret)
+    {
+        using var files = new Fixture();
+        var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(65536, 1048576, 1000, 8192), new([secret], []));
+        var identity = new RunIdentity("purchase", "v1", new string('c', 64), "build", new string('a', 64));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginReplayPreparation(new("public", [], new Dictionary<string, string>(), []), identity).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")), field);
     }
 
     [Fact]

@@ -13,8 +13,10 @@ namespace Gua.Playtest.Runner.Planning;
 public sealed class PlanManager
 {
     private const int MaxBytes = 4 * 1024 * 1024;
+    private static readonly StringComparison Paths = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly string root;
+    private readonly FileIdentity rootIdentity;
     private readonly byte[] key;
     private readonly PersistenceRedactor redactor;
     public PlanManager(string managedRoot, PersistenceRedactor redactor)
@@ -25,6 +27,7 @@ public sealed class PlanManager
         while (!Directory.Exists(existing)) existing = Path.GetDirectoryName(existing) ?? throw new InvalidDataException("PlanRootInvalid");
         RunArtifactStore.CheckPath(existing);
         Directory.CreateDirectory(root); RunArtifactStore.CheckPath(root);
+        rootIdentity = FileIdentity.ReadDirectory(root);
         var keyPath = Path.Combine(root, ".plan-authority");
         if (!File.Exists(keyPath))
         {
@@ -100,11 +103,14 @@ public sealed class PlanManager
         if (identity.ScenarioSha256 != scenario.Sha256 || identity.ScenarioId != scenarioModel.ScenarioId ||
             identity.DefinitionVersion != scenarioModel.DefinitionVersion)
             throw new InvalidDataException("TrialIdentityMismatch");
-        var result = Read(Path.Combine(store.DirectoryPath, "result.json"));
-        var completion = Read(Path.Combine(store.DirectoryPath, "completion.json"));
-        var run = Read(Path.Combine(store.DirectoryPath, "run.json"));
+        var limit = store.SummaryMaxBytes;
+        var result = Read(Path.Combine(store.DirectoryPath, "result.json"), limit);
+        var completion = Read(Path.Combine(store.DirectoryPath, "completion.json"), limit);
+        var run = Read(Path.Combine(store.DirectoryPath, "run.json"), limit);
         if (!store.MatchesPublishedSummary("run.json", run) || !store.MatchesPublishedSummary("result.json", result) ||
             !store.MatchesPublishedSummary("completion.json", completion)) throw new InvalidDataException("TrialSummaryChanged");
+        foreach (var bytes in new[] { run, result, completion })
+        { RejectSecrets(bytes); RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(bytes)!); }
         CheckRun(run, store.RunId, identity);
         CheckResult(result, store.RunId);
         CheckCompletion(completion, store.RunId);
@@ -113,11 +119,11 @@ public sealed class PlanManager
         Directory.CreateDirectory(temporary);
         try
         {
-            Publish(Path.Combine(temporary, "result.json"), result, token);
-            Publish(Path.Combine(temporary, "completion.json"), completion, token);
-            Publish(Path.Combine(temporary, "run.json"), run, token);
+            Publish(Path.Combine(temporary, "result.json"), result, token, limit);
+            Publish(Path.Combine(temporary, "completion.json"), completion, token, limit);
+            Publish(Path.Combine(temporary, "run.json"), run, token, limit);
             var proof = new TrialProof(store.RunId, identity, replay.PlanSha256, replay.ScenarioSha256,
-                replay.RecordingSha256, replay.Progress, replay.TotalCheckpoints, Hash(result), Hash(completion), Hash(run));
+                replay.RecordingSha256, replay.Progress, replay.TotalCheckpoints, Hash(result), Hash(completion), Hash(run), limit);
             Publish(Path.Combine(temporary, "proof.json"), Seal(proof), token);
             token.ThrowIfCancellationRequested();
             Directory.Move(temporary, Path.Combine(directory, "trial-" + id));
@@ -135,7 +141,7 @@ public sealed class PlanManager
         var (directory, plan, scenario, recording) = await Load(planPath, token);
         var proof = VerifyTrial(directory, trialId, plan, scenario, recording);
         var evidence = new AdoptionEvidenceDocument(new("plan.json", plan.Sha256),
-            new(Path.GetFileName(scenario.Path), scenario.Sha256), new(Path.GetFileName(recording.Path), recording.Sha256),
+            new(Relative(directory, scenario.Path), scenario.Sha256), new(Relative(directory, recording.Path), recording.Sha256),
             proof.RunId, proof.Identity, "afterPlan", true, true, true, false);
         // Signed marker is authoritative; the wire evidence inside remains independently exportable.
         Publish(Path.Combine(directory, "accepted.json"), Seal(new Acceptance(trialId, evidence)), token);
@@ -148,7 +154,10 @@ public sealed class PlanManager
         if (!File.Exists(marker)) return false;
         var acceptance = Unseal<Acceptance>(Read(marker));
         var proof = VerifyTrial(directory, acceptance.TrialId, plan, scenario, recording);
-        if (acceptance.Evidence.Plan.Sha256 != plan.Sha256 || acceptance.Evidence.TestRunId != proof.RunId ||
+        if (acceptance.Evidence.Plan.Path != "plan.json" ||
+            acceptance.Evidence.Scenario.Path != Relative(directory, scenario.Path) ||
+            acceptance.Evidence.Recording.Path != Relative(directory, recording.Path) ||
+            acceptance.Evidence.Plan.Sha256 != plan.Sha256 || acceptance.Evidence.TestRunId != proof.RunId ||
             acceptance.Evidence.Scenario.Sha256 != scenario.Sha256 || acceptance.Evidence.Recording.Sha256 != recording.Sha256)
             throw new InvalidDataException("AdoptionIdentityMismatch");
         return true;
@@ -158,8 +167,10 @@ public sealed class PlanManager
     {
         var path = Path.GetFullPath(planPath);
         var directory = Path.GetDirectoryName(path)!;
-        if (Path.GetFileName(path) != "plan.json" || Path.GetDirectoryName(directory) != root ||
+        if (!string.Equals(Path.GetFileName(path), "plan.json", Paths) || !string.Equals(Path.GetDirectoryName(directory), root, Paths) ||
             !Guid.TryParseExact(Path.GetFileName(directory), "N", out _)) throw new InvalidDataException("ManagedPlanRequired");
+        if (FileIdentity.ReadDirectory(Path.GetDirectoryName(directory)!) != rootIdentity)
+            throw new InvalidDataException("ManagedPlanRequired");
         RunArtifactStore.CheckPath(path);
         var report = await new StaticContractValidator([directory]).ValidateFileAsync(path, token);
         token.ThrowIfCancellationRequested();
@@ -167,7 +178,7 @@ public sealed class PlanManager
             throw new InvalidDataException("CandidateInvalid");
         foreach (var file in report.Files.Values)
         { RejectSecrets(file.CopyBytes()); RejectStructuredSecrets(file.CopyJson()); }
-        return (directory, report.Files.Values.Single(f => f.Path == path),
+        return (directory, report.Files.Values.Single(f => string.Equals(f.Path, path, Paths)),
             report.Files.Values.Single(f => f.Sha256 == model.Scenario.Sha256),
             report.Files.Values.Single(f => f.Sha256 == model.Recording.Sha256));
     }
@@ -176,9 +187,10 @@ public sealed class PlanManager
         if (!Guid.TryParseExact(id, "N", out _)) throw new InvalidDataException("TrialInvalid");
         var trial = Path.Combine(directory, "trial-" + id);
         var proof = Unseal<TrialProof>(Read(Path.Combine(trial, "proof.json")));
-        var result = Read(Path.Combine(trial, "result.json"));
-        var completion = Read(Path.Combine(trial, "completion.json"));
-        var run = Read(Path.Combine(trial, "run.json"));
+        if (proof.SummaryMaxBytes < 256 || proof.SummaryMaxBytes > 16 * 1024 * 1024) throw new InvalidDataException("TrialLimitInvalid");
+        var result = Read(Path.Combine(trial, "result.json"), proof.SummaryMaxBytes);
+        var completion = Read(Path.Combine(trial, "completion.json"), proof.SummaryMaxBytes);
+        var run = Read(Path.Combine(trial, "run.json"), proof.SummaryMaxBytes);
         if (proof.PlanSha256 != plan.Sha256 || proof.ScenarioSha256 != scenario.Sha256 ||
             proof.RecordingSha256 != recording.Sha256 || proof.ResultSha256 != Hash(result) || proof.CompletionSha256 != Hash(completion) || proof.RunSha256 != Hash(run) ||
             !Full(proof.Progress, proof.TotalCheckpoints)) throw new InvalidDataException("TrialIdentityMismatch");
@@ -189,7 +201,7 @@ public sealed class PlanManager
     private static void RequireFullReplay(ReplayOutcome replay)
     {
         if (replay.Completion != CompletionPolicy.AfterPlan || replay.Run.Primary.Status != ResultStatus.Passed ||
-            replay.Run.Primary.Cause.Reason != RunReason.GoalSatisfied || replay.Run.PostProcessing.Count != 0 ||
+            replay.Run.Primary.Cause.Reason != RunReason.GoalSatisfied || !replay.Run.PostProcessingComplete ||
             !Full(replay.Progress, replay.TotalCheckpoints)) throw new InvalidDataException("FullReplayRequired");
     }
     private static bool Full(ReplayProgress progress, int checkpoints) => progress.PlanCompleted && progress.GoalVerified &&
@@ -202,7 +214,7 @@ public sealed class PlanManager
         if (result.GetProperty("kind").GetString() != "result" || result.GetProperty("schemaVersion").GetInt32() != 1 ||
             result.GetProperty("runId").GetString() != runId || result.GetProperty("status").GetString() != "Passed" ||
             result.GetProperty("reason").GetString() != "GoalSatisfied" || !result.GetProperty("postProcessing").GetProperty("complete").GetBoolean() ||
-            result.GetProperty("postProcessing").GetProperty("reasons").GetArrayLength() != 0)
+            result.GetProperty("postProcessing").GetProperty("reasons").EnumerateArray().Any(x => x.GetString() != "Cancelled"))
             throw new InvalidDataException("TrialResultInvalid");
     }
     private static void CheckCompletion(byte[] bytes, string runId)
@@ -211,7 +223,7 @@ public sealed class PlanManager
         var completion = json.RootElement;
         if (completion.GetProperty("kind").GetString() != "playtestCompletionStorage" ||
             completion.GetProperty("storageVersion").GetInt32() != 1 || completion.GetProperty("runId").GetString() != runId ||
-            completion.GetProperty("postProcessing").GetArrayLength() != 0) throw new InvalidDataException("TrialPostProcessingInvalid");
+            completion.GetProperty("postProcessing").EnumerateArray().Any(x => x.GetProperty("reason").GetString() != "Cancelled")) throw new InvalidDataException("TrialPostProcessingInvalid");
     }
     private static void CheckRun(byte[] bytes, string runId, RunIdentity identity)
     {
@@ -259,19 +271,19 @@ public sealed class PlanManager
             throw new InvalidDataException("ProofUntrusted");
         return JsonSerializer.Deserialize<T>(payload, Json) ?? throw new InvalidDataException("ProofInvalid");
     }
-    private static byte[] Read(string path)
+    private static byte[] Read(string path, int maximum = MaxBytes)
     {
         RunArtifactStore.CheckPath(path);
         var opened = FileIdentity.OpenRegular(path);
         using var stream = opened.Stream;
-        if (stream.Length > MaxBytes) throw new InvalidDataException("PlanFileTooLarge");
+        if (stream.Length > maximum) throw new InvalidDataException("PlanFileTooLarge");
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
         if (stream.ReadByte() != -1) throw new InvalidDataException("PlanFileChanged");
         return bytes;
     }
-    private static void Publish(string path, byte[] bytes, CancellationToken token)
+    private static void Publish(string path, byte[] bytes, CancellationToken token, int maximum = MaxBytes)
     {
-        if (bytes.Length > MaxBytes) throw new InvalidDataException("PlanFileTooLarge");
+        if (bytes.Length > maximum) throw new InvalidDataException("PlanFileTooLarge");
         RunArtifactStore.CheckPath(Path.GetDirectoryName(path)!);
         var temporary = Path.Combine(Path.GetDirectoryName(path)!, ".write-" + Guid.NewGuid().ToString("N"));
         try
@@ -284,6 +296,7 @@ public sealed class PlanManager
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static string Relative(string directory, string path) => Path.GetRelativePath(directory, path).Replace('\\', '/');
     private static bool Within(string directory, string file)
     {
         var relative = Path.GetRelativePath(directory, file);
@@ -292,6 +305,6 @@ public sealed class PlanManager
     }
     private sealed record Envelope(string Payload, string Signature);
     private sealed record TrialProof(string RunId, RunIdentity Identity, string PlanSha256, string ScenarioSha256,
-        string RecordingSha256, ReplayProgress Progress, int TotalCheckpoints, string ResultSha256, string CompletionSha256, string RunSha256);
+        string RecordingSha256, ReplayProgress Progress, int TotalCheckpoints, string ResultSha256, string CompletionSha256, string RunSha256, int SummaryMaxBytes);
     private sealed record Acceptance(string TrialId, AdoptionEvidenceDocument Evidence);
 }

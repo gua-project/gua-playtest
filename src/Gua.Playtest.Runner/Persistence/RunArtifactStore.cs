@@ -30,6 +30,7 @@ public sealed class RunArtifactStore
     internal bool MatchesPublishedSummary(string name, byte[] bytes)
         => publishedHashes.TryGetValue(name, out var expected) && expected == Hash(bytes);
     internal RunIdentity? ReplayIdentity { get; private set; }
+    internal int SummaryMaxBytes => limits.MaxFileBytes;
     internal void BindReplay(Gua.Playtest.Runner.Replay.ResolvedReplay replay)
     {
         if (replayBound || primary is not null || completionAttempted || persistenceIncomplete ||
@@ -159,7 +160,7 @@ public sealed class RunArtifactStore
                 new(issues.All(x => x.Reason == PostProcessingReason.Cancelled), issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
             // ResultDocument is the existing public schema. No storage extension changes its wire format.
             Publish("result.json", Encode(document), cancellationToken);
-            completedSuccessfully = !persistenceIncomplete && issues.Count == 0;
+            completedSuccessfully = !persistenceIncomplete && issues.All(x => x.Reason == PostProcessingReason.Cancelled);
         });
         return saved with { PostProcessingIncomplete = persistenceIncomplete || !outcome.PostProcessingComplete ||
             artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed) };
@@ -168,7 +169,7 @@ public sealed class RunArtifactStore
     // immutable primary and mandatory postprocessing. No file can supply this authority.
     internal bool CanCertifyReplay(Gua.Playtest.Runner.Replay.ReplayOutcome replay)
         => completedSuccessfully && !persistenceIncomplete && ReferenceEquals(certifiedReplay, replay) &&
-            replay.TrialRunId == RunId && primary == replay.Run.Primary && replay.Run.PostProcessing.Count == 0;
+            replay.TrialRunId == RunId && primary == replay.Run.Primary && replay.Run.PostProcessingComplete;
     private void ValidateReferences(IReadOnlyList<ObservationReference> observations, IReadOnlyList<DecisionReference> decisions)
     {
         if (observations.Count + decisions.Count > limits.MaxItems) throw new ArtifactLimitException();
@@ -368,7 +369,8 @@ public sealed class RunArtifactStore
         var safeKey = redactor.Redact(key);
         if (structural && (safeKey != key || redactor.Sensitive(key))) throw new InvalidDataException("StructuralRedactionCollision");
         if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason" or
-            "observationId" or "decisionId" or "actionId" or "reasonCode") &&
+            "observationId" or "decisionId" or "actionId" or "reasonCode" or "scenarioId" or "definitionVersion" or
+            "buildId" or "scenarioSha256" or "environmentSha256") &&
             value is string structuralText && redactor.Redact(structuralText) != structuralText)
             throw new InvalidDataException("StructuralRedactionCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
