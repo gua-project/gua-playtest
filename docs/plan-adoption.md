@@ -39,7 +39,10 @@ state. `AcceptAsync` verifies the current graph, signed proof and summaries,
 requires explicit adoption and approval of expectations, and creates `accepted.json`
 once. Its signed payload contains the existing `AdoptionEvidenceDocument`. Imported
 or hand-written evidence cannot confer authority. `IsAcceptedAsync` rechecks these
-identities. Publication never overwrites an existing file or adoption.
+identities and reapplies the current host secret policy to retained summaries,
+signed payloads and envelopes. A strengthened policy can invalidate older trial
+or adoption evidence; verification preserves those files and refuses authority.
+Publication never overwrites an existing file or adoption.
 
 Summary copies retain the Run store's explicit per-file limit (up to 16 MiB) in
 the signed proof; candidate inputs retain the 4 MiB contract limit. A cancellation

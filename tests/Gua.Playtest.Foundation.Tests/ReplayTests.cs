@@ -165,6 +165,32 @@ public sealed class ReplayTests
     private static async Task<string> Candidate(Fixture files, PlanManager manager) => await manager.CreateAsync(
         Path.Combine(files.Root, "scenario.json"), Path.Combine(files.Root, "recording.json"), [files.Root], "conditionSynchronized");
     [Theory]
+    [InlineData("secret", false)]
+    [InlineData("secret", true)]
+    [InlineData("profile", false)]
+    [InlineData("profile", true)]
+    [InlineData("summaryMaxBytes", false)]
+    [InlineData("summaryMaxBytes", true)]
+    [InlineData("payload", true)]
+    [InlineData("signature", true)]
+    [InlineData("trialId", true)]
+    public async Task StoredTrialsHonorStrengthenedPolicyAtAdoptionAndReadback(string field, bool previouslyAccepted)
+    {
+        const string secret = "retained\nprivate";
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path, metadata: secret);
+        if (previouslyAccepted) await manager.AcceptAsync(path, id, true, true);
+        var stronger = new PlanManager(Path.Combine(files.Root, "managed"), field == "secret" ? new([secret], []) : new([], [field]));
+        var error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        {
+            if (previouslyAccepted) _ = await stronger.IsAcceptedAsync(path);
+            else await stronger.AcceptAsync(path, id, true, true);
+        });
+        Assert.Equal("PlanSecretCollision", error.Message);
+        Assert.Equal(previouslyAccepted, File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+        Assert.Equal(previouslyAccepted, await manager.IsAcceptedAsync(path));
+    }
+    [Theory]
     [InlineData("payload")]
     [InlineData("signature")]
     [InlineData("summaryMaxBytes")]
@@ -194,7 +220,9 @@ public sealed class ReplayTests
     private static async Task<string> Trial(Fixture files, PlanManager manager, string path, bool cleanupFailure = false,
         string? wrongIdentity = null, string? changedSummary = null, bool cancelAfterPrimary = false, string? metadata = null)
     {
-        var replay = await ResolvedReplay.LoadAsync(path, [files.Root], new(10, 1000));
+        // This managed trial authorizes its candidate directory. Use the same path
+        // spelling for the static validator's lexical allowed-root contract.
+        var replay = await ResolvedReplay.LoadAsync(path, [Path.GetDirectoryName(path)!], new(10, 1000));
         var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(8 * 1024 * 1024, 32 * 1024 * 1024, 1000, 8 * 1024 * 1024), new([], []));
         var scenario = replay.CopyScenario();
         var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, replay.ScenarioSha256, "build", new string('a', 64));

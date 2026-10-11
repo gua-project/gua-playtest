@@ -204,6 +204,8 @@ public sealed class PlanManager
         if (proof.PlanSha256 != plan.Sha256 || proof.ScenarioSha256 != scenario.Sha256 ||
             proof.RecordingSha256 != recording.Sha256 || proof.ResultSha256 != Hash(result) || proof.CompletionSha256 != Hash(completion) || proof.RunSha256 != Hash(run) ||
             !Full(proof.Progress, proof.TotalCheckpoints)) throw new InvalidDataException("TrialIdentityMismatch");
+        foreach (var bytes in new[] { run, result, completion })
+        { RejectSecrets(bytes); RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(bytes)!); }
         CheckResult(result, proof.RunId); CheckCompletion(completion, proof.RunId);
         CheckRun(run, proof.RunId, proof.Identity);
         return proof;
@@ -285,11 +287,15 @@ public sealed class PlanManager
     }
     private T Unseal<T>(byte[] bytes)
     {
+        RejectSecrets(bytes);
+        RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(bytes)!);
         var envelope = JsonSerializer.Deserialize<Envelope>(bytes, Json) ?? throw new InvalidDataException("ProofInvalid");
         var payload = Convert.FromBase64String(envelope.Payload);
         var signature = Convert.FromHexString(envelope.Signature);
         if (!CryptographicOperations.FixedTimeEquals(signature, HMACSHA256.HashData(key, payload)))
             throw new InvalidDataException("ProofUntrusted");
+        RejectSecrets(payload);
+        RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(payload)!);
         return JsonSerializer.Deserialize<T>(payload, Json) ?? throw new InvalidDataException("ProofInvalid");
     }
     private static byte[] Read(string path, int maximum = MaxBytes)
