@@ -101,6 +101,12 @@ public sealed class RunArtifactStore
             foreach (var input in metadata.Inputs)
             {
                 var safe = Encode(input.Document, out var nodeCount);
+                using (var fixedInput = JsonDocument.Parse(safe))
+                    if (identity is not null && fixedInput.RootElement.ValueKind == JsonValueKind.Object &&
+                        fixedInput.RootElement.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.GetString() == "scenario" &&
+                        (!fixedInput.RootElement.TryGetProperty("scenarioId", out var scenarioId) || scenarioId.ValueKind != JsonValueKind.String || scenarioId.GetString() != identity.ScenarioId ||
+                         !fixedInput.RootElement.TryGetProperty("definitionVersion", out var version) || version.ValueKind != JsonValueKind.String || version.GetString() != identity.DefinitionVersion))
+                        throw new InvalidDataException("RunIdentityScenarioMismatch");
                 inputBytes += safe.Length; inputNodes += nodeCount;
                 if (inputBytes > limits.MaxFileBytes || inputNodes > limits.MaxItems) throw new ArtifactLimitException();
                 // Store as embedded fixed sanitized bytes; do not copy source files or original input hashes.

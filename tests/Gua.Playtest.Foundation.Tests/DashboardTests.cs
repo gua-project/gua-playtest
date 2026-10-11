@@ -558,6 +558,39 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("Unsettled", run.State); Assert.Equal(replayPreparation ? "buildB" : "buildA", run.BuildId);
         Assert.Equal(started, run.StartedAt); Assert.Equal(Identity().ScenarioSha256, run.ScenarioSha256);
     }
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public void Preparation_never_publishes_identity_that_disagrees_with_fixed_scenario(bool replayPreparation, bool versionMismatch)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var identity = versionMismatch ? Identity() with { DefinitionVersion = "v2" } : Identity() with { ScenarioId = "s2" };
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity);
+        var result = replayPreparation ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure); Assert.False(result.Saved);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Fact]
+    public async Task Cancellation_returned_by_public_run_validator_never_becomes_a_normal_snapshot()
+    {
+        var store = Save(); var runFile = Path.Combine(store.DirectoryPath, "run.json");
+        File.WriteAllText(runFile, ContractJson.Serialize(new RunDocument(store.RunId, Identity(), "Explore", ExecutionState.Finished,
+            DateTimeOffset.UtcNow, new("../../s1.json", Identity().ScenarioSha256), new("../../s2.json", new string('b', 64)), null)));
+        File.Delete(Path.Combine(store.DirectoryPath, "result.json")); File.Delete(Path.Combine(store.DirectoryPath, "completion.json"));
+        using var canceled = new CancellationTokenSource(); var interrupted = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ValidateContract = async (path, roots, token) =>
+            {
+                if (path == runFile) canceled.Cancel();
+                var report = await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+                if (path == runFile) interrupted = report.Code == "Interrupted";
+                return report;
+            }
+        };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
+        Assert.True(interrupted); // Real static validator returned its Interrupted report on the final run.
+    }
     [Fact]
     public async Task Issued_report_route_never_rebinds_to_another_run_after_refresh()
     {

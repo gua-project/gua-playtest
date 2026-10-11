@@ -40,6 +40,8 @@ public sealed class DashboardIndex
     private readonly HashSet<string> validationRoots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Directory, ArtifactFileReference File, FileIdentity Identity, ArtifactFileReference[] Files)> reports = [];
     private long remaining;
+    internal Func<string, IEnumerable<string>, CancellationToken, ValueTask<StaticValidationReport>> ValidateContract { get; init; }
+        = static (path, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(path, token);
     public DashboardIndex(string registry, IEnumerable<string> artifactRoots, IEnumerable<string> allowedRoots,
         DashboardLimits? limits = null)
     {
@@ -61,8 +63,9 @@ public sealed class DashboardIndex
             CheckAllowed(registry);
             using (var admission = ReadContract(registry, reserveValidationRead: true))
                 AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal), reserveValidationRead: true);
-            var report = await new StaticContractValidator(allowedRoots.Concat(validationRoots).ToArray()).ValidateFileAsync(registry, token);
+            var report = await ValidateContract(registry, allowedRoots.Concat(validationRoots).ToArray(), token);
             token.ThrowIfCancellationRequested();
+            if (report.Code == "Interrupted") throw new OperationCanceledException(token);
             if (!report.IsValid || report.Document is not ScenarioRegistryDocument population)
                 return new(report.Code == "Valid" ? "RegistryInvalid" : report.Code, [], [], [], false);
             foreach (var entry in population.Scenarios)
@@ -151,7 +154,9 @@ public sealed class DashboardIndex
             {
                 using (var reservation = Open(Path.Combine(directory, "run.json"))) Charge(reservation.Length);
                 AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal), reserveValidationRead: true);
-                var validation = await new StaticContractValidator(allowedRoots.Concat(validationRoots).ToArray()).ValidateFileAsync(Path.Combine(directory, "run.json"), token);
+                var validation = await ValidateContract(Path.Combine(directory, "run.json"), allowedRoots.Concat(validationRoots).ToArray(), token);
+                token.ThrowIfCancellationRequested();
+                if (validation.Code == "Interrupted") throw new OperationCanceledException(token);
                 if (!validation.IsValid || validation.Document is not RunDocument wire) throw new InvalidDataException();
                 identity = wire.Identity; started = wire.StartedAt;
             }
