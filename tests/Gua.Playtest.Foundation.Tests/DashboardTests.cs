@@ -1300,7 +1300,7 @@ public sealed class DashboardTests : IDisposable
             Assert.Equal(0, probes);
             if (lane == "artifact") { Assert.Equal("Ready", snapshot.RegistryState); Assert.Contains("ArtifactRootUnreadable", snapshot.Warnings); }
             else Assert.Equal("RegistryUnreadable", snapshot.RegistryState);
-        } finally { Directory.Delete(link); }
+        } finally { if (OperatingSystem.IsWindows()) Directory.Delete(link); else File.Delete(link); }
     }
     [Fact]
     public async Task Aborted_http_report_stops_sibling_work_and_releases_index_gate()
