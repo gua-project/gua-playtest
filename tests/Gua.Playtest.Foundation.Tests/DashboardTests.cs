@@ -1156,5 +1156,78 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("PassedPostProcessingIncomplete", run.State);
         Assert.Equal("OmittedOnSuccess", run.Details[0].State); Assert.Equal("NotExecuted", run.Details[1].State);
     }
+    [Theory]
+    [InlineData("fileName", "null")] [InlineData("fileName", "\"../private\"")]
+    [InlineData("bytes", "null")] [InlineData("bytes", "0")]
+    [InlineData("sha256", "null")] [InlineData("sha256", "\"invalid\"")]
+    [InlineData("additionalFiles", "[null]")]
+    [InlineData("additionalFiles", "[{\"fileName\":null,\"bytes\":1,\"sha256\":\"invalid\"}]")]
+    public async Task Malformed_saved_recording_invalidates_completion_before_any_report_route(string field, string value)
+    {
+        var (store, _) = SavedReportAndRecording(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["artifacts"]![1]![field] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        File.WriteAllText(file, json.ToJsonString()); var index = Index(); var run = Assert.Single((await index.ReadAsync()).Runs);
+        Assert.Equal(ResultStatus.Failed, run.Result!.Status);
+        Assert.All(run.Details, d => { Assert.Equal("CompletionUnreadable", d.State); Assert.Null(d.Report); });
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/" + run.Key));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Cancellation_between_registry_or_public_run_references_stops_remaining_admission(bool publicRun)
+    {
+        var (store, html) = SavedReportAndRecording(); using var canceled = new CancellationTokenSource();
+        var stop = false; var registryValidated = false; var admitted = 0;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ReferenceAdmitted = _ => { if (stop && (!publicRun || registryValidated)) { admitted++; canceled.Cancel(); } },
+            ValidateContract = async (path, roots, token) =>
+            { var result = await new StaticContractValidator(roots).ValidateFileAsync(path, token); if (path == Registry) registryValidated = true; return result; }
+        };
+        var route = Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report!;
+        if (publicRun) File.WriteAllText(Path.Combine(store.DirectoryPath, "run.json"), ContractJson.Serialize(new RunDocument(store.RunId,
+            Identity(), "Explore", ExecutionState.Finished, DateTimeOffset.UtcNow,
+            new("../../s1.json", Identity().ScenarioSha256), new("../../s2.json", new string('b', 64)), null)));
+        registryValidated = false; stop = true;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
+        Assert.Equal(1, admitted); Assert.Equal(html, index.ReadReport(route));
+    }
+    [Theory]
+    [InlineData("\\\\offline-dashboard.invalid\\share\\source.json")]
+    [InlineData("//offline-dashboard.invalid/share/source.json")]
+    [InlineData("\\\\?\\C:\\source.json")]
+    [InlineData("\\\\.\\GLOBALROOT\\source.json")]
+    public void Network_and_device_namespace_constructor_paths_rejected_without_filesystem_access(string unsafePath)
+    {
+        Assert.Throws<InvalidDataException>(() => new DashboardIndex(unsafePath, [Artifacts], [root]));
+        Assert.Throws<InvalidDataException>(() => new DashboardIndex(Registry, [unsafePath], [root]));
+        Assert.Throws<InvalidDataException>(() => new DashboardIndex(Registry, [Artifacts], [unsafePath]));
+    }
+    [Theory]
+    [InlineData(false, "\\\\offline-dashboard.invalid\\share\\source.json")]
+    [InlineData(true, "\\\\offline-dashboard.invalid\\share\\source.json")]
+    [InlineData(false, "\\\\?\\C:\\source.json")]
+    [InlineData(true, "\\\\?\\C:\\source.json")]
+    public async Task Network_and_device_registry_paths_never_reach_probe_boundary(bool artifactRoot, string unsafePath)
+    {
+        if (!OperatingSystem.IsWindows()) return; // Windows normalization is the affected admission lane.
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        if (artifactRoot) json["artifactRoots"]![0] = unsafePath; else json["scenarios"]![0]!["file"]!["path"] = unsafePath;
+        File.WriteAllText(Registry, json.ToJsonString()); var unsafeProbes = 0;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        { PathProbed = path => { if (path.StartsWith("\\\\", StringComparison.Ordinal)) { unsafeProbes++; throw new IOException("BlockedBeforeActualNetworkProbe"); } } };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState);
+        Assert.Equal(0, unsafeProbes); // Observer aborts pre-fix admission before any actual UNC/device contact.
+    }
+    [Theory]
+    [InlineData(false, "null")] [InlineData(true, "null")] [InlineData(false, "42")] [InlineData(true, "42")]
+    public async Task Registry_path_shape_errors_remain_readable_failure_states(bool artifactRoot, string value)
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        if (artifactRoot) json["artifactRoots"]![0] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        else json["scenarios"]![0]!["file"]!["path"] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        File.WriteAllText(Registry, json.ToJsonString());
+        Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState);
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }

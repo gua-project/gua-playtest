@@ -6,6 +6,9 @@ additional access. The registry is the Scenario population, including entries
 with no saved Run. Updating the registry is an explicit operation outside this
 read-only viewer. Refresh rereads the registry and artifacts; filters operate on
 the current snapshot and never launch a game, Planner or Replay.
+Paths must be local filesystem paths. UNC and device namespaces are rejected
+before any filesystem probe. Cancellation stops admission between references
+and preserves the preceding completed snapshot and report routes.
 
 Choose a game build and effective Environment SHA-256 separately. A Scenario's
 current result matches all five identity fields: stable ID, definition version,

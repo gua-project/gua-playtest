@@ -44,12 +44,14 @@ public sealed class DashboardIndex
     internal Func<string, IEnumerable<string>, CancellationToken, ValueTask<StaticValidationReport>> ValidateContract { get; init; }
         = static (path, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(path, token);
     internal Action<string>? ReceiptFileOpened { get; init; }
+    internal Action<string>? ReferenceAdmitted { get; init; }
+    internal Action<string>? PathProbed { get; init; }
     public DashboardIndex(string registry, IEnumerable<string> artifactRoots, IEnumerable<string> allowedRoots,
         DashboardLimits? limits = null)
     {
-        this.registry = Path.GetFullPath(registry);
-        roots = artifactRoots.Select(Path.GetFullPath).Distinct(StringComparer.Ordinal).ToArray();
-        this.allowedRoots = allowedRoots.Select(Path.GetFullPath).ToArray();
+        this.registry = LocalPath(registry);
+        roots = artifactRoots.Select(path => LocalPath(path)).Distinct(StringComparer.Ordinal).ToArray();
+        this.allowedRoots = allowedRoots.Select(path => LocalPath(path)).ToArray();
         this.limits = limits ?? new(); this.limits.Validate();
         if (roots.Length is 0 || roots.Length > this.limits.MaxRoots || this.allowedRoots.Length is 0 ||
             this.allowedRoots.Length > this.limits.MaxRoots) throw new ArgumentException("ExplicitRootsRequired");
@@ -59,7 +61,8 @@ public sealed class DashboardIndex
         // Build a separate bounded index so canceled or failed refreshes cannot invalidate
         // the report routes belonging to the last successfully returned snapshot.
         var pending = new DashboardIndex(registry, roots, allowedRoots, limits)
-        { ValidateContract = ValidateContract, ReceiptFileOpened = ReceiptFileOpened };
+        { ValidateContract = ValidateContract, ReceiptFileOpened = ReceiptFileOpened,
+            ReferenceAdmitted = ReferenceAdmitted, PathProbed = PathProbed };
         var snapshot = await pending.ReadCoreAsync(token);
         token.ThrowIfCancellationRequested();
         reports = pending.reports;
@@ -73,9 +76,9 @@ public sealed class DashboardIndex
         var scenarios = new List<DashboardScenario>(); var truncated = false;
         try
         {
-            CheckAllowed(registry);
+            CheckAllowed(registry, token);
             using (var admission = ReadContract(registry, reserveValidationRead: true))
-                AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal), reserveValidationRead: true);
+                AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal), token, reserveValidationRead: true);
             var report = await ValidateContract(registry, allowedRoots.Concat(validationRoots).ToArray(), token);
             token.ThrowIfCancellationRequested();
             if (report.Code == "Interrupted") throw new OperationCanceledException(token);
@@ -83,6 +86,7 @@ public sealed class DashboardIndex
                 return new(report.Code == "Valid" ? "RegistryInvalid" : report.Code, [], [], [], false);
             foreach (var entry in population.Scenarios)
             {
+                token.ThrowIfCancellationRequested();
                 var file = report.Files.Values.Single(x => x.Sha256 == entry.File.Sha256 &&
                     x.CopyJson()["scenarioId"]?.GetValue<string>() == entry.ScenarioId);
                 scenarios.Add(new(entry.ScenarioId, entry.DefinitionVersion, entry.File.Sha256,
@@ -98,7 +102,7 @@ public sealed class DashboardIndex
             if (truncated) break;
             try
             {
-                CheckAllowed(root);
+                CheckAllowed(root, token);
                 if (!visited.Add(FileIdentity.ReadDirectory(root))) continue;
                 // Enumerate immediate Run entries only, never recurse or sort an unbounded directory.
                 using var entries = Directory.EnumerateFileSystemEntries(root).GetEnumerator();
@@ -196,7 +200,7 @@ public sealed class DashboardIndex
             else if (kind == "run")
             {
                 using (var reservation = Open(Path.Combine(directory, "run.json"))) Charge(reservation.Length);
-                AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal), reserveValidationRead: true);
+                AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal), token, reserveValidationRead: true);
                 var validation = await ValidateContract(Path.Combine(directory, "run.json"), allowedRoots.Concat(validationRoots).ToArray(), token);
                 token.ThrowIfCancellationRequested();
                 if (validation.Code == "Interrupted") throw new OperationCanceledException(token);
@@ -357,35 +361,46 @@ public sealed class DashboardIndex
         RejectDuplicates(validation.RootElement);
         return JsonDocument.Parse(bytes, new() { MaxDepth = 33 });
     }
-    private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited, bool reserveValidationRead = false)
+    private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited, CancellationToken token, bool reserveValidationRead = false)
     {
+        token.ThrowIfCancellationRequested();
         if (Text(document, "kind") == "scenarioRegistry")
         {
             var artifactRoots = document.GetProperty("artifactRoots");
             if (artifactRoots.ValueKind != JsonValueKind.Array || artifactRoots.GetArrayLength() > limits.MaxRoots)
                 throw new InvalidDataException();
             foreach (var scenario in document.GetProperty("scenarios").EnumerateArray())
-                AdmitReference(scenario.GetProperty("file"), directory, visited, reserveValidationRead);
+            {
+                token.ThrowIfCancellationRequested();
+                AdmitReference(scenario.GetProperty("file"), directory, visited, token, reserveValidationRead);
+            }
             foreach (var root in artifactRoots.EnumerateArray())
-                CheckAllowed(Path.GetFullPath(root.GetString()!, directory));
+            {
+                token.ThrowIfCancellationRequested();
+                CheckAllowed(LocalPath(root.GetString()!, directory), token);
+            }
             return;
         }
         string[] fields = Text(document, "kind") switch
         { "run" => ["scenario", "environment", "plan"], "replayPlan" => ["scenario", "recording"], _ => [] };
         foreach (var field in fields)
         {
+            token.ThrowIfCancellationRequested();
             if (!document.TryGetProperty(field, out var reference) || reference.ValueKind == JsonValueKind.Null) continue;
-            AdmitReference(reference, directory, visited, reserveValidationRead);
+            AdmitReference(reference, directory, visited, token, reserveValidationRead);
         }
     }
-    private void AdmitReference(JsonElement reference, string directory, HashSet<string> visited, bool reserveValidationRead)
+    private void AdmitReference(JsonElement reference, string directory, HashSet<string> visited, CancellationToken token, bool reserveValidationRead)
     {
-        var path = Path.GetFullPath(reference.GetProperty("path").GetString()!, directory);
-        CheckAllowed(path);
+        token.ThrowIfCancellationRequested();
+        var path = LocalPath(reference.GetProperty("path").GetString()!, directory);
+        CheckAllowed(path, token);
         if (!visited.Add(path)) return;
         if (visited.Count > 1000) throw new InvalidDataException();
         using var source = ReadContract(path, reserveValidationRead);
-        AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited, reserveValidationRead);
+        ReferenceAdmitted?.Invoke(path);
+        token.ThrowIfCancellationRequested();
+        AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited, token, reserveValidationRead);
     }
     private JsonDocument ReadContract(string path, bool reserveValidationRead = false)
     {
@@ -412,12 +427,32 @@ public sealed class DashboardIndex
         if (stream.Length <= limits.MaxFileBytes) return stream;
         stream.Dispose(); throw new InvalidDataException();
     }
-    private void CheckAllowed(string path)
+    private static string LocalPath(string path, string? directory = null)
     {
-        var full = Path.GetFullPath(path);
-        var identities = allowedRoots.Select(FileIdentity.ReadDirectory).ToHashSet();
+        ArgumentNullException.ThrowIfNull(path);
+        RejectNamespace(path);
+        var full = directory is null ? Path.GetFullPath(path) : Path.GetFullPath(path, directory);
+        RejectNamespace(full);
+        if (OperatingSystem.IsWindows() && full[(Path.GetPathRoot(full)?.Length ?? 0)..].Contains(':'))
+            throw new InvalidDataException("LocalPathRequired");
+        return full;
+    }
+    private static void RejectNamespace(string path)
+    {
+        if (path.StartsWith("\\\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal) ||
+            path.StartsWith("\\??\\", StringComparison.Ordinal)) throw new InvalidDataException("LocalPathRequired");
+    }
+    private void CheckAllowed(string path, CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        var full = LocalPath(path);
+        PathProbed?.Invoke(full);
+        var identities = new HashSet<FileIdentity>();
+        foreach (var root in allowedRoots) { token.ThrowIfCancellationRequested(); identities.Add(FileIdentity.ReadDirectory(root)); }
         for (var directory = Directory.Exists(full) ? full : Path.GetDirectoryName(full); directory is not null;
             directory = Path.GetDirectoryName(directory))
+        {
+            token.ThrowIfCancellationRequested();
             if (Directory.Exists(directory) && identities.Contains(FileIdentity.ReadDirectory(directory)))
             {
                 RunArtifactStore.CheckPath(full);
@@ -425,6 +460,7 @@ public sealed class DashboardIndex
                 // validator's lexical check (e.g. case-insensitive APFS). No new identity is granted.
                 validationRoots.Add(Path.TrimEndingDirectorySeparator(directory)); return;
             }
+        }
         throw new InvalidDataException();
     }
     private HashSet<FileIdentity> SummaryIdentities(string directory)
