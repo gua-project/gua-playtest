@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gua.Playtest.Core.Contracts;
@@ -58,8 +59,8 @@ public sealed class DashboardIndex
         try
         {
             CheckAllowed(registry);
-            using (var admission = ReadContract(registry))
-                AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal));
+            using (var admission = ReadContract(registry, reserveValidationRead: true))
+                AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal), reserveValidationRead: true);
             var report = await new StaticContractValidator(allowedRoots.Concat(validationRoots).ToArray()).ValidateFileAsync(registry, token);
             token.ThrowIfCancellationRequested();
             if (!report.IsValid || report.Document is not ScenarioRegistryDocument population)
@@ -89,7 +90,7 @@ public sealed class DashboardIndex
                     if (++examined > limits.MaxEntries) { truncated = true; break; }
                     if ((File.GetAttributes(directory) & FileAttributes.Directory) == 0) continue;
                     if (runs.Count == limits.MaxRuns || remaining <= 0) { truncated = true; break; }
-                    runs.Add(await ReadRunAsync(directory, runs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), token));
+                    runs.Add(await ReadRunAsync(directory, RunKey(directory), token));
                 }
             }
             catch (OperationCanceledException) { throw; }
@@ -150,7 +151,7 @@ public sealed class DashboardIndex
             else throw new InvalidDataException();
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception e) when (ReadFailure(e)) { metadataState = e is FileNotFoundException ? "IdentityUnknown" : "RunUnreadable"; }
+        catch (Exception e) when (ReadFailure(e)) { metadataState = "RunUnreadable"; }
         ResultDocument? result = null; var state = "Unsettled";
         try
         {
@@ -277,12 +278,12 @@ public sealed class DashboardIndex
         RejectDuplicates(validation.RootElement);
         return JsonDocument.Parse(bytes, new() { MaxDepth = 32 });
     }
-    private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited)
+    private void AdmitWireReferences(JsonElement document, string directory, HashSet<string> visited, bool reserveValidationRead = false)
     {
         if (Text(document, "kind") == "scenarioRegistry")
         {
             foreach (var scenario in document.GetProperty("scenarios").EnumerateArray())
-                AdmitReference(scenario.GetProperty("file"), directory, visited);
+                AdmitReference(scenario.GetProperty("file"), directory, visited, reserveValidationRead);
             return;
         }
         string[] fields = Text(document, "kind") switch
@@ -290,21 +291,22 @@ public sealed class DashboardIndex
         foreach (var field in fields)
         {
             if (!document.TryGetProperty(field, out var reference) || reference.ValueKind == JsonValueKind.Null) continue;
-            AdmitReference(reference, directory, visited);
+            AdmitReference(reference, directory, visited, reserveValidationRead);
         }
     }
-    private void AdmitReference(JsonElement reference, string directory, HashSet<string> visited)
+    private void AdmitReference(JsonElement reference, string directory, HashSet<string> visited, bool reserveValidationRead)
     {
         var path = Path.GetFullPath(reference.GetProperty("path").GetString()!, directory);
         CheckAllowed(path);
         if (!visited.Add(path)) return;
         if (visited.Count > 1000) throw new InvalidDataException();
-        using var source = ReadContract(path);
-        AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited);
+        using var source = ReadContract(path, reserveValidationRead);
+        AdmitWireReferences(source.RootElement, Path.GetDirectoryName(path)!, visited, reserveValidationRead);
     }
-    private JsonDocument ReadContract(string path)
+    private JsonDocument ReadContract(string path, bool reserveValidationRead = false)
     {
         using var stream = Open(path); Charge(stream.Length);
+        if (reserveValidationRead) Charge(stream.Length); // Reserve the static validator's duplicate read before it allocates.
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
         var inspected = ContractJson.Inspect(bytes, Path.GetExtension(path));
         if (inspected.Document is null) throw new InvalidDataException();
@@ -345,11 +347,20 @@ public sealed class DashboardIndex
     {
         var identities = new HashSet<FileIdentity>();
         foreach (var name in new[] { ".owner", "run.json", "primary.json", "completion.json", "result.json" })
-            try { using var file = Open(Path.Combine(directory, name)); identities.Add(FileIdentity.Read(file.SafeFileHandle)); }
+            try { using var file = Open(Path.Combine(directory, name));
+                if (!identities.Add(FileIdentity.Read(file.SafeFileHandle))) throw new ReceiptAliasException(); }
             catch (FileNotFoundException) { }
         return identities;
     }
     private sealed class ReceiptAliasException : IOException { }
+    private static string RunKey(string directory)
+    {
+        string input;
+        try { var id = FileIdentity.ReadDirectory(directory);
+            input = FormattableString.Invariant($"{id.Device:x16}:{id.Low:x16}:{id.High:x16}:{Path.GetFileName(directory)}"); }
+        catch (Exception e) when (ReadFailure(e)) { input = "unreadable:" + Path.GetFullPath(directory); }
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
+    }
     private void Charge(long length)
     { remaining -= length; if (remaining < 0) throw new InvalidDataException("IndexLimit"); }
     private static RunIdentity DecodeIdentity(JsonElement element)

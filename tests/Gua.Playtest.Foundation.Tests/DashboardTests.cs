@@ -475,5 +475,43 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("RegistryUnreadable", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [safe]).ReadAsync()).RegistryState);
         Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [parent]).ReadAsync()).RegistryState);
     }
+    [Fact]
+    public async Task Missing_run_document_is_unreadable_and_independent_result_is_retained()
+    {
+        var store = Save(); File.Delete(Path.Combine(store.DirectoryPath, "run.json"));
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Registry_budget_reserves_static_validation_second_read()
+    {
+        var files = new[] { Registry, Path.Combine(root, "s1.json"), Path.Combine(root, "s2.json") };
+        var total = files.Sum(path => new FileInfo(path).Length);
+        var largest = checked((int)Math.Max(256, files.Max(path => new FileInfo(path).Length)));
+        Assert.Equal("RegistryUnreadable", (await Index(new(MaxFileBytes: largest, MaxIndexBytes: total)).ReadAsync()).RegistryState);
+        Assert.Equal("Ready", (await Index(new(MaxFileBytes: largest, MaxIndexBytes: 2 * total)).ReadAsync()).RegistryState);
+    }
+    [Fact]
+    public async Task Issued_report_route_never_rebinds_to_another_run_after_refresh()
+    {
+        var (first, firstHtml) = SavedReportAndRecording(); var index = Index();
+        var firstRun = Assert.Single((await index.ReadAsync()).Runs); var oldRoute = firstRun.Details.Single(d => d.Kind == "Trace").Report!;
+        Assert.Equal(firstHtml, index.ReadReport(oldRoute));
+        Directory.Delete(first.DirectoryPath, true); var (second, secondHtml) = SavedReportAndRecording();
+        var secondRun = Assert.Single((await index.ReadAsync()).Runs); var newRoute = secondRun.Details.Single(d => d.Kind == "Trace").Report!;
+        Assert.NotEqual(first.RunId, second.RunId); Assert.NotEqual(firstRun.Key, secondRun.Key); Assert.NotEqual(oldRoute, newRoute);
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport(oldRoute)); Assert.Equal(secondHtml, index.ReadReport(newRoute));
+        Assert.Equal(newRoute, Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report);
+    }
+    [Fact]
+    public async Task Summary_to_summary_hardlink_is_rejected_independently_of_receipt_aliases()
+    {
+        var store = Save(); var primary = Path.Combine(store.DirectoryPath, "primary.json"); File.Delete(primary);
+        CreateHardLink(primary, Path.Combine(store.DirectoryPath, "result.json"));
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.All(run.Details, d => Assert.Equal("CompletionUnreadable", d.State));
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status); // Preserve the independent saved result, do not regrade it.
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
