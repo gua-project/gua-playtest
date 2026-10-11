@@ -1,0 +1,14 @@
+  復元対象のプロジェクトを決定しています...
+  復元対象のすべてのプロジェクトは最新です。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+警告: 結果ファイルを上書きしています: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-raw\focused.trx
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-raw\focused.trx
+
+成功!   -失敗:     0、合格:   235、スキップ:     0、合計:   235、期間: 1 s - Gua.Playtest.Foundation.Tests.dll (net10.0)

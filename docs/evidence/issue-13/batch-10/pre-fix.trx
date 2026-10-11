@@ -1,0 +1,130 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="60aa4316-c496-4bdc-b8e4-2e5ff9f396bf" name="testk@DESKTOP-3CJOU9S 2026-10-11 08:47:45" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T08:47:45.6919052+09:00" queuing="2026-10-11T08:47:45.6919054+09:00" start="2026-10-11T08:47:44.3110822+09:00" finish="2026-10-11T08:47:45.6960248+09:00" />
+  <TestSettings name="default" id="9b4804de-43cd-4b42-823e-f6b9e7f61ded">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_08_47_45" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="8b95955b-3439-4452-81d0-4b833c8ab6e7" testId="755f97dd-c767-2a6b-d53e-feb2417c142f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/completed&quot;, beforeResponse: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2583656" startTime="2026-10-11T08:47:45.3171746+09:00" endTime="2026-10-11T08:47:45.5857349+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8b95955b-3439-4452-81d0-4b833c8ab6e7">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d18ff1ad-49a2-4720-ac73-41b4d7d5b2d3" testId="5908a6ae-ba8c-596f-431c-a5bfaf2ac26c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/started&quot;, beforeResponse: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0074852" startTime="2026-10-11T08:47:45.5961985+09:00" endTime="2026-10-11T08:47:45.5962955+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d18ff1ad-49a2-4720-ac73-41b4d7d5b2d3">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="be3ee300-ce7f-4895-8b53-34df0de66c63" testId="8b6b8b72-8204-5aff-8a34-59e722fcfc06" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/started&quot;, beforeResponse: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0035288" startTime="2026-10-11T08:47:45.6097330+09:00" endTime="2026-10-11T08:47:45.6128585+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="be3ee300-ce7f-4895-8b53-34df0de66c63">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b4f6cdeb-6b5e-40fe-a9a4-41393a90ed4a" testId="00d66bb3-6ba9-e710-e3e4-62bb01bac5d0" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/completed&quot;, beforeResponse: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0156744" startTime="2026-10-11T08:47:45.5974812+09:00" endTime="2026-10-11T08:47:45.6091233+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b4f6cdeb-6b5e-40fe-a9a4-41393a90ed4a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/started&quot;, beforeResponse: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5908a6ae-ba8c-596f-431c-a5bfaf2ac26c">
+      <Execution id="d18ff1ad-49a2-4720-ac73-41b4d7d5b2d3" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/completed&quot;, beforeResponse: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="755f97dd-c767-2a6b-d53e-feb2417c142f">
+      <Execution id="8b95955b-3439-4452-81d0-4b833c8ab6e7" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/started&quot;, beforeResponse: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="8b6b8b72-8204-5aff-8a34-59e722fcfc06">
+      <Execution id="be3ee300-ce7f-4895-8b53-34df0de66c63" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: &quot;hook/completed&quot;, beforeResponse: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="00d66bb3-6ba9-e710-e3e4-62bb01bac5d0">
+      <Execution id="b4f6cdeb-6b5e-40fe-a9a4-41393a90ed4a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="755f97dd-c767-2a6b-d53e-feb2417c142f" executionId="8b95955b-3439-4452-81d0-4b833c8ab6e7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5908a6ae-ba8c-596f-431c-a5bfaf2ac26c" executionId="d18ff1ad-49a2-4720-ac73-41b4d7d5b2d3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8b6b8b72-8204-5aff-8a34-59e722fcfc06" executionId="be3ee300-ce7f-4895-8b53-34df0de66c63" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="00d66bb3-6ba9-e710-e3e4-62bb01bac5d0" executionId="b4f6cdeb-6b5e-40fe-a9a4-41393a90ed4a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="4" executed="4" passed="0" failed="4" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.31]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.46]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.48]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.77]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.77]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.77]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.77]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.77]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(421,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.77]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.78]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.78]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.78]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.78]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.78]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(421,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.78]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.79]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.79]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.79]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.79]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.79]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(421,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.79]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.79]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.79]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.79]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.79]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.79]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(421,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.79]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.80]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:47:45.5880179+09:00">
+        <Text>[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/completed", beforeResponse: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:47:45.5967174+09:00">
+        <Text>[xUnit.net 00:00:00.78]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/started", beforeResponse: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:47:45.6095385+09:00">
+        <Text>[xUnit.net 00:00:00.79]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/completed", beforeResponse: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:47:45.6130759+09:00">
+        <Text>[xUnit.net 00:00:00.79]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/started", beforeResponse: True) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

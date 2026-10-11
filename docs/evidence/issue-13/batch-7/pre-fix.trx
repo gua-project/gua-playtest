@@ -1,0 +1,230 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b95fba08-b298-4d7b-be6f-59e190d584dc" name="testk@DESKTOP-3CJOU9S 2026-10-11 08:24:51" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T08:24:51.8402304+09:00" queuing="2026-10-11T08:24:51.8402307+09:00" start="2026-10-11T08:24:50.7397877+09:00" finish="2026-10-11T08:24:51.8454746+09:00" />
+  <TestSettings name="default" id="ce01ae47-d854-44d1-b12c-9d663ecb58d5">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_08_24_51" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="dd8ee02b-6f59-43a5-a4d3-545967ab37f4" testId="2a14077d-3550-7dcd-bfd9-364090f2e42f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 11)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0041298" startTime="2026-10-11T08:24:51.7332472+09:00" endTime="2026-10-11T08:24:51.7333089+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dd8ee02b-6f59-43a5-a4d3-545967ab37f4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 6, TotalTokens = 12 }</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e940120a-a18a-4141-9349-fdf46447c3c0" testId="f4b65909-95c8-31b4-9cd2-cf004abe0606" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 12)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042839" startTime="2026-10-11T08:24:51.7343312+09:00" endTime="2026-10-11T08:24:51.7359026+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e940120a-a18a-4141-9349-fdf46447c3c0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 6, TotalTokens = 12 }</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f3843590-ee5e-45ce-b079-c4d5bd0f29f5" testId="10b4cb6e-4fad-e12e-62be-024b71267c21" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;model/verification&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0033184" startTime="2026-10-11T08:24:51.7414283+09:00" endTime="2026-10-11T08:24:51.7445160+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f3843590-ee5e-45ce-b079-c4d5bd0f29f5">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="510e6b80-c1a8-4c79-9e25-6c83cbfb6c00" testId="0efa7182-8179-f347-340d-6ae3459269ae" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 4, total: 12)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2388821" startTime="2026-10-11T08:24:51.4738022+09:00" endTime="2026-10-11T08:24:51.7230956+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="510e6b80-c1a8-4c79-9e25-6c83cbfb6c00">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   CodexUsage { InputTokens = 8, OutputTokens = 5, TotalTokens = 12 }</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c548df10-6ae0-404f-8bfc-5b4c85c2ab4b" testId="af30414a-7eec-2197-da18-5055a7d79ea9" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;rawResponseItem/completed&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0025948" startTime="2026-10-11T08:24:51.7541301+09:00" endTime="2026-10-11T08:24:51.7564447+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c548df10-6ae0-404f-8bfc-5b4c85c2ab4b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1a73f464-1c89-4f27-a3b9-4b73c79962b6" testId="71e0e767-5626-13a9-a84d-fa05664c2c2f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;rawResponse/completed&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0047066" startTime="2026-10-11T08:24:51.7368658+09:00" endTime="2026-10-11T08:24:51.7410106+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a73f464-1c89-4f27-a3b9-4b73c79962b6">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="91daeca6-8d7c-4231-b2a3-c2b30b454370" testId="734c5452-93c1-9bba-9867-c26fa8776904" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;model/safetyBuffering/updated&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0089734" startTime="2026-10-11T08:24:51.7449205+09:00" endTime="2026-10-11T08:24:51.7537283+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="91daeca6-8d7c-4231-b2a3-c2b30b454370">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="0a9d9101-83a5-496d-b7fc-4bf7b92b861c" testId="99a16207-9cff-7309-56a6-659b8b5ee4e2" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 5, total: 11)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042048" startTime="2026-10-11T08:24:51.7340442+09:00" endTime="2026-10-11T08:24:51.7340737+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0a9d9101-83a5-496d-b7fc-4bf7b92b861c">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   CodexUsage { InputTokens = 8, OutputTokens = 5, TotalTokens = 12 }</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;model/safetyBuffering/updated&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="734c5452-93c1-9bba-9867-c26fa8776904">
+      <Execution id="91daeca6-8d7c-4231-b2a3-c2b30b454370" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="PassiveTelemetryIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 5, total: 11)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="99a16207-9cff-7309-56a6-659b8b5ee4e2">
+      <Execution id="0a9d9101-83a5-496d-b7fc-4bf7b92b861c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="OpposingUsageComponentsInvalidateCurrentAndLaterEpoch" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 4, total: 12)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0efa7182-8179-f347-340d-6ae3459269ae">
+      <Execution id="510e6b80-c1a8-4c79-9e25-6c83cbfb6c00" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="OpposingUsageComponentsInvalidateCurrentAndLaterEpoch" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;model/verification&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="10b4cb6e-4fad-e12e-62be-024b71267c21">
+      <Execution id="f3843590-ee5e-45ce-b079-c4d5bd0f29f5" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="PassiveTelemetryIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;rawResponse/completed&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="71e0e767-5626-13a9-a84d-fa05664c2c2f">
+      <Execution id="1a73f464-1c89-4f27-a3b9-4b73c79962b6" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="PassiveTelemetryIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 12)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="f4b65909-95c8-31b4-9cd2-cf004abe0606">
+      <Execution id="e940120a-a18a-4141-9349-fdf46447c3c0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="OpposingUsageComponentsInvalidateCurrentAndLaterEpoch" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: &quot;rawResponseItem/completed&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="af30414a-7eec-2197-da18-5055a7d79ea9">
+      <Execution id="c548df10-6ae0-404f-8bfc-5b4c85c2ab4b" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="PassiveTelemetryIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 11)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="2a14077d-3550-7dcd-bfd9-364090f2e42f">
+      <Execution id="dd8ee02b-6f59-43a5-a4d3-545967ab37f4" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="OpposingUsageComponentsInvalidateCurrentAndLaterEpoch" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="2a14077d-3550-7dcd-bfd9-364090f2e42f" executionId="dd8ee02b-6f59-43a5-a4d3-545967ab37f4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f4b65909-95c8-31b4-9cd2-cf004abe0606" executionId="e940120a-a18a-4141-9349-fdf46447c3c0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="10b4cb6e-4fad-e12e-62be-024b71267c21" executionId="f3843590-ee5e-45ce-b079-c4d5bd0f29f5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0efa7182-8179-f347-340d-6ae3459269ae" executionId="510e6b80-c1a8-4c79-9e25-6c83cbfb6c00" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="af30414a-7eec-2197-da18-5055a7d79ea9" executionId="c548df10-6ae0-404f-8bfc-5b4c85c2ab4b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="71e0e767-5626-13a9-a84d-fa05664c2c2f" executionId="1a73f464-1c89-4f27-a3b9-4b73c79962b6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="734c5452-93c1-9bba-9867-c26fa8776904" executionId="91daeca6-8d7c-4231-b2a3-c2b30b454370" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="99a16207-9cff-7309-56a6-659b8b5ee4e2" executionId="0a9d9101-83a5-496d-b7fc-4bf7b92b861c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="8" executed="8" passed="0" failed="8" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.13]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.27]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.29]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.55]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.55]       Expected: null&#xD;
+[xUnit.net 00:00:00.55]       Actual:   CodexUsage { InputTokens = 8, OutputTokens = 5, TotalTokens = 12 }&#xD;
+[xUnit.net 00:00:00.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(341,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total)&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.56]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.56]       Expected: null&#xD;
+[xUnit.net 00:00:00.56]       Actual:   CodexUsage { InputTokens = 7, OutputTokens = 6, TotalTokens = 12 }&#xD;
+[xUnit.net 00:00:00.56]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.56]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(341,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total)&#xD;
+[xUnit.net 00:00:00.56]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.56]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.56]       Expected: null&#xD;
+[xUnit.net 00:00:00.56]       Actual:   CodexUsage { InputTokens = 8, OutputTokens = 5, TotalTokens = 12 }&#xD;
+[xUnit.net 00:00:00.56]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.56]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(341,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total)&#xD;
+[xUnit.net 00:00:00.56]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.56]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.56]       Expected: null&#xD;
+[xUnit.net 00:00:00.56]       Actual:   CodexUsage { InputTokens = 7, OutputTokens = 6, TotalTokens = 12 }&#xD;
+[xUnit.net 00:00:00.56]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.56]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(341,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total)&#xD;
+[xUnit.net 00:00:00.56]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.57]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(306,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.57]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(306,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.58]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.58]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.58]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.58]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.58]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(306,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method)&#xD;
+[xUnit.net 00:00:00.58]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.59]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.59]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.59]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.59]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(306,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method)&#xD;
+[xUnit.net 00:00:00.59]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.59]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7254971+09:00">
+        <Text>[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 4, total: 12) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7336661+09:00">
+        <Text>[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 11) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7341760+09:00">
+        <Text>[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 5, total: 11) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7360712+09:00">
+        <Text>[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 12) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7413275+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "rawResponse/completed") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7447365+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "model/verification") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7540321+09:00">
+        <Text>[xUnit.net 00:00:00.58]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "model/safetyBuffering/updated") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:24:51.7565953+09:00">
+        <Text>[xUnit.net 00:00:00.59]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "rawResponseItem/completed") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

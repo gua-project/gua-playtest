@@ -1,0 +1,41 @@
+  復元対象のプロジェクトを決定しています...
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\Gua.Playtest.Foundation.Tests.csproj を復元しました (235 ミリ秒)。
+  6 個中 5 個の復元対象のプロジェクトは最新です。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.67]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "guardianWarning") [FAIL]
+[xUnit.net 00:00:00.68]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "deprecationNotice") [FAIL]
+[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "configWarning") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "guardianWarning") [240 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 377
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "deprecationNotice") [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 377
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "configWarning") [20 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 377
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-startup\pre-fix.trx
+
+失敗!   -失敗:     3、合格:     0、スキップ:     0、合計:     3、期間: 273 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

@@ -1,0 +1,123 @@
+{
+  "head": "0bc5270ae0b0ae1f151a81cd14c172ac99b6291f",
+  "sdk": "10.0.401",
+  "guaVersion": "1.1.1",
+  "nativeFilesRemoved": 8,
+  "tests": [
+    {
+      "file": "scenario.json",
+      "expected": "Valid",
+      "actual": "Valid",
+      "exit": 0
+    },
+    {
+      "file": "scenario.yaml",
+      "expected": "Valid",
+      "actual": "Valid",
+      "exit": 0
+    },
+    {
+      "file": "environment.json",
+      "expected": "Valid",
+      "actual": "Valid",
+      "exit": 0
+    },
+    {
+      "file": "plan.json",
+      "expected": "Valid",
+      "actual": "Valid",
+      "exit": 0
+    },
+    {
+      "file": "registry.json",
+      "expected": "Valid",
+      "actual": "Valid",
+      "exit": 0
+    },
+    {
+      "file": "unknown-goal-field.json",
+      "expected": "SchemaInvalid",
+      "actual": "SchemaInvalid",
+      "exit": 2
+    },
+    {
+      "file": "unknown-version.json",
+      "expected": "SchemaInvalid",
+      "actual": "SchemaInvalid",
+      "exit": 2
+    },
+    {
+      "file": "type-mismatch.json",
+      "expected": "TypeMismatch",
+      "actual": "TypeMismatch",
+      "exit": 2
+    },
+    {
+      "file": "null-value.json",
+      "expected": "SchemaInvalid",
+      "actual": "SchemaInvalid",
+      "exit": 2
+    },
+    {
+      "file": "multiple-goals.json",
+      "expected": "SchemaInvalid",
+      "actual": "SchemaInvalid",
+      "exit": 2
+    },
+    {
+      "file": "duplicate.json",
+      "expected": "DuplicateKey",
+      "actual": "DuplicateKey",
+      "exit": 2
+    },
+    {
+      "file": "duplicate.yaml",
+      "expected": "DuplicateKey",
+      "actual": "DuplicateKey",
+      "exit": 2
+    },
+    {
+      "file": "tag.yaml",
+      "expected": "YamlFeatureForbidden",
+      "actual": "YamlFeatureForbidden",
+      "exit": 2
+    },
+    {
+      "file": "cycle.yaml",
+      "expected": "YamlFeatureForbidden",
+      "actual": "YamlFeatureForbidden",
+      "exit": 2
+    },
+    {
+      "file": "merge.yaml",
+      "expected": "YamlFeatureForbidden",
+      "actual": "YamlFeatureForbidden",
+      "exit": 2
+    },
+    {
+      "file": "multi.yaml",
+      "expected": "YamlFeatureForbidden",
+      "actual": "YamlFeatureForbidden",
+      "exit": 2
+    },
+    {
+      "file": "nonfinite.yaml",
+      "expected": "NonFiniteNumber",
+      "actual": "NonFiniteNumber",
+      "exit": 2
+    },
+    {
+      "file": "nonfinite.json",
+      "expected": "NonFiniteNumber",
+      "actual": "NonFiniteNumber",
+      "exit": 2
+    },
+    {
+      "file": "bad-hash.json",
+      "expected": "HashMismatch",
+      "actual": "HashMismatch",
+      "exit": 2
+    }
+  ],
+  "scope": "Actual published CLI with Gua native payload removed; static forms/paths only. No host, engine, Planner or Goal scoring."
+}

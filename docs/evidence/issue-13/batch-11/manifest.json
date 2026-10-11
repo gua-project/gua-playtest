@@ -1,0 +1,114 @@
+{
+  "testedBase": "9ce91e7869e55979b92a0f811b18a5367be54cfd",
+  "mergedMain": "fd612b255e2764e8f8f0dc9a23065dfe5b51bce8",
+  "environment": "Windows 10.0.26300 win-x64 .NET SDK 10.0.401",
+  "utcDates": [
+    "2026-10-10",
+    "2026-10-11"
+  ],
+  "hostTimezone": "UTC+09:00",
+  "sourceSnapshot": [
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexProtocolBackend.cs",
+      "gitBlobSha1": "c607375e854391ee2ddd916eee2cfe8fb7578896"
+    },
+    {
+      "file": "tests/Gua.Playtest.Foundation.Tests/CodexProtocolTests.cs",
+      "gitBlobSha1": "373ae8701fc604144da5b6bd43450200fb0fb684"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexItemSchema.cs",
+      "gitBlobSha1": "a8f904a38d54ce51cdb8254bb20f7347aad54c48"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/Gua.Playtest.Planners.Codex.csproj",
+      "gitBlobSha1": "4e1a47be0f8638d94a8866b06a6889677895c849"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/item-started.schema.json",
+      "gitBlobSha1": "f43c997b8e46d8c723039b0674bc45b1a6324221"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "boundaries.log",
+      "bytes": 42,
+      "sha256": "b9fb0accb01765f19c5ae3d6be502172567313a025b9a1b5cf8f42c90c4ca162"
+    },
+    {
+      "file": "bridge.trx",
+      "bytes": 248862,
+      "sha256": "72f5bdf3222b5109904961f481e55884d1d7841be572a73b1ad1966d23fd9dc5"
+    },
+    {
+      "file": "build.log",
+      "bytes": 1432,
+      "sha256": "1eabf30236a9acaec635f42afccf5cded78516a0ec4f98f0b15fbafd5637200a"
+    },
+    {
+      "file": "contracts-evidence.json",
+      "bytes": 2832,
+      "sha256": "afb357d8e797f6e3ea04d0b35a7bbc48b15d0ae8c18030a42ebc517977e174f4"
+    },
+    {
+      "file": "contracts.log",
+      "bytes": 1081,
+      "sha256": "2c51c657fda4722c63fa8bd89a9c6d7799ae2b5ff127c625c6bf775a1e67d62d"
+    },
+    {
+      "file": "contracts.trx",
+      "bytes": 862636,
+      "sha256": "b7c76091da90f53f4242fefd24dc32095fd1d064135388bffe1020481086aac2"
+    },
+    {
+      "file": "focused.log",
+      "bytes": 1657,
+      "sha256": "22b3bae280ed196b98ce295f30d827b73ff80c61aa5ed34d6c9794edc9350c13"
+    },
+    {
+      "file": "focused.trx",
+      "bytes": 417020,
+      "sha256": "635439344c6e924dd892d9b64b7727f5c5ab1835326a3f6ebc07c205d6a98a0b"
+    },
+    {
+      "file": "foundation.trx",
+      "bytes": 1955268,
+      "sha256": "2d730e0eff647edd1033b51cbc7f12a908cdf82211a8269e2d82a63c6d71f2e7"
+    },
+    {
+      "file": "pack.log",
+      "bytes": 1380,
+      "sha256": "c36a4820a89ef47ce6f64d475a4c421cad36a61e8cb402c92391e7d8607f5baa"
+    },
+    {
+      "file": "package-evidence.json",
+      "bytes": 2825,
+      "sha256": "ac4abdb7130dcae967a5ec097c9d9a74386c74d59fb201893c3092da4befc4e5"
+    },
+    {
+      "file": "package.log",
+      "bytes": 4257,
+      "sha256": "bd38f35c784388c0b2a9c84a9d723783ce4aa15fd1ae3f18cf0942c3d6cc2438"
+    },
+    {
+      "file": "pre-fix.log",
+      "bytes": 11867,
+      "sha256": "828ed2b3403843ef128d40c897a032413a06dde6e5ef5e61d8b80a54adb16490"
+    },
+    {
+      "file": "pre-fix.trx",
+      "bytes": 47825,
+      "sha256": "46370928c511261ee4baac393d86426e8f84d72c5fa6c7180e87f8eb91726e6b"
+    },
+    {
+      "file": "restore.log",
+      "bytes": 1098,
+      "sha256": "aecc7837b40ae59ace800ae7817a9c8211babc2c48d97ad3521c7e64162d6b5e"
+    },
+    {
+      "file": "tests.log",
+      "bytes": 1727,
+      "sha256": "d1aa8e4c4a4c39e5943f91e22fb4687f4fed50da1d98c59c36a11ebc9c858224"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Bridge.Tests\bin\Release\net10.0\Gua.Playtest.Bridge.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\tests\testk_DESKTOP-3CJOU9S_2026-10-11_08_47_55_net10.0.trx
+
+成功!   -失敗:     0、合格:   153、スキップ:     0、合計:   153、期間: 10 s - Gua.Playtest.Bridge.Tests.dll (net10.0)
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Contracts.Tests\bin\Release\net10.0\Gua.Playtest.Contracts.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\tests\testk_DESKTOP-3CJOU9S_2026-10-11_08_48_06_net10.0.trx
+
+成功!   -失敗:     0、合格:   528、スキップ:     0、合計:   528、期間: 6 s - Gua.Playtest.Contracts.Tests.dll (net10.0)
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\tests\testk_DESKTOP-3CJOU9S_2026-10-11_08_48_15_net10.0.trx
+
+成功!   -失敗:     0、合格:  1244、スキップ:     0、合計:  1244、期間: 15 s - Gua.Playtest.Foundation.Tests.dll (net10.0)

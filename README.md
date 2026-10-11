@@ -31,6 +31,8 @@ dotnet run --project src/Gua.Playtest.Cli -- doctor --native
 
 依存: `Core ← Runner / GuaIntegration / Planners.Codex ← Cli`。Core に engine/Codex package はない。Runner は `IStaticValidator`、clock/observation/planner/host の抽象窓口を使う。具体 Gua schema/native 連携は GuaIntegration。Codex module は #13 未実装を例外で明示し、認証や Codex 本体を同梱しない。Fake は tests にのみ存在する。
 
+Codex の [protocol converter](docs/codex-protocol.md) と CLI adapter は、相関済み完了応答・異常処理・送信前 redaction を扱う。実 provider の起動・認証・OS 隔離は OPEN-09 の確認まで利用不可で、Replay に Codex を要求しない。
+
 Trace writer/reader/詳細 Viewer は Gua の `GuaTraceSession` / `GuaTraceReader` / `GuaTraceReport` をそのまま使い、Playtest 独自形式へ複製しない。実製品の Run への接続は #9。境界テストは public package だけで round-trip、Player profile、秘密値 redaction、HTML の非上書きを確認する。
 
 [Replay composition](docs/replay.md) は保持した Plan/Recording bytes、既存 Run owner、初期・中間条件、全操作完了を接続する。GuaIntegration の公開 `Gua.Testing.Recording` 1.1.1 adapter が Gua の UI/Timed Segment scheduler を消費する。UI の原子的送信には host 全体の lifecycle lease が必要で、厳密 timing capability がない host を拒否する。native/transport fixture は実 engine/Planner の受け入れと区別する。

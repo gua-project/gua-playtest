@@ -1,0 +1,86 @@
+  復元対象のプロジェクトを決定しています...
+  復元対象のすべてのプロジェクトは最新です。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 4, total: 12) [FAIL]
+[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 11) [FAIL]
+[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 5, total: 11) [FAIL]
+[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 12) [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "rawResponse/completed") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "model/verification") [FAIL]
+[xUnit.net 00:00:00.58]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "model/safetyBuffering/updated") [FAIL]
+[xUnit.net 00:00:00.59]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "rawResponseItem/completed") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 4, total: 12) [238 ms]
+  エラー メッセージ:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   CodexUsage { InputTokens = 8, OutputTokens = 5, TotalTokens = 12 }
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 11) [4 ms]
+  エラー メッセージ:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 6, TotalTokens = 12 }
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 8, output: 5, total: 11) [4 ms]
+  エラー メッセージ:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   CodexUsage { InputTokens = 8, OutputTokens = 5, TotalTokens = 12 }
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(input: 6, output: 6, total: 12) [4 ms]
+  エラー メッセージ:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 6, TotalTokens = 12 }
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.OpposingUsageComponentsInvalidateCurrentAndLaterEpoch(Int64 input, Int64 output, Int64 total) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 341
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "rawResponse/completed") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "model/verification") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "model/safetyBuffering/updated") [8 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(method: "rawResponseItem/completed") [2 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PassiveTelemetryIsValidatedBeforeAndAfterResponse(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 306
+--- End of stack trace from previous location ---
+警告: 結果ファイルを上書きしています: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-raw\pre-fix.trx
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-raw\pre-fix.trx
+
+失敗!   -失敗:     8、合格:     0、スキップ:     0、合計:     8、期間: 282 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

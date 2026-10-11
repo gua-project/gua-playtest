@@ -1,0 +1,389 @@
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.33]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "{}") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "missing") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "missing") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":\"false\""···) [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "null") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"dangerFullAccess\"}") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "null") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":true}") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":null}") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "{}") [34 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "missing") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "missing") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":\"false\""···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "null") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"dangerFullAccess\"}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "null") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":true}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"readOnly\",\"networkAccess\":null}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "\"on-request\"") [FAIL]
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"workspaceWrite\"}") [FAIL]
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"unknown\"") [FAIL]
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "missing") [FAIL]
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "{}") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "approvalPolicy", value: "\"on-request\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(field: "sandbox", value: "{\"type\":\"workspaceWrite\"}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.EffectiveThreadRestrictionsMustMatchBeforeSendingPlannerInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 57
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"unknown\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "missing") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "{}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "[{\"id\":\"x\",\"type\":\"agentMessage\"}]") [FAIL]
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "null") [FAIL]
+[xUnit.net 00:00:00.36]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "[null]") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "itemsView", value: "\"unknown\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"completed\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"interrupted\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "missing") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"failed\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "null") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "[{\"id\":\"x\",\"type\":\"agentMessage\"}]") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "null") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "[null]") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "itemsView", value: "\"unknown\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"completed\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"interrupted\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "missing") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "status", value: "\"failed\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "items", value: "null") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "durationMs", value: "\"wrong\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "error", value: "{\"message\":42}") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: True) [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "missing") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "\"true\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "null") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "false") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "[]") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "durationMs", value: "\"wrong\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(field: "error", value: "{\"message\":42}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidStartTurnCannotBeRescuedByLaterCompletion(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 95
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(beforeResponse: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CorrelatedRetryNoticeBeforeOrAfterStartResponseAllowsTerminalCompletion(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 118
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "missing") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "\"true\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "null") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(value: "false") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadMustConfirmEphemeralBeforePlannerInput(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "[]") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"activeTurnNotSteerable\":{}}") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{},\"other\":{}}") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":null}") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "\"unknown\"") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":6553"···) [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":-1}}") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":\"50"···) [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"activeTurnNotSteerable\":{\"turnKind\":\"unknow"···) [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "42") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"activeTurnNotSteerable\":{}}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{},\"other\":{}}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":null}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "\"unknown\"") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":6553"···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":-1}}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"httpConnectionFailed\":{\"httpStatusCode\":\"50"···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{\"activeTurnNotSteerable\":{\"turnKind\":\"unknow"···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "42") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{}") [FAIL]
+[xUnit.net 00:00:00.37]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: False) [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(info: "{}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedErrorUnionCannotMasqueradeAsBackendFailure(String info) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 175
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(overflow: False) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.PairedUsageAndRateLimitTelemetryBeforeResponseRemainBounded(Boolean overflow) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 245
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\codex-review-followup\pre-fix\testk_DESKTOP-3CJOU9S_2026-10-11_07_15_32_net10.0.trx
+
+失敗!   -失敗:    42、合格:     6、スキップ:     0、合計:    48、期間: 93 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)
