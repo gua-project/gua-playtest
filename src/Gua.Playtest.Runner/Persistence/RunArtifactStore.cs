@@ -79,16 +79,17 @@ public sealed class RunArtifactStore
     public PersistenceResult BeginPreparation(RunArtifactMetadata metadata, CancellationToken cancellationToken = default)
         => BeginPreparationCore(metadata, null, cancellationToken);
     /// <summary>Fix the effective host-certified build and Environment identity before execution.
-    /// Ordinary preparation without this identity cannot issue an adoption trial.</summary>
+    /// Ordinary preparation cannot issue an adoption trial, even when it stores a dashboard identity.</summary>
     public PersistenceResult BeginReplayPreparation(RunArtifactMetadata metadata, RunIdentity identity,
         CancellationToken cancellationToken = default)
         => BeginPreparationCore(metadata, identity, cancellationToken);
-    private PersistenceResult BeginPreparationCore(RunArtifactMetadata metadata, RunIdentity? identity,
+    private PersistenceResult BeginPreparationCore(RunArtifactMetadata metadata, RunIdentity? replayIdentity,
         CancellationToken cancellationToken)
         => Attempt(() =>
         {
             if (primary is not null || completionAttempted || File.Exists(Path.Combine(DirectoryPath, "run.json")))
                 throw new InvalidDataException("RunAlreadyStarted");
+            var identity = replayIdentity ?? metadata.Identity;
             if (identity is not null && (!Token(identity.ScenarioId) || !Token(identity.BuildId) ||
                 !Token(identity.DefinitionVersion) ||
                 !Sha256(identity.ScenarioSha256) || !Sha256(identity.EnvironmentSha256)))
@@ -96,18 +97,66 @@ public sealed class RunArtifactStore
             var inputs = new List<object>();
             if (metadata.Inputs.Count > limits.MaxItems) throw new ArtifactLimitException();
             long inputBytes = 0;
+            long sourceBytesRead = 0;
             var inputNodes = 0;
+            string? scenarioCopyHash = null;
             foreach (var input in metadata.Inputs)
             {
                 var safe = Encode(input.Document, out var nodeCount);
+                string? sourceSha256 = null;
+                using (var fixedInput = JsonDocument.Parse(safe))
+                {
+                    if (identity is not null && input.Document.ValueKind == JsonValueKind.Object &&
+                        input.Document.TryGetProperty("kind", out var sourceKind) && sourceKind.ValueKind == JsonValueKind.String && sourceKind.GetString() == "scenario" &&
+                        (fixedInput.RootElement.ValueKind != JsonValueKind.Object ||
+                         !fixedInput.RootElement.TryGetProperty("kind", out var retainedKind) || retainedKind.ValueKind != JsonValueKind.String || retainedKind.GetString() != "scenario"))
+                        throw new InvalidDataException("RunIdentityScenarioKindLost");
+                    if (fixedInput.RootElement.ValueKind == JsonValueKind.Object &&
+                        fixedInput.RootElement.TryGetProperty("kind", out var fixedKind) && fixedKind.ValueKind == JsonValueKind.String && fixedKind.GetString() == "scenario")
+                    {
+                        var copyHash = Hash(safe);
+                        if (scenarioCopyHash is not null && scenarioCopyHash != copyHash)
+                            throw new InvalidDataException("RunIdentityScenarioConflict");
+                        scenarioCopyHash = copyHash;
+                        if (identity is not null)
+                        {
+                            var raw = System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(input.Document);
+                            var source = input.SourceUtf8 is { } bytes ? bytes.Span : raw;
+                            sourceBytesRead += source.Length;
+                            if (sourceBytesRead > limits.MaxFileBytes) throw new ArtifactLimitException();
+                            if (input.SourceUtf8 is { } sourceBytes)
+                            {
+                                if (!string.Equals(input.SourceFormat, ".json", StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(input.SourceFormat, ".yaml", StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(input.SourceFormat, ".yml", StringComparison.OrdinalIgnoreCase))
+                                    throw new InvalidDataException("RunIdentitySourceFormatInvalid");
+                                var decoded = ContractJson.Inspect(sourceBytes.ToArray(), input.SourceFormat);
+                                if (decoded.Code != "Decoded" || decoded.Document is null ||
+                                    !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(decoded.Document), input.Document))
+                                    throw new InvalidDataException("RunIdentitySourceMismatch");
+                            }
+                            sourceSha256 = Convert.ToHexStringLower(SHA256.HashData(source));
+                            if (sourceSha256 != identity.ScenarioSha256) throw new InvalidDataException("RunIdentityScenarioHashMismatch");
+                        }
+                    }
+                    if (identity is not null && fixedInput.RootElement.ValueKind == JsonValueKind.Object &&
+                        fixedInput.RootElement.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.GetString() == "scenario" &&
+                        (!fixedInput.RootElement.TryGetProperty("scenarioId", out var scenarioId) || scenarioId.ValueKind != JsonValueKind.String || scenarioId.GetString() != identity.ScenarioId ||
+                         !fixedInput.RootElement.TryGetProperty("definitionVersion", out var version) || version.ValueKind != JsonValueKind.String || version.GetString() != identity.DefinitionVersion))
+                        throw new InvalidDataException("RunIdentityScenarioMismatch");
+                }
                 inputBytes += safe.Length; inputNodes += nodeCount;
                 if (inputBytes > limits.MaxFileBytes || inputNodes > limits.MaxItems) throw new ArtifactLimitException();
-                // Store as embedded fixed sanitized bytes; do not copy source files or original input hashes.
-                inputs.Add(new { name = input.Name, sha256 = Hash(safe), document = JsonSerializer.Deserialize<JsonElement>(safe) });
+                // The Scenario source digest binds the supplied identity; only sanitized bytes are stored.
+                inputs.Add(new { name = input.Name, sha256 = Hash(safe), sourceSha256, document = JsonSerializer.Deserialize<JsonElement>(safe) });
             }
+            if (identity is not null && scenarioCopyHash is null)
+                throw new InvalidDataException("RunIdentityScenarioMissing");
             Publish("run.json", Encode(new { kind = "playtestRunStorage", storageVersion = 1, runId = RunId,
-                executionState = ExecutionState.Preparing, identity, metadata.Profile, metadata.Settings, metadata.Versions, inputs }), cancellationToken);
-            ReplayIdentity = identity;
+                executionState = ExecutionState.Preparing, identity, metadata.Profile, metadata.Settings, metadata.Versions, inputs,
+                metadata.StartedAt }), cancellationToken);
+            // Stored identity aids read-only history; only the explicit Replay entry point grants trial authority.
+            ReplayIdentity = replayIdentity;
         });
     /// <summary>Snapshot machine authority at confirmation, before diagnostics or input/resource release.</summary>
     public PersistenceResult ConfirmPrimary(RunSnapshot snapshot, IReadOnlyList<ObservationReference> observations,
