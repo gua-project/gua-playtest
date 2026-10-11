@@ -95,7 +95,7 @@ internal static class OfflineCommands
         var options = Options.Parse(args[2..], create
             ? ["--managed-root", "--allow-root", "--scenario", "--recording", "--timing", "--secret-env"]
             : ["--managed-root", "--plan", "--trial", "--approve", "--approve-expectations", "--secret-env"]);
-        var managed = options.Required("--managed-root");
+        var managed = ArtifactPathAuthority.LocalStorageRoot(options.Required("--managed-root"));
         string[] command;
         PlanCommand.InputHashes inputHashes;
         IEnumerable<JsonNode> documents;

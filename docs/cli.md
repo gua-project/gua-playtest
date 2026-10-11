@@ -31,6 +31,10 @@ saved Trace directories and existing report output parents.
 Static commands preserve the contract's symbolic-link and junction resolution,
 and check the final target against the explicit roots. Managed Plan commands
 retain their stricter artifact path rules.
+UNC and Windows device namespaces are refused before target filesystem access,
+including managed storage roots and the explicit legacy schema input. Static
+link targets are checked one hop at a time before following them; managed
+artifact paths reject links by inspecting parent entries first.
 
 Plan commands use [PlanManager's managed evidence chain](plan-adoption.md).
 Candidates preserve exact validated Scenario and Recording bytes, including Goal

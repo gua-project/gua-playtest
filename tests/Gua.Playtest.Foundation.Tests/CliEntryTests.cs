@@ -134,6 +134,53 @@ public sealed class CliEntryTests
     }
 
     [Theory]
+    [InlineData(@"\\unreachable.invalid\share\input.json")]
+    [InlineData("//unreachable.invalid/share/input.json")]
+    [InlineData(@"\\?\C:\input.json")]
+    [InlineData(@"\\.\pipe\input")]
+    public void PhysicalAuthorityRejectsNamespacesAtItsPureStringBoundary(string input)
+        => Assert.Equal("LocalOnly", Assert.Throws<InvalidDataException>(() => ArtifactPathAuthority.LocalPath(input, "LocalOnly")).Message);
+
+    [Theory]
+    [InlineData(@"\\unreachable.invalid\share\input.json")]
+    [InlineData("//unreachable.invalid/share/input.json")]
+    [InlineData(@"\\?\C:\input.json")]
+    [InlineData(@"\\.\pipe\input")]
+    public async Task SchemaAndStorageNamespacesAreRefusedWithoutTargetAccess(string input)
+    {
+        Assert.Equal("LocalStorageRequired", Assert.Throws<InvalidDataException>(() => ArtifactPathAuthority.LocalStorageRoot(input)).Message);
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "--json", "--gua-schema", "selector.schema.json", input], output, error));
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal("document-unreadable", document.RootElement.GetProperty("code").GetString());
+        Assert.DoesNotContain("unreachable.invalid", output.ToString() + error);
+    }
+
+    [Fact]
+    public async Task PlanRefusesLocalDeviceAliasBeforeInputPublication()
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var input = Directory.CreateDirectory(Path.Combine(root.FullName, "input"));
+            foreach (var name in new[] { "scenario.json", "recording.json" }) File.Copy(Fixture(name), Path.Combine(input.FullName, name));
+            var device = @"\\?\" + Path.Combine(input.FullName, "scenario.json");
+            using var output = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["plan", "create", "--json", "--managed-root", Path.Combine(root.FullName, "managed"),
+                "--allow-root", input.FullName, "--scenario", device, "--recording", Path.Combine(input.FullName, "recording.json"), "--timing", "recorded"], output));
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.Empty(Directory.GetFiles(root.FullName, "plan.json", SearchOption.AllDirectories));
+            using var managed = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["plan", "create", "--json", "--managed-root", @"\\?\" + Path.Combine(root.FullName, "managed"),
+                "--allow-root", input.FullName, "--scenario", Path.Combine(input.FullName, "scenario.json"), "--recording", Path.Combine(input.FullName, "recording.json"),
+                "--timing", "recorded"], managed));
+            using var refused = JsonDocument.Parse(managed.ToString());
+            Assert.Empty(Directory.GetFiles(root.FullName, "plan.json", SearchOption.AllDirectories));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Theory]
     [InlineData("explore", false)]
     [InlineData("explore", true)]
     [InlineData("replay", false)]
@@ -455,11 +502,15 @@ public sealed class CliEntryTests
         finally { Environment.SetEnvironmentVariable(first, null); Environment.SetEnvironmentVariable(second, null); root.Delete(true); }
     }
 
-    [Fact]
-    public async Task PartialSecretFailureRetainsOneSafeJsonDocumentWhenInitialCandidatesCollide()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PartialSecretFailureRetainsOneSafeJsonDocumentWhenInitialCandidatesCollide(bool whitespaceOnly, bool oversized)
     {
         var root = PrivateRoot();
-        string[] secrets = ["{", "[", "n", "f", "t", "0", "1", "2"];
+        string[] secrets = whitespaceOnly ? ContainerOnlyPolicy() : ["{", "[", "n", "f", "t", "0", "1", "2"];
+        if (oversized) secrets = secrets.Concat(new[] { new string(' ', 32767), new string(' ', 32767) }).ToArray();
         var variables = secrets.Select(_ => "GUA_JSON_" + Guid.NewGuid().ToString("N")).ToArray();
         try
         {
@@ -494,10 +545,12 @@ public sealed class CliEntryTests
         }
     }
 
-    [Fact]
-    public async Task ContentFreeJsonCanAvoidAllPrimitiveCandidatesAndEmptyString()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ContentFreeJsonCanAvoidAllPrimitiveCandidatesAndEmptyString(bool whitespaceOnly)
     {
-        string[] secrets = ["{", "[", "n", "f", "t", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\"\""];
+        string[] secrets = whitespaceOnly ? ContainerOnlyPolicy() : ["{", "[", "n", "f", "t", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\"\""];
         using var output = new StringWriter(); using var error = new StringWriter();
         Assert.Equal(2, await CommandOutput.WriteKnownFailureAsync(output, error, true, "Invalid", "SecretUnavailable", 2, secrets));
         Assert.NotEmpty(output.ToString());
@@ -507,6 +560,29 @@ public sealed class CliEntryTests
         var policyDocument = CommandOutput.PolicyFailureDocument(redactor);
         using var policy = JsonDocument.Parse(policyDocument);
         foreach (var secret in secrets) Assert.DoesNotContain(secret, policyDocument);
+    }
+
+    private static string[] ContainerOnlyPolicy()
+        => new[] { "\"", "n", "f", "t", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "{}", "[]" }
+            .Concat(new[] { " ", "\t", "\r", "\n" }.SelectMany(space => new[] { "{" + space + "}", "[" + space + "]" })).ToArray();
+
+    [Fact]
+    public void ContentFreeJsonSearchRemainsBoundedAndRecognizesImpossiblePolicies()
+    {
+        var secrets = ContainerOnlyPolicy().Append(new string(' ', 65000)).ToArray();
+        var redactor = new PersistenceRedactor(secrets, []);
+        var elapsed = Stopwatch.StartNew();
+        var value = redactor.CreateContentFreeJsonDocument();
+        Assert.NotEmpty(value);
+        using var document = JsonDocument.Parse(value);
+        foreach (var secret in secrets) Assert.DoesNotContain(secret, value);
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(5));
+        Assert.Empty(new PersistenceRedactor(["\"", "n", "f", "t", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "{", "["], []).CreateContentFreeJsonDocument());
+        var oversized = ContainerOnlyPolicy().Concat(new[] { new string(' ', 32767), new string(' ', 32767) }).ToArray();
+        Assert.Throws<ArgumentException>(() => new PersistenceRedactor(oversized, []));
+        var diagnostic = PersistenceRedactor.CreateContentFreeDiagnosticDocument(oversized);
+        using var guarded = JsonDocument.Parse(diagnostic);
+        foreach (var secret in oversized) Assert.DoesNotContain(secret, diagnostic);
     }
 
     [Fact]

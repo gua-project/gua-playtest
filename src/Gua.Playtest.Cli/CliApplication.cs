@@ -75,7 +75,7 @@ public static class CliApplication
             try
             {
                 // Read at most the limit + 1, including files that grow while being read.
-                await using var stream = File.OpenRead(file);
+                await using var stream = File.OpenRead(StaticPathAuthority.ExplicitLocalFile(file));
                 var bytes = new byte[MaxDocumentBytes + 1];
                 var count = 0;
                 while (count < bytes.Length)
@@ -91,7 +91,7 @@ public static class CliApplication
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             { result = new(ValidationStatus.Interrupted, "validation-interrupted"); }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
             { result = new(ValidationStatus.Invalid, "document-unreadable"); }
         }
         else result = new(ValidationStatus.Unavailable, args.FirstOrDefault() == "validate" ? "explicit-validation-arguments-required" : "unsupported-command");

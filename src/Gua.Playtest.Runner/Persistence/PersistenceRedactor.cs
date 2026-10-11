@@ -14,14 +14,16 @@ public sealed class PersistenceRedactor
     private readonly List<Node> nodes = [new()];
     private readonly HashSet<string> fields;
     public PersistenceRedactor(IEnumerable<string> secrets, IEnumerable<string> sensitiveFields)
+        : this(secrets, sensitiveFields, MaxSecretCharacters) { }
+    private PersistenceRedactor(IEnumerable<string> secrets, IEnumerable<string> sensitiveFields, int characterLimit)
     {
         var patterns = secrets.Take(1025).ToArray();
         var names = sensitiveFields.Take(1025).ToArray();
         if (patterns.Length > 1024 || names.Length > 1024 ||
-            patterns.Any(x => string.IsNullOrEmpty(x) || x.Length > MaxSecretCharacters) ||
+            patterns.Any(x => string.IsNullOrEmpty(x) || x.Length > characterLimit) ||
             names.Any(x => string.IsNullOrEmpty(x) || x.Length > 256))
             throw new ArgumentException("RedactionPolicyInvalid");
-        if (patterns.Sum(x => (long)x.Length) > MaxSecretCharacters) throw new ArgumentException("RedactionPolicyInvalid");
+        if (patterns.Sum(x => (long)x.Length) > characterLimit) throw new ArgumentException("RedactionPolicyInvalid");
         foreach (var pattern in patterns)
         {
             var state = 0;
@@ -45,6 +47,25 @@ public sealed class PersistenceRedactor
             }
         fields = new(names, StringComparer.OrdinalIgnoreCase);
     }
+    /// <summary>Protect a resolution failure including the single supply that exceeded
+    /// the storage ceiling. This returns only a JSON value, never a relaxed storage policy.</summary>
+    public static string CreateContentFreeDiagnosticDocument(IReadOnlyList<string> resolvedValues)
+    {
+        if (resolvedValues.Count > 1024) throw new ArgumentException("RedactionPolicyInvalid");
+        long characters = 0;
+        foreach (var value in resolvedValues)
+        {
+            if (characters > MaxSecretCharacters || string.IsNullOrEmpty(value))
+                throw new ArgumentException("RedactionPolicyInvalid");
+            characters += value.Length;
+        }
+        // Resolution stops at the first overflow. A safe document from the prefix
+        // can have at most prefix trie nodes + 1 characters (65538). A larger last
+        // value cannot occur in that document, so omit only that impossible match.
+        var relevant = resolvedValues.Where(value => value.Length <= MaxSecretCharacters + 2).ToArray();
+        var document = new PersistenceRedactor(relevant, [], 2 * MaxSecretCharacters + 2).CreateContentFreeJsonDocument();
+        return resolvedValues.All(value => !document.Contains(value, StringComparison.Ordinal)) ? document : string.Empty;
+    }
     public string Redact(string value)
     {
         // Aho-Corasick scans once without per-value allocations. Suppress the whole containing
@@ -59,6 +80,69 @@ public sealed class PersistenceRedactor
             if (nodes[state].Terminal) return string.Empty;
         }
         return value;
+    }
+    /// <summary>One content-free JSON value avoiding all known values, or empty when none can exist.
+    /// The search uses only the bounded policy automaton and never exposes its patterns.</summary>
+    public string CreateContentFreeJsonDocument()
+    {
+        foreach (var value in new[] { "{}", "[]", "null", "false", "true", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\"\"" })
+            if (Redact(value) == value) return value;
+        if (Redact("\"") == "\"")
+        {
+            // Each nonempty pattern excluding a bare quotation mark can match at
+            // most one of these 1025 distinct one-character JSON strings.
+            var tried = 0;
+            for (var character = ' '; tried < 1025; character++)
+            {
+                if (character is '"' or '\\' || char.IsControl(character)) continue;
+                tried++;
+                var value = "\"" + character + "\"";
+                if (Redact(value) == value) return value;
+            }
+        }
+        // Quotes, every digit and the literal candidates are now unavailable.
+        // Every possible JSON value must therefore contain a deepest empty
+        // object/array, possibly with whitespace. Find the shortest safe one by
+        // walking automaton states, rather than an unbounded list of strings.
+        char[] alphabet = [' ', '\t', '\r', '\n', '}', ']'];
+        var transitions = new int[nodes.Count, alphabet.Length];
+        for (var letter = 0; letter < alphabet.Length; letter++)
+            transitions[0, letter] = nodes[0].Edges.GetValueOrDefault(alphabet[letter]);
+        var breadth = new Queue<int>(nodes[0].Edges.Values);
+        while (breadth.TryDequeue(out var state))
+        {
+            for (var letter = 0; letter < alphabet.Length; letter++)
+                transitions[state, letter] = nodes[state].Edges.TryGetValue(alphabet[letter], out var next)
+                    ? next : transitions[nodes[state].Failure, letter];
+            foreach (var next in nodes[state].Edges.Values) breadth.Enqueue(next);
+        }
+        var parents = new int[nodes.Count];
+        var edges = new char[nodes.Count];
+        foreach (var opening in new[] { '{', '[' })
+        {
+            var start = nodes[0].Edges.GetValueOrDefault(opening);
+            if (nodes[start].Terminal) continue;
+            Array.Fill(parents, -2); parents[start] = -1;
+            var pending = new Queue<int>(); pending.Enqueue(start);
+            var closingIndex = opening == '{' ? 4 : 5;
+            while (pending.TryDequeue(out var state))
+            {
+                if (!nodes[transitions[state, closingIndex]].Terminal)
+                {
+                    var whitespace = new List<char>();
+                    for (var current = state; parents[current] != -1; current = parents[current]) whitespace.Add(edges[current]);
+                    whitespace.Reverse();
+                    return opening + new string(whitespace.ToArray()) + alphabet[closingIndex];
+                }
+                for (var letter = 0; letter < 4; letter++)
+                {
+                    var next = transitions[state, letter];
+                    if (nodes[next].Terminal || parents[next] != -2) continue;
+                    parents[next] = state; edges[next] = alphabet[letter]; pending.Enqueue(next);
+                }
+            }
+        }
+        return string.Empty;
     }
     internal bool ContainsAsciiSecret(ReadOnlySpan<byte> token)
     {
