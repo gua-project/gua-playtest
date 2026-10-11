@@ -616,6 +616,73 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("Passed", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId); Assert.Null(run.ScenarioSha256);
         Assert.Equal(ResultStatus.Passed, run.Result!.Status);
     }
+    [Theory]
+    [InlineData("missing")] [InlineData("number")] [InlineData("array")] [InlineData("object")]
+    [InlineData("!")] [InlineData(" ")]
+    public async Task Malformed_legacy_scenario_ids_are_corruption_even_with_valid_wrapper_hash(string shape)
+    {
+        var store = Save(identity: false); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        var input = json["inputs"]![0]!; var copy = input["document"]!.AsObject();
+        if (shape == "missing") copy.Remove("scenarioId");
+        else copy["scenarioId"] = shape switch
+        {
+            "number" => System.Text.Json.Nodes.JsonValue.Create(1),
+            "array" => new System.Text.Json.Nodes.JsonArray(),
+            "object" => new System.Text.Json.Nodes.JsonObject(),
+            _ => System.Text.Json.Nodes.JsonValue.Create(shape)
+        };
+        using var document = JsonDocument.Parse(copy.ToJsonString());
+        input["sha256"] = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(document.RootElement)));
+        File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status); // Saved result remains independently inspectable.
+    }
+    [Fact]
+    public async Task Aborted_http_refresh_preserves_old_snapshot_and_live_report_route()
+    {
+        var (_, html) = SavedReportAndRecording(); var validations = 0;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ValidateContract = async (path, roots, token) =>
+            {
+                if (path == Registry && Interlocked.Increment(ref validations) == 2)
+                {
+                    entered.TrySetResult();
+                    try { await Task.Delay(Timeout.Infinite, token); }
+                    finally { interrupted.TrySetResult(); }
+                }
+                return await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+            }
+        };
+        using var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+        using var cancellation = new CancellationTokenSource();
+        var ready = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = DashboardApplication.RunAsync(index, port, uri => ready.TrySetResult(uri), cancellation.Token);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)) };
+            var oldSnapshot = await client.GetStringAsync("/api/snapshot");
+            using var snapshot = JsonDocument.Parse(oldSnapshot);
+            var route = snapshot.RootElement.GetProperty("runs")[0].GetProperty("details")
+                .EnumerateArray().Single(d => d.GetProperty("kind").GetString() == "Trace").GetProperty("report").GetString()!;
+            Assert.Equal(html, await client.GetByteArrayAsync(route));
+            using var aborted = new CancellationTokenSource();
+            var refresh = client.GetAsync("/api/refresh", aborted.Token);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); aborted.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+            await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(oldSnapshot, await client.GetStringAsync("/api/snapshot"));
+            Assert.Equal(html, await client.GetByteArrayAsync(route));
+            Assert.Equal(oldSnapshot, await client.GetStringAsync("/api/refresh")); // A later full refresh still commits.
+            Assert.Equal(html, await client.GetByteArrayAsync(route));
+        }
+        finally { cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10)); }
+    }
     [Fact]
     public async Task Entry_limit_stops_all_later_roots_without_advancing_or_admitting_them()
     {

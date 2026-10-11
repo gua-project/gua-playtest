@@ -38,7 +38,7 @@ public sealed class DashboardIndex
     private readonly string[] allowedRoots;
     private readonly DashboardLimits limits;
     private readonly HashSet<string> validationRoots = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, (string Directory, ArtifactFileReference File, FileIdentity Identity, ArtifactFileReference[] Files)> reports = [];
+    private Dictionary<string, (string Directory, ArtifactFileReference File, FileIdentity Identity, ArtifactFileReference[] Files)> reports = [];
     private long remaining;
     internal Func<string, IEnumerable<string>, CancellationToken, ValueTask<StaticValidationReport>> ValidateContract { get; init; }
         = static (path, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(path, token);
@@ -53,6 +53,16 @@ public sealed class DashboardIndex
             this.allowedRoots.Length > this.limits.MaxRoots) throw new ArgumentException("ExplicitRootsRequired");
     }
     public async ValueTask<DashboardSnapshot> ReadAsync(CancellationToken token = default)
+    {
+        // Build a separate bounded index so canceled or failed refreshes cannot invalidate
+        // the report routes belonging to the last successfully returned snapshot.
+        var pending = new DashboardIndex(registry, roots, allowedRoots, limits) { ValidateContract = ValidateContract };
+        var snapshot = await pending.ReadCoreAsync(token);
+        token.ThrowIfCancellationRequested();
+        reports = pending.reports;
+        return snapshot;
+    }
+    private async ValueTask<DashboardSnapshot> ReadCoreAsync(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         reports.Clear(); validationRoots.Clear(); remaining = limits.MaxIndexBytes;
@@ -148,10 +158,12 @@ public sealed class DashboardIndex
                             throw new InvalidDataException();
                         if (Text(copy, "kind") == "scenario")
                         {
-                            scenarioId = Text(copy, "scenarioId");
+                            if (!copy.TryGetProperty("scenarioId", out var storedId) ||
+                                storedId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
+                            scenarioId = storedId.ValueKind == JsonValueKind.String ? storedId.GetString() : null;
                             if (!Token(scenarioId))
                             {
-                                if (identity is not null) throw new InvalidDataException();
+                                if (identity is not null || scenarioId is { Length: > 0 }) throw new InvalidDataException();
                                 scenarioId = null; // Legacy grouping may be unavailable after legitimate redaction.
                             }
                             if (identity is not null && (scenarioId != identity.ScenarioId ||
