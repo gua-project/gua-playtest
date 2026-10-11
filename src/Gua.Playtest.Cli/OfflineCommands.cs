@@ -34,7 +34,7 @@ internal static class OfflineCommands
                 token.ThrowIfCancellationRequested();
                 if (options.Optional("--output") is { } destination)
                 {
-                    var full = Path.GetFullPath(destination);
+                    var full = ArtifactPathAuthority.LocalPath(destination, "ReportWriteRejected");
                     var parent = StaticPathAuthority.Directory(Path.GetDirectoryName(full)!, roots, "ReportWriteRejected");
                     full = Path.Combine(parent, Path.GetFileName(full));
                     if (ArtifactPathAuthority.ContainsDirectory(source, parent))

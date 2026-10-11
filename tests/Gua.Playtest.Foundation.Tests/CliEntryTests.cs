@@ -213,6 +213,27 @@ public sealed class CliEntryTests
     }
 
     [Fact]
+    public async Task SavedReportRefusesRawOutputNamespaceBeforeNormalization()
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var trace = await Probe("trace", Path.Combine(root.FullName, "source"));
+            Assert.Equal(0, trace.Exit); var source = trace.Output.Trim();
+            var before = Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories).ToDictionary(path => path, File.ReadAllBytes);
+            var destination = "//" + Path.Combine(root.FullName, "new.html").TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            using var output = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["report", "--json", "--allow-root", root.FullName,
+                "--trace", source, "--output", destination], output));
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.Equal("ReportWriteRejected", document.RootElement.GetProperty("code").GetString());
+            Assert.False(File.Exists(Path.Combine(root.FullName, "new.html")));
+            foreach (var (path, bytes) in before) Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Fact]
     public async Task PlanRefusesLocalDeviceAliasBeforeInputPublication()
     {
         var root = PrivateRoot();

@@ -52,7 +52,7 @@ public sealed class StaticContractValidator
         var files = new Dictionary<string, ValidatedFile>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         try
         {
-            var entry = await ReadAsync(paths.Resolve(file, Directory.GetCurrentDirectory()), files, cancellationToken);
+            var entry = await ReadAsync(ResolveFile(file, Directory.GetCurrentDirectory()), files, cancellationToken);
             ContractSchemas.Validate("recording.schema.json", entry.Json);
             return new("Valid", null, new ReadOnlyDictionary<string, ValidatedFile>(files));
         }
@@ -74,7 +74,7 @@ public sealed class StaticContractValidator
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var entry = await LoadDocumentAsync(paths.Resolve(file, Directory.GetCurrentDirectory()), files, cancellationToken);
+            var entry = await LoadDocumentAsync(ResolveFile(file, Directory.GetCurrentDirectory()), files, cancellationToken);
             var model = Deserialize(entry.Json);
             return new("Valid", model, new ReadOnlyDictionary<string, ValidatedFile>(files));
         }
@@ -91,6 +91,19 @@ public sealed class StaticContractValidator
     }
 
     private static StaticValidationReport Failed(string code) => new(code, null, new ReadOnlyDictionary<string, ValidatedFile>(new Dictionary<string, ValidatedFile>()));
+
+    private string ResolveFile(string path, string baseDirectory)
+    {
+        // Normalize genuine aliases under host authority before the lexical check.
+        var full = LocalFullPath(path, baseDirectory);
+        return paths.Resolve(fileAdmission?.Invoke(full) ?? full, baseDirectory);
+    }
+    private static string LocalFullPath(string path, string baseDirectory)
+    {
+        if (path.StartsWith("\\\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal))
+            throw new ContractException("InvalidPath");
+        return System.IO.Path.GetFullPath(path, baseDirectory);
+    }
 
     private async Task<ValidatedFile> LoadDocumentAsync(string path, Dictionary<string, ValidatedFile> files, CancellationToken token)
     {
@@ -110,7 +123,6 @@ public sealed class StaticContractValidator
     private async Task<ValidatedFile> ReadAsync(string path, Dictionary<string, ValidatedFile> files, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        path = fileAdmission?.Invoke(path) ?? path;
         if (files.TryGetValue(path, out var old)) return old;
         if (files.Count >= 1000) throw new ContractException("DocumentTooComplex");
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
@@ -128,7 +140,7 @@ public sealed class StaticContractValidator
     private async Task<ValidatedFile> ReferenceAsync(ValidatedFile owner, JsonNode reference, string kind,
         Dictionary<string, ValidatedFile> files, CancellationToken token)
     {
-        var path = paths.Resolve(reference["path"]!.GetValue<string>(), System.IO.Path.GetDirectoryName(owner.Path)!);
+        var path = ResolveFile(reference["path"]!.GetValue<string>(), System.IO.Path.GetDirectoryName(owner.Path)!);
         if (path.Equals(owner.Path, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) throw new ContractException("ReferenceCycle");
         var value = await ReadAsync(path, files, token);
         if (value.Sha256 != reference["sha256"]!.GetValue<string>()) throw new ContractException("HashMismatch");
@@ -171,8 +183,8 @@ public sealed class StaticContractValidator
         }
         foreach (var root in registry.Json["artifactRoots"]!.AsArray())
         {
-            var resolved = paths.Resolve(root!.GetValue<string>(), System.IO.Path.GetDirectoryName(registry.Path)!);
-            resolved = directoryAdmission?.Invoke(resolved) ?? resolved;
+            var declared = LocalFullPath(root!.GetValue<string>(), System.IO.Path.GetDirectoryName(registry.Path)!);
+            var resolved = paths.Resolve(directoryAdmission?.Invoke(declared) ?? declared, System.IO.Path.GetDirectoryName(registry.Path)!);
             if (!Directory.Exists(resolved)) throw new ContractException("InvalidPath");
         }
     }

@@ -62,7 +62,8 @@ public static class ArtifactPathAuthority
             if (FileIdentity.ReadDirectory(current) == expected) return true;
         return false;
     }
-    internal static string LocalPath(string input, string refusal)
+    /// <summary>Pure local namespace check and path normalization; performs no target access.</summary>
+    public static string LocalPath(string input, string refusal)
     {
         // This check performs no filesystem access, including malformed namespaces.
         if (input.StartsWith("\\\\", StringComparison.Ordinal) || input.StartsWith("//", StringComparison.Ordinal))
