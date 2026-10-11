@@ -67,6 +67,8 @@ These fields are persisted under the existing redaction and create-only policy;
 the owner must verify the actual connected build and effective Environment before
 recording them. Legacy envelopes do not acquire fabricated identity fields.
 Their embedded Scenario ID is used only to group historical records.
+Legitimate redaction can make that optional legacy grouping ID unavailable;
+it remains `Unknown` while a correctly hashed copy and saved result remain readable.
 `result.json` still uses the public independent result reader. The dashboard
 never infers a final result from `primary.json`, a Trace event or a pending file.
 

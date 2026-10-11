@@ -334,10 +334,20 @@ public sealed class DashboardTests : IDisposable
         Assert.Contains("textContent", await client.GetStringAsync("/dashboard.js"));
         Assert.Contains("color-scheme", await client.GetStringAsync("/dashboard.css"));
         for (var i = 0; i < 3; i++) Assert.Contains("Passed", await client.GetStringAsync("/api/refresh"));
+        var simultaneous = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => client.GetStringAsync("/api/refresh")));
+        foreach (var json in simultaneous)
+        {
+            using var snapshot = JsonDocument.Parse(json);
+            Assert.Equal(2, snapshot.RootElement.GetProperty("scenarios").GetArrayLength());
+            Assert.Equal(1, snapshot.RootElement.GetProperty("runs").GetArrayLength());
+            Assert.False(snapshot.RootElement.GetProperty("truncated").GetBoolean());
+        }
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/result.json")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync("/api/refresh", null)).StatusCode);
         using var hostile = new HttpRequestMessage(HttpMethod.Get, "/api/refresh"); hostile.Headers.Add("Origin", "https://evil.example");
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(hostile)).StatusCode);
+        using var hostileHost = new HttpRequestMessage(HttpMethod.Get, "/api/snapshot"); hostileHost.Headers.Host = $"127.0.0.2:{port}";
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(hostileHost)).StatusCode);
         foreach (var entry in before) Assert.Equal(entry.Value, File.ReadAllBytes(entry.Key));
         Assert.Equal(before.Count, Directory.GetFiles(Artifacts, "*", SearchOption.AllDirectories).Length);
         var completion = before.Keys.Single(file => Path.GetFileName(file) == "completion.json");
@@ -348,6 +358,7 @@ public sealed class DashboardTests : IDisposable
         Assert.Contains("Failed", await client.GetStringAsync("/api/refresh"));
         Assert.Contains("CompletionUnreadable", await client.GetStringAsync("/api/snapshot"));
         cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10));
+        using var released = new TcpListener(IPAddress.Loopback, port); released.Start(); released.Stop();
     }
     [Fact]
     public async Task Ordinary_files_count_against_finite_index_work()
@@ -590,6 +601,30 @@ public sealed class DashboardTests : IDisposable
         };
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
         Assert.True(interrupted); // Real static validator returned its Interrupted report on the final run.
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Redacted_legacy_scenario_grouping_stays_unknown_without_corrupting_saved_result(bool sensitiveName)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, sensitiveName ? new([], ["scenarioId"]) : new(["s1"], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)])).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.NotExecuted), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId); Assert.Null(run.ScenarioSha256);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Entry_limit_stops_all_later_roots_without_advancing_or_admitting_them()
+    {
+        File.WriteAllText(Path.Combine(Artifacts, "noise"), "x");
+        File.WriteAllText(Path.Combine(Artifacts, "second-noise"), "x");
+        var index = new DashboardIndex(Registry, [Artifacts, Path.Combine(root, "unreadable-unused-root")], [root], new(MaxEntries: 1));
+        var snapshot = await index.ReadAsync();
+        Assert.Empty(snapshot.Warnings); Assert.True(snapshot.Truncated); Assert.Empty(snapshot.Runs);
+        Assert.All(DashboardIndex.Select(snapshot, "buildA", EnvironmentHash), item => Assert.Equal("IndexIncomplete", item.State));
     }
     [Fact]
     public async Task Issued_report_route_never_rebinds_to_another_run_after_refresh()

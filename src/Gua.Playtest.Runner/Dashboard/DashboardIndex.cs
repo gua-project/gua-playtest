@@ -82,19 +82,24 @@ public sealed class DashboardIndex
         foreach (var root in roots)
         {
             token.ThrowIfCancellationRequested();
+            if (truncated) break;
             try
             {
                 CheckAllowed(root);
                 if (!visited.Add(FileIdentity.ReadDirectory(root))) continue;
                 // Enumerate immediate Run entries only, never recurse or sort an unbounded directory.
-                foreach (var directory in Directory.EnumerateFileSystemEntries(root))
+                using var entries = Directory.EnumerateFileSystemEntries(root).GetEnumerator();
+                while (examined < limits.MaxEntries && entries.MoveNext())
                 {
                     token.ThrowIfCancellationRequested();
-                    if (++examined > limits.MaxEntries) { truncated = true; break; }
+                    examined++;
+                    var directory = entries.Current;
                     if ((File.GetAttributes(directory) & FileAttributes.Directory) == 0) continue;
                     if (runs.Count == limits.MaxRuns || remaining <= 0) { truncated = true; break; }
                     runs.Add(await ReadRunAsync(directory, RunKey(directory), token));
                 }
+                // Do not advance any enumerator again just to discover whether more work exists.
+                if (examined == limits.MaxEntries) truncated = true;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception e) when (ReadFailure(e)) { warnings.Add("ArtifactRootUnreadable"); }
@@ -144,7 +149,11 @@ public sealed class DashboardIndex
                         if (Text(copy, "kind") == "scenario")
                         {
                             scenarioId = Text(copy, "scenarioId");
-                            if (!Token(scenarioId)) throw new InvalidDataException();
+                            if (!Token(scenarioId))
+                            {
+                                if (identity is not null) throw new InvalidDataException();
+                                scenarioId = null; // Legacy grouping may be unavailable after legitimate redaction.
+                            }
                             if (identity is not null && (scenarioId != identity.ScenarioId ||
                                 Text(copy, "definitionVersion") != identity.DefinitionVersion)) throw new InvalidDataException();
                         }
