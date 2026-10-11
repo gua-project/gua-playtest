@@ -149,27 +149,28 @@ public sealed class DashboardIndex
                 // #9 persistence envelope is deliberately not passed to RunDocument validation.
                 if (run.TryGetProperty("identity", out var id)) identity = DecodeIdentity(id);
                 if (run.TryGetProperty("startedAt", out var at)) started = at.GetDateTimeOffset();
-                if (run.TryGetProperty("inputs", out var inputs))
-                    foreach (var input in inputs.EnumerateArray())
+                if (!run.TryGetProperty("inputs", out var inputs) || inputs.ValueKind != JsonValueKind.Array)
+                    throw new InvalidDataException();
+                foreach (var input in inputs.EnumerateArray())
+                {
+                    if (Text(input, "name") is null || !Hash(Text(input, "sha256")) ||
+                        !input.TryGetProperty("document", out var copy) ||
+                        Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(copy, Json))) != Text(input, "sha256"))
+                        throw new InvalidDataException();
+                    if (Text(copy, "kind") == "scenario")
                     {
-                        if (Text(input, "name") is null || !Hash(Text(input, "sha256")) ||
-                            !input.TryGetProperty("document", out var copy) ||
-                            Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(copy, Json))) != Text(input, "sha256"))
-                            throw new InvalidDataException();
-                        if (Text(copy, "kind") == "scenario")
+                        if (!copy.TryGetProperty("scenarioId", out var storedId) ||
+                            storedId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
+                        scenarioId = storedId.ValueKind == JsonValueKind.String ? storedId.GetString() : null;
+                        if (!Token(scenarioId))
                         {
-                            if (!copy.TryGetProperty("scenarioId", out var storedId) ||
-                                storedId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
-                            scenarioId = storedId.ValueKind == JsonValueKind.String ? storedId.GetString() : null;
-                            if (!Token(scenarioId))
-                            {
-                                if (identity is not null || scenarioId is { Length: > 0 }) throw new InvalidDataException();
-                                scenarioId = null; // Legacy grouping may be unavailable after legitimate redaction.
-                            }
-                            if (identity is not null && (scenarioId != identity.ScenarioId ||
-                                Text(copy, "definitionVersion") != identity.DefinitionVersion)) throw new InvalidDataException();
+                            if (identity is not null || scenarioId is { Length: > 0 }) throw new InvalidDataException();
+                            scenarioId = null; // Legacy grouping may be unavailable after legitimate redaction.
                         }
+                        if (identity is not null && (scenarioId != identity.ScenarioId ||
+                            Text(copy, "definitionVersion") != identity.DefinitionVersion)) throw new InvalidDataException();
                     }
+                }
             }
             else if (kind == "run")
             {
@@ -317,6 +318,8 @@ public sealed class DashboardIndex
         {
             foreach (var scenario in document.GetProperty("scenarios").EnumerateArray())
                 AdmitReference(scenario.GetProperty("file"), directory, visited, reserveValidationRead);
+            foreach (var root in document.GetProperty("artifactRoots").EnumerateArray())
+                CheckAllowed(Path.GetFullPath(root.GetString()!, directory));
             return;
         }
         string[] fields = Text(document, "kind") switch

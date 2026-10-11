@@ -495,6 +495,62 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("RunUnreadable", run.State); Assert.Null(run.BuildId);
         Assert.Equal(ResultStatus.Passed, run.Result!.Status);
     }
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task Storage_requires_inputs_even_when_identity_is_optional(bool identity)
+    {
+        var store = Save(identity: identity); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json.Remove("inputs"); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.BuildId); Assert.Null(run.ScenarioId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("null")] [InlineData("{}")]
+    [InlineData("42")] [InlineData("\"inputs\"")]
+    public async Task Storage_inputs_must_be_an_array(string invalid)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json["inputs"] = System.Text.Json.Nodes.JsonNode.Parse(invalid); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Writer_empty_inputs_remain_valid()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [])).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []),
+            [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Null(run.BuildId); Assert.Null(run.ScenarioId);
+    }
+    [Fact]
+    public async Task Declared_artifact_root_requires_physical_authority_before_validation()
+    {
+        var parent = Path.Combine(root, "declared-case-parent"); Directory.CreateDirectory(parent);
+        if (OperatingSystem.IsWindows())
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", parent, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var safe = Path.Combine(parent, "safe"); var sibling = Path.Combine(parent, "SAFE");
+        Directory.CreateDirectory(safe); Directory.CreateDirectory(Path.Combine(safe, "runs"));
+        Directory.CreateDirectory(sibling); Directory.CreateDirectory(Path.Combine(sibling, "runs"));
+        foreach (var file in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, file), Path.Combine(safe, file));
+        var registry = Path.Combine(safe, "registry.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(registry))!.AsObject();
+        json["artifactRoots"] = new System.Text.Json.Nodes.JsonArray("../SAFE/runs"); File.WriteAllText(registry, json.ToJsonString());
+        var same = FileIdentity.ReadDirectory(safe) == FileIdentity.ReadDirectory(sibling);
+        Assert.Equal(same ? "Ready" : "RegistryUnreadable",
+            (await new DashboardIndex(registry, [Path.Combine(safe, "runs")], [safe]).ReadAsync()).RegistryState);
+        Assert.Equal("Ready", (await new DashboardIndex(registry, [Path.Combine(safe, "runs")], [parent]).ReadAsync()).RegistryState);
+    }
     [Fact]
     public async Task Registry_budget_reserves_static_validation_second_read()
     {
