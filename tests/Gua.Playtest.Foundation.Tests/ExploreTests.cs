@@ -12,24 +12,43 @@ using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
 
+// Explore's owner/worker continuations have physical watchdogs. Unrelated tests
+// deliberately blocking pool workers must not consume those watchdogs.
+[CollectionDefinition("Explore owner timing", DisableParallelization = true)]
+public sealed class ExploreOwnerTimingCollection { }
+
+[Collection("Explore owner timing")]
 public sealed class ExploreTests
 {
     private sealed class Clock : IClock
     {
         private readonly List<(TimeSpan Due, TaskCompletionSource Completion)> timers = [];
-        public TimeSpan Elapsed { get; private set; }
+        private readonly object sync = new();
+        private TimeSpan elapsed;
+        public Action<TimeSpan>? TimerRegistered;
+        public TimeSpan Elapsed { get { lock (sync) return elapsed; } }
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             if (duration <= TimeSpan.Zero) return ValueTask.CompletedTask;
             var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             token.Register(() => completion.TrySetCanceled(token));
-            timers.Add((Elapsed + duration, completion)); return new(completion.Task);
+            TimeSpan due;
+            lock (sync)
+            {
+                due = elapsed + duration;
+                timers.Add((due, completion));
+            }
+            TimerRegistered?.Invoke(due);
+            return new(completion.Task);
         }
         public void At(int milliseconds)
         {
-            Elapsed = TimeSpan.FromMilliseconds(milliseconds);
-            foreach (var timer in timers.Where(x => x.Due <= Elapsed).ToArray()) timer.Completion.TrySetResult();
+            lock (sync)
+            {
+                elapsed = TimeSpan.FromMilliseconds(milliseconds);
+                foreach (var timer in timers.Where(x => x.Due <= elapsed).ToArray()) timer.Completion.TrySetResult();
+            }
         }
     }
     private static ResourceLimits Limits(long actions = 30, long decisions = 30, long recovery = 2, long stagnation = 8, long repeats = 3)
@@ -446,11 +465,13 @@ public sealed class ExploreTests
             new ConditionLeafObservation("scope", true, [new("target", "{\"type\":\"bool\",\"value\":" + (value ? "true" : "false") + "}")], true))]);
         s.Feed.PrivateMilestone = HeldUnit(false);
         var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timerRegistered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var attained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var improvement = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         s.Feed.TransformCapture = frame => { if (frame.Run.CapturedAt == TimeSpan.FromMilliseconds(10)) first.TrySetResult();
             if (frame.Run.CapturedAt == TimeSpan.FromMilliseconds(110)) attained.TrySetResult(); return frame; };
+        s.Clock.TimerRegistered = due => { if (due == TimeSpan.FromMilliseconds(110)) timerRegistered.TrySetResult(); };
         var summaries = new List<ProgressSummary>(); var planner = new Planner(i => i == 1 ? Action() : Finish());
         var work = new Work(async (_, calls, token) =>
         {
@@ -460,7 +481,10 @@ public sealed class ExploreTests
         var pending = s.Execute(planner, work, record: summary => { summaries.Add(summary); if (summary.Improved) improvement.TrySetResult(); }).AsTask();
         try
         {
-            await first.Task.WaitAsync(TimeSpan.FromSeconds(5)); s.Clock.At(110);
+            await first.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // Capture notification precedes private evaluation and timer registration.
+            // Advance only once the monitor is actually waiting at the hold boundary.
+            await timerRegistered.Task.WaitAsync(TimeSpan.FromSeconds(5)); s.Clock.At(110);
             Assert.Same(attained.Task, await Task.WhenAny(attained.Task, Task.Delay(1000)));
             await improvement.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.False(pending.IsCompleted); Assert.Single(planner.Inputs);
