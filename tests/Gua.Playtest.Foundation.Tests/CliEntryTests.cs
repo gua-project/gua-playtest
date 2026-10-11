@@ -231,6 +231,56 @@ public sealed class CliEntryTests
         finally { Environment.SetEnvironmentVariable(variable, null); root.Delete(true); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PartialSecretResolutionFailureNeverPublishesKnownDiagnosticValues(bool oversized)
+    {
+        var root = PrivateRoot(); var first = "GUA_PARTIAL_" + Guid.NewGuid().ToString("N");
+        var second = "GUA_LARGE_" + Guid.NewGuid().ToString("N");
+        var marker = oversized ? "CommandInputRejected" : "SecretUnavailable";
+        try
+        {
+            Environment.SetEnvironmentVariable(first, marker);
+            if (oversized) Environment.SetEnvironmentVariable(second, new string('x', 32767));
+            var recording = JsonNode.Parse(await File.ReadAllTextAsync(Fixture("recording.json")))!;
+            var step = recording["steps"]![0]!; step["secretKey"] = "first"; step["sensitive"] = true; step["action"] = "set_value";
+            var additional = step.DeepClone(); additional["secretKey"] = "second";
+            ((JsonArray)recording["steps"]!).Add(additional);
+            if (oversized)
+            {
+                var third = step.DeepClone(); third["secretKey"] = "third";
+                ((JsonArray)recording["steps"]!).Add(third);
+                var fourth = step.DeepClone(); fourth["secretKey"] = "fourth";
+                ((JsonArray)recording["steps"]!).Add(fourth);
+            }
+            var file = Path.Combine(root.FullName, "recording.json"); await File.WriteAllTextAsync(file, recording.ToJsonString());
+            var validation = await new StaticContractValidator([root.FullName]).ValidateRecordingFileAsync(file);
+            Assert.True(validation.IsValid, validation.Code);
+            var args = new List<string> { "plan", "create", "--json", "--managed-root", Path.Combine(root.FullName, "managed"),
+                "--allow-root", root.FullName, "--scenario", Path.Combine(root.FullName, "scenario.json"), "--recording", file,
+                "--timing", "recorded", "--secret-env", "first=" + first };
+            File.Copy(Fixture("scenario.json"), Path.Combine(root.FullName, "scenario.json"));
+            if (oversized) foreach (var key in new[] { "second", "third", "fourth" }) args.AddRange(["--secret-env", key + "=" + second]);
+            using var output = new StringWriter(); using var error = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(args.ToArray(), output, error));
+            Assert.DoesNotContain(marker, output.ToString() + error);
+            Assert.Equal("{}", output.ToString().Trim());
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.Empty(Directory.GetFiles(root.FullName, "plan.json", SearchOption.AllDirectories));
+        }
+        finally { Environment.SetEnvironmentVariable(first, null); Environment.SetEnvironmentVariable(second, null); root.Delete(true); }
+    }
+
+    [Fact]
+    public async Task PartialSecretFailureBoundaryPreservesCancellationWithoutRevealingItsCode()
+    {
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(4, await CommandOutput.WriteKnownFailureAsync(output, error, true, "Interrupted", "CommandInterrupted", 4, ["CommandInterrupted"]));
+        Assert.DoesNotContain("CommandInterrupted", output.ToString() + error);
+        using var document = JsonDocument.Parse(output.ToString());
+    }
+
     [Fact]
     public async Task SavedReportDoesNotChangeSourceAndNeverOverwrites()
     {

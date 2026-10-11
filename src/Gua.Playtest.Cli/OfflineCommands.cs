@@ -14,11 +14,12 @@ internal static class OfflineCommands
     internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics,
         bool json, CancellationToken token, InputValidator? validateInput = null)
     {
+        var resolvedSecrets = new List<string>();
         try
         {
             token.ThrowIfCancellationRequested();
             validateInput ??= static (input, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(input, token);
-            if (args[0] == "plan") return await PlanAsync(args, output, diagnostics, json, token, validateInput);
+            if (args[0] == "plan") return await PlanAsync(args, output, diagnostics, json, token, validateInput, resolvedSecrets);
             var options = Options.Parse(args[1..], args[0] == "report"
                 ? ["--allow-root", "--trace", "--output"]
                 : ["--allow-root", "--scenario", "--plan", "--environment", "--max-actions", "--max-duration-ms", "--deny-action"]);
@@ -68,12 +69,12 @@ internal static class OfflineCommands
                     runtimeVerified = false, blockers = new[] { "TrustedRuntimeInputRequired", "PublishedExternalGuardUnavailable", "HostIdentityAndCleanupUnverified" } });
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
-        { return await CommandOutput.WriteAsync(output, diagnostics, json, "Interrupted", "CommandInterrupted", 4); }
+        { return await CommandOutput.WriteKnownFailureAsync(output, diagnostics, json, "Interrupted", "CommandInterrupted", 4, resolvedSecrets); }
         catch (Exception error)
         {
             // Only our finite diagnostic vocabulary may cross the process boundary.
             var code = error is InvalidDataException && Codes.Contains(error.Message) ? error.Message : "CommandInputRejected";
-            return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", code, 2);
+            return await CommandOutput.WriteKnownFailureAsync(output, diagnostics, json, "Invalid", code, 2, resolvedSecrets);
         }
     }
 
@@ -85,7 +86,7 @@ internal static class OfflineCommands
         "ReportWriteRejected", "SecretBindingInvalid", "SecretBindingNotReferenced", "SecretUnavailable", "PlanSecretCollision"
     };
 
-    private static async Task<int> PlanAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, InputValidator validateInput)
+    private static async Task<int> PlanAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, InputValidator validateInput, List<string> secrets)
     {
         if (args.Length < 2 || args[1] is not ("create" or "accept")) throw new InvalidDataException("CommandArgumentsRequired");
         var create = args[1] == "create";
@@ -126,6 +127,7 @@ internal static class OfflineCommands
         }
         var references = new HashSet<string>(StringComparer.Ordinal);
         foreach (var document in documents) CollectSecretKeys(document, references);
+        if (references.Count > 1024) throw new InvalidDataException("CommandInputRejected");
         var bindings = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var binding in options.All("--secret-env"))
         {
@@ -133,7 +135,7 @@ internal static class OfflineCommands
             if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1]) || !bindings.TryAdd(parts[0], parts[1])) throw new InvalidDataException("SecretBindingInvalid");
             if (!references.Contains(parts[0])) throw new InvalidDataException("SecretBindingNotReferenced");
         }
-        var secrets = new List<string>();
+        long secretCharacters = 0;
         foreach (var key in references)
         {
             if (!bindings.TryGetValue(key, out var variable))
@@ -141,6 +143,9 @@ internal static class OfflineCommands
             var supply = Environment.GetEnvironmentVariable(variable);
             if (string.IsNullOrEmpty(supply)) throw new InvalidDataException("SecretUnavailable");
             secrets.Add(supply);
+            secretCharacters += supply.Length;
+            if (secretCharacters > PersistenceRedactor.MaxSecretCharacters)
+                throw new InvalidDataException("CommandInputRejected");
         }
         var redactor = new PersistenceRedactor(secrets, ["password", "token", "authorization", "secretValue"]);
         if (command.Append(Path.GetFullPath(managed)).Any(x => redactor.Redact(x) != x))
@@ -152,7 +157,9 @@ internal static class OfflineCommands
             var status = parsed.RootElement.GetProperty("status").GetString()!;
             var code = parsed.RootElement.TryGetProperty("code", out var value) ? value.GetString()! : create ? "PlanCandidateCreated" : "PlanAccepted";
             var document = CommandOutput.Serialize(status, code, parsed.RootElement);
-            return redactor.Redact(document) == document &&
+            var text = (create && status == "Candidate" ? parsed.RootElement.GetProperty("plan").GetString() + output.NewLine : "") + $"{status}: {code}";
+            var rendered = (json ? document : text) + output.NewLine;
+            return redactor.Redact(rendered) == rendered && redactor.Redact(code + diagnostics.NewLine) == code + diagnostics.NewLine &&
                 (!parsed.RootElement.TryGetProperty("plan", out var path) || redactor.Redact(path.GetString()!) == path.GetString());
         }
         using var buffer = new StringWriter(CultureInfo.InvariantCulture);
@@ -174,8 +181,8 @@ internal static class OfflineCommands
     {
         var code = redactor.Redact("PlanSecretCollision");
         var document = CommandOutput.PolicyFailureDocument(redactor);
-        await output.WriteLineAsync(json ? document : code);
-        if (code.Length != 0) await diagnostics.WriteLineAsync(code);
+        await output.WriteAsync(json ? document : code);
+        if (code.Length != 0) await diagnostics.WriteAsync(code);
         return 2;
     }
 

@@ -43,7 +43,12 @@ to PlanManager. A replaced Scenario, Recording or Plan fails before candidate or
 adoption publication, so secret policy and saved bytes cannot refer to different
 inputs. The managed root and authority key must remain private host resources.
 The complete command response, including its code and candidate path, must also
-pass the private secret policy before candidate or adoption publication.
+pass the private secret policy before candidate or adoption publication, in both
+text and JSON modes. Already-resolved values remain protected if another supply
+is missing, cancellation occurs, or policy construction fails. Resolution stops
+at the persistence policy's 1024-key and 65536-character ceilings. Diagnostics
+that collide with a known value are suppressed; a content-free JSON document
+preserves the final-document boundary when named fields would disclose a value.
 
 Explore/Replay accept repeated `--allow-root`, optional positive `--max-actions`
 and `--max-duration-ms`, and repeated `--deny-action`. Offline resolution retains

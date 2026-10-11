@@ -62,9 +62,11 @@ public sealed class ReplayTests
     }
 
     [Theory]
-    [InlineData("Accepted")]
-    [InlineData("PlanAccepted")]
-    public async Task CliAdoptionPreflightsResolvedSecretAgainstEntireResponse(string secret)
+    [InlineData("Accepted", true)]
+    [InlineData("PlanAccepted", true)]
+    [InlineData("Accepted: PlanAccepted", false)]
+    [InlineData("\n", true)]
+    public async Task CliAdoptionPreflightsResolvedSecretAgainstEntireResponse(string secret, bool json)
     {
         using var files = new Fixture(steps: 1, gameInput: true, secretInput: true);
         var manager = Plans(files); var path = await Candidate(files, manager);
@@ -74,10 +76,12 @@ public sealed class ReplayTests
         try
         {
             using var output = new StringWriter(); using var diagnostics = new StringWriter();
-            Assert.Equal(2, await CliApplication.ExecuteAsync(["plan", "accept", "--json", "--managed-root", Path.Combine(files.Root, "managed"),
-                "--plan", path, "--trial", id, "--approve", "--approve-expectations", "--secret-env", "input=" + variable], output, diagnostics));
+            var args = new List<string> { "plan", "accept", "--managed-root", Path.Combine(files.Root, "managed"),
+                "--plan", path, "--trial", id, "--approve", "--approve-expectations", "--secret-env", "input=" + variable };
+            if (json) args.Add("--json");
+            Assert.Equal(2, await CliApplication.ExecuteAsync(args.ToArray(), output, diagnostics));
             Assert.DoesNotContain(secret, output.ToString()); Assert.DoesNotContain(secret, diagnostics.ToString());
-            using var document = JsonDocument.Parse(output.ToString());
+            if (json) { using var document = JsonDocument.Parse(output.ToString()); }
             Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
             Assert.False(await manager.IsAcceptedAsync(path));
         }

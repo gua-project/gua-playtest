@@ -13,10 +13,10 @@ public static class PlanCommand
         PersistenceRedactor redactor, CancellationToken token = default, InputHashes? inputHashes = null,
         Func<string, bool>? responseAllowed = null)
     {
-        bool CanReply(string reply) => redactor.Redact(reply) == reply && (responseAllowed?.Invoke(reply) ?? true);
+        bool CanReply(string reply) => redactor.Redact(reply + output.NewLine) == reply + output.NewLine && (responseAllowed?.Invoke(reply) ?? true);
         async Task<int> Failure(string reply, int exit)
         {
-            await output.WriteLineAsync(CanReply(reply) ? reply : CommandOutput.PolicyFailureDocument(redactor));
+            await output.WriteAsync(CanReply(reply) ? reply + output.NewLine : CommandOutput.PolicyFailureDocument(redactor));
             return exit;
         }
         try
@@ -24,7 +24,7 @@ public static class PlanCommand
             token.ThrowIfCancellationRequested();
             if (new[] { "{\"status\":\"Invalid\",\"code\":\"PlanRejected\"}", "{\"status\":\"Interrupted\",\"code\":\"PlanInterrupted\"}",
                 "{\"status\":\"Invalid\",\"code\":\"PlanArgumentsRequired\"}" }.Any(reply => !CanReply(reply)))
-            { await output.WriteLineAsync(CommandOutput.PolicyFailureDocument(redactor)); return 2; }
+            { await output.WriteAsync(CommandOutput.PolicyFailureDocument(redactor)); return 2; }
             if (args is ["plan", "create", "--managed-root", var managed, "--allow-root", var allowed,
                 "--scenario", var scenario, "--recording", var recording, "--timing", var timing])
             {
@@ -37,7 +37,7 @@ public static class PlanCommand
             if (args is ["plan", "accept", "--managed-root", var root, "--plan", var path,
                 "--trial", var trial, "--approve", "--approve-expectations"])
             {
-                if (!CanReply("{\"status\":\"Accepted\"}")) { await output.WriteLineAsync(CommandOutput.PolicyFailureDocument(redactor)); return 2; }
+                if (!CanReply("{\"status\":\"Accepted\"}")) { await output.WriteAsync(CommandOutput.PolicyFailureDocument(redactor)); return 2; }
                 await new PlanManager(root, redactor).AcceptAsync(path, trial, true, true, token, inputHashes?.PlanSha256);
                 await output.WriteLineAsync("{\"status\":\"Accepted\"}");
                 return 0;
