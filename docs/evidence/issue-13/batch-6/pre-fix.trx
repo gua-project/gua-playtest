@@ -1,0 +1,292 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="823501c2-d81c-4118-8f73-cc19d4f0e176" name="testk@DESKTOP-3CJOU9S 2026-10-11 08:12:08" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T08:12:08.2798455+09:00" queuing="2026-10-11T08:12:08.2798458+09:00" start="2026-10-11T08:12:07.2381221+09:00" finish="2026-10-11T08:12:08.3278974+09:00" />
+  <TestSettings name="default" id="c2ca667a-8621-4e12-8c2e-19eff696a354">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_08_12_08" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="6b02643c-7b4d-40c6-a976-f8200a2f4bb9" testId="1397b875-9617-c8e8-cc30-b1992600ab34" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0082142" startTime="2026-10-11T08:12:08.2210876+09:00" endTime="2026-10-11T08:12:08.2290954+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6b02643c-7b4d-40c6-a976-f8200a2f4bb9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="070c3f01-9deb-4aff-930d-2eb27cca09f1" testId="affd4a9c-72ec-bed7-80d6-a56721c66667" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;latest&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0051471" startTime="2026-10-11T08:12:08.2118214+09:00" endTime="2026-10-11T08:12:08.2162320+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="070c3f01-9deb-4aff-930d-2eb27cca09f1" />
+    <UnitTestResult executionId="213b73cb-063c-4e31-bbfd-68a8d8ed9955" testId="b2e456ba-f9f8-0e06-d7b1-b5964d7bd779" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;different&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0038174" startTime="2026-10-11T08:12:08.2294550+09:00" endTime="2026-10-11T08:12:08.2330345+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="213b73cb-063c-4e31-bbfd-68a8d8ed9955">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2843bf06-d476-426b-b2ee-00276e058370" testId="17c52d36-0af3-a5a1-7b0b-4172758948ed" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0033505" startTime="2026-10-11T08:12:08.2381340+09:00" endTime="2026-10-11T08:12:08.2408879+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2843bf06-d476-426b-b2ee-00276e058370">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 238&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7bf04706-ed6e-4278-80d4-db8e369cbed6" testId="2429b633-939a-9d94-66d8-e035a04e9427" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0114916" startTime="2026-10-11T08:12:08.2684056+09:00" endTime="2026-10-11T08:12:08.2798807+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7bf04706-ed6e-4278-80d4-db8e369cbed6">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 5, TotalTokens = 100005 }</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9ca612b9-b747-4a84-8f2a-80fb439ebe1e" testId="c0164130-3a7a-7283-dd25-1d60eecb292d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0042969" startTime="2026-10-11T08:12:08.2163240+09:00" endTime="2026-10-11T08:12:08.2206685+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9ca612b9-b747-4a84-8f2a-80fb439ebe1e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="55d964fc-c601-4a20-b3c2-8e011ae99e63" testId="91541630-5657-4a97-96a3-f61ae1a68e50" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2367287" startTime="2026-10-11T08:12:07.9480822+09:00" endTime="2026-10-11T08:12:08.1949135+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="55d964fc-c601-4a20-b3c2-8e011ae99e63">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="3251d36b-61c7-4f71-bbf6-bd9af1584d30" testId="9c8658cc-a43d-f447-0e38-855c46292c77" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0218565" startTime="2026-10-11T08:12:08.2589843+09:00" endTime="2026-10-11T08:12:08.2629191+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3251d36b-61c7-4f71-bbf6-bd9af1584d30">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 238&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9090bd9b-ddb2-4943-8bbf-f49f1581c5df" testId="d85412f3-159f-6901-e1a1-486b80c1127e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;latest&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0104794" startTime="2026-10-11T08:12:08.2045171+09:00" endTime="2026-10-11T08:12:08.2054071+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9090bd9b-ddb2-4943-8bbf-f49f1581c5df" />
+    <UnitTestResult executionId="c341d138-0fc2-470a-ae79-8ad6f4c1754f" testId="1d9bc117-1304-ef09-d38e-cbc34061bcd6" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0040307" startTime="2026-10-11T08:12:08.2333706+09:00" endTime="2026-10-11T08:12:08.2372209+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c341d138-0fc2-470a-ae79-8ad6f4c1754f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="43b378e3-27c5-4f9b-b7dc-a571d06b414c" testId="5b4c9476-6441-2f46-f9da-c4f89104feba" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0050337" startTime="2026-10-11T08:12:08.2633847+09:00" endTime="2026-10-11T08:12:08.2681386+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="43b378e3-27c5-4f9b-b7dc-a571d06b414c">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 5, TotalTokens = 100005 }</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ceca84ff-92ca-40f4-8ba2-3b8f43836d4a" testId="5a1750a9-fd0e-075e-4fbe-886885c30bcf" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;different&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0054247" startTime="2026-10-11T08:12:08.2062070+09:00" endTime="2026-10-11T08:12:08.2110730+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ceca84ff-92ca-40f4-8ba2-3b8f43836d4a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5b4c9476-6441-2f46-f9da-c4f89104feba">
+      <Execution id="43b378e3-27c5-4f9b-b7dc-a571d06b414c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9c8658cc-a43d-f447-0e38-855c46292c77">
+      <Execution id="3251d36b-61c7-4f71-bbf6-bd9af1584d30" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;different&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="b2e456ba-f9f8-0e06-d7b1-b5964d7bd779">
+      <Execution id="213b73cb-063c-4e31-bbfd-68a8d8ed9955" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c0164130-3a7a-7283-dd25-1d60eecb292d">
+      <Execution id="9ca612b9-b747-4a84-8f2a-80fb439ebe1e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="91541630-5657-4a97-96a3-f61ae1a68e50">
+      <Execution id="55d964fc-c601-4a20-b3c2-8e011ae99e63" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="2429b633-939a-9d94-66d8-e035a04e9427">
+      <Execution id="7bf04706-ed6e-4278-80d4-db8e369cbed6" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="1d9bc117-1304-ef09-d38e-cbc34061bcd6">
+      <Execution id="c341d138-0fc2-470a-ae79-8ad6f4c1754f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;latest&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="affd4a9c-72ec-bed7-80d6-a56721c66667">
+      <Execution id="070c3f01-9deb-4aff-930d-2eb27cca09f1" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="1397b875-9617-c8e8-cc30-b1992600ab34">
+      <Execution id="6b02643c-7b4d-40c6-a976-f8200a2f4bb9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="17c52d36-0af3-a5a1-7b0b-4172758948ed">
+      <Execution id="2843bf06-d476-426b-b2ee-00276e058370" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: &quot;different&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5a1750a9-fd0e-075e-4fbe-886885c30bcf">
+      <Execution id="ceca84ff-92ca-40f4-8ba2-3b8f43836d4a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: &quot;latest&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d85412f3-159f-6901-e1a1-486b80c1127e">
+      <Execution id="9090bd9b-ddb2-4943-8bbf-f49f1581c5df" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="TerminalErrorPayloadMustMatchLatestNonRetryableNotice" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="1397b875-9617-c8e8-cc30-b1992600ab34" executionId="6b02643c-7b4d-40c6-a976-f8200a2f4bb9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="affd4a9c-72ec-bed7-80d6-a56721c66667" executionId="070c3f01-9deb-4aff-930d-2eb27cca09f1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b2e456ba-f9f8-0e06-d7b1-b5964d7bd779" executionId="213b73cb-063c-4e31-bbfd-68a8d8ed9955" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="17c52d36-0af3-a5a1-7b0b-4172758948ed" executionId="2843bf06-d476-426b-b2ee-00276e058370" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2429b633-939a-9d94-66d8-e035a04e9427" executionId="7bf04706-ed6e-4278-80d4-db8e369cbed6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c0164130-3a7a-7283-dd25-1d60eecb292d" executionId="9ca612b9-b747-4a84-8f2a-80fb439ebe1e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="91541630-5657-4a97-96a3-f61ae1a68e50" executionId="55d964fc-c601-4a20-b3c2-8e011ae99e63" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9c8658cc-a43d-f447-0e38-855c46292c77" executionId="3251d36b-61c7-4f71-bbf6-bd9af1584d30" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d85412f3-159f-6901-e1a1-486b80c1127e" executionId="9090bd9b-ddb2-4943-8bbf-f49f1581c5df" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d9bc117-1304-ef09-d38e-cbc34061bcd6" executionId="c341d138-0fc2-470a-ae79-8ad6f4c1754f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5b4c9476-6441-2f46-f9da-c4f89104feba" executionId="43b378e3-27c5-4f9b-b7dc-a571d06b414c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5a1750a9-fd0e-075e-4fbe-886885c30bcf" executionId="ceca84ff-92ca-40f4-8ba2-3b8f43836d4a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="12" executed="12" passed="2" failed="10" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.25]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.27]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.53]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.53]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.53]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(212,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.55]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.55]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.55]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(212,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant)&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.56]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.56]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.56]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.56]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.56]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(212,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant)&#xD;
+[xUnit.net 00:00:00.56]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(212,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(212,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(212,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.58]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.58]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.58]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.58]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.58]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(238,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.58]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.60]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.60]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(238,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.60]       Expected: null&#xD;
+[xUnit.net 00:00:00.60]       Actual:   CodexUsage { InputTokens = 7, OutputTokens = 5, TotalTokens = 100005 }&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.62]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.62]       Expected: null&#xD;
+[xUnit.net 00:00:00.62]       Actual:   CodexUsage { InputTokens = 7, OutputTokens = 5, TotalTokens = 100005 }&#xD;
+[xUnit.net 00:00:00.62]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.62]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.62]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.62]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.1972564+09:00">
+        <Text>[xUnit.net 00:00:00.53]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2114767+09:00">
+        <Text>[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "different") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2208973+09:00">
+        <Text>[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2293072+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2332386+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "different") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2374448+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2410603+09:00">
+        <Text>[xUnit.net 00:00:00.58]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2843888+09:00">
+        <Text>[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2844091+09:00">
+        <Text>[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:12:08.2844317+09:00">
+        <Text>[xUnit.net 00:00:00.62]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: True) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

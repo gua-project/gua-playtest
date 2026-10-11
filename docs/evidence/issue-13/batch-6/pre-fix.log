@@ -1,0 +1,103 @@
+  復元対象のプロジェクトを決定しています...
+  復元対象のすべてのプロジェクトは最新です。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.53]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "null") [FAIL]
+[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "different") [FAIL]
+[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "missing") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "null") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "different") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "missing") [FAIL]
+[xUnit.net 00:00:00.58]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: True) [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "null") [236 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "different") [5 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "missing") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "null") [8 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: False, variant: "different") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(beforeResponse: True, variant: "missing") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TerminalErrorPayloadMustMatchLatestNonRetryableNotice(Boolean beforeResponse, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 212
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: True) [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: Completed
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 238
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: False) [FAIL]
+[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: False) [FAIL]
+[xUnit.net 00:00:00.62]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: True) [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(beforeResponse: False) [21 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ModelRerouteBeforeOrAfterResponseRequiresValidCorrelationAndShape(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 238
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: False) [5 ms]
+  エラー メッセージ:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 5, TotalTokens = 100005 }
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(beforeResponse: True) [11 ms]
+  エラー メッセージ:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   CodexUsage { InputTokens = 7, OutputTokens = 5, TotalTokens = 100005 }
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.SyntheticContextResetLeavesCurrentAndSubsequentUsageUnavailable(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-usage\pre-fix.trx
+
+失敗!   -失敗:    10、合格:     2、スキップ:     0、合計:    12、期間: 331 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

@@ -1,0 +1,131 @@
+  復元対象のプロジェクトを決定しています...
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\Gua.Playtest.Foundation.Tests.csproj を復元しました (214 ミリ秒)。
+  6 個中 5 個の復元対象のプロジェクトは最新です。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "summary", variant: "extra") [FAIL]
+[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "identity") [FAIL]
+[xUnit.net 00:00:00.67]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "extra") [FAIL]
+[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "summary", variant: "identity") [FAIL]
+[xUnit.net 00:00:00.74]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "text") [FAIL]
+[xUnit.net 00:00:00.75]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "itemMissing") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "summary", variant: "extra") [237 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "identity") [5 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "extra") [7 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "summary", variant: "identity") [5 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "text") [5 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "itemMissing") [6 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampMissing") [FAIL]
+[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampString") [FAIL]
+[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampNull") [FAIL]
+[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "itemIncomplete") [FAIL]
+[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampOverflow") [FAIL]
+[xUnit.net 00:00:00.78]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: True) [FAIL]
+[xUnit.net 00:00:00.78]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: False) [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampMissing") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampString") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampNull") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "itemIncomplete") [6 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampOverflow") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 443
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: False) [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 443
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-canonical\pre-fix.trx
+
+失敗!   -失敗:    13、合格:     4、スキップ:     0、合計:    17、期間: 373 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

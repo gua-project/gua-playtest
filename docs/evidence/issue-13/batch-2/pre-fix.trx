@@ -1,0 +1,736 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="78f48c11-b02c-4e65-89bf-7edaba78ea0e" name="testk@DESKTOP-3CJOU9S 2026-10-11 07:30:47" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T07:30:47.0270371+09:00" queuing="2026-10-11T07:30:47.0270372+09:00" start="2026-10-11T07:30:46.1321650+09:00" finish="2026-10-11T07:30:47.1895810+09:00" />
+  <TestSettings name="default" id="b464fb00-b166-46af-bba9-a5cca6890ac2">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_07_30_47" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="0947cf43-020c-4137-9cff-6d4127dbb17b" testId="0800281f-f0d8-42f3-3370-45bb685bbfa3" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;status&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009414" startTime="2026-10-11T07:30:47.0059626+09:00" endTime="2026-10-11T07:30:47.0060128+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0947cf43-020c-4137-9cff-6d4127dbb17b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="31816ac3-82e2-4626-b932-127f0b179c9d" testId="3b997092-0bb9-dc36-d315-9198ba8dbd6c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;9223372036854775808&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0020572" startTime="2026-10-11T07:30:47.0125171+09:00" endTime="2026-10-11T07:30:47.0125368+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="31816ac3-82e2-4626-b932-127f0b179c9d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="080a0bf1-97ef-4856-a97f-587ad5cd8260" testId="9692bdd4-3d56-761d-ab71-0de303022db7" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;modelProvider&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009136" startTime="2026-10-11T07:30:47.0063908+09:00" endTime="2026-10-11T07:30:47.0064174+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="080a0bf1-97ef-4856-a97f-587ad5cd8260">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="4f36e951-6009-4dc7-a92d-f0236ec99a80" testId="3a20dec9-f4ce-709a-7a37-59028fb62a1e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;active\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0014761" startTime="2026-10-11T07:30:47.0132063+09:00" endTime="2026-10-11T07:30:47.0132306+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4f36e951-6009-4dc7-a92d-f0236ec99a80">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b62c50b5-b3e1-4f93-bd5c-60e78dfdcd39" testId="4fa3d260-d205-c6d0-f3e6-884c3d44826c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;model&quot;, nested: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0013820" startTime="2026-10-11T07:30:46.9856432+09:00" endTime="2026-10-11T07:30:46.9857216+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b62c50b5-b3e1-4f93-bd5c-60e78dfdcd39">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a13685cb-8e08-4497-ba9c-b677a6365218" testId="b8a556fe-590f-d41f-de42-f96ce61b72f6" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;missing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0020815" startTime="2026-10-11T07:30:47.0109782+09:00" endTime="2026-10-11T07:30:47.0110042+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a13685cb-8e08-4497-ba9c-b677a6365218">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e5114a86-8881-4586-a50b-50c5d92ab1b0" testId="9c636438-e16b-0fda-6ac0-830275cbf94d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;createdAt&quot;, value: &quot;9223372036854775808&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0010750" startTime="2026-10-11T07:30:47.0130005+09:00" endTime="2026-10-11T07:30:47.0130185+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e5114a86-8881-4586-a50b-50c5d92ab1b0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="45c99ee1-d5bf-48c8-a8b0-157d007b6add" testId="cbc60a97-a6ee-21cb-2e7b-1f886b9ccb9a" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;1.5&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0024572" startTime="2026-10-11T07:30:47.0106127+09:00" endTime="2026-10-11T07:30:47.0106392+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="45c99ee1-d5bf-48c8-a8b0-157d007b6add">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="404344c4-42f3-4fa8-93b6-485007a32a8d" testId="0b3a72b8-0893-8b4f-fe48-c85332c2a2cf" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;modelProvider&quot;, nested: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009221" startTime="2026-10-11T07:30:46.9873571+09:00" endTime="2026-10-11T07:30:46.9873753+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="404344c4-42f3-4fa8-93b6-485007a32a8d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a8b075ec-b8ad-4b34-bb02-ba88288be9e8" testId="1a823fcb-9168-563c-323a-ec9c5093f128" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: &quot;inProgress&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.1275187" startTime="2026-10-11T07:30:47.0155491+09:00" endTime="2026-10-11T07:30:47.1432079+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a8b075ec-b8ad-4b34-bb02-ba88288be9e8" />
+    <UnitTestResult executionId="50954a94-e99c-4e09-8076-f3080ee4e6ca" testId="0237ecfe-83c6-6d2f-b023-69ee33845aed" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;cliVersion&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009595" startTime="2026-10-11T07:30:46.9875404+09:00" endTime="2026-10-11T07:30:46.9875588+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="50954a94-e99c-4e09-8076-f3080ee4e6ca">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="0e876ee1-599f-4a80-927b-b5e8a9c5de31" testId="7f9674e7-f6ca-a711-5b88-360db6f6e970" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;createdAt&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009322" startTime="2026-10-11T07:30:47.0090735+09:00" endTime="2026-10-11T07:30:47.0090927+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0e876ee1-599f-4a80-927b-b5e8a9c5de31">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5fcf6bb8-f9c5-4b01-9424-8c4dc3987869" testId="84921ef0-d91f-77fa-e7da-88941fc61031" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;source&quot;, value: &quot;\&quot;unknown-source\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0038327" startTime="2026-10-11T07:30:47.0127969+09:00" endTime="2026-10-11T07:30:47.0128164+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5fcf6bb8-f9c5-4b01-9424-8c4dc3987869">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="3bb0d2a9-b1ad-4ad2-8309-b66f3414b3e5" testId="16b547a6-1556-66b9-0f62-895071cb92c8" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;projectId&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0106275" startTime="2026-10-11T07:30:46.9867598+09:00" endTime="2026-10-11T07:30:46.9867809+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3bb0d2a9-b1ad-4ad2-8309-b66f3414b3e5">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="430a0fab-d40a-4369-81a7-cc4197e2e969" testId="d466732a-05b9-1aa0-5205-4859ae9829db" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;\&quot;1\&quot;&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0037385" startTime="2026-10-11T07:30:47.0103185+09:00" endTime="2026-10-11T07:30:47.0103391+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="430a0fab-d40a-4369-81a7-cc4197e2e969">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="353c7bf3-32aa-49c9-a3e0-ffab40ccdc8f" testId="e727a0ff-641a-0a61-756f-a10abe15e3d7" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: &quot;completed&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0011208" startTime="2026-10-11T07:30:47.1446657+09:00" endTime="2026-10-11T07:30:47.1456995+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="353c7bf3-32aa-49c9-a3e0-ffab40ccdc8f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(String status) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 307&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="48558b09-081d-4ef0-91f8-aa31d6de9d52" testId="bda6a075-a5cf-b409-29b5-655912af5165" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;sessionId&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009081" startTime="2026-10-11T07:30:47.0093036+09:00" endTime="2026-10-11T07:30:47.0093223+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="48558b09-081d-4ef0-91f8-aa31d6de9d52">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="0f9eda01-38ce-4eab-b55b-b8df28cd1b63" testId="5d229c4d-f7de-1cb3-ff01-dcf8421ab65d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;approvalsReviewer&quot;, nested: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0011326" startTime="2026-10-11T07:30:46.9864900+09:00" endTime="2026-10-11T07:30:46.9865144+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0f9eda01-38ce-4eab-b55b-b8df28cd1b63">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="923b1d64-15bb-4093-abdd-8bdaea34db2c" testId="158b3f91-20dd-2057-b01b-f58e800586ab" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;cwd&quot;, nested: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0010895" startTime="2026-10-11T07:30:46.9869717+09:00" endTime="2026-10-11T07:30:46.9869911+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="923b1d64-15bb-4093-abdd-8bdaea34db2c">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="46b06186-782f-4063-b1f0-ca3ffc33a464" testId="95bcc120-14c0-daf9-13fe-0f0eca135fab" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;turns&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.1028586" startTime="2026-10-11T07:30:46.8534781+09:00" endTime="2026-10-11T07:30:46.9666104+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="46b06186-782f-4063-b1f0-ca3ffc33a464">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="21fcb4aa-6066-4ac6-8c1f-8e250b49822e" testId="2643c9a9-16d3-78e5-c04a-c00a190bcfde" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;preview&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0010336" startTime="2026-10-11T07:30:47.0094996+09:00" endTime="2026-10-11T07:30:47.0095173+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="21fcb4aa-6066-4ac6-8c1f-8e250b49822e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="aafbcaea-368e-4fd8-ab09-a148b1e540ba" testId="25164eee-7167-badd-4cbf-fa036d44d0d2" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0020905" startTime="2026-10-11T07:30:47.0122751+09:00" endTime="2026-10-11T07:30:47.0123032+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aafbcaea-368e-4fd8-ab09-a148b1e540ba">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="aab0f2c0-268c-4eee-833f-1494bf03733a" testId="5f727f1c-8b2b-f24c-660b-64278980b98d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;turns&quot;, value: &quot;[null]&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009817" startTime="2026-10-11T07:30:47.0144640+09:00" endTime="2026-10-11T07:30:47.0153178+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aab0f2c0-268c-4eee-833f-1494bf03733a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9e67e534-f2ef-4804-b7a9-2b364e5d826f" testId="5cf9d837-ac29-8081-5119-e4fa24cc95b5" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;cwd&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009498" startTime="2026-10-11T07:30:46.9877254+09:00" endTime="2026-10-11T07:30:46.9877478+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9e67e534-f2ef-4804-b7a9-2b364e5d826f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fbce3d16-e3cd-43b9-afa9-bb8fa7989f27" testId="b4a6dfcd-c38b-dd98-1c29-5dbd658e3aa1" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;updatedAt&quot;, value: &quot;1.5&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009571" startTime="2026-10-11T07:30:47.0136241+09:00" endTime="2026-10-11T07:30:47.0142411+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fbce3d16-e3cd-43b9-afa9-bb8fa7989f27">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fae50b1c-5dec-4bcb-8940-2aa3a540e439" testId="6e453d9f-a672-fdd2-3427-248884923fec" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: &quot;interrupted&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0013188" startTime="2026-10-11T07:30:47.1443755+09:00" endTime="2026-10-11T07:30:47.1444268+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fae50b1c-5dec-4bcb-8940-2aa3a540e439">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(String status) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 307&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a2f041e4-170e-4c5b-8fdb-52dff9411c4a" testId="65294ac0-0c7b-9724-5e2f-6be1c12e90c0" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;updatedAt&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0008960" startTime="2026-10-11T07:30:47.0088507+09:00" endTime="2026-10-11T07:30:47.0088731+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a2f041e4-170e-4c5b-8fdb-52dff9411c4a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="eb9b7d06-e3fb-4442-a735-7a5804750618" testId="0d69e9f1-b97b-1746-719a-7040ab152ff8" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;turns&quot;, value: &quot;[{\&quot;id\&quot;:\&quot;old-turn\&quot;,\&quot;items\&quot;:[],\&quot;status\&quot;:\&quot;co&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0011810" startTime="2026-10-11T07:30:47.0134109+09:00" endTime="2026-10-11T07:30:47.0134286+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="eb9b7d06-e3fb-4442-a735-7a5804750618">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d4100513-af90-4623-8631-e0b4fcd2a3b4" testId="ea40d203-9de7-a14c-56d9-f3a7165159da" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;source&quot;, nested: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009529" startTime="2026-10-11T07:30:46.9871638+09:00" endTime="2026-10-11T07:30:46.9871830+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d4100513-af90-4623-8631-e0b4fcd2a3b4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;model&quot;, nested: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="4fa3d260-d205-c6d0-f3e6-884c3d44826c">
+      <Execution id="b62c50b5-b3e1-4f93-bd5c-60e78dfdcd39" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: &quot;inProgress&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="1a823fcb-9168-563c-323a-ec9c5093f128">
+      <Execution id="a8b075ec-b8ad-4b34-bb02-ba88288be9e8" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NonFailedTurnCannotCarryValidBackendError" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="25164eee-7167-badd-4cbf-fa036d44d0d2">
+      <Execution id="aafbcaea-368e-4fd8-ab09-a148b1e540ba" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalCompletionTimestampIsRequiredBeforeCaching" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;createdAt&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="7f9674e7-f6ca-a711-5b88-360db6f6e970">
+      <Execution id="0e876ee1-599f-4a80-927b-b5e8a9c5de31" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;cwd&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5cf9d837-ac29-8081-5119-e4fa24cc95b5">
+      <Execution id="9e67e534-f2ef-4804-b7a9-2b364e5d826f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;approvalsReviewer&quot;, nested: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5d229c4d-f7de-1cb3-ff01-dcf8421ab65d">
+      <Execution id="0f9eda01-38ce-4eab-b55b-b8df28cd1b63" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;projectId&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="16b547a6-1556-66b9-0f62-895071cb92c8">
+      <Execution id="3bb0d2a9-b1ad-4ad2-8309-b66f3414b3e5" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;preview&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="2643c9a9-16d3-78e5-c04a-c00a190bcfde">
+      <Execution id="21fcb4aa-6066-4ac6-8c1f-8e250b49822e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;createdAt&quot;, value: &quot;9223372036854775808&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9c636438-e16b-0fda-6ac0-830275cbf94d">
+      <Execution id="e5114a86-8881-4586-a50b-50c5d92ab1b0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidOrHistoricalThreadStateCannotOpenNewRun" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;missing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="b8a556fe-590f-d41f-de42-f96ce61b72f6">
+      <Execution id="a13685cb-8e08-4497-ba9c-b677a6365218" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalCompletionTimestampIsRequiredBeforeCaching" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;modelProvider&quot;, nested: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0b3a72b8-0893-8b4f-fe48-c85332c2a2cf">
+      <Execution id="404344c4-42f3-4fa8-93b6-485007a32a8d" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;source&quot;, value: &quot;\&quot;unknown-source\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="84921ef0-d91f-77fa-e7da-88941fc61031">
+      <Execution id="5fcf6bb8-f9c5-4b01-9424-8c4dc3987869" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidOrHistoricalThreadStateCannotOpenNewRun" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;source&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ea40d203-9de7-a14c-56d9-f3a7165159da">
+      <Execution id="d4100513-af90-4623-8631-e0b4fcd2a3b4" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;modelProvider&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9692bdd4-3d56-761d-ab71-0de303022db7">
+      <Execution id="080a0bf1-97ef-4856-a97f-587ad5cd8260" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;updatedAt&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="65294ac0-0c7b-9724-5e2f-6be1c12e90c0">
+      <Execution id="a2f041e4-170e-4c5b-8fdb-52dff9411c4a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;1.5&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="cbc60a97-a6ee-21cb-2e7b-1f886b9ccb9a">
+      <Execution id="45c99ee1-d5bf-48c8-a8b0-157d007b6add" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalCompletionTimestampIsRequiredBeforeCaching" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: &quot;completed&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="e727a0ff-641a-0a61-756f-a10abe15e3d7">
+      <Execution id="353c7bf3-32aa-49c9-a3e0-ffab40ccdc8f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NonFailedTurnCannotCarryValidBackendError" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;9223372036854775808&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="3b997092-0bb9-dc36-d315-9198ba8dbd6c">
+      <Execution id="31816ac3-82e2-4626-b932-127f0b179c9d" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalCompletionTimestampIsRequiredBeforeCaching" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;status&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0800281f-f0d8-42f3-3370-45bb685bbfa3">
+      <Execution id="0947cf43-020c-4137-9cff-6d4127dbb17b" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;turns&quot;, value: &quot;[null]&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5f727f1c-8b2b-f24c-660b-64278980b98d">
+      <Execution id="aab0f2c0-268c-4eee-833f-1494bf03733a" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidOrHistoricalThreadStateCannotOpenNewRun" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: &quot;\&quot;1\&quot;&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d466732a-05b9-1aa0-5205-4859ae9829db">
+      <Execution id="430a0fab-d40a-4369-81a7-cc4197e2e969" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalCompletionTimestampIsRequiredBeforeCaching" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;cliVersion&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0237ecfe-83c6-6d2f-b023-69ee33845aed">
+      <Execution id="50954a94-e99c-4e09-8076-f3080ee4e6ca" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;status&quot;, value: &quot;{\&quot;type\&quot;:\&quot;active\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="3a20dec9-f4ce-709a-7a37-59028fb62a1e">
+      <Execution id="4f36e951-6009-4dc7-a92d-f0236ec99a80" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidOrHistoricalThreadStateCannotOpenNewRun" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;sessionId&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="bda6a075-a5cf-b409-29b5-655912af5165">
+      <Execution id="48558b09-081d-4ef0-91f8-aa31d6de9d52" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;turns&quot;, nested: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="95bcc120-14c0-daf9-13fe-0f0eca135fab">
+      <Execution id="46b06186-782f-4063-b1f0-ca3ffc33a464" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: &quot;interrupted&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="6e453d9f-a672-fdd2-3427-248884923fec">
+      <Execution id="fae50b1c-5dec-4bcb-8940-2aa3a540e439" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NonFailedTurnCannotCarryValidBackendError" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;updatedAt&quot;, value: &quot;1.5&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="b4a6dfcd-c38b-dd98-1c29-5dbd658e3aa1">
+      <Execution id="fbce3d16-e3cd-43b9-afa9-bb8fa7989f27" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidOrHistoricalThreadStateCannotOpenNewRun" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: &quot;turns&quot;, value: &quot;[{\&quot;id\&quot;:\&quot;old-turn\&quot;,\&quot;items\&quot;:[],\&quot;status\&quot;:\&quot;co&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0d69e9f1-b97b-1746-719a-7040ab152ff8">
+      <Execution id="eb9b7d06-e3fb-4442-a735-7a5804750618" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidOrHistoricalThreadStateCannotOpenNewRun" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: &quot;cwd&quot;, nested: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="158b3f91-20dd-2057-b01b-f58e800586ab">
+      <Execution id="923b1d64-15bb-4093-abdd-8bdaea34db2c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CompleteThreadStartShapeIsRequiredBeforeInput" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="0800281f-f0d8-42f3-3370-45bb685bbfa3" executionId="0947cf43-020c-4137-9cff-6d4127dbb17b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3b997092-0bb9-dc36-d315-9198ba8dbd6c" executionId="31816ac3-82e2-4626-b932-127f0b179c9d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9692bdd4-3d56-761d-ab71-0de303022db7" executionId="080a0bf1-97ef-4856-a97f-587ad5cd8260" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3a20dec9-f4ce-709a-7a37-59028fb62a1e" executionId="4f36e951-6009-4dc7-a92d-f0236ec99a80" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4fa3d260-d205-c6d0-f3e6-884c3d44826c" executionId="b62c50b5-b3e1-4f93-bd5c-60e78dfdcd39" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b8a556fe-590f-d41f-de42-f96ce61b72f6" executionId="a13685cb-8e08-4497-ba9c-b677a6365218" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9c636438-e16b-0fda-6ac0-830275cbf94d" executionId="e5114a86-8881-4586-a50b-50c5d92ab1b0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cbc60a97-a6ee-21cb-2e7b-1f886b9ccb9a" executionId="45c99ee1-d5bf-48c8-a8b0-157d007b6add" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0b3a72b8-0893-8b4f-fe48-c85332c2a2cf" executionId="404344c4-42f3-4fa8-93b6-485007a32a8d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1a823fcb-9168-563c-323a-ec9c5093f128" executionId="a8b075ec-b8ad-4b34-bb02-ba88288be9e8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0237ecfe-83c6-6d2f-b023-69ee33845aed" executionId="50954a94-e99c-4e09-8076-f3080ee4e6ca" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7f9674e7-f6ca-a711-5b88-360db6f6e970" executionId="0e876ee1-599f-4a80-927b-b5e8a9c5de31" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="84921ef0-d91f-77fa-e7da-88941fc61031" executionId="5fcf6bb8-f9c5-4b01-9424-8c4dc3987869" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="16b547a6-1556-66b9-0f62-895071cb92c8" executionId="3bb0d2a9-b1ad-4ad2-8309-b66f3414b3e5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d466732a-05b9-1aa0-5205-4859ae9829db" executionId="430a0fab-d40a-4369-81a7-cc4197e2e969" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e727a0ff-641a-0a61-756f-a10abe15e3d7" executionId="353c7bf3-32aa-49c9-a3e0-ffab40ccdc8f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bda6a075-a5cf-b409-29b5-655912af5165" executionId="48558b09-081d-4ef0-91f8-aa31d6de9d52" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5d229c4d-f7de-1cb3-ff01-dcf8421ab65d" executionId="0f9eda01-38ce-4eab-b55b-b8df28cd1b63" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="158b3f91-20dd-2057-b01b-f58e800586ab" executionId="923b1d64-15bb-4093-abdd-8bdaea34db2c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="95bcc120-14c0-daf9-13fe-0f0eca135fab" executionId="46b06186-782f-4063-b1f0-ca3ffc33a464" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2643c9a9-16d3-78e5-c04a-c00a190bcfde" executionId="21fcb4aa-6066-4ac6-8c1f-8e250b49822e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="25164eee-7167-badd-4cbf-fa036d44d0d2" executionId="aafbcaea-368e-4fd8-ab09-a148b1e540ba" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5f727f1c-8b2b-f24c-660b-64278980b98d" executionId="aab0f2c0-268c-4eee-833f-1494bf03733a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5cf9d837-ac29-8081-5119-e4fa24cc95b5" executionId="9e67e534-f2ef-4804-b7a9-2b364e5d826f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b4a6dfcd-c38b-dd98-1c29-5dbd658e3aa1" executionId="fbce3d16-e3cd-43b9-afa9-bb8fa7989f27" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6e453d9f-a672-fdd2-3427-248884923fec" executionId="fae50b1c-5dec-4bcb-8940-2aa3a540e439" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="65294ac0-0c7b-9724-5e2f-6be1c12e90c0" executionId="a2f041e4-170e-4c5b-8fdb-52dff9411c4a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0d69e9f1-b97b-1746-719a-7040ab152ff8" executionId="eb9b7d06-e3fb-4442-a735-7a5804750618" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ea40d203-9de7-a14c-56d9-f3a7165159da" executionId="d4100513-af90-4623-8631-e0b4fcd2a3b4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="29" executed="29" passed="1" failed="28" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.27]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.40]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.40]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.40]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.40]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.40]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.40]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.41]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.41]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.41]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.41]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.41]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.41]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.43]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.43]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.43]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.43]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.43]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.43]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.43]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.43]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.43]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(226,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(290,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(290,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(290,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(290,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(290,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(255,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(255,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(255,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(255,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(255,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.44]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.44]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.44]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(255,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(307,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(String status)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.57]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.57]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(307,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(String status)&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.58]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9685189+09:00">
+        <Text>[xUnit.net 00:00:00.39]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "turns", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9861596+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "model", nested: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9866469+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "approvalsReviewer", nested: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9868967+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "projectId", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9872613+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cwd", nested: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9874229+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "source", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9875599+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "modelProvider", nested: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9876976+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cliVersion", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:46.9879063+09:00">
+        <Text>[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cwd", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0326739+09:00">
+        <Text>[xUnit.net 00:00:00.43]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "status", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0327140+09:00">
+        <Text>[xUnit.net 00:00:00.43]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "modelProvider", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0327360+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "updatedAt", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0327576+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "createdAt", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0327783+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "sessionId", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0328057+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "preview", nested: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0328267+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "\"1\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0328484+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "1.5") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0328692+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0336933+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "null") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0337204+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "9223372036854775808") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0337407+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "source", value: "\"unknown-source\"") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0337612+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "createdAt", value: "9223372036854775808") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0337815+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "status", value: "{\"type\":\"active\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0337986+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "turns", value: "[{\"id\":\"old-turn\",\"items\":[],\"status\":\"co"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0338157+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "updatedAt", value: "1.5") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.0338312+09:00">
+        <Text>[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "turns", value: "[null]") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.1462606+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: "interrupted") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:30:47.1462866+09:00">
+        <Text>[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: "completed") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,93 @@
+{
+  "rid": "win-x64",
+  "head": "6067a4fef2b892712be614674fa07801c35bce18",
+  "sdk": "10.0.401",
+  "guaVersion": "1.1.1",
+  "guaCommit": "88f5dca4aa97c5d5187ab66ea4416377f3affc96",
+  "archiveSha256": "78C49BE47FBEA7D267BE7E2E2AFA8331D7810AA2C9E5C4992F7AE91100A7C478",
+  "checks": [
+    {
+      "command": "Gua.Playtest.Cli.exe",
+      "arguments": [
+        "validate",
+        "--gua-schema",
+        "selector.schema.json",
+        "C:\\Users\\testk\\Documents\\Codex\\2026-10-07\\task-4\\issue-13\\artifacts\\smoke-win-x64-5853023f2721447598c0bbb9e3238266\\valid.json"
+      ],
+      "exit": 0,
+      "code": "gua-schema-valid"
+    },
+    {
+      "command": "Gua.Playtest.Cli.exe",
+      "arguments": [
+        "validate",
+        "--gua-schema",
+        "selector.schema.json",
+        "C:\\Users\\testk\\Documents\\Codex\\2026-10-07\\task-4\\issue-13\\artifacts\\smoke-win-x64-5853023f2721447598c0bbb9e3238266\\invalid.json"
+      ],
+      "exit": 2,
+      "code": "gua-schema-invalid"
+    },
+    {
+      "command": "Gua.Playtest.Cli.exe",
+      "arguments": [
+        "doctor",
+        "--native"
+      ],
+      "exit": 0,
+      "code": "native-package-compatible"
+    },
+    {
+      "command": "Gua.Playtest.Cli.exe",
+      "arguments": [
+        "validate",
+        "--gua-schema",
+        "selector.schema.json",
+        "C:\\Users\\testk\\Documents\\Codex\\2026-10-07\\task-4\\issue-13\\artifacts\\smoke-win-x64-5853023f2721447598c0bbb9e3238266\\valid.json"
+      ],
+      "exit": 0,
+      "code": "gua-schema-valid"
+    },
+    {
+      "command": "Gua.Playtest.Cli.exe",
+      "arguments": [
+        "doctor",
+        "--native"
+      ],
+      "exit": 2,
+      "code": "native-package-unavailable-or-incompatible"
+    },
+    {
+      "command": "gua-playtest.exe",
+      "arguments": [
+        "validate",
+        "--gua-schema",
+        "selector.schema.json",
+        "C:\\Users\\testk\\Documents\\Codex\\2026-10-07\\task-4\\issue-13\\artifacts\\smoke-win-x64-5853023f2721447598c0bbb9e3238266\\valid.json"
+      ],
+      "exit": 0,
+      "code": "gua-schema-valid"
+    },
+    {
+      "command": "gua-playtest.exe",
+      "arguments": [
+        "validate",
+        "--gua-schema",
+        "selector.schema.json",
+        "C:\\Users\\testk\\Documents\\Codex\\2026-10-07\\task-4\\issue-13\\artifacts\\smoke-win-x64-5853023f2721447598c0bbb9e3238266\\invalid.json"
+      ],
+      "exit": 2,
+      "code": "gua-schema-invalid"
+    },
+    {
+      "command": "gua-playtest.exe",
+      "arguments": [
+        "doctor",
+        "--native"
+      ],
+      "exit": 0,
+      "code": "native-package-compatible"
+    }
+  ],
+  "scope": "Package core/runtime load and offline validation; no engine, bridge, Scenario or Codex execution."
+}

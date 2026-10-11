@@ -1,0 +1,83 @@
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.33]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "42") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"agentMessage\"}") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{}") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"reasoning\",\"summary\":["···) [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"agentMessage\",\"text\":1"···) [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"commandExecution\",\"comm"···) [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"unknown\"}") [FAIL]
+[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "null") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "42") [41 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"agentMessage\"}") [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"reasoning\",\"summary\":["···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"agentMessage\",\"text\":1"···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"commandExecution\",\"comm"···) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"unknown\"}") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "null") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   UsageLimit
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\codex-review-followup\pre-fix-items\testk_DESKTOP-3CJOU9S_2026-10-11_07_15_55_net10.0.trx
+
+失敗!   -失敗:     8、合格:     0、スキップ:     0、合計:     8、期間: 65 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

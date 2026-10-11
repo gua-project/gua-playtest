@@ -1,0 +1,138 @@
+{
+  "testedBase": "7457ed4dfb5ecea139824b2d557add99166ab5f2",
+  "mergedMain": "fd612b255e2764e8f8f0dc9a23065dfe5b51bce8",
+  "originalBase": "0b77154dbf35f35d6ae58811d8d8e6800deb2baa",
+  "environment": "Windows 10.0.26300 win-x64 .NET SDK 10.0.401",
+  "utcDate": "2026-10-10",
+  "hostTimezone": "UTC+09:00",
+  "sourceSnapshot": [
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexProtocolBackend.cs",
+      "gitBlobSha1": "a7cd67a0086395cb4a15678b2d0783500e604637"
+    },
+    {
+      "file": "tests/Gua.Playtest.Foundation.Tests/CodexProtocolTests.cs",
+      "gitBlobSha1": "fcc07dee87c3e59fa590f167cd891aee8b1b0f78"
+    },
+    {
+      "file": "src/Gua.Playtest.Runner/Execution/RunExecutor.cs",
+      "gitBlobSha1": "7d177b74282aef7cd414aa3d8d45457a0470d919"
+    },
+    {
+      "file": "src/Gua.Playtest.Runner/Replay/ReplayDriver.cs",
+      "gitBlobSha1": "6429646ce48785a57ee49172c2002a4c48da53eb"
+    },
+    {
+      "file": "src/Gua.Playtest.Runner/Replay/ReplayCalls.cs",
+      "gitBlobSha1": "1f8ee76fb040732062afa7b4d7624c54134c6f91"
+    },
+    {
+      "file": "src/Gua.Playtest.Core/ReplayPorts.cs",
+      "gitBlobSha1": "d1fe601eba1ab1da0a3cbcab9f28afb5e5159638"
+    },
+    {
+      "file": "src/Gua.Playtest.GuaIntegration/GuaUiReplay.cs",
+      "gitBlobSha1": "c2c5bc042d52618cf1df9a3171b24baa6f4db3ac"
+    },
+    {
+      "file": "src/Gua.Playtest.GuaIntegration/GuaTimedReplay.cs",
+      "gitBlobSha1": "992f660a9293896fae5d83102d3ffca8a8efc7c6"
+    },
+    {
+      "file": "src/Gua.Playtest.GuaIntegration/Gua.Playtest.GuaIntegration.csproj",
+      "gitBlobSha1": "ab80e69278e75f073da46e4d24cd08d0bdddcf0d"
+    },
+    {
+      "file": "src/Gua.Playtest.GuaIntegration/packages.lock.json",
+      "gitBlobSha1": "a9b474cb0eb4b54cabfb8c7f5c10d2e36c96c114"
+    },
+    {
+      "file": "src/Gua.Playtest.Cli/packages.lock.json",
+      "gitBlobSha1": "50b5e39ec9249ef684577d11f6864529d18e6324"
+    },
+    {
+      "file": "tests/Gua.Playtest.Foundation.Tests/ReplayTests.cs",
+      "gitBlobSha1": "54c673ae2c9e228ec84ca90e8f3ddd8e850772a1"
+    },
+    {
+      "file": "tests/Gua.Playtest.Bridge.Tests/ReplayAdapterTests.cs",
+      "gitBlobSha1": "8dac5ed3430cbe19e66ed255213bf01f89eb68f4"
+    },
+    {
+      "file": "scripts/check-boundaries.ps1",
+      "gitBlobSha1": "90401bfbcf791cf38fa088cced1c26b010b72697"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "boundaries.log",
+      "bytes": 42,
+      "sha256": "b9fb0accb01765f19c5ae3d6be502172567313a025b9a1b5cf8f42c90c4ca162"
+    },
+    {
+      "file": "bridge.trx",
+      "bytes": 248814,
+      "sha256": "74cd0ab80eb6f1d8002e33382bd6b4f1c75c7f2400b99f5cd127cf45f5ea5ca0"
+    },
+    {
+      "file": "build.log",
+      "bytes": 1432,
+      "sha256": "8fbf11f464ebb73031355aab47526ec3f40a185ea2524c631e1712d25c2892fb"
+    },
+    {
+      "file": "contracts-evidence.json",
+      "bytes": 2832,
+      "sha256": "5fdc11968cb558a048804e0721f4a86585ef87da4fc3fd336576c210af0cdf36"
+    },
+    {
+      "file": "contracts.log",
+      "bytes": 1081,
+      "sha256": "5cbcd6a7e1a3373185d8866637cd199e37079830dce60f4c232aa81d95103b0c"
+    },
+    {
+      "file": "contracts.trx",
+      "bytes": 862636,
+      "sha256": "507190ec3a10bfbbdcf8562a682eaa8325924cf30f4c5c627d8a8d012caa200b"
+    },
+    {
+      "file": "focused.log",
+      "bytes": 2155,
+      "sha256": "05029c2f5ecb25926644d84c6c86edba0a2ebe47b6316ac912458d1f257c3381"
+    },
+    {
+      "file": "focused.trx",
+      "bytes": 574681,
+      "sha256": "b332800d3b6315a19c7b651877c343b1b3a2b56024f2dc1409f1dc1cbf6b2cfc"
+    },
+    {
+      "file": "foundation.trx",
+      "bytes": 1922069,
+      "sha256": "71ac9b87e1d3acf6685ace42f9011535c8e39ff2538b4f707c2f73c1a6c504c8"
+    },
+    {
+      "file": "pack.log",
+      "bytes": 1380,
+      "sha256": "b349ce70437c8c7a0658bf77ac077fe559af0e4ba5db708d8a5644968730503b"
+    },
+    {
+      "file": "package-evidence.json",
+      "bytes": 2825,
+      "sha256": "de0524657ae133546db329a135fa49e4b7c7fbd573ce6cc9f42af30738f50afd"
+    },
+    {
+      "file": "package.log",
+      "bytes": 4257,
+      "sha256": "7e3eb112c7ce44bcf308fae09fd46e7e19cee7b830fad90f2cd1bd344fcda9fb"
+    },
+    {
+      "file": "restore.log",
+      "bytes": 1265,
+      "sha256": "e6212b3667c4cd93747b709440cb1bb160fdea3be90e4b7a03f89eb8de250269"
+    },
+    {
+      "file": "tests.log",
+      "bytes": 1727,
+      "sha256": "e7727875337d6fd0656462ba4959ebdbded3894868c54bd3c31046c4ad51d1e6"
+    }
+  ]
+}

@@ -1,0 +1,379 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="0995bcc2-801c-4884-82d0-097e9db841c0" name="testk@DESKTOP-3CJOU9S 2026-10-11 09:00:01" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T09:00:01.9317052+09:00" queuing="2026-10-11T09:00:01.9317059+09:00" start="2026-10-11T09:00:00.7156849+09:00" finish="2026-10-11T09:00:01.9760224+09:00" />
+  <TestSettings name="default" id="9f0109e2-da96-4433-a706-d6d12e43c539">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_09_00_01" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="967f2551-16c7-426f-922a-e52b1d790a0c" testId="49aefd38-107a-3037-1b90-b451460f2f8f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampOverflow&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0034359" startTime="2026-10-11T09:00:01.9136664+09:00" endTime="2026-10-11T09:00:01.9136858+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="967f2551-16c7-426f-922a-e52b1d790a0c">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7181337f-70fb-487a-8980-59360a5b42ae" testId="d309637b-0e51-be2f-b31a-56ecd09cc20d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;matching&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0209753" startTime="2026-10-11T09:00:01.8125935+09:00" endTime="2026-10-11T09:00:01.8336037+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7181337f-70fb-487a-8980-59360a5b42ae" />
+    <UnitTestResult executionId="25788cf6-9c22-4c2a-b0cf-959d9f1ec2fc" testId="ed5a1867-d976-9f5c-725a-31065749a30c" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;itemMissing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0066051" startTime="2026-10-11T09:00:01.8847469+09:00" endTime="2026-10-11T09:00:01.8905099+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="25788cf6-9c22-4c2a-b0cf-959d9f1ec2fc">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="eb5fcb53-9d98-4400-821f-35f0316f4498" testId="2beb1dd6-1cbb-39f8-9e08-14fb584ddc20" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;extra&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2376256" startTime="2026-10-11T09:00:01.5501989+09:00" endTime="2026-10-11T09:00:01.7984505+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="eb5fcb53-9d98-4400-821f-35f0316f4498">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7c82c6d6-7a8f-41ea-b98f-93614ce561b9" testId="45024cdd-3b82-fb68-cc5d-de9e90384ecb" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;matching&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0118879" startTime="2026-10-11T09:00:01.8397553+09:00" endTime="2026-10-11T09:00:01.8509745+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7c82c6d6-7a8f-41ea-b98f-93614ce561b9" />
+    <UnitTestResult executionId="e103fa15-328b-4d05-85a4-2bd221806a4c" testId="9f2243e0-4352-e795-e570-70230ce4a527" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;valid&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0071937" startTime="2026-10-11T09:00:01.9138934+09:00" endTime="2026-10-11T09:00:01.9193598+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e103fa15-328b-4d05-85a4-2bd221806a4c" />
+    <UnitTestResult executionId="9ff0d3f2-5008-4118-8b61-1399e732c714" testId="8d934e24-db87-e6da-4908-d45f2092a412" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;extra&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0078065" startTime="2026-10-11T09:00:01.8082491+09:00" endTime="2026-10-11T09:00:01.8121902+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9ff0d3f2-5008-4118-8b61-1399e732c714">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="db2bacbb-3b10-4b03-aac0-684950d629d4" testId="78f288b5-3abd-3bb6-6a42-e6887945a98d" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampNull&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0036869" startTime="2026-10-11T09:00:01.9131896+09:00" endTime="2026-10-11T09:00:01.9132117+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="db2bacbb-3b10-4b03-aac0-684950d629d4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="460c5b9f-86a7-4935-b1c4-ae5331afc6f7" testId="96a53cf5-8959-ecb4-afe0-2cebc893332e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;text&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0271063" startTime="2026-10-11T09:00:01.8510706+09:00" endTime="2026-10-11T09:00:01.8781711+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="460c5b9f-86a7-4935-b1c4-ae5331afc6f7" />
+    <UnitTestResult executionId="0f9bc0c3-fd44-4534-92b7-c5aff176e002" testId="ddb670cf-cd8c-bc71-902f-a435477ba6cd" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: False)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0034862" startTime="2026-10-11T09:00:01.9208762+09:00" endTime="2026-10-11T09:00:01.9240956+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0f9bc0c3-fd44-4534-92b7-c5aff176e002">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 443&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="afcb7382-8add-4d4e-95fb-2c5cbe8bb50d" testId="1d62a347-4dbd-54bc-3696-b4d340e84b6f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampMissing&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0038456" startTime="2026-10-11T09:00:01.9123515+09:00" endTime="2026-10-11T09:00:01.9123897+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="afcb7382-8add-4d4e-95fb-2c5cbe8bb50d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ce261331-52a0-477b-b723-59a967b4358e" testId="795a04fe-d6ea-5d09-3207-dfda7d4d1041" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;identity&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0055024" startTime="2026-10-11T09:00:01.8344104+09:00" endTime="2026-10-11T09:00:01.8390130+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ce261331-52a0-477b-b723-59a967b4358e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   ConnectionFailure</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ff4cf5b0-d6fe-4b27-a199-c7cca5164fd0" testId="c066b509-141f-c7e6-e702-3b6d69f430ec" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;itemIncomplete&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0061772" startTime="2026-10-11T09:00:01.9134351+09:00" endTime="2026-10-11T09:00:01.9134558+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ff4cf5b0-d6fe-4b27-a199-c7cca5164fd0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="80093954-515c-430c-8da7-669536bb855f" testId="b433850e-e45e-9fd0-a890-a2daabfac0fd" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampString&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0035138" startTime="2026-10-11T09:00:01.9129296+09:00" endTime="2026-10-11T09:00:01.9129541+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="80093954-515c-430c-8da7-669536bb855f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 475&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="57842cb3-7b38-45a0-943a-80b82950bf37" testId="0e46afa2-c31e-d652-7de5-b48f8b6a9fa4" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: True)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0009558" startTime="2026-10-11T09:00:01.9194656+09:00" endTime="2026-10-11T09:00:01.9204897+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="57842cb3-7b38-45a0-943a-80b82950bf37">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: ConnectionFailure&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 443&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7041178b-be81-4fa5-b45a-02b1be7662d9" testId="280339a2-9d27-04c3-3e71-8c6e6b26d2f0" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;identity&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0058350" startTime="2026-10-11T09:00:01.8074680+09:00" endTime="2026-10-11T09:00:01.8075293+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7041178b-be81-4fa5-b45a-02b1be7662d9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="180fe4de-86bf-4f4e-ae1e-1ccbe095ca89" testId="2f615b60-dda8-9d13-2ea7-181e8bee01b0" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;text&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0051348" startTime="2026-10-11T09:00:01.8782902+09:00" endTime="2026-10-11T09:00:01.8835078+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="180fe4de-86bf-4f4e-ae1e-1ccbe095ca89">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 504&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampNull&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="78f288b5-3abd-3bb6-6a42-e6887945a98d">
+      <Execution id="db2bacbb-3b10-4b03-aac0-684950d629d4" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;matching&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="d309637b-0e51-be2f-b31a-56ecd09cc20d">
+      <Execution id="7181337f-70fb-487a-8980-59360a5b42ae" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;identity&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="280339a2-9d27-04c3-3e71-8c6e6b26d2f0">
+      <Execution id="7041178b-be81-4fa5-b45a-02b1be7662d9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;itemMissing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ed5a1867-d976-9f5c-725a-31065749a30c">
+      <Execution id="25788cf6-9c22-4c2a-b0cf-959d9f1ec2fc" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;matching&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="45024cdd-3b82-fb68-cc5d-de9e90384ecb">
+      <Execution id="7c82c6d6-7a8f-41ea-b98f-93614ce561b9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;extra&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="2beb1dd6-1cbb-39f8-9e08-14fb584ddc20">
+      <Execution id="eb5fcb53-9d98-4400-821f-35f0316f4498" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: True)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="0e46afa2-c31e-d652-7de5-b48f8b6a9fa4">
+      <Execution id="57842cb3-7b38-45a0-943a-80b82950bf37" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;text&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="2f615b60-dda8-9d13-2ea7-181e8bee01b0">
+      <Execution id="180fe4de-86bf-4f4e-ae1e-1ccbe095ca89" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;text&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="96a53cf5-8959-ecb4-afe0-2cebc893332e">
+      <Execution id="460c5b9f-86a7-4935-b1c4-ae5331afc6f7" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampOverflow&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="49aefd38-107a-3037-1b90-b451460f2f8f">
+      <Execution id="967f2551-16c7-426f-922a-e52b1d790a0c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampString&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="b433850e-e45e-9fd0-a890-a2daabfac0fd">
+      <Execution id="80093954-515c-430c-8da7-669536bb855f" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;valid&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="9f2243e0-4352-e795-e570-70230ce4a527">
+      <Execution id="e103fa15-328b-4d05-85a4-2bd221806a4c" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: False)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ddb670cf-cd8c-bc71-902f-a435477ba6cd">
+      <Execution id="0f9bc0c3-fd44-4534-92b7-c5aff176e002" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;full&quot;, variant: &quot;extra&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="8d934e24-db87-e6da-4908-d45f2092a412">
+      <Execution id="9ff0d3f2-5008-4118-8b61-1399e732c714" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;timestampMissing&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="1d62a347-4dbd-54bc-3696-b4d340e84b6f">
+      <Execution id="afcb7382-8add-4d4e-95fb-2c5cbe8bb50d" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: &quot;summary&quot;, variant: &quot;identity&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="795a04fe-d6ea-5d09-3207-dfda7d4d1041">
+      <Execution id="ce261331-52a0-477b-b723-59a967b4358e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="CanonicalFinalItemsMustMatchEveryTerminalView" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: &quot;itemIncomplete&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c066b509-141f-c7e6-e702-3b6d69f430ec">
+      <Execution id="ff4cf5b0-d6fe-4b27-a199-c7cca5164fd0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="49aefd38-107a-3037-1b90-b451460f2f8f" executionId="967f2551-16c7-426f-922a-e52b1d790a0c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d309637b-0e51-be2f-b31a-56ecd09cc20d" executionId="7181337f-70fb-487a-8980-59360a5b42ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ed5a1867-d976-9f5c-725a-31065749a30c" executionId="25788cf6-9c22-4c2a-b0cf-959d9f1ec2fc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2beb1dd6-1cbb-39f8-9e08-14fb584ddc20" executionId="eb5fcb53-9d98-4400-821f-35f0316f4498" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="45024cdd-3b82-fb68-cc5d-de9e90384ecb" executionId="7c82c6d6-7a8f-41ea-b98f-93614ce561b9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9f2243e0-4352-e795-e570-70230ce4a527" executionId="e103fa15-328b-4d05-85a4-2bd221806a4c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8d934e24-db87-e6da-4908-d45f2092a412" executionId="9ff0d3f2-5008-4118-8b61-1399e732c714" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="78f288b5-3abd-3bb6-6a42-e6887945a98d" executionId="db2bacbb-3b10-4b03-aac0-684950d629d4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="96a53cf5-8959-ecb4-afe0-2cebc893332e" executionId="460c5b9f-86a7-4935-b1c4-ae5331afc6f7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ddb670cf-cd8c-bc71-902f-a435477ba6cd" executionId="0f9bc0c3-fd44-4534-92b7-c5aff176e002" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d62a347-4dbd-54bc-3696-b4d340e84b6f" executionId="afcb7382-8add-4d4e-95fb-2c5cbe8bb50d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="795a04fe-d6ea-5d09-3207-dfda7d4d1041" executionId="ce261331-52a0-477b-b723-59a967b4358e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c066b509-141f-c7e6-e702-3b6d69f430ec" executionId="ff4cf5b0-d6fe-4b27-a199-c7cca5164fd0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b433850e-e45e-9fd0-a890-a2daabfac0fd" executionId="80093954-515c-430c-8da7-669536bb855f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0e46afa2-c31e-d652-7de5-b48f8b6a9fa4" executionId="57842cb3-7b38-45a0-943a-80b82950bf37" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="280339a2-9d27-04c3-3e71-8c6e6b26d2f0" executionId="7041178b-be81-4fa5-b45a-02b1be7662d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2f615b60-dda8-9d13-2ea7-181e8bee01b0" executionId="180fe4de-86bf-4f4e-ae1e-1ccbe095ca89" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="17" executed="17" passed="4" failed="13" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.23]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.37]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.39]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.66]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.66]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.66]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.66]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(504,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant)&#xD;
+[xUnit.net 00:00:00.66]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.66]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.66]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.66]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.66]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(504,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant)&#xD;
+[xUnit.net 00:00:00.66]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.67]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.67]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.67]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.67]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(504,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant)&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.69]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.70]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.70]       Actual:   ConnectionFailure&#xD;
+[xUnit.net 00:00:00.70]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.70]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(504,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant)&#xD;
+[xUnit.net 00:00:00.70]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.74]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.74]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.74]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.74]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.74]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(504,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(String view, String variant)&#xD;
+[xUnit.net 00:00:00.74]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.75]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.75]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.75]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.75]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.75]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(475,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant)&#xD;
+[xUnit.net 00:00:00.75]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.77]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.77]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.77]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.77]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.77]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(475,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant)&#xD;
+[xUnit.net 00:00:00.77]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.77]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.77]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.77]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.77]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.77]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(475,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant)&#xD;
+[xUnit.net 00:00:00.77]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.77]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.77]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.77]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.77]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.77]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(475,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant)&#xD;
+[xUnit.net 00:00:00.77]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.77]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.77]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.77]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.77]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.77]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(475,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant)&#xD;
+[xUnit.net 00:00:00.77]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.77]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.77]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.77]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.77]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.77]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(475,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(String variant)&#xD;
+[xUnit.net 00:00:00.77]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.78]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.78]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.78]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.78]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.78]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(443,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.78]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.78]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.78]       Expected: ConnectionFailure&#xD;
+[xUnit.net 00:00:00.78]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.78]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.78]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(443,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(Boolean beforeResponse)&#xD;
+[xUnit.net 00:00:00.78]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.78]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.8007729+09:00">
+        <Text>[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "summary", variant: "extra") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.8078722+09:00">
+        <Text>[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "identity") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.8123885+09:00">
+        <Text>[xUnit.net 00:00:00.67]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "extra") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.8394001+09:00">
+        <Text>[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "summary", variant: "identity") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.8839210+09:00">
+        <Text>[xUnit.net 00:00:00.74]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalFinalItemsMustMatchEveryTerminalView(view: "full", variant: "text") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.8908091+09:00">
+        <Text>[xUnit.net 00:00:00.75]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "itemMissing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9367255+09:00">
+        <Text>[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampMissing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9367471+09:00">
+        <Text>[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampString") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9367699+09:00">
+        <Text>[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampNull") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9367884+09:00">
+        <Text>[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "itemIncomplete") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9368103+09:00">
+        <Text>[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ItemStartedEnvelopeIsValidatedBeforeAndAfterResponse(variant: "timestampOverflow") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9368284+09:00">
+        <Text>[xUnit.net 00:00:00.78]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T09:00:01.9368445+09:00">
+        <Text>[xUnit.net 00:00:00.78]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedMcpStartupIsRefusedBeforeAndAfterThreadResponse(beforeResponse: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

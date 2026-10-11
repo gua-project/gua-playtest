@@ -1,0 +1,227 @@
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.54]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "id", value: "\"other-turn\"") [FAIL]
+[xUnit.net 00:00:00.54]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "status", value: "missing") [FAIL]
+[xUnit.net 00:00:00.54]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "id", value: "missing") [FAIL]
+[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "items", value: "[null]") [FAIL]
+[xUnit.net 00:00:00.55]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "status", value: "\"completed\"") [FAIL]
+[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "items", value: "missing") [FAIL]
+[xUnit.net 00:00:00.56]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: "item/agentMessage/delta") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: "turn/plan/updated") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformOs") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "id", value: "\"other-turn\"") [247 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "status", value: "missing") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "id", value: "missing") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "items", value: "[null]") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "status", value: "\"completed\"") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(field: "items", value: "missing") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.TurnStartedUsesSameShapeAndIdentityBeforeAndAfterRpcResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 332
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: "item/agentMessage/delta") [8 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 353
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(method: "turn/plan/updated") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NeighboringPostResponseStreamNoticesRequireTurnCorrelation(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 353
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformOs") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 436
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.59]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "codexHome") [FAIL]
+[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformFamily") [FAIL]
+[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "missing") [FAIL]
+[xUnit.net 00:00:00.60]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "{\"type\":\"unknown\"}") [FAIL]
+[xUnit.net 00:00:00.61]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "threadId", value: "missing") [FAIL]
+[xUnit.net 00:00:00.62]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "{\"type\":\"active\"}") [FAIL]
+[xUnit.net 00:00:00.63]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":null,\"params\":{}}") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "codexHome") [16 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 436
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformFamily") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 436
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "missing") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "{\"type\":\"unknown\"}") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "threadId", value: "missing") [6 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(field: "status", value: "{\"type\":\"active\"}") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.ThreadStatusNoticesUseSameValidationBeforeAndAfterResponse(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 373
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":null,\"params\":{}}") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 855
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":\"\",\"params\":{}}") [FAIL]
+[xUnit.net 00:00:00.66]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":\" \",\"params\":{}}") [FAIL]
+[xUnit.net 00:00:00.67]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"0.150.10\"") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":\"\",\"params\":{}}") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 855
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(frame: "{\"method\":\" \",\"params\":{}}") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.MalformedDuplicateStaleOrCapabilityRequestClosesSession(String frame) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 855
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"0.150.10\"") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"systemError\"}") [FAIL]
+[xUnit.net 00:00:00.68]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"0.149.0\"") [FAIL]
+[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"active\",\"activeFlags\":[]}") [FAIL]
+[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"notLoaded\"}") [FAIL]
+[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"\"") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"systemError\"}") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"0.149.0\"") [5 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"active\",\"activeFlags\":[]}") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "status", value: "{\"type\":\"notLoaded\"}") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(field: "cliVersion", value: "\"\"") [4 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.FreshThreadMustBeIdleAndMatchSupportedCliBeforeInput(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 399
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\codex-review-followup\pass4-pre-fix\testk_DESKTOP-3CJOU9S_2026-10-11_07_46_08_net10.0.trx
+
+失敗!   -失敗:    24、合格:     8、スキップ:     0、合計:    32、期間: 418 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

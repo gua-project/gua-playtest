@@ -1,0 +1,142 @@
+{
+  "testedBase": "2abc8e809785e718d7970d0d93ff3410ebbdd28b",
+  "environment": "Windows 10.0.26300 win-x64 .NET SDK 10.0.401",
+  "utcDate": "2026-10-10",
+  "hostTimezone": "UTC+09:00",
+  "sourceSnapshot": [
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexProtocolBackend.cs",
+      "gitBlobSha1": "724ad63ba73aa5b30ebb8d739227c88710324a52"
+    },
+    {
+      "file": "tests/Gua.Playtest.Foundation.Tests/CodexProtocolTests.cs",
+      "gitBlobSha1": "6193689c68341c851bb4a5427c2782173615bcbe"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexItemSchema.cs",
+      "gitBlobSha1": "0d4e32b71239912d714499a11deca19589d9a29a"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/Gua.Playtest.Planners.Codex.csproj",
+      "gitBlobSha1": "a54decf35b15c663d8b1506c88a493365d575c3f"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/raw-response-completed.schema.json",
+      "gitBlobSha1": "77f9fbb057220bfd023f266f095fc536587c68e8"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/raw-response-item-completed.schema.json",
+      "gitBlobSha1": "9b1afc5ea0493ea5ae7b9c0d15dbabce7d933ebd"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/model-verification.schema.json",
+      "gitBlobSha1": "aea6b628eb3784ee84c15d5287866e4de64b1535"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/model-safety-buffering.schema.json",
+      "gitBlobSha1": "ab542b63995821377a3fe4b45ae3e6689c4c0546"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "boundaries.log",
+      "bytes": 42,
+      "sha256": "b9fb0accb01765f19c5ae3d6be502172567313a025b9a1b5cf8f42c90c4ca162"
+    },
+    {
+      "file": "bridge.trx",
+      "bytes": 214092,
+      "sha256": "e1f04b6a3733836a02c5bf46c84745be45b9db63ef2e7485828a4472e1feb058"
+    },
+    {
+      "file": "build.log",
+      "bytes": 1432,
+      "sha256": "4ac4453a2ce9475cfdb3a16f2728d822e7e65856ccc73e3efecf3f4f74f0de05"
+    },
+    {
+      "file": "contracts-evidence.json",
+      "bytes": 2832,
+      "sha256": "1034c4c2a71522d37a2dcbaab44f2d49e171550dff2e02e469c77d08542b2cc9"
+    },
+    {
+      "file": "contracts.log",
+      "bytes": 1081,
+      "sha256": "56be4c83268adb0e98c12b55e40353faa9ee458318ddd4a435de666115db3c5a"
+    },
+    {
+      "file": "contracts.trx",
+      "bytes": 862636,
+      "sha256": "6c3d99395e23600603fe3cdc8e72ad5649afe8fd729fc8bb7d7ea83160d14cb3"
+    },
+    {
+      "file": "focused.log",
+      "bytes": 1798,
+      "sha256": "e219007efb5b3a57b0904d2f54e834e34bf617df30feb0a9fd07fb7a6fa06e7f"
+    },
+    {
+      "file": "focused.trx",
+      "bytes": 374311,
+      "sha256": "4415711877ccee7efca22966124e0d62b9d7fa9d1026846c49e125755f393f5a"
+    },
+    {
+      "file": "foundation.trx",
+      "bytes": 1804275,
+      "sha256": "6b4638d2b68a1a6f586f63a1589847fe3f0cdc1a9e32ec37c17eccfa3618e9a9"
+    },
+    {
+      "file": "initial-focused.log",
+      "bytes": 2433,
+      "sha256": "3bb0428a257d6c868a3a9f11406d5bba5deb813aa0aeb03a105cc1f0e908eeb5"
+    },
+    {
+      "file": "initial-focused.trx",
+      "bytes": 375838,
+      "sha256": "b21b728c91175d47420c2250b6dbf3850600300df21136914a0b4d462f604ae1"
+    },
+    {
+      "file": "initial-pre-fix.log",
+      "bytes": 8158,
+      "sha256": "fd7f19409c12e2fc6db6c7d74e9c58d61bf226e0d9169c7c83449528a07a5bfb"
+    },
+    {
+      "file": "initial-pre-fix.trx",
+      "bytes": 26724,
+      "sha256": "4661e9724fc5ba6a5281ff53e87c7b75eb99f9a53c1e8b70a8c7dc25372e31fc"
+    },
+    {
+      "file": "pack.log",
+      "bytes": 1380,
+      "sha256": "b349ce70437c8c7a0658bf77ac077fe559af0e4ba5db708d8a5644968730503b"
+    },
+    {
+      "file": "package-evidence.json",
+      "bytes": 2825,
+      "sha256": "157721636201e5f43ead2fab76167c6c6091720f5506fd14e0f5f8c3c79716f9"
+    },
+    {
+      "file": "package.log",
+      "bytes": 4257,
+      "sha256": "6c8320607b949dd3924ff33b6141800b24e18881e3b95f8372d60a434f9070e6"
+    },
+    {
+      "file": "pre-fix.log",
+      "bytes": 8301,
+      "sha256": "7cc47549946985463598a01bf241167e3e0b8f25d1f7c96cc767cd63b82293dc"
+    },
+    {
+      "file": "pre-fix.trx",
+      "bytes": 26724,
+      "sha256": "4770fdbe9484b07670bdcd47260faf66bb2fa3fb1c9eaca18c64f0553bf1f688"
+    },
+    {
+      "file": "restore.log",
+      "bytes": 1098,
+      "sha256": "3fa7c376d733025b1e51cccfe09ea69978ddee11aa186c3faf85a0f5d4f57a28"
+    },
+    {
+      "file": "tests.log",
+      "bytes": 1726,
+      "sha256": "732b0994a5c705361553b382659ef4ca40b107565cb68b3f185dd866481c69d1"
+    }
+  ]
+}
