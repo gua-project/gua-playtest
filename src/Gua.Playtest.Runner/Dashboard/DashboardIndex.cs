@@ -149,6 +149,18 @@ public sealed class DashboardIndex
             {
                 if (run.GetProperty("storageVersion").GetInt32() != 1) throw new InvalidDataException();
                 // #9 persistence envelope is deliberately not passed to RunDocument validation.
+                if (Text(run, "executionState") != "Preparing" || Text(run, "profile") is null)
+                    throw new InvalidDataException();
+                var settings = run.GetProperty("settings"); var versions = run.GetProperty("versions");
+                if (settings.ValueKind != JsonValueKind.Array || versions.ValueKind != JsonValueKind.Object)
+                    throw new InvalidDataException();
+                foreach (var setting in settings.EnumerateArray())
+                    if (Text(setting, "name") is null || Text(setting, "source") is null ||
+                        !setting.TryGetProperty("value", out var value) ||
+                        value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
+                // Sensitive setting/version values are explicitly null in legitimate sanitized storage.
+                foreach (var version in versions.EnumerateObject())
+                    if (version.Value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
                 if (run.TryGetProperty("identity", out var id)) identity = DecodeIdentity(id);
                 if (run.TryGetProperty("startedAt", out var at)) started = at.GetDateTimeOffset();
                 if (!run.TryGetProperty("inputs", out var inputs) || inputs.ValueKind != JsonValueKind.Array)

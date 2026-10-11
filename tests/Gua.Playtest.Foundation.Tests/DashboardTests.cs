@@ -925,5 +925,54 @@ public sealed class DashboardTests : IDisposable
         var snapshot = await new DashboardIndex(registry, [Path.Combine(directory, "runs")], [root]).ReadAsync();
         Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal(new[] { "s1", "s2" }, snapshot.Scenarios.Select(s => s.ScenarioId));
     }
+    [Theory]
+    [InlineData("profile")] [InlineData("settings")] [InlineData("versions")] [InlineData("executionState")]
+    public async Task Storage_required_fields_cannot_be_missing(string field)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+        json.Remove(field); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("profile", "null")] [InlineData("profile", "42")]
+    [InlineData("settings", "null")] [InlineData("settings", "{}")]
+    [InlineData("versions", "null")] [InlineData("versions", "[]")]
+    [InlineData("executionState", "null")] [InlineData("executionState", "1")]
+    [InlineData("executionState", "\"Completed\"")]
+    [InlineData("settings", "[null]")] [InlineData("settings", "[42]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"value\":\"v\",\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"value\":\"v\"}]")]
+    [InlineData("settings", "[{\"name\":null,\"value\":\"v\",\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"value\":42,\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"value\":\"v\",\"source\":null}]")]
+    [InlineData("versions", "{\"gua\":42}")] [InlineData("versions", "{\"gua\":{}}")]
+    public async Task Storage_required_fields_reject_corrupt_shapes(string field, string replacement)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+        json[field] = System.Text.Json.Nodes.JsonNode.Parse(replacement); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Storage_required_fields_accept_real_writer_redaction(bool redact)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new(redact ? ["private"] : [], redact ? ["token", "secretVersion"] : []));
+        Assert.True(store.BeginPreparation(new("private-profile",
+            [new("token", "private-value", "host"), new("normal", "private-value", "private-source")],
+            new Dictionary<string, string> { ["gua"] = "private-version", ["secretVersion"] = "private-value" }, [], Identity())).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Unsettled", run.State); Assert.Equal("buildA", run.BuildId);
+        using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(redact ? "" : "private-profile", saved.RootElement.GetProperty("profile").GetString());
+        Assert.Equal(redact ? JsonValueKind.Null : JsonValueKind.String, saved.RootElement.GetProperty("settings")[0].GetProperty("value").ValueKind);
+        Assert.Equal(redact ? JsonValueKind.Null : JsonValueKind.String, saved.RootElement.GetProperty("versions").GetProperty("secretVersion").ValueKind);
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
