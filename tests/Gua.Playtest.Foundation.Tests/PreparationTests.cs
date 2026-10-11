@@ -9,6 +9,13 @@ using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
 
+// Preparation isolates untrusted callbacks on workers under physical deadlines.
+// Other collections deliberately blocking those workers must not consume these
+// tests' bounded diagnostic/cleanup shares. In-test races remain concurrent.
+[CollectionDefinition("Preparation owner timing", DisableParallelization = true)]
+public sealed class PreparationOwnerTimingCollection { }
+
+[Collection("Preparation owner timing")]
 public sealed class PreparationTests
 {
     private sealed class Clock : IClock
@@ -1221,6 +1228,8 @@ public sealed class PreparationTests
         Assert.Contains(outcome.Events, item => item.Reason == RunReason.ExecutionError && item.Origin == RunOrigin.Host);
         Assert.Contains(outcome.Events, item => item.Reason == RunReason.GoalSatisfied);
         Assert.Contains(trace.Events, item => item.Code == PreparationCode.ProcessExited);
+        Assert.True(outcome.PostProcessingComplete,
+            $"Lifecycle diagnostics were not joined: {string.Join(",", outcome.PostProcessing.Select(item => item.Reason))}; workers={ThreadPool.ThreadCount} pending={ThreadPool.PendingWorkItemCount}");
         Assert.Equal(2, polls);
         if (dispatch) { Assert.Contains(outcome.Events, item => item.Reason == RunReason.ActionUnconfirmed); Assert.False(operation!.IsOpen); }
     }
