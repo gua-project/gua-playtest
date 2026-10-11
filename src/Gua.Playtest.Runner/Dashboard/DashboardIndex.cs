@@ -42,6 +42,7 @@ public sealed class DashboardIndex
     private long remaining;
     internal Func<string, IEnumerable<string>, CancellationToken, ValueTask<StaticValidationReport>> ValidateContract { get; init; }
         = static (path, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(path, token);
+    internal Action<string>? ReceiptFileOpened { get; init; }
     public DashboardIndex(string registry, IEnumerable<string> artifactRoots, IEnumerable<string> allowedRoots,
         DashboardLimits? limits = null)
     {
@@ -56,7 +57,8 @@ public sealed class DashboardIndex
     {
         // Build a separate bounded index so canceled or failed refreshes cannot invalidate
         // the report routes belonging to the last successfully returned snapshot.
-        var pending = new DashboardIndex(registry, roots, allowedRoots, limits) { ValidateContract = ValidateContract };
+        var pending = new DashboardIndex(registry, roots, allowedRoots, limits)
+        { ValidateContract = ValidateContract, ReceiptFileOpened = ReceiptFileOpened };
         var snapshot = await pending.ReadCoreAsync(token);
         token.ThrowIfCancellationRequested();
         reports = pending.reports;
@@ -151,6 +153,7 @@ public sealed class DashboardIndex
                 if (run.TryGetProperty("startedAt", out var at)) started = at.GetDateTimeOffset();
                 if (!run.TryGetProperty("inputs", out var inputs) || inputs.ValueKind != JsonValueKind.Array)
                     throw new InvalidDataException();
+                string? scenarioCopyHash = null;
                 foreach (var input in inputs.EnumerateArray())
                 {
                     if (Text(input, "name") is null || !Hash(Text(input, "sha256")) ||
@@ -159,6 +162,8 @@ public sealed class DashboardIndex
                         throw new InvalidDataException();
                     if (Text(copy, "kind") == "scenario")
                     {
+                        if (scenarioCopyHash is not null && scenarioCopyHash != Text(input, "sha256")) throw new InvalidDataException();
+                        scenarioCopyHash = Text(input, "sha256");
                         if (!copy.TryGetProperty("scenarioId", out var storedId) ||
                             storedId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) throw new InvalidDataException();
                         scenarioId = storedId.ValueKind == JsonValueKind.String ? storedId.GetString() : null;
@@ -205,16 +210,17 @@ public sealed class DashboardIndex
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (ReadFailure(e)) { state = e is FileNotFoundException ? "Unsettled" : "ResultUnreadable"; }
-        var details = ReadDetails(directory, key, result);
+        var details = ReadDetails(directory, key, result, token);
         if (metadataState == "RunUnreadable") { identity = null; scenarioId = null; state = "RunUnreadable"; }
         return new(key, runId, identity?.ScenarioId ?? scenarioId, identity?.DefinitionVersion, identity?.ScenarioSha256,
             identity?.BuildId, identity?.EnvironmentSha256, started, state, result, details);
     }
 
-    private IReadOnlyList<DashboardDetail> ReadDetails(string directory, string key, ResultDocument? result)
+    private IReadOnlyList<DashboardDetail> ReadDetails(string directory, string key, ResultDocument? result, CancellationToken token)
     {
         try
         {
+            token.ThrowIfCancellationRequested();
             using var doc = ReadJson(Path.Combine(directory, "completion.json"));
             var completion = doc.RootElement;
             if (Text(completion, "kind") != "playtestCompletionStorage" || completion.GetProperty("storageVersion").GetInt32() != 1 ||
@@ -233,6 +239,7 @@ public sealed class DashboardIndex
                 new[] { new ArtifactFileReference(r.FileName!, r.Bytes ?? 0, r.Sha256!) }.Concat(r.AdditionalFiles ?? [])).ToArray();
             foreach (var receipt in receipts)
             {
+                token.ThrowIfCancellationRequested();
                 if (!Enum.IsDefined(receipt.State) || !Enum.IsDefined(receipt.Kind)) throw new InvalidDataException();
                 if (receipt.State != ArtifactState.Saved)
                 {
@@ -243,13 +250,15 @@ public sealed class DashboardIndex
                 var entries = new[] { new ArtifactFileReference(receipt.FileName!, receipt.Bytes ?? 0, receipt.Sha256!) }
                     .Concat(receipt.AdditionalFiles ?? []).ToArray();
                 if (entries.Any(x => x is null)) throw new InvalidDataException();
-                foreach (var entry in entries) ValidateReference(entry);
+                foreach (var entry in entries) { token.ThrowIfCancellationRequested(); ValidateReference(entry); }
                 string? link = null;
                 try
                 {
                     foreach (var entry in entries)
                     {
+                        token.ThrowIfCancellationRequested();
                         using var stream = OpenReceipt(directory, entry); Charge(stream.Length);
+                        ReceiptFileOpened?.Invoke(entry.FileName);
                         var identity = FileIdentity.Read(stream.SafeFileHandle);
                         if (!identities.Add(identity)) throw new ReceiptAliasException();
                         if (Convert.ToHexStringLower(SHA256.HashData(stream)) != entry.Sha256) throw new InvalidDataException();

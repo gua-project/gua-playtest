@@ -809,5 +809,75 @@ public sealed class DashboardTests : IDisposable
         Assert.All(run.Details, d => Assert.Equal("CompletionUnreadable", d.State));
         Assert.Equal(ResultStatus.Passed, run.Result!.Status); // Preserve the independent saved result, do not regrade it.
     }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Conflicting_legacy_scenario_copies_never_choose_by_input_order(bool reverse)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        using var second = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s2.json")));
+        InputCopy[] inputs = [new("first", first.RootElement), new("second", second.RootElement)];
+        if (reverse) Array.Reverse(inputs);
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), inputs)).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Cancellation_between_receipt_files_stops_remaining_opens_and_preserves_live_routes()
+    {
+        var (_, html) = SavedReportAndRecording(); using var canceled = new CancellationTokenSource();
+        var stop = false; var opened = 0;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ReceiptFileOpened = _ => { if (stop) { opened++; canceled.Cancel(); } }
+        };
+        var route = Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report!;
+        stop = true;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
+        Assert.Equal(1, opened); Assert.Equal(html, index.ReadReport(route));
+    }
+    [Fact]
+    public async Task Identical_legacy_scenario_copies_are_unambiguous()
+    {
+        var store = Save(identity: false); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        var copy = json["inputs"]![0]!.DeepClone(); copy["name"] = "second";
+        json["inputs"]!.AsArray().Add(copy); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Equal("s1", run.ScenarioId); Assert.Null(run.BuildId);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Case_distinct_scenario_files_remain_distinct_fixed_references(bool ownerCase)
+    {
+        var directory = Path.Combine(root, "case-files"); Directory.CreateDirectory(directory);
+        if (OperatingSystem.IsWindows())
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", directory, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var firstName = ownerCase ? "REGISTRY.json" : "case.json"; var secondName = ownerCase ? "other.json" : "CASE.json";
+        File.Copy(Path.Combine(root, "s1.json"), Path.Combine(directory, firstName));
+        if (File.Exists(Path.Combine(directory, ownerCase ? "registry.json" : secondName)))
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(directory, firstName)), File.ReadAllBytes(Path.Combine(directory, ownerCase ? "registry.json" : secondName)));
+            return; // This volume cannot represent two physical files with these spellings.
+        }
+        File.Copy(Path.Combine(root, "s2.json"), Path.Combine(directory, secondName));
+        var registry = Path.Combine(directory, "registry.json"); Directory.CreateDirectory(Path.Combine(directory, "runs"));
+        var firstHash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, firstName))));
+        var secondHash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, secondName))));
+        File.WriteAllText(registry, ContractJson.Serialize(new ScenarioRegistryDocument("case-registry",
+            [new("s1", "v1", new(firstName, firstHash)), new("s2", "v1", new(secondName, secondHash))], ["runs"])));
+        var validation = await new StaticContractValidator([root]).ValidateFileAsync(registry);
+        Assert.Equal("Valid", validation.Code); Assert.Equal(3, validation.Files.Count);
+        var snapshot = await new DashboardIndex(registry, [Path.Combine(directory, "runs")], [root]).ReadAsync();
+        Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal(new[] { "s1", "s2" }, snapshot.Scenarios.Select(s => s.ScenarioId));
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
