@@ -48,16 +48,17 @@ persistence succeed, following `RunOutcome.PostProcessingComplete`. Real cleanup
 failures remain disqualifying. Evidence preserves candidate-relative paths,
 including subdirectories, and rechecks them with the retained hashes.
 
-`PlanCommand.ExecuteAsync` supplies a separate CLI handler. The shared composition
-passes its secret policy and dispatches these exact forms:
+`PlanCommand.ExecuteAsync` supplies a standalone handler for host integration.
+The packaged CLI currently dispatches neither `plan` nor `replay`. The shared
+composition must pass its secret policy and connect these handler forms:
 
 ```text
 plan create --managed-root <root> --allow-root <input-root> --scenario <file> --recording <file> --timing <recorded|conditionSynchronized>
 plan accept --managed-root <root> --plan <managed-plan.json> --trial <trial-id> --approve --approve-expectations
 ```
 
-The Replay command checks `IsAcceptedAsync`; an unaccepted candidate requires
-explicit `--allow-candidate` and retains all normal host safety limits. It persists
-its trial through the sequence above and returns the trial ID for adoption. The
+The Replay integration must check `IsAcceptedAsync`; an unaccepted candidate requires
+explicit `--allow-candidate` and must retain all normal host safety limits. Persist
+the trial through the sequence above and return the trial ID for adoption. The
 Plan handler creates candidates or accepts trials; engine execution belongs to
 Replay composition.

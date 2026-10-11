@@ -145,8 +145,52 @@ public sealed class ReplayTests
             }, token, confirmPrimary, trialStore);
 
     private static PlanManager Plans(Fixture files) => new(Path.Combine(files.Root, "managed"), new([], []));
+    [Theory]
+    [InlineData("conditionSynchronized", false)]
+    [InlineData("recording.json", false)]
+    [InlineData("timing", true)]
+    public async Task GeneratedCandidateRejectsHostSecretCollisionsBeforePublication(string secret, bool sensitiveField)
+    {
+        using var files = new Fixture();
+        File.Move(Path.Combine(files.Root, "scenario.json"), Path.Combine(files.Root, "original.json"));
+        File.Move(Path.Combine(files.Root, "recording.json"), Path.Combine(files.Root, "capture.json"));
+        var root = Path.Combine(files.Root, "managed");
+        var manager = new PlanManager(root, sensitiveField ? new([], [secret]) : new([secret], []));
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => manager.CreateAsync(
+            Path.Combine(files.Root, "original.json"), Path.Combine(files.Root, "capture.json"), [files.Root], "conditionSynchronized").AsTask());
+        Assert.Equal("PlanSecretCollision", error.Message);
+        Assert.Empty(Directory.GetDirectories(root));
+        Assert.False(File.Exists(Path.Combine(root, "plan.json")));
+    }
     private static async Task<string> Candidate(Fixture files, PlanManager manager) => await manager.CreateAsync(
         Path.Combine(files.Root, "scenario.json"), Path.Combine(files.Root, "recording.json"), [files.Root], "conditionSynchronized");
+    [Theory]
+    [InlineData("payload")]
+    [InlineData("signature")]
+    [InlineData("summaryMaxBytes")]
+    public async Task TrialEnvelopeRejectsSensitiveGeneratedFields(string field)
+    {
+        using var files = new Fixture();
+        var manager = new PlanManager(Path.Combine(files.Root, "managed"), new([], [field]));
+        var path = await Candidate(files, manager);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => Trial(files, manager, path));
+        Assert.Equal("PlanSecretCollision", error.Message);
+        Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(path)!, "*trial-*"));
+    }
+
+    [Theory]
+    [InlineData("trialId")]
+    [InlineData("evidence")]
+    public async Task AcceptancePayloadRejectsSensitiveGeneratedFields(string field)
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var stronger = new PlanManager(Path.Combine(files.Root, "managed"), new([], [field]));
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => stronger.AcceptAsync(path, id, true, true).AsTask());
+        Assert.Equal("PlanSecretCollision", error.Message);
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+        Assert.False(await manager.IsAcceptedAsync(path));
+    }
     private static async Task<string> Trial(Fixture files, PlanManager manager, string path, bool cleanupFailure = false,
         string? wrongIdentity = null, string? changedSummary = null, bool cancelAfterPrimary = false, string? metadata = null)
     {

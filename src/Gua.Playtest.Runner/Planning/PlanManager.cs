@@ -58,12 +58,13 @@ public sealed class PlanManager
         // Use static reference validation to authorize and retain Recording bytes too.
         var sourcePlan = new ReplayPlanDocument("candidate", new(source.Path, source.Sha256),
             new(recordingFullPath, Hash(recordingBytes)), timing, "afterPlan", [], null);
+        var sourcePlanBytes = CheckedPlanBytes(sourcePlan);
         var staging = Path.Combine(root, ".pending-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
         try
         {
             var entry = Path.Combine(staging, "source.json");
-            Publish(entry, Encoding.UTF8.GetBytes(ContractJson.Serialize(sourcePlan)), token);
+            Publish(entry, sourcePlanBytes, token);
             var report = await new StaticContractValidator(roots.Append(root)).ValidateFileAsync(entry, token);
             token.ThrowIfCancellationRequested();
             if (!report.IsValid) throw new InvalidDataException(report.Code);
@@ -76,7 +77,7 @@ public sealed class PlanManager
             Publish(Path.Combine(staging, recordingName), recording.CopyBytes(), token);
             var id = Guid.NewGuid().ToString("N");
             var plan = sourcePlan with { PlanId = id, Scenario = new(scenarioName, scenario.Sha256), Recording = new(recordingName, recording.Sha256) };
-            Publish(Path.Combine(staging, "plan.json"), Encoding.UTF8.GetBytes(ContractJson.Serialize(plan)), token);
+            Publish(Path.Combine(staging, "plan.json"), CheckedPlanBytes(plan), token);
             File.Delete(entry);
             var validated = await new StaticContractValidator([root]).ValidateFileAsync(Path.Combine(staging, "plan.json"), token);
             token.ThrowIfCancellationRequested();
@@ -237,8 +238,19 @@ public sealed class PlanManager
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
         RejectSecrets(bytes);
-        return JsonSerializer.SerializeToUtf8Bytes(new Envelope(Convert.ToBase64String(bytes),
+        RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(bytes)!);
+        var envelope = JsonSerializer.SerializeToUtf8Bytes(new Envelope(Convert.ToBase64String(bytes),
             Convert.ToHexStringLower(HMACSHA256.HashData(key, bytes))), Json);
+        RejectSecrets(envelope);
+        RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(envelope)!);
+        return envelope;
+    }
+    private byte[] CheckedPlanBytes(ReplayPlanDocument plan)
+    {
+        var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(plan));
+        RejectSecrets(bytes);
+        RejectStructuredSecrets(System.Text.Json.Nodes.JsonNode.Parse(bytes)!);
+        return bytes;
     }
     private void RejectSecrets(byte[] bytes)
     {
