@@ -237,7 +237,7 @@ public sealed class DashboardIndex
                 if (receipt.State != ArtifactState.Saved)
                 {
                     if (receipt.FileName is not null || receipt.Bytes is not null || receipt.Sha256 is not null || receipt.AdditionalFiles is not null ||
-                        (receipt.State == ArtifactState.OmittedOnSuccess && result?.Status != ResultStatus.Passed)) throw new InvalidDataException();
+                        (receipt.State == ArtifactState.OmittedOnSuccess && result is not null && result.Status != ResultStatus.Passed)) throw new InvalidDataException();
                     details.Add(new(receipt.Kind.ToString(), receipt.State.ToString())); continue;
                 }
                 var entries = new[] { new ArtifactFileReference(receipt.FileName!, receipt.Bytes ?? 0, receipt.Sha256!) }
@@ -316,9 +316,12 @@ public sealed class DashboardIndex
     {
         if (Text(document, "kind") == "scenarioRegistry")
         {
+            var artifactRoots = document.GetProperty("artifactRoots");
+            if (artifactRoots.ValueKind != JsonValueKind.Array || artifactRoots.GetArrayLength() > limits.MaxRoots)
+                throw new InvalidDataException();
             foreach (var scenario in document.GetProperty("scenarios").EnumerateArray())
                 AdmitReference(scenario.GetProperty("file"), directory, visited, reserveValidationRead);
-            foreach (var root in document.GetProperty("artifactRoots").EnumerateArray())
+            foreach (var root in artifactRoots.EnumerateArray())
                 CheckAllowed(Path.GetFullPath(root.GetString()!, directory));
             return;
         }

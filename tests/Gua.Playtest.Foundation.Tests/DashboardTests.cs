@@ -529,6 +529,45 @@ public sealed class DashboardTests : IDisposable
         var run = Assert.Single((await Index().ReadAsync()).Runs);
         Assert.Equal("Passed", run.State); Assert.Null(run.BuildId); Assert.Null(run.ScenarioId);
     }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Independent_omission_receipts_survive_missing_or_corrupt_result(bool corrupt)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "result.json");
+        if (corrupt) File.WriteAllText(file, "{broken"); else File.Delete(file);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal(corrupt ? "ResultUnreadable" : "Unsettled", run.State); Assert.Null(run.Result);
+        Assert.Equal("OmittedOnSuccess", run.Details.Single(x => x.Kind == "Trace").State);
+        Assert.Equal("NotExecuted", run.Details.Single(x => x.Kind == "Recording").State);
+    }
+    [Fact]
+    public async Task Verified_non_passed_result_contradicts_omission_receipt()
+    {
+        var store = Save(ResultStatus.Failed); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json["artifacts"]![0]!["state"] = "OmittedOnSuccess"; File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Failed", run.State); Assert.All(run.Details, d => Assert.Equal("CompletionUnreadable", d.State));
+    }
+    [Fact]
+    public async Task Registry_declared_root_limit_precedes_physical_admission_and_validation()
+    {
+        var second = Path.Combine(root, "second-runs"); Directory.CreateDirectory(second);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!.AsObject();
+        json["artifactRoots"] = new System.Text.Json.Nodes.JsonArray("runs", "second-runs");
+        File.WriteAllText(Registry, json.ToJsonString());
+        var validated = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root], new(MaxRoots: 1))
+        {
+            ValidateContract = (path, roots, token) =>
+            {
+                validated = true;
+                return new StaticContractValidator(roots).ValidateFileAsync(path, token);
+            }
+        };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState); Assert.False(validated);
+        Assert.Equal("Ready", (await Index(new(MaxRoots: 2)).ReadAsync()).RegistryState);
+    }
     [Fact]
     public async Task Declared_artifact_root_requires_physical_authority_before_validation()
     {
