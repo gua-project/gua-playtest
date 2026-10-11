@@ -770,16 +770,16 @@ public sealed class DashboardTests : IDisposable
             using var snapshot = JsonDocument.Parse(oldSnapshot);
             var route = snapshot.RootElement.GetProperty("runs")[0].GetProperty("details")
                 .EnumerateArray().Single(d => d.GetProperty("kind").GetString() == "Trace").GetProperty("report").GetString()!;
-            Assert.Equal(html, await client.GetByteArrayAsync(route));
+            AssertReportWrapper(html, await client.GetStringAsync(route));
             using var aborted = new CancellationTokenSource();
             var refresh = client.GetAsync("/api/refresh", aborted.Token);
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); aborted.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
             await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(oldSnapshot, await client.GetStringAsync("/api/snapshot"));
-            Assert.Equal(html, await client.GetByteArrayAsync(route));
+            AssertReportWrapper(html, await client.GetStringAsync(route));
             Assert.Equal(oldSnapshot, await client.GetStringAsync("/api/refresh")); // A later full refresh still commits.
-            Assert.Equal(html, await client.GetByteArrayAsync(route));
+            AssertReportWrapper(html, await client.GetStringAsync(route));
         }
         finally { cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10)); }
     }
@@ -1228,6 +1228,135 @@ public sealed class DashboardTests : IDisposable
         else json["scenarios"]![0]!["file"]!["path"] = System.Text.Json.Nodes.JsonNode.Parse(value);
         File.WriteAllText(Registry, json.ToJsonString());
         Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState);
+    }
+    private static void AssertReportWrapper(byte[] html, string wrapper)
+    {
+        Assert.Contains("sandbox=\"allow-scripts\"", wrapper);
+        Assert.Contains("srcdoc=\"" + WebUtility.HtmlEncode(Encoding.UTF8.GetString(html)) + "\"", wrapper);
+    }
+    [Fact]
+    public async Task Canceled_report_read_stops_before_sibling_receipts_and_keeps_route()
+    {
+        var (_, html) = SavedReportAndRecording(); using var canceled = new CancellationTokenSource();
+        var opened = 0; var stop = true;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        { ReportFileOpened = (_, _) => { if (stop) { opened++; canceled.Cancel(); } } };
+        var route = Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report!;
+        Assert.ThrowsAny<OperationCanceledException>(() => index.ReadReport(route, canceled.Token));
+        Assert.Equal(1, opened); stop = false; Assert.Equal(html, index.ReadReport(route));
+    }
+    [Fact]
+    public async Task Registry_second_read_cannot_publish_a_changed_admission()
+    {
+        var valid = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        { ValidateContract = async (path, roots, token) => {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(path))!;
+            json["registryId"] = "changed-registry"; File.WriteAllText(path, json.ToJsonString());
+            var report = await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+            valid = report.IsValid; return report;
+        } };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState);
+        Assert.True(valid); // Static schema success alone must not grant the changed snapshot.
+    }
+    [Fact]
+    public async Task Oversized_duplicate_registry_stops_before_reference_probes()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        var scenario = json["scenarios"]![0]!.DeepClone();
+        var entries = new System.Text.Json.Nodes.JsonArray();
+        for (var i = 0; i < 1001; i++) entries.Add(scenario.DeepClone());
+        json["scenarios"] = entries; File.WriteAllText(Registry, json.ToJsonString());
+        var probes = 0; var validated = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root]) {
+            PathProbed = path => { if (path == Path.Combine(root, "s1.json")) probes++; },
+            ValidateContract = (_, _, _) => { validated = true; throw new InvalidOperationException(); }
+        };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState);
+        Assert.Equal(0, probes); Assert.False(validated);
+    }
+    [Theory]
+    [InlineData("reference")] [InlineData("artifact")] [InlineData("allowed")]
+    public async Task Broken_directory_links_are_rejected_before_identity_or_existence_probes(string lane)
+    {
+        var link = Path.Combine(root, "remote-link");
+        var target = Path.Combine(root, "absent-target");
+        if (OperatingSystem.IsWindows()) {
+            var start = new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "/c", "mklink", "/J", link, target }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        } else Directory.CreateSymbolicLink(link, target);
+        var probes = 0;
+        try {
+            if (lane == "reference") {
+                var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+                json["scenarios"]![0]!["file"]!["path"] = "remote-link/s1.json";
+                File.WriteAllText(Registry, json.ToJsonString());
+            }
+            var index = new DashboardIndex(Registry, lane == "artifact" ? [link] : [Artifacts], lane == "allowed" ? [link] : [root]) {
+                PathProbed = path => { if (path.StartsWith(link, StringComparison.Ordinal)) { probes++; throw new IOException("UnsafeProbeBlockedByTest"); } }
+            };
+            var snapshot = await index.ReadAsync();
+            Assert.Equal(0, probes);
+            if (lane == "artifact") { Assert.Equal("Ready", snapshot.RegistryState); Assert.Contains("ArtifactRootUnreadable", snapshot.Warnings); }
+            else Assert.Equal("RegistryUnreadable", snapshot.RegistryState);
+        } finally { Directory.Delete(link); }
+    }
+    [Fact]
+    public async Task Aborted_http_report_stops_sibling_work_and_releases_index_gate()
+    {
+        var (_, html) = SavedReportAndRecording(); var opened = 0; var block = true;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var index = new DashboardIndex(Registry, [Artifacts], [root]) {
+            ReportFileOpened = (_, token) => {
+                if (!block) return; Interlocked.Increment(ref opened); entered.TrySetResult();
+                Assert.True(token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10))); interrupted.TrySetResult();
+            }
+        };
+        using var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+        using var cancellation = new CancellationTokenSource();
+        var ready = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = DashboardApplication.RunAsync(index, port, uri => ready.TrySetResult(uri), cancellation.Token);
+        try {
+            using var client = new HttpClient { BaseAddress = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)) };
+            using var snapshot = JsonDocument.Parse(await client.GetStringAsync("/api/snapshot"));
+            var route = snapshot.RootElement.GetProperty("runs")[0].GetProperty("details").EnumerateArray()
+                .Single(d => d.GetProperty("kind").GetString() == "Trace").GetProperty("report").GetString()!;
+            using var aborted = new CancellationTokenSource(); var request = client.GetAsync(route, aborted.Token);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); aborted.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+            await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(10)); block = false;
+            Assert.Equal(1, opened); AssertReportWrapper(html, await client.GetStringAsync(route));
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/snapshot")).StatusCode);
+        } finally { cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10)); }
+    }
+    [Fact]
+    public async Task Case_distinct_second_read_cannot_grant_an_unauthorized_sibling()
+    {
+        var parent = Path.Combine(root, "physical-race"); Directory.CreateDirectory(parent);
+        if (OperatingSystem.IsWindows()) {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", parent, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var safe = Path.Combine(parent, "safe"); var sibling = Path.Combine(parent, "SAFE"); Directory.CreateDirectory(safe);
+        if (Directory.Exists(sibling)) return; // Volume cannot represent the reproduced physical split.
+        Directory.CreateDirectory(sibling); Directory.CreateDirectory(Path.Combine(safe, "runs"));
+        foreach (var name in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, name), Path.Combine(safe, name));
+        File.Copy(Path.Combine(root, "s1.json"), Path.Combine(sibling, "s1.json"));
+        var registry = Path.Combine(safe, "registry.json"); var readUnauthorized = false;
+        var index = new DashboardIndex(registry, [Path.Combine(safe, "runs")], [safe]) {
+            ValidateContract = async (path, roots, token) => {
+                var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(path))!;
+                json["scenarios"]![0]!["file"]!["path"] = "../SAFE/s1.json"; File.WriteAllText(path, json.ToJsonString());
+                var report = await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+                readUnauthorized = report.IsValid; return report;
+            }
+        };
+        Assert.Equal(OperatingSystem.IsWindows() ? "RegistryUnreadable" : "PathOutsideAllowedRoots", (await index.ReadAsync()).RegistryState);
+        if (OperatingSystem.IsWindows()) Assert.True(readUnauthorized); // Reproduce lexical admission without physical authority.
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }

@@ -42,7 +42,9 @@ receipt links to the existing Viewer. Every associated file's bounded size and
 SHA-256 are checked, and the report is checked again when opened. No Playtest
 timeline or Trace format is introduced. Saved Trace without a listed HTML
 report explains that no report link is available. Reports execute in a sandbox
-without origin, network, forms, popups or access to the dashboard.
+inside an opaque iframe without origin, network, forms, popups or access to the
+dashboard. The wrapper's frame policy blocks the report's own link and script
+navigation; the iframe sandbox blocks navigation of the dashboard window.
 
 The list represents registered Scenario execution, not coverage of all game
 features or a guarantee of game quality. Partial indexing cannot certify either

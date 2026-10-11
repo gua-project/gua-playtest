@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gua.Playtest.Runner.Dashboard;
@@ -65,8 +66,12 @@ public static class DashboardApplication
                 }
                 else if (path.StartsWith("/reports/", StringComparison.Ordinal))
                 {
-                    body = index.ReadReport(path); response.ContentType = "text/html; charset=utf-8";
-                    response.Headers.ContentSecurityPolicy = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-ancestors 'none'";
+                    var report = index.ReadReport(path, token);
+                    // An opaque sandboxed child can run the existing Viewer but cannot navigate
+                    // its parent. The parent's frame-src blocks the child's own network navigation.
+                    body = Encoding.UTF8.GetBytes("<!doctype html><meta charset=\"utf-8\"><title>Gua Viewer</title><style>html,body,iframe{margin:0;width:100%;height:100%;border:0}</style><iframe title=\"Saved Gua Viewer\" sandbox=\"allow-scripts\" srcdoc=\"" + WebUtility.HtmlEncode(Encoding.UTF8.GetString(report)) + "\"></iframe>");
+                    response.ContentType = "text/html; charset=utf-8";
+                    response.Headers.ContentSecurityPolicy = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
                 }
                 else if (path is "/" or "/dashboard.js" or "/dashboard.css")
                 {

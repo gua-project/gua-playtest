@@ -41,11 +41,13 @@ public sealed class DashboardIndex
     private readonly HashSet<string> validationRoots = new(StringComparer.Ordinal);
     private Dictionary<string, (string Directory, ArtifactFileReference File, FileIdentity Identity, ArtifactFileReference[] Files)> reports = [];
     private long remaining;
+    private readonly Dictionary<FileIdentity, string> admittedHashes = [];
     internal Func<string, IEnumerable<string>, CancellationToken, ValueTask<StaticValidationReport>> ValidateContract { get; init; }
         = static (path, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(path, token);
     internal Action<string>? ReceiptFileOpened { get; init; }
     internal Action<string>? ReferenceAdmitted { get; init; }
     internal Action<string>? PathProbed { get; init; }
+    internal Action<string, CancellationToken>? ReportFileOpened { get; init; }
     public DashboardIndex(string registry, IEnumerable<string> artifactRoots, IEnumerable<string> allowedRoots,
         DashboardLimits? limits = null)
     {
@@ -62,7 +64,7 @@ public sealed class DashboardIndex
         // the report routes belonging to the last successfully returned snapshot.
         var pending = new DashboardIndex(registry, roots, allowedRoots, limits)
         { ValidateContract = ValidateContract, ReceiptFileOpened = ReceiptFileOpened,
-            ReferenceAdmitted = ReferenceAdmitted, PathProbed = PathProbed };
+            ReferenceAdmitted = ReferenceAdmitted, PathProbed = PathProbed, ReportFileOpened = ReportFileOpened };
         var snapshot = await pending.ReadCoreAsync(token);
         token.ThrowIfCancellationRequested();
         reports = pending.reports;
@@ -84,6 +86,9 @@ public sealed class DashboardIndex
             if (report.Code == "Interrupted") throw new OperationCanceledException(token);
             if (!report.IsValid || report.Document is not ScenarioRegistryDocument population)
                 return new(report.Code == "Valid" ? "RegistryInvalid" : report.Code, [], [], [], false);
+            CheckValidationAuthority(report, token);
+            if (population.ArtifactRoots.Length > limits.MaxRoots) throw new InvalidDataException();
+            foreach (var root in population.ArtifactRoots) CheckAllowed(LocalPath(root, Path.GetDirectoryName(registry)!), token);
             foreach (var entry in population.Scenarios)
             {
                 token.ThrowIfCancellationRequested();
@@ -205,6 +210,7 @@ public sealed class DashboardIndex
                 token.ThrowIfCancellationRequested();
                 if (validation.Code == "Interrupted") throw new OperationCanceledException(token);
                 if (!validation.IsValid || validation.Document is not RunDocument wire) throw new InvalidDataException();
+                CheckValidationAuthority(validation, token);
                 identity = wire.Identity; started = wire.StartedAt;
             }
             else throw new InvalidDataException();
@@ -321,20 +327,28 @@ public sealed class DashboardIndex
         catch (Exception e) when (ReadFailure(e))
         { reports.Remove($"/reports/{key}"); return [new("Trace", "CompletionUnreadable"), new("Recording", "CompletionUnreadable")]; }
     }
-    public byte[] ReadReport(string route)
+    public byte[] ReadReport(string route, CancellationToken token = default)
     {
+        token.ThrowIfCancellationRequested();
         if (!reports.TryGetValue(route, out var reference)) throw new FileNotFoundException();
         using var stream = OpenReceipt(reference.Directory, reference.File);
+        ReportFileOpened?.Invoke(reference.File.FileName, token);
+        token.ThrowIfCancellationRequested();
         var identity = FileIdentity.Read(stream.SafeFileHandle);
-        if (identity != reference.Identity || SummaryIdentities(reference.Directory).Contains(identity)) throw new InvalidDataException();
+        if (identity != reference.Identity || SummaryIdentities(reference.Directory, token).Contains(identity)) throw new InvalidDataException();
         foreach (var file in reference.Files.Where(f => f != reference.File))
         {
+            token.ThrowIfCancellationRequested();
             try { using var other = Open(Path.Combine(reference.Directory, Path.Combine(file.FileName.Split('/'))));
+                ReportFileOpened?.Invoke(file.FileName, token); token.ThrowIfCancellationRequested();
                 if (FileIdentity.Read(other.SafeFileHandle) == identity) throw new ReceiptAliasException(); }
             catch (Exception e) when (ReadFailure(e) && e is not ReceiptAliasException) { } // Unreadable Recording is independent of Trace.
         }
+        token.ThrowIfCancellationRequested();
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
+        token.ThrowIfCancellationRequested();
         if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != reference.File.Sha256) throw new InvalidDataException();
+        token.ThrowIfCancellationRequested();
         return bytes;
     }
     private FileStream OpenReceipt(string directory, ArtifactFileReference file)
@@ -357,6 +371,7 @@ public sealed class DashboardIndex
     {
         using var stream = Open(path); Charge(stream.Length);
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
+        admittedHashes[FileIdentity.Read(stream.SafeFileHandle)] = Convert.ToHexStringLower(SHA256.HashData(bytes));
         using var validation = JsonDocument.Parse(bytes, new() { MaxDepth = 33 });
         RejectDuplicates(validation.RootElement);
         return JsonDocument.Parse(bytes, new() { MaxDepth = 33 });
@@ -367,9 +382,11 @@ public sealed class DashboardIndex
         if (Text(document, "kind") == "scenarioRegistry")
         {
             var artifactRoots = document.GetProperty("artifactRoots");
+            var scenarios = document.GetProperty("scenarios");
             if (artifactRoots.ValueKind != JsonValueKind.Array || artifactRoots.GetArrayLength() > limits.MaxRoots)
                 throw new InvalidDataException();
-            foreach (var scenario in document.GetProperty("scenarios").EnumerateArray())
+            if (scenarios.ValueKind != JsonValueKind.Array || scenarios.GetArrayLength() > 1000) throw new InvalidDataException();
+            foreach (var scenario in scenarios.EnumerateArray())
             {
                 token.ThrowIfCancellationRequested();
                 AdmitReference(scenario.GetProperty("file"), directory, visited, token, reserveValidationRead);
@@ -394,8 +411,8 @@ public sealed class DashboardIndex
     {
         token.ThrowIfCancellationRequested();
         var path = LocalPath(reference.GetProperty("path").GetString()!, directory);
-        CheckAllowed(path, token);
         if (!visited.Add(path)) return;
+        CheckAllowed(path, token);
         if (visited.Count > 1000) throw new InvalidDataException();
         using var source = ReadContract(path, reserveValidationRead);
         ReferenceAdmitted?.Invoke(path);
@@ -407,6 +424,7 @@ public sealed class DashboardIndex
         using var stream = Open(path); Charge(stream.Length);
         if (reserveValidationRead) Charge(stream.Length); // Reserve the static validator's duplicate read before it allocates.
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
+        admittedHashes[FileIdentity.Read(stream.SafeFileHandle)] = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var inspected = ContractJson.Inspect(bytes, Path.GetExtension(path));
         if (inspected.Document is null) throw new InvalidDataException();
         return JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(inspected.Document), new() { MaxDepth = 64 });
@@ -446,9 +464,10 @@ public sealed class DashboardIndex
     {
         token.ThrowIfCancellationRequested();
         var full = LocalPath(path);
+        CheckNoLinks(full, token);
         PathProbed?.Invoke(full);
         var identities = new HashSet<FileIdentity>();
-        foreach (var root in allowedRoots) { token.ThrowIfCancellationRequested(); identities.Add(FileIdentity.ReadDirectory(root)); }
+        foreach (var root in allowedRoots) { token.ThrowIfCancellationRequested(); CheckNoLinks(root, token); PathProbed?.Invoke(root); identities.Add(FileIdentity.ReadDirectory(root)); }
         for (var directory = Directory.Exists(full) ? full : Path.GetDirectoryName(full); directory is not null;
             directory = Path.GetDirectoryName(directory))
         {
@@ -463,20 +482,42 @@ public sealed class DashboardIndex
         }
         throw new InvalidDataException();
     }
-    private HashSet<FileIdentity> SummaryIdentities(string directory)
+    private static void CheckNoLinks(string path, CancellationToken token)
+    {
+        var current = Path.GetPathRoot(path)!;
+        foreach (var part in path[current.Length..].Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries))
+        {
+            token.ThrowIfCancellationRequested();
+            current = Path.Combine(current, part);
+            try { if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("LocalRegularPathRequired"); }
+            catch (FileNotFoundException) { break; }
+            catch (DirectoryNotFoundException) { break; }
+        }
+    }
+    private void CheckValidationAuthority(StaticValidationReport report, CancellationToken token)
+    {
+        foreach (var file in report.Files.Values)
+        {
+            token.ThrowIfCancellationRequested(); CheckAllowed(file.Path, token);
+            using var stream = Open(file.Path);
+            if (!admittedHashes.TryGetValue(FileIdentity.Read(stream.SafeFileHandle), out var hash) || hash != file.Sha256)
+                throw new InvalidDataException("AdmissionChanged");
+        }
+    }
+    private HashSet<FileIdentity> SummaryIdentities(string directory, CancellationToken token = default)
     {
         var identities = new HashSet<FileIdentity>();
         foreach (var name in new[] { ".owner", "run.json", "primary.json", "completion.json", "result.json" })
-            try { using var file = Open(Path.Combine(directory, name));
+            try { token.ThrowIfCancellationRequested(); using var file = Open(Path.Combine(directory, name));
                 if (!identities.Add(FileIdentity.Read(file.SafeFileHandle))) throw new ReceiptAliasException(); }
             catch (FileNotFoundException) { }
         return identities;
     }
     private sealed class ReceiptAliasException : IOException { }
-    private static string RunKey(string directory)
+    private string RunKey(string directory)
     {
         string input;
-        try { var id = FileIdentity.ReadDirectory(directory);
+        try { CheckAllowed(directory); var id = FileIdentity.ReadDirectory(directory);
             input = FormattableString.Invariant($"{id.Device:x16}:{id.Low:x16}:{id.High:x16}:{Path.GetFileName(directory)}"); }
         catch (Exception e) when (ReadFailure(e)) { input = "unreadable:" + Path.GetFullPath(directory); }
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
