@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="e46afd08-9d4f-46f9-a67b-1192b0819621" name="testk@DESKTOP-3CJOU9S 2026-10-11 07:39:20" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T07:39:20.8256118+09:00" queuing="2026-10-11T07:39:20.8256122+09:00" start="2026-10-11T07:39:19.9084421+09:00" finish="2026-10-11T07:39:20.8299287+09:00" />
+  <TestSettings name="default" id="7fb867f5-e8ea-43f4-8033-0a34be657594">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_07_39_20" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="daeb943c-3185-4905-8b79-f2acca4e16be" testId="79602204-a054-c737-feb5-8c65f05b30c3" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;codexHome&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0040781" startTime="2026-10-11T07:39:20.7507344+09:00" endTime="2026-10-11T07:39:20.7507931+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="daeb943c-3185-4905-8b79-f2acca4e16be">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 343&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="88ade3e2-ad8e-47dd-ad37-6db81984a63b" testId="233f9bd7-c0f9-3376-e957-11ad59e8a133" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformOs&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2310180" startTime="2026-10-11T07:39:20.4888881+09:00" endTime="2026-10-11T07:39:20.7306765+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="88ade3e2-ad8e-47dd-ad37-6db81984a63b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 343&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7d2a45ce-b9f5-4dbe-96b7-df7cb096aaa0" testId="ab535d23-f45a-e904-48a6-4d197fc579d4" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformFamily&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0142764" startTime="2026-10-11T07:39:20.7515525+09:00" endTime="2026-10-11T07:39:20.7515768+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7d2a45ce-b9f5-4dbe-96b7-df7cb096aaa0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 343&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;codexHome&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="79602204-a054-c737-feb5-8c65f05b30c3">
+      <Execution id="daeb943c-3185-4905-8b79-f2acca4e16be" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="AdjacentInitializeResponseRequiresCompletePinnedShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformFamily&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ab535d23-f45a-e904-48a6-4d197fc579d4">
+      <Execution id="7d2a45ce-b9f5-4dbe-96b7-df7cb096aaa0" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="AdjacentInitializeResponseRequiresCompletePinnedShape" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: &quot;platformOs&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="233f9bd7-c0f9-3376-e957-11ad59e8a133">
+      <Execution id="88ade3e2-ad8e-47dd-ad37-6db81984a63b" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="AdjacentInitializeResponseRequiresCompletePinnedShape" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="79602204-a054-c737-feb5-8c65f05b30c3" executionId="daeb943c-3185-4905-8b79-f2acca4e16be" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="233f9bd7-c0f9-3376-e957-11ad59e8a133" executionId="88ade3e2-ad8e-47dd-ad37-6db81984a63b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ab535d23-f45a-e904-48a6-4d197fc579d4" executionId="7d2a45ce-b9f5-4dbe-96b7-df7cb096aaa0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="3" passed="0" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.26]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.52]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.52]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.52]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.52]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.52]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(343,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field)&#xD;
+[xUnit.net 00:00:00.52]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.53]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.53]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(343,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.54]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.54]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.54]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.54]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.54]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(343,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(String field)&#xD;
+[xUnit.net 00:00:00.54]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.54]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:39:20.7325584+09:00">
+        <Text>[xUnit.net 00:00:00.52]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformOs") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:39:20.7512162+09:00">
+        <Text>[xUnit.net 00:00:00.53]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "codexHome") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:39:20.7516986+09:00">
+        <Text>[xUnit.net 00:00:00.53]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.AdjacentInitializeResponseRequiresCompletePinnedShape(field: "platformFamily") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

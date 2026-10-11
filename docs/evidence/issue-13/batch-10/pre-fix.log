@@ -1,0 +1,50 @@
+  復元対象のプロジェクトを決定しています...
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\Gua.Playtest.Foundation.Tests.csproj を復元しました (216 ミリ秒)。
+  6 個中 5 個の復元対象のプロジェクトは最新です。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.77]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/completed", beforeResponse: True) [FAIL]
+[xUnit.net 00:00:00.78]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/started", beforeResponse: False) [FAIL]
+[xUnit.net 00:00:00.79]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/completed", beforeResponse: False) [FAIL]
+[xUnit.net 00:00:00.79]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/started", beforeResponse: True) [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/completed", beforeResponse: True) [258 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/started", beforeResponse: False) [7 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/completed", beforeResponse: False) [15 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(method: "hook/started", beforeResponse: True) [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: ConnectionFailure
+Actual:   OutputInvalid
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InheritedHookExecutionIsRefusedBeforeAndAfterTurnResponse(String method, Boolean beforeResponse) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 421
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\review-hooks\pre-fix.trx
+
+失敗!   -失敗:     4、合格:     0、スキップ:     0、合計:     4、期間: 295 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)

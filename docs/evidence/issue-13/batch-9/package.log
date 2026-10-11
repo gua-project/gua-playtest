@@ -1,0 +1,29 @@
+  復元対象のプロジェクトを決定しています...
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\Gua.Playtest.Core.csproj を復元しました (201 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\Gua.Playtest.Cli.csproj を復元しました (201 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\Gua.Playtest.Runner.csproj を復元しました (201 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\Gua.Playtest.GuaIntegration.csproj を復元しました (201 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\Gua.Playtest.Planners.Codex.csproj を復元しました (201 ミリ秒)。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\win-x64\Gua.Playtest.Cli.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\smoke-win-x64-5339cdde34864e6ab9f9fce20d382603\published\
+  復元対象のプロジェクトを決定しています...
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\Gua.Playtest.Core.csproj を復元しました (189 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\Gua.Playtest.Planners.Codex.csproj を復元しました (189 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\Gua.Playtest.GuaIntegration.csproj を復元しました (189 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\Gua.Playtest.Cli.csproj を復元しました (189 ミリ秒)。
+  C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\Gua.Playtest.Runner.csproj を復元しました (189 ミリ秒)。
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\publish\
+  パッケージ 'C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\smoke-win-x64-5339cdde34864e6ab9f9fce20d382603\feed\Gua.Playtest.Cli.0.1.0-dev.nupkg' が正常に作成されました。
+次のコマンドを使用してツールを呼び出せます。gua-playtest
+ツール 'gua.playtest.cli' (バージョン '0.1.0-dev') が正常にインストールされました。
+Package smoke passed: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\smoke-win-x64-5339cdde34864e6ab9f9fce20d382603

@@ -1,0 +1,230 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="f1224e9d-8109-42d3-b7f6-b0107c253df3" name="testk@DESKTOP-3CJOU9S 2026-10-11 07:15:55" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T07:15:55.8993317+09:00" queuing="2026-10-11T07:15:55.8993321+09:00" start="2026-10-11T07:15:55.1566616+09:00" finish="2026-10-11T07:15:55.9057591+09:00" />
+  <TestSettings name="default" id="e0b1a13d-9d10-4dd2-94ed-8d3aaff52eb1">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_07_15_55" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="fadf2024-be03-41e6-927e-bed38a9132b9" testId="fb95c2ff-1270-dd9a-6286-c3cedebc075a" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002693" startTime="2026-10-11T07:15:55.8126522+09:00" endTime="2026-10-11T07:15:55.8126783+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fadf2024-be03-41e6-927e-bed38a9132b9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="794706f6-abf4-4a1a-8581-f4077462c424" testId="5db0b182-b74f-d434-6a90-83d9e3db9588" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;42&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0419906" startTime="2026-10-11T07:15:55.7483213+09:00" endTime="2026-10-11T07:15:55.8012757+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="794706f6-abf4-4a1a-8581-f4077462c424">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5c52923a-5b41-42fb-b319-fc251059b578" testId="fe550db6-be1e-7907-448e-4ef5da070dea" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;commandExecution\&quot;,\&quot;comm&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001552" startTime="2026-10-11T07:15:55.8134264+09:00" endTime="2026-10-11T07:15:55.8134462+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5c52923a-5b41-42fb-b319-fc251059b578">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d8dbc775-dbb6-4666-b0c3-b32c3def0619" testId="225440e1-ff36-8571-7e53-6dc2d330f006" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;reasoning\&quot;,\&quot;summary\&quot;:[&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001865" startTime="2026-10-11T07:15:55.8129376+09:00" endTime="2026-10-11T07:15:55.8129687+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d8dbc775-dbb6-4666-b0c3-b32c3def0619">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="daae8f2a-27ca-4eba-be29-997be9f38ab6" testId="fcd0926e-a539-320e-7576-ce5b4f1f1a2e" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;unknown\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0001289" startTime="2026-10-11T07:15:55.8136418+09:00" endTime="2026-10-11T07:15:55.8136603+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="daae8f2a-27ca-4eba-be29-997be9f38ab6">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c07ef025-15dd-4ad1-9555-5cf5944cb290" testId="7b3cedd3-9d75-b38e-40c9-60488d8f1cb9" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;null&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002279" startTime="2026-10-11T07:15:55.8138550+09:00" endTime="2026-10-11T07:15:55.8138736+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c07ef025-15dd-4ad1-9555-5cf5944cb290">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="920a9016-dc71-4bf9-8e65-6f324415eede" testId="598c68b4-baf8-5df1-a4d4-b99bc8745c78" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;agentMessage\&quot;}&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0014177" startTime="2026-10-11T07:15:55.8118645+09:00" endTime="2026-10-11T07:15:55.8119248+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="920a9016-dc71-4bf9-8e65-6f324415eede">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f159fbd4-fb7c-4952-a7c6-32e2713e8d91" testId="b60bbeae-814f-6c28-647a-57c6540dd92f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;agentMessage\&quot;,\&quot;text\&quot;:1&quot;···)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0002359" startTime="2026-10-11T07:15:55.8132209+09:00" endTime="2026-10-11T07:15:55.8132413+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f159fbd4-fb7c-4952-a7c6-32e2713e8d91">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   UsageLimit</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 268&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;null&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="7b3cedd3-9d75-b38e-40c9-60488d8f1cb9">
+      <Execution id="c07ef025-15dd-4ad1-9555-5cf5944cb290" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;agentMessage\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="598c68b4-baf8-5df1-a4d4-b99bc8745c78">
+      <Execution id="920a9016-dc71-4bf9-8e65-6f324415eede" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;unknown\&quot;}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="fcd0926e-a539-320e-7576-ce5b4f1f1a2e">
+      <Execution id="daae8f2a-27ca-4eba-be29-997be9f38ab6" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;42&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="5db0b182-b74f-d434-6a90-83d9e3db9588">
+      <Execution id="794706f6-abf4-4a1a-8581-f4077462c424" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;agentMessage\&quot;,\&quot;text\&quot;:1&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="b60bbeae-814f-6c28-647a-57c6540dd92f">
+      <Execution id="f159fbd4-fb7c-4952-a7c6-32e2713e8d91" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{}&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="fb95c2ff-1270-dd9a-6286-c3cedebc075a">
+      <Execution id="fadf2024-be03-41e6-927e-bed38a9132b9" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;commandExecution\&quot;,\&quot;comm&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="fe550db6-be1e-7907-448e-4ef5da070dea">
+      <Execution id="5c52923a-5b41-42fb-b319-fc251059b578" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: &quot;{\&quot;id\&quot;:\&quot;x\&quot;,\&quot;type\&quot;:\&quot;reasoning\&quot;,\&quot;summary\&quot;:[&quot;···)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="225440e1-ff36-8571-7e53-6dc2d330f006">
+      <Execution id="d8dbc775-dbb6-4666-b0c3-b32c3def0619" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="InvalidItemMembersCannotBecomeBackendTerminalEvidence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="fb95c2ff-1270-dd9a-6286-c3cedebc075a" executionId="fadf2024-be03-41e6-927e-bed38a9132b9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5db0b182-b74f-d434-6a90-83d9e3db9588" executionId="794706f6-abf4-4a1a-8581-f4077462c424" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fe550db6-be1e-7907-448e-4ef5da070dea" executionId="5c52923a-5b41-42fb-b319-fc251059b578" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="225440e1-ff36-8571-7e53-6dc2d330f006" executionId="d8dbc775-dbb6-4666-b0c3-b32c3def0619" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fcd0926e-a539-320e-7576-ce5b4f1f1a2e" executionId="daae8f2a-27ca-4eba-be29-997be9f38ab6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7b3cedd3-9d75-b38e-40c9-60488d8f1cb9" executionId="c07ef025-15dd-4ad1-9555-5cf5944cb290" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="598c68b4-baf8-5df1-a4d4-b99bc8745c78" executionId="920a9016-dc71-4bf9-8e65-6f324415eede" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b60bbeae-814f-6c28-647a-57c6540dd92f" executionId="f159fbd4-fb7c-4952-a7c6-32e2713e8d91" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="8" executed="8" passed="0" failed="8" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.11]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.26]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.33]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.33]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.33]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.33]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.33]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.34]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.34]       Actual:   UsageLimit&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(268,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(String invalid)&#xD;
+[xUnit.net 00:00:00.34]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8035501+09:00">
+        <Text>[xUnit.net 00:00:00.33]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "42") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8123318+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"agentMessage\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8128064+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8130501+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"reasoning\",\"summary\":["···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8133023+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"agentMessage\",\"text\":1"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8135070+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"commandExecution\",\"comm"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8137187+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "{\"id\":\"x\",\"type\":\"unknown\"}") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T07:15:55.8139661+09:00">
+        <Text>[xUnit.net 00:00:00.34]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidItemMembersCannotBecomeBackendTerminalEvidence(invalid: "null") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

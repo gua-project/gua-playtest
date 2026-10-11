@@ -1,0 +1,131 @@
+{
+  "testedBase": "19fafb32385a12bc24ba31ac69f865747fa795d6",
+  "environment": "Windows 10.0.26300 win-x64 .NET SDK 10.0.401",
+  "utcDate": "2026-10-10",
+  "hostTimezone": "UTC+09:00",
+  "sourceSnapshot": [
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexProtocolBackend.cs",
+      "gitBlobSha1": "5000f2bbd194efad5d4e9c549532424efc191304"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/CodexItemSchema.cs",
+      "gitBlobSha1": "04f9d0080647ac32f6bcdd80d6be2f0566c2f9e0"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/Gua.Playtest.Planners.Codex.csproj",
+      "gitBlobSha1": "1f6e696bd10f3b2302a62134f965b3eb12acc1b5"
+    },
+    {
+      "file": "tests/Gua.Playtest.Foundation.Tests/CodexProtocolTests.cs",
+      "gitBlobSha1": "9200cc318fcdc3755d21a07f3ee7f5a8d94062db"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/item-completed.schema.json",
+      "gitBlobSha1": "f66a8337c24f3f44cda5672504b9f3a297e79da1"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/thread-item.schema.json",
+      "gitBlobSha1": "869992f569a89f2d339bb2580490fdd1f80262f1"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/thread-start.schema.json",
+      "gitBlobSha1": "599aa7ff4cd309785fd8349327277513106181bc"
+    },
+    {
+      "file": "src/Gua.Playtest.Planners.Codex/protocol-0.150.1/turn-error.schema.json",
+      "gitBlobSha1": "c43a3ccc79b1843977029c9ce4307c1948f08c7b"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "boundaries.log",
+      "bytes": 42,
+      "sha256": "b9fb0accb01765f19c5ae3d6be502172567313a025b9a1b5cf8f42c90c4ca162"
+    },
+    {
+      "file": "bridge.trx",
+      "bytes": 214092,
+      "sha256": "dd21217d31e622858a13ae17af843e887a6f80f72ba960cfaceb1ccd09a1fb73"
+    },
+    {
+      "file": "build.log",
+      "bytes": 1432,
+      "sha256": "13dcc3a866af0b7da9f691bd492ebcc817b75e5c00355e3fb140ecb66b140bc7"
+    },
+    {
+      "file": "contracts-evidence.json",
+      "bytes": 2832,
+      "sha256": "3856c9f60d7a588081a5d8146a33e1e289338884cf1911f6062c400bb72221d9"
+    },
+    {
+      "file": "contracts.log",
+      "bytes": 1081,
+      "sha256": "d80c4c9ec339db85d075e6d04296bef0950cdda08932e8f402975aab93d971c9"
+    },
+    {
+      "file": "contracts.trx",
+      "bytes": 862636,
+      "sha256": "0ac3a810e216ed45b2f00512d2c5f280afe9cfa88544238e32e65cfa3ee9574e"
+    },
+    {
+      "file": "focused.log",
+      "bytes": 1587,
+      "sha256": "86dc082c839d66c118a2c9b857cf77eb82576f181370ad64607c215bf4bd7253"
+    },
+    {
+      "file": "focused.trx",
+      "bytes": 276605,
+      "sha256": "0c3f2204f69af13f8bf266bb57ed5a00159492bf442560da0ae09ac65db6b6f9"
+    },
+    {
+      "file": "foundation.trx",
+      "bytes": 1705121,
+      "sha256": "7dab250f1e7cab7697e10c4469aea45375c5416067956c3a63ad07c187510622"
+    },
+    {
+      "file": "package-evidence.json",
+      "bytes": 2825,
+      "sha256": "469db313494c6556d977f69e9c8660c43ab343cedef0ba61a9fd74f9daac6583"
+    },
+    {
+      "file": "package.log",
+      "bytes": 4257,
+      "sha256": "0db29e613e01d12036d37750b2bf40524396961ab1bbe4a831d7eb948521fb13"
+    },
+    {
+      "file": "pre-fix.log",
+      "bytes": 3861,
+      "sha256": "15068ab70165d6566612101fdbc69743cfbac914b5c68342a654ca85fd5eba09"
+    },
+    {
+      "file": "pre-fix.trx",
+      "bytes": 10827,
+      "sha256": "23958c906aad374b75e3fd532e66595289b6a1d4a3dff37552b2300596d71c52"
+    },
+    {
+      "file": "restore.log",
+      "bytes": 923,
+      "sha256": "774c90a2350049b2be5d7353483b838448b3f344c9f5f0b6ea469173a8a6cdd2"
+    },
+    {
+      "file": "tests.log",
+      "bytes": 1726,
+      "sha256": "9bf305234b424f2b2e02651c29dd40946e9b628083b5253f712681d8b30f1803"
+    }
+  ],
+  "snapshotEvidence": [
+    {
+      "file": "snapshot/CodexProtocolBackend.cs.txt",
+      "bytes": 29796,
+      "sha256": "e01c5fc07185c833f485a2fb679e2c50314655831aca3fbfb167b46b3e29671e",
+      "gitBlobSha1": "5000f2bbd194efad5d4e9c549532424efc191304"
+    },
+    {
+      "file": "snapshot/CodexProtocolTests.cs.txt",
+      "bytes": 56826,
+      "sha256": "daa56e9bddb9259bc66782d92028ef9c56545813a9ceba4c4c1875e87ba1c445",
+      "gitBlobSha1": "9200cc318fcdc3755d21a07f3ee7f5a8d94062db"
+    }
+  ]
+}

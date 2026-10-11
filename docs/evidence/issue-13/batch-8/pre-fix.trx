@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="5614b961-c6b5-466a-a9f4-b6c2fd01cdbf" name="testk@DESKTOP-3CJOU9S 2026-10-11 08:32:05" runUser="DESKTOP-3CJOU9S\testk" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-11T08:32:05.4804317+09:00" queuing="2026-10-11T08:32:05.4804318+09:00" start="2026-10-11T08:32:04.2508673+09:00" finish="2026-10-11T08:32:05.4845193+09:00" />
+  <TestSettings name="default" id="2ddc753e-348c-4329-9d12-a3eaf7c7e9df">
+    <Deployment runDeploymentRoot="testk_DESKTOP-3CJOU9S_2026-10-11_08_32_05" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="d23b53a5-836a-41c9-87cc-1397fa286a0e" testId="ed5bed55-11d7-3134-afba-11785b30afba" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: &quot;configWarning&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0200851" startTime="2026-10-11T08:32:05.3897631+09:00" endTime="2026-10-11T08:32:05.4016828+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d23b53a5-836a-41c9-87cc-1397fa286a0e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: OutputInvalid&#xD;
+Actual:   Completed</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 377&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="32ba1029-d505-48c3-b465-c413fee529b7" testId="1f77ac06-7263-4f3b-4689-0be99ce9c87f" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: &quot;deprecationNotice&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.0019699" startTime="2026-10-11T08:32:05.3889872+09:00" endTime="2026-10-11T08:32:05.3890484+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="32ba1029-d505-48c3-b465-c413fee529b7">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 377&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5d176fa5-cf76-4f0d-b685-29ca63689eb8" testId="c0e8079e-9506-072e-1e33-77f34c3b7f78" testName="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: &quot;guardianWarning&quot;)" computerName="DESKTOP-3CJOU9S" duration="00:00:00.2402230" startTime="2026-10-11T08:32:05.1285689+09:00" endTime="2026-10-11T08:32:05.3794231+09:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5d176fa5-cf76-4f0d-b685-29ca63689eb8">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Completed&#xD;
+Actual:   OutputInvalid</Message>
+          <StackTrace>   at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 377&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: &quot;deprecationNotice&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="1f77ac06-7263-4f3b-4689-0be99ce9c87f">
+      <Execution id="32ba1029-d505-48c3-b465-c413fee529b7" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: &quot;configWarning&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="ed5bed55-11d7-3134-afba-11785b30afba">
+      <Execution id="d23b53a5-836a-41c9-87cc-1397fa286a0e" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses" />
+    </UnitTest>
+    <UnitTest name="Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: &quot;guardianWarning&quot;)" storage="c:\users\testk\documents\codex\2026-10-07\task-4\issue-13\tests\gua.playtest.foundation.tests\bin\release\net10.0\gua.playtest.foundation.tests.dll" id="c0e8079e-9506-072e-1e33-77f34c3b7f78">
+      <Execution id="5d176fa5-cf76-4f0d-b685-29ca63689eb8" />
+      <TestMethod codeBase="C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Gua.Playtest.Foundation.Tests.CodexProtocolTests" name="NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="ed5bed55-11d7-3134-afba-11785b30afba" executionId="d23b53a5-836a-41c9-87cc-1397fa286a0e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1f77ac06-7263-4f3b-4689-0be99ce9c87f" executionId="32ba1029-d505-48c3-b465-c413fee529b7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c0e8079e-9506-072e-1e33-77f34c3b7f78" executionId="5d176fa5-cf76-4f0d-b685-29ca63689eb8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="一覧に存在しない結果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="読み込まれたすべての結果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="3" passed="0" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.24]   Discovering: Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.39]   Discovered:  Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.41]   Starting:    Gua.Playtest.Foundation.Tests&#xD;
+[xUnit.net 00:00:00.67]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.67]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.67]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.67]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.67]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(377,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method)&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.68]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.68]       Expected: Completed&#xD;
+[xUnit.net 00:00:00.68]       Actual:   OutputInvalid&#xD;
+[xUnit.net 00:00:00.68]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.68]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(377,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method)&#xD;
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.69]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.69]       Expected: OutputInvalid&#xD;
+[xUnit.net 00:00:00.69]       Actual:   Completed&#xD;
+[xUnit.net 00:00:00.69]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.69]         C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs(377,0): at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(String method)&#xD;
+[xUnit.net 00:00:00.69]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.70]   Finished:    Gua.Playtest.Foundation.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:32:05.3815697+09:00">
+        <Text>[xUnit.net 00:00:00.67]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "guardianWarning") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:32:05.3893688+09:00">
+        <Text>[xUnit.net 00:00:00.68]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "deprecationNotice") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="DESKTOP-3CJOU9S" outcome="Error" timestamp="2026-10-11T08:32:05.4020336+09:00">
+        <Text>[xUnit.net 00:00:00.69]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonfatalStartupNoticesAreValidatedAcrossThreadAndTurnResponses(method: "configWarning") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,263 @@
+  Gua.Playtest.Core -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Core\bin\Release\net10.0\Gua.Playtest.Core.dll
+  Gua.Playtest.GuaIntegration -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.GuaIntegration\bin\Release\net10.0\Gua.Playtest.GuaIntegration.dll
+  Gua.Playtest.Runner -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Runner\bin\Release\net10.0\Gua.Playtest.Runner.dll
+  Gua.Playtest.Planners.Codex -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Planners.Codex\bin\Release\net10.0\Gua.Playtest.Planners.Codex.dll
+  Gua.Playtest.Cli -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\src\Gua.Playtest.Cli\bin\Release\net10.0\Gua.Playtest.Cli.dll
+  Gua.Playtest.Foundation.Tests -> C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll
+C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\bin\Release\net10.0\Gua.Playtest.Foundation.Tests.dll (.NETCoreApp,Version=v10.0) のテスト実行
+合計 1 個のテスト ファイルが指定されたパターンと一致しました。
+[xUnit.net 00:00:00.39]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "turns", nested: True) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "model", nested: False) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "approvalsReviewer", nested: False) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "projectId", nested: True) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cwd", nested: False) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "source", nested: True) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "modelProvider", nested: False) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cliVersion", nested: True) [FAIL]
+[xUnit.net 00:00:00.41]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cwd", nested: True) [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "turns", nested: True) [102 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "model", nested: False) [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "approvalsReviewer", nested: False) [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "projectId", nested: True) [10 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cwd", nested: False) [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "source", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "modelProvider", nested: False) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cliVersion", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "cwd", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.43]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "status", nested: True) [FAIL]
+[xUnit.net 00:00:00.43]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "modelProvider", nested: True) [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "updatedAt", nested: True) [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "createdAt", nested: True) [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "sessionId", nested: True) [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "preview", nested: True) [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "\"1\"") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "1.5") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "missing") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "status", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "modelProvider", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "updatedAt", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "createdAt", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "sessionId", nested: True) [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(field: "preview", nested: True) [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CompleteThreadStartShapeIsRequiredBeforeInput(String field, Boolean nested) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 226
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "\"1\"") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "1.5") [2 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "missing") [2 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "null") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "9223372036854775808") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "source", value: "\"unknown-source\"") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "createdAt", value: "9223372036854775808") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "status", value: "{\"type\":\"active\"}") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "turns", value: "[{\"id\":\"old-turn\",\"items\":[],\"status\":\"co"···) [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "updatedAt", value: "1.5") [FAIL]
+[xUnit.net 00:00:00.44]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "turns", value: "[null]") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "null") [2 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(value: "9223372036854775808") [2 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.CanonicalCompletionTimestampIsRequiredBeforeCaching(String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 290
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "source", value: "\"unknown-source\"") [3 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "createdAt", value: "9223372036854775808") [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "status", value: "{\"type\":\"active\"}") [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "turns", value: "[{\"id\":\"old-turn\",\"items\":[],\"status\":\"co"···) [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "updatedAt", value: "1.5") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(field: "turns", value: "[null]") [< 1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.InvalidOrHistoricalThreadStateCannotOpenNewRun(String field, String value) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 255
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: "interrupted") [FAIL]
+[xUnit.net 00:00:00.57]     Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: "completed") [FAIL]
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: "interrupted") [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   ConnectionFailure
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(String status) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 307
+--- End of stack trace from previous location ---
+  失敗 Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(status: "completed") [1 ms]
+  エラー メッセージ:
+   Assert.Equal() Failure: Values differ
+Expected: OutputInvalid
+Actual:   Completed
+  スタック トレース:
+     at Gua.Playtest.Foundation.Tests.CodexProtocolTests.NonFailedTurnCannotCarryValidBackendError(String status) in C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\tests\Gua.Playtest.Foundation.Tests\CodexProtocolTests.cs:line 307
+--- End of stack trace from previous location ---
+結果ファイル: C:\Users\testk\Documents\Codex\2026-10-07\task-4\issue-13\artifacts\codex-review-followup\pass2-pre-fix\testk_DESKTOP-3CJOU9S_2026-10-11_07_30_47_net10.0.trx
+
+失敗!   -失敗:    28、合格:     1、スキップ:     0、合計:    29、期間: 292 ms - Gua.Playtest.Foundation.Tests.dll (net10.0)
