@@ -36,6 +36,7 @@ public sealed class DashboardIndex
     private readonly string[] roots;
     private readonly string[] allowedRoots;
     private readonly DashboardLimits limits;
+    private readonly HashSet<string> validationRoots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Directory, ArtifactFileReference File, FileIdentity Identity, ArtifactFileReference[] Files)> reports = [];
     private long remaining;
     public DashboardIndex(string registry, IEnumerable<string> artifactRoots, IEnumerable<string> allowedRoots,
@@ -51,7 +52,7 @@ public sealed class DashboardIndex
     public async ValueTask<DashboardSnapshot> ReadAsync(CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
-        reports.Clear(); remaining = limits.MaxIndexBytes;
+        reports.Clear(); validationRoots.Clear(); remaining = limits.MaxIndexBytes;
         var warnings = new List<string>(); var runs = new List<DashboardRun>();
         var scenarios = new List<DashboardScenario>(); var truncated = false;
         try
@@ -59,7 +60,7 @@ public sealed class DashboardIndex
             CheckAllowed(registry);
             using (var admission = ReadContract(registry))
                 AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal));
-            var report = await new StaticContractValidator(allowedRoots).ValidateFileAsync(registry, token);
+            var report = await new StaticContractValidator(allowedRoots.Concat(validationRoots).ToArray()).ValidateFileAsync(registry, token);
             token.ThrowIfCancellationRequested();
             if (!report.IsValid || report.Document is not ScenarioRegistryDocument population)
                 return new(report.Code == "Valid" ? "RegistryInvalid" : report.Code, [], [], [], false);
@@ -141,7 +142,7 @@ public sealed class DashboardIndex
             else if (kind == "run")
             {
                 AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal));
-                var validation = await new StaticContractValidator(allowedRoots).ValidateFileAsync(Path.Combine(directory, "run.json"), token);
+                var validation = await new StaticContractValidator(allowedRoots.Concat(validationRoots).ToArray()).ValidateFileAsync(Path.Combine(directory, "run.json"), token);
                 if (!validation.IsValid || validation.Document is not RunDocument wire) throw new InvalidDataException();
                 foreach (var file in validation.Files.Values) { CheckAllowed(file.Path); Charge(file.ByteLength); }
                 identity = wire.Identity; started = wire.StartedAt;
@@ -332,7 +333,12 @@ public sealed class DashboardIndex
         for (var directory = Directory.Exists(full) ? full : Path.GetDirectoryName(full); directory is not null;
             directory = Path.GetDirectoryName(directory))
             if (Directory.Exists(directory) && identities.Contains(FileIdentity.ReadDirectory(directory)))
-            { RunArtifactStore.CheckPath(full); return; }
+            {
+                RunArtifactStore.CheckPath(full);
+                // Preserve this spelling of the very same authorized directory for the static
+                // validator's lexical check (e.g. case-insensitive APFS). No new identity is granted.
+                validationRoots.Add(Path.TrimEndingDirectorySeparator(directory)); return;
+            }
         throw new InvalidDataException();
     }
     private HashSet<FileIdentity> SummaryIdentities(string directory)
