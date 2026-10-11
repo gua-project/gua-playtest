@@ -61,6 +61,29 @@ public sealed class ReplayTests
         using var document = JsonDocument.Parse(output.ToString());
     }
 
+    [Theory]
+    [InlineData("Accepted")]
+    [InlineData("PlanAccepted")]
+    public async Task CliAdoptionPreflightsResolvedSecretAgainstEntireResponse(string secret)
+    {
+        using var files = new Fixture(steps: 1, gameInput: true, secretInput: true);
+        var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var variable = "GUA_TEST_REPLY_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(variable, secret);
+        try
+        {
+            using var output = new StringWriter(); using var diagnostics = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["plan", "accept", "--json", "--managed-root", Path.Combine(files.Root, "managed"),
+                "--plan", path, "--trial", id, "--approve", "--approve-expectations", "--secret-env", "input=" + variable], output, diagnostics));
+            Assert.DoesNotContain(secret, output.ToString()); Assert.DoesNotContain(secret, diagnostics.ToString());
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+            Assert.False(await manager.IsAcceptedAsync(path));
+        }
+        finally { Environment.SetEnvironmentVariable(variable, null); }
+    }
+
     [Fact]
     public async Task CandidateResponsePolicyRunsBeforeDirectoryPublication()
     {
