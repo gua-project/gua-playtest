@@ -21,13 +21,13 @@ dotnet test --no-build --no-restore -c Release
 `global.json` は SDK 10.0.301 以降の同一 major/minor feature band を許可する。Gua は公開 NuGet **1.1.1** を固定し、依存 lock の content hash を保存する。Gua checkout、`../gua`、Node、engine、Codex 認証は build と offline validate に不要。
 
 ```powershell
-dotnet run --project src/Gua.Playtest.Cli -- validate --gua-schema selector.schema.json selector.json
-dotnet run --project src/Gua.Playtest.Cli -- doctor --native
+dotnet run --project src/Gua.Playtest.Cli -- validate --json --gua-schema selector.schema.json selector.json
+dotnet run --project src/Gua.Playtest.Cli -- doctor --json --native
 ```
 
-`validate --gua-schema` は Gua の embedded schema に対する構造検証だけを行う。成功は exit 0、不正/未実装/取得不能は exit 2、中断は exit 130。stdout は status/code の単一 JSON。ファイルは UTF-8、1 MiB 上限。文書値・例外・ローカルパスは診断へ出さない。Scenario validate は #2、正式 CLI/全終了コードは #15 の担当であり、この段階では非ゼロで未実装を示す。
+`validate --json --gua-schema` は Gua の embedded schema に対する構造検証だけを行う。成功は exit 0、不正/未実装/取得不能は exit 2、中断は exit 4。`--json` の stdout は status/code の単一 JSON。通常表示はテキスト、診断は stderr。ファイルは UTF-8、1 MiB 上限。文書値・例外・ローカルパスは診断へ出さない。Scenario validate は明示 allowed root で静的検証する。[CLI](docs/cli.md) は Plan 候補・明示採用と保存済み report を接続する。Explore/Replay は入力解決後、実行前提不足を非ゼロで示す。
 
-`doctor --native` は package の core/runtime の ABI/protocol/buildId と embedded Viewer の commit を確認する。ゲームを起動・接続・操作しない。native のない配置は非ゼロ。native override を拒否する。起動成功は engine/bridge の機能証拠ではない。
+`doctor --json --native` は package の core/runtime の ABI/protocol/buildId と embedded Viewer の commit を確認する。ゲームを起動・接続・操作しない。native のない配置は非ゼロ。native override を拒否する。起動成功は engine/bridge の機能証拠ではない。
 
 依存: `Core ← Runner / GuaIntegration / Planners.Codex ← Cli`。Core に engine/Codex package はない。Runner は `IStaticValidator`、clock/observation/planner/host の抽象窓口を使う。具体 Gua schema/native 連携は GuaIntegration。Codex module は #13 未実装を例外で明示し、認証や Codex 本体を同梱しない。Fake は tests にのみ存在する。
 

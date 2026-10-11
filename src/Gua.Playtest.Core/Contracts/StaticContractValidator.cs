@@ -35,6 +35,29 @@ public sealed class StaticContractValidator
     private readonly AllowedPaths paths;
     public StaticContractValidator(IEnumerable<string> allowedRoots) => paths = new AllowedPaths(allowedRoots);
 
+    /// <summary>Read a Gua-owned Recording with the same bounded decoder and explicit path authority.
+    /// Does not dispatch, adopt or infer a Scenario.</summary>
+    public async ValueTask<StaticValidationReport> ValidateRecordingFileAsync(string file, CancellationToken cancellationToken = default)
+    {
+        var files = new Dictionary<string, ValidatedFile>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        try
+        {
+            var entry = await ReadAsync(paths.Resolve(file, Directory.GetCurrentDirectory()), files, cancellationToken);
+            ContractSchemas.Validate("recording.schema.json", entry.Json);
+            return new("Valid", null, new ReadOnlyDictionary<string, ValidatedFile>(files));
+        }
+        catch (OperationCanceledException) { return Failed("Interrupted"); }
+        catch (ContractException e) { return Failed(e.Code); }
+        catch (YamlException) { return Failed("MalformedDocument"); }
+        catch (JsonException) { return Failed("MalformedDocument"); }
+        catch (UnauthorizedAccessException) { return Failed("ReferenceUnreadable"); }
+        catch (IOException) { return Failed("ReferenceUnreadable"); }
+        catch (ArgumentException) { return Failed("InvalidPath"); }
+        catch (NotSupportedException) { return Failed("InvalidPath"); }
+        catch (InvalidOperationException) { return Failed("SchemaInvalid"); }
+        catch (OverflowException) { return Failed("NonFiniteNumber"); }
+    }
+
     public async ValueTask<StaticValidationReport> ValidateFileAsync(string file, CancellationToken cancellationToken = default)
     {
         var files = new Dictionary<string, ValidatedFile>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);

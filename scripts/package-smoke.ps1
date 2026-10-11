@@ -10,7 +10,7 @@ function Invoke-Dotnet([string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "dotnet failed ($LASTEXITCODE)" }
 }
 function Assert-Cli([string]$Command, [string[]]$Arguments, [int]$Expected, [string]$Code) {
-    $lines = & $Command @Arguments
+    $lines = & $Command --json @Arguments
     $actual = $LASTEXITCODE
     if ($actual -ne $Expected) { throw "CLI exit $actual, expected $Expected : $lines" }
     $result = ($lines -join "`n") | ConvertFrom-Json
@@ -20,6 +20,20 @@ function Assert-Cli([string]$Command, [string[]]$Arguments, [int]$Expected, [str
 $records = @()
 $valid = Join-Path $stage 'valid.json'
 $invalid = Join-Path $stage 'invalid.json'
+$contractRoot = Join-Path $root 'fixtures/contracts'
+$probe = Join-Path $root 'tests/Gua.Playtest.ProcessProbe/Gua.Playtest.ProcessProbe.csproj'
+Invoke-Dotnet @('build', $probe, '-c', 'Release', '--no-restore')
+$probeDll = Join-Path $root 'tests/Gua.Playtest.ProcessProbe/bin/Release/net10.0/Gua.Playtest.ProcessProbe.dll'
+$trace = (& dotnet $probeDll trace (Join-Path $stage 'saved-trace') | Select-Object -Last 1)
+if ($LASTEXITCODE -ne 0) { throw 'Saved Gua Trace fixture creation failed' }
+function Assert-OfflineCommands([string]$Command, [string]$Label) {
+    Assert-Cli $Command @('validate', '--allow-root', $contractRoot, (Join-Path $contractRoot 'scenario.json')) 0 'Valid'
+    Assert-Cli $Command @('plan', 'create', '--managed-root', (Join-Path $stage ('reject-' + $Label)), '--allow-root', $contractRoot, '--scenario', (Join-Path $contractRoot 'multiple-goals.json'), '--recording', (Join-Path $contractRoot 'recording.json'), '--timing', 'recorded') 2 'ExecutionInputInvalid'
+    $html = Join-Path $stage ('report-' + $Label + '.html')
+    Assert-Cli $Command @('report', '--allow-root', $stage, '--trace', $trace, '--output', $html) 0 'SavedTraceRead'
+    Assert-Cli $Command @('report', '--allow-root', $stage, '--trace', $trace, '--output', $html) 2 'ReportOutputExists'
+    Assert-Cli $Command @('replay', '--allow-root', $contractRoot, '--plan', (Join-Path $contractRoot 'plan.json'), '--environment', (Join-Path $contractRoot 'environment.json')) 2 'ProductionRuntimeUnavailable'
+}
 Set-Content -LiteralPath $valid -Value '{"id":{"value":"ready"}}' -Encoding utf8NoBOM
 Set-Content -LiteralPath $invalid -Value '{"id":42}' -Encoding utf8NoBOM
 $published = Join-Path $stage 'published'
@@ -33,6 +47,7 @@ if (!$IsWindows) { & chmod +x $exe; if ($LASTEXITCODE) { throw 'chmod failed' } 
 Assert-Cli $exe @('validate', '--gua-schema', 'selector.schema.json', $valid) 0 'gua-schema-valid'
 Assert-Cli $exe @('validate', '--gua-schema', 'selector.schema.json', $invalid) 2 'gua-schema-invalid'
 Assert-Cli $exe @('doctor', '--native') 0 'native-package-compatible'
+Assert-OfflineCommands $exe 'archive'
 # Remove just Gua native assets from this uniquely created extraction. Offline validation must still work.
 $nativeNames = @('gua.dll', 'gua_runtime.dll', 'libgua.so', 'libgua_runtime.so', 'libgua.dylib', 'libgua_runtime.dylib')
 $native = @(Get-ChildItem -LiteralPath $extracted -Recurse -File | Where-Object Name -In $nativeNames)
@@ -60,6 +75,7 @@ $toolExe = Join-Path $tool $(if ($IsWindows) { 'gua-playtest.exe' } else { 'gua-
 Assert-Cli $toolExe @('validate', '--gua-schema', 'selector.schema.json', $valid) 0 'gua-schema-valid'
 Assert-Cli $toolExe @('validate', '--gua-schema', 'selector.schema.json', $invalid) 2 'gua-schema-invalid'
 Assert-Cli $toolExe @('doctor', '--native') 0 'native-package-compatible'
+Assert-OfflineCommands $toolExe 'tool'
 [pscustomobject]@{
     rid = $Rid
     head = (& git rev-parse HEAD)
@@ -68,6 +84,6 @@ Assert-Cli $toolExe @('doctor', '--native') 0 'native-package-compatible'
     guaCommit = '88f5dca4aa97c5d5187ab66ea4416377f3affc96'
     archiveSha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
     checks = $records
-    scope = 'Package core/runtime load and offline validation; no engine, bridge, Scenario or Codex execution.'
+    scope = 'Actual archive/fresh Tool offline validate, Plan refusal, saved report and fail-closed Replay; no engine, bridge or Codex authentication/execution.'
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $stage 'evidence.json') -Encoding utf8NoBOM
 Write-Output "Package smoke passed: $stage"

@@ -54,8 +54,8 @@ failures remain disqualifying. Evidence preserves candidate-relative paths,
 including subdirectories, and rechecks them with the retained hashes.
 
 `PlanCommand.ExecuteAsync` supplies a standalone handler for host integration.
-The packaged CLI currently dispatches neither `plan` nor `replay`. The shared
-composition must pass its secret policy and connect these handler forms:
+The packaged CLI dispatches `plan` with its explicit host secret policy;
+see [CLI](cli.md) for secret bindings and fail-closed Replay prerequisites. Handler forms:
 
 ```text
 plan create --managed-root <root> --allow-root <input-root> --scenario <file> --recording <file> --timing <recorded|conditionSynchronized>

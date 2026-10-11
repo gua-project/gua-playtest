@@ -10,5 +10,6 @@
     <Project Path="tests/Gua.Playtest.Bridge.Tests/Gua.Playtest.Bridge.Tests.csproj" />
     <Project Path="tests/Gua.Playtest.Contracts.Tests/Gua.Playtest.Contracts.Tests.csproj" />
     <Project Path="tests/Gua.Playtest.Foundation.Tests/Gua.Playtest.Foundation.Tests.csproj" />
+    <Project Path="tests/Gua.Playtest.ProcessProbe/Gua.Playtest.ProcessProbe.csproj" />
   </Folder>
 </Solution>

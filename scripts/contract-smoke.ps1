@@ -26,14 +26,14 @@ try {
     Set-Location $stage
     $cases = @(Get-Content -Raw -LiteralPath (Join-Path $fixtures 'expected.json') | ConvertFrom-Json)
     foreach ($case in $cases) {
-        $lines = & dotnet $dll validate --allow-root $fixtures (Join-Path $fixtures $case.file)
+        $lines = & dotnet $dll validate --json --allow-root $fixtures (Join-Path $fixtures $case.file)
         $exit = $LASTEXITCODE
         $expectedExit = if ($case.expected -eq 'Valid') { 0 } else { 2 }
         $response = ($lines -join "`n") | ConvertFrom-Json
         if ($exit -ne $expectedExit -or $response.code -ne $case.expected) { throw "Contract mismatch: $($case.file)" }
         $checks += [pscustomobject]@{ file=$case.file; expected=$case.expected; actual=$response.code; exit=$exit }
     }
-    $lines = & dotnet $dll doctor --native
+    $lines = & dotnet $dll doctor --json --native
     if ($LASTEXITCODE -ne 2 -or (($lines -join "`n") | ConvertFrom-Json).code -ne 'native-package-unavailable-or-incompatible') { throw 'Missing-native control did not fail' }
 } finally { Set-Location $previous }
 [pscustomobject]@{
