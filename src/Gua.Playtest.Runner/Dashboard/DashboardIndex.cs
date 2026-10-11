@@ -179,7 +179,12 @@ public sealed class DashboardIndex
             var completion = doc.RootElement;
             if (Text(completion, "kind") != "playtestCompletionStorage" || completion.GetProperty("storageVersion").GetInt32() != 1 ||
                 Text(completion, "runId") != Path.GetFileName(directory)) throw new InvalidDataException();
-            var receipts = JsonSerializer.Deserialize<ArtifactReceipt[]>(completion.GetProperty("artifacts"), Json);
+            var rawReceipts = completion.GetProperty("artifacts");
+            if (rawReceipts.ValueKind != JsonValueKind.Array) throw new InvalidDataException();
+            foreach (var raw in rawReceipts.EnumerateArray())
+                if (!Enum.GetNames<ArtifactKind>().Contains(Text(raw, "kind"), StringComparer.Ordinal) ||
+                    !Enum.GetNames<ArtifactState>().Contains(Text(raw, "state"), StringComparer.Ordinal)) throw new InvalidDataException();
+            var receipts = JsonSerializer.Deserialize<ArtifactReceipt[]>(rawReceipts, Json);
             if (receipts is null || receipts.Length != 2 || receipts.Any(x => x is null) ||
                 receipts.Select(x => x.Kind).Distinct().Count() != 2) throw new InvalidDataException();
             var details = new List<DashboardDetail>();
@@ -195,6 +200,7 @@ public sealed class DashboardIndex
                 var entries = new[] { new ArtifactFileReference(receipt.FileName!, receipt.Bytes ?? 0, receipt.Sha256!) }
                     .Concat(receipt.AdditionalFiles ?? []).ToArray();
                 if (entries.Any(x => x is null)) throw new InvalidDataException();
+                foreach (var entry in entries) ValidateReference(entry);
                 string? link = null;
                 try
                 {
@@ -230,14 +236,19 @@ public sealed class DashboardIndex
     }
     private FileStream OpenReceipt(string directory, ArtifactFileReference file)
     {
+        ValidateReference(file);
+        var stream = Open(Path.Combine(directory, Path.Combine(file.FileName.Split('/'))));
+        if (stream.Length == file.Bytes) return stream;
+        stream.Dispose(); throw new InvalidDataException();
+    }
+    private void ValidateReference(ArtifactFileReference file)
+    {
         if (file.FileName is null || file.FileName.Length > 1031 || file.Bytes <= 0 || file.Bytes > limits.MaxFileBytes ||
             !Hash(file.Sha256)) throw new InvalidDataException();
         var parts = file.FileName.Split('/');
         if (parts.Length > 8 || parts.Any(p => !Token(p) || p[^1] == '.') ||
-            parts[0] is "run.json" or "primary.json" or "completion.json" or "result.json") throw new InvalidDataException();
-        var stream = Open(Path.Combine(directory, Path.Combine(parts)));
-        if (stream.Length == file.Bytes) return stream;
-        stream.Dispose(); throw new InvalidDataException();
+            new[] { "run.json", "primary.json", "completion.json", "result.json" }.Contains(parts[0], StringComparer.OrdinalIgnoreCase))
+            throw new InvalidDataException();
     }
     private JsonDocument ReadJson(string path)
     {
@@ -299,10 +310,10 @@ public sealed class DashboardIndex
     private void CheckAllowed(string path)
     {
         var full = Path.GetFullPath(path);
-        if (!allowedRoots.Any(root => full.Equals(Path.TrimEndingDirectorySeparator(root),
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
-            full.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar,
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))) throw new InvalidDataException();
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!allowedRoots.Any(root => full.Equals(root, comparison) ||
+            full.StartsWith(Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, comparison)))
+            throw new InvalidDataException();
         RunArtifactStore.CheckPath(full);
     }
     private void Charge(long length)

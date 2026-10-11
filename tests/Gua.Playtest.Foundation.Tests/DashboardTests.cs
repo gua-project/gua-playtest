@@ -125,6 +125,59 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("LatestUnknown", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
     }
     [Fact]
+    public async Task Explicit_filesystem_root_authorizes_existing_descendants()
+    {
+        Save(); var drive = Path.GetPathRoot(root)!;
+        var snapshot = await new DashboardIndex(Registry, [Artifacts], [drive]).ReadAsync();
+        Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal("Passed", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+    }
+    [Theory]
+    [InlineData("{}")] [InlineData("{\"kind\":\"Trace\"}")] [InlineData("{\"state\":\"NotExecuted\"}")]
+    [InlineData("{\"kind\":null,\"state\":\"NotExecuted\"}")] [InlineData("{\"kind\":\"Trace\",\"state\":null}")]
+    public async Task Receipt_requires_explicit_string_kind_and_state(string receipt)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse(receipt); File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs[0].Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+    }
+    [Theory]
+    [InlineData("run.json")] [InlineData("primary.json")] [InlineData("completion.json")] [InlineData("result.json")]
+    public async Task Case_equivalent_summary_names_are_not_artifact_receipts(string name)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var bytes = File.ReadAllBytes(Path.Combine(store.DirectoryPath, name));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new
+        { kind = "Trace", state = "Saved", fileName = name.ToUpperInvariant(), bytes = bytes.Length, sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)) }));
+        File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs[0].Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+    }
+    [Theory]
+    [InlineData("scenarioId")] [InlineData("definitionVersion")] [InlineData("scenarioSha256")] [InlineData("buildId")] [InlineData("environmentSha256")]
+    public void Identity_value_redaction_collisions_reject_without_publication(string field)
+    {
+        var identity = Identity();
+        var secret = field switch { "scenarioId" => identity.ScenarioId, "definitionVersion" => identity.DefinitionVersion,
+            "scenarioSha256" => identity.ScenarioSha256, "buildId" => identity.BuildId, _ => identity.EnvironmentSha256 };
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([secret], []));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], identity)).Failure);
+        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(path => Path.GetFileName(path)!).ToArray());
+    }
+    [Fact]
+    public void Valid_identity_is_retained_exactly_in_storage()
+    {
+        var identity = Identity(); var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], identity)).Saved);
+        using var file = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        var saved = file.RootElement.GetProperty("identity");
+        Assert.Equal(identity.ScenarioId, saved.GetProperty("scenarioId").GetString());
+        Assert.Equal(identity.DefinitionVersion, saved.GetProperty("definitionVersion").GetString());
+        Assert.Equal(identity.ScenarioSha256, saved.GetProperty("scenarioSha256").GetString());
+        Assert.Equal(identity.BuildId, saved.GetProperty("buildId").GetString());
+        Assert.Equal(identity.EnvironmentSha256, saved.GetProperty("environmentSha256").GetString());
+    }
+    [Fact]
     public async Task Registry_yaml_and_references_obey_regular_file_admission()
     {
         var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;

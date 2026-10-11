@@ -323,7 +323,8 @@ public sealed class RunArtifactStore
         var safeKey = redactor.Redact(key);
         if (structural && (safeKey != key || redactor.Sensitive(key))) throw new InvalidDataException("StructuralRedactionCollision");
         if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason" or
-            "observationId" or "decisionId" or "actionId" or "reasonCode") &&
+            "observationId" or "decisionId" or "actionId" or "reasonCode" or "scenarioId" or
+            "definitionVersion" or "scenarioSha256" or "buildId" or "environmentSha256") &&
             value is string structuralText && redactor.Redact(structuralText) != structuralText)
             throw new InvalidDataException("StructuralRedactionCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
