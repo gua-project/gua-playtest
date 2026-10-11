@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Gua.Playtest.Runner.Execution;
+using Gua.Playtest.Core.Contracts;
 
 namespace Gua.Playtest.Runner.Artifacts;
 
@@ -10,9 +11,12 @@ public enum ObservationBoundary { Before, After, PrimaryDecision, AfterCleanup }
 public sealed record ObservationReference(ObservationBoundary Boundary, string ObservationId);
 public sealed record DecisionReference(string DecisionId, string ObservationId, string? ActionId, string ReasonCode);
 public sealed record EffectiveSetting(string Name, string Value, string Source);
-public sealed record InputCopy(string Name, JsonElement Document);
+/// <summary>Optional exact UTF-8 JSON/YAML source bytes include BOM, comments and whitespace and are never persisted.
+/// Without SourceUtf8, the original JsonElement root bytes are the JSON source identity.</summary>
+public sealed record InputCopy(string Name, JsonElement Document, ReadOnlyMemory<byte>? SourceUtf8 = null, string SourceFormat = ".json");
 public sealed record RunArtifactMetadata(string Profile, IReadOnlyList<EffectiveSetting> Settings,
-    IReadOnlyDictionary<string, string> Versions, IReadOnlyList<InputCopy> Inputs);
+    IReadOnlyDictionary<string, string> Versions, IReadOnlyList<InputCopy> Inputs,
+    RunIdentity? Identity = null, DateTimeOffset? StartedAt = null);
 /// <summary>Receipt from a Gua-owned writer. Saved bytes must already be redacted by that writer.
 /// SHA-256 covers those fixed bytes, never the original secret-bearing input.</summary>
 public sealed record ArtifactFileReference(string FileName, long Bytes, string Sha256);

@@ -3560,5 +3560,15 @@
     "P-26": "https://github.com/gua-project/gua-playtest/issues/26"
   },
   "current_gua_source_commit": "88f5dca4aa97c5d5187ab66ea4416377f3affc96",
+  "dashboard_contract_mapping": {
+    "contract": "docs/dashboard.md",
+    "regressions": "tests/Gua.Playtest.Foundation.Tests/DashboardTests.cs",
+    "DASH-001": ["Current_content_build_environment_and_latest_failure_are_independent"],
+    "DASH-002": ["Current_content_build_environment_and_latest_failure_are_independent", "Missing_old_identity_stays_unknown_but_result_is_retained"],
+    "DASH-003": ["Saved_status_is_not_regraded", "Unsettled_corrupt_read_failures_and_exit11_remain_distinct", "Detail_states_are_separate", "Unknown_start_does_not_hide_ordering_uncertainty"],
+    "DASH-004": ["Limits_and_root_failure_cannot_claim_unrun_or_latest_pass", "Gua_common_report_links_revalidate_and_missing_detail_is_not_omission", "Duplicate_metadata_and_paths_outside_authority_fail_closed", "Packaged_assets_read_only_http_refresh_and_rejected_requests"],
+    "integration_owners": ["https://github.com/gua-project/gua-playtest/issues/1", "https://github.com/gua-project/gua-playtest/issues/15", "https://github.com/gua-project/gua-playtest/issues/18", "https://github.com/gua-project/gua-playtest/issues/26"],
+    "release_evidence_lanes": ["local-contract", "real-Runner", "real-game-multiple-builds", "common-Gua-Viewer", "browser", "packaged-consumer"]
+  },
   "original_ledger_github_writes_performed": false
 }

@@ -1075,7 +1075,11 @@ valueSchemaで入力構造・範囲・各値の意味を機械可読にし、exa
 
 ## DASH local dashboard追加要件
 
-#26によりv0.1へ追加した4要件。元126要件は削減しない。契約は[contracts.md](contracts.md)、実Runner/browser/配布物の受け入れは#26/#18。
+#26によりv0.1へ追加した4要件。元126要件は削減しない。契約は[contracts.md](contracts.md)と[dashboard.md](dashboard.md)、実Runner/browser/配布物の受け入れは#26/#18。
+
+契約回帰の対応先は `tests/Gua.Playtest.Foundation.Tests/DashboardTests.cs`。
+AT-DASH-001/002 は登録母集団・content/build/Environment照合、AT-DASH-003 は全status・履歴・後処理・receipt状態、AT-DASH-004 は明示path境界・common report再読取・HTTP read-only・embedded assetsを対応させる。
+親#1と#18の統合受け入れでは、実ゲームの複数Scenario・複数buildで保存したRunとの独立比較、正式CLIと配布物のみでのbrowser操作を別に確認する。
 
 ### DASH-001 明示Scenario登録母集団
 

@@ -368,7 +368,11 @@ public sealed class ReplayTests
         var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(8 * 1024 * 1024, 32 * 1024 * 1024, 1000, 8 * 1024 * 1024), new([], []));
         var scenario = replay.CopyScenario();
         var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, replay.ScenarioSha256, "build", new string('a', 64));
-        Assert.True(store.BeginReplayPreparation(new("public", metadata is null ? [] : [new("note", metadata, "public")], new Dictionary<string, string>(), []), identity).Saved);
+        var scenarioPath = Path.Combine(Path.GetDirectoryName(path)!, JsonNode.Parse(File.ReadAllText(path))!["scenario"]!["path"]!.GetValue<string>());
+        var sourceBytes = File.ReadAllBytes(scenarioPath);
+        using var fixedScenario = JsonDocument.Parse(sourceBytes);
+        Assert.True(store.BeginReplayPreparation(new("public", metadata is null ? [] : [new("note", metadata, "public")], new Dictionary<string, string>(),
+            [new("scenario", fixedScenario.RootElement, sourceBytes)]), identity).Saved);
         var clock = new MonotonicClock();
         using var cancellation = new CancellationTokenSource();
         var outcome = await Run(replay, new(clock), new Playback(), clock,
@@ -486,9 +490,14 @@ public sealed class ReplayTests
     public void ReplayPreparationRejectsIdentitySecretCollisions(string field, string secret)
     {
         using var files = new Fixture();
+        var sourceBytes = File.ReadAllBytes(Path.Combine(files.Root, "scenario.json"));
+        using var fixedScenario = JsonDocument.Parse(sourceBytes);
+        var sourceHash = Convert.ToHexStringLower(SHA256.HashData(sourceBytes));
+        if (field == "scenarioSha256") secret = sourceHash[..4];
         var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(65536, 1048576, 1000, 8192), new([secret], []));
-        var identity = new RunIdentity("purchase", "v1", new string('c', 64), "build", new string('a', 64));
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginReplayPreparation(new("public", [], new Dictionary<string, string>(), []), identity).Failure);
+        var identity = new RunIdentity("purchase", "v1", sourceHash, "build", new string('a', 64));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginReplayPreparation(new("public", [], new Dictionary<string, string>(),
+            [new("scenario", fixedScenario.RootElement, sourceBytes)]), identity).Failure);
         Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")), field);
     }
 

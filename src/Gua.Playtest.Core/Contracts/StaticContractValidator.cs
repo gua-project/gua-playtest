@@ -70,7 +70,9 @@ public sealed class StaticContractValidator
 
     public async ValueTask<StaticValidationReport> ValidateFileAsync(string file, CancellationToken cancellationToken = default)
     {
-        var files = new Dictionary<string, ValidatedFile>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        // Distinct spellings may name distinct files even on Windows. Let filesystem
+        // reads resolve aliases instead of merging case-distinct fixed references.
+        var files = new Dictionary<string, ValidatedFile>(StringComparer.Ordinal);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -141,7 +143,7 @@ public sealed class StaticContractValidator
         Dictionary<string, ValidatedFile> files, CancellationToken token)
     {
         var path = ResolveFile(reference["path"]!.GetValue<string>(), System.IO.Path.GetDirectoryName(owner.Path)!);
-        if (path.Equals(owner.Path, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) throw new ContractException("ReferenceCycle");
+        if (path.Equals(owner.Path, StringComparison.Ordinal)) throw new ContractException("ReferenceCycle");
         var value = await ReadAsync(path, files, token);
         if (value.Sha256 != reference["sha256"]!.GetValue<string>()) throw new ContractException("HashMismatch");
         if (kind == "recording") ContractSchemas.Validate("recording.schema.json", value.Json);

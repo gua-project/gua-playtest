@@ -1,0 +1,1362 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Gua.Playtest.Cli;
+using Gua.Playtest.Core.Contracts;
+using Gua.Playtest.Runner;
+using Gua.Playtest.Runner.Artifacts;
+using Gua.Playtest.Runner.Dashboard;
+using Gua.Playtest.Runner.Execution;
+using Gua.Playtest.Runner.Replay;
+using Gua.Testing;
+using Xunit;
+
+namespace Gua.Playtest.Foundation.Tests;
+
+public sealed class DashboardTests : IDisposable
+{
+    private readonly string root = Path.Combine(AppContext.BaseDirectory, "dashboard-tests-" + Guid.NewGuid().ToString("N"));
+    private string Registry => Path.Combine(root, "registry.json");
+    private string Artifacts => Path.Combine(root, "runs");
+    private static string EnvironmentHash => new('a', 64);
+    private static ArtifactLimits Limits => new(1024 * 1024, 8 * 1024 * 1024, 10000, 65536);
+    public DashboardTests() { Directory.CreateDirectory(Artifacts); Register(); }
+    private string Register(string objective = "Reach target")
+    {
+        var scenario = new ScenarioDocument("s1", "v1", "First <script>Scenario</script>", new(objective, null, null), new(1000, 2, null), null);
+        var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(scenario));
+        File.WriteAllBytes(Path.Combine(root, "s1.json"), bytes);
+        var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var second = new ScenarioDocument("s2", "v1", "Unrun Scenario", new("Second", null, null), new(1000, 2, null), null);
+        var secondBytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(second));
+        File.WriteAllBytes(Path.Combine(root, "s2.json"), secondBytes);
+        File.WriteAllText(Registry, ContractJson.Serialize(new ScenarioRegistryDocument("registry",
+            [new("s1", "v1", new("s1.json", hash)), new("s2", "v1", new("s2.json", Convert.ToHexStringLower(SHA256.HashData(secondBytes))))], ["runs"])));
+        return hash;
+    }
+    private RunIdentity Identity(string build = "buildA") => new("s1", "v1",
+        Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(root, "s1.json")))), build, EnvironmentHash);
+    private DashboardIndex Index(DashboardLimits? limits = null) => new(Registry, [Artifacts], [root], limits);
+    private RunArtifactStore Save(ResultStatus status = ResultStatus.Passed, int day = 1, string build = "buildA",
+        bool incomplete = false, bool identity = true, bool settled = true, ArtifactState detail = ArtifactState.OmittedOnSuccess)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)],
+            identity ? Identity(build) : null, new DateTimeOffset(2026, 1, day, 0, 0, 0, TimeSpan.Zero))).Saved);
+        var reason = status switch
+        { ResultStatus.Passed => RunReason.GoalSatisfied, ResultStatus.Failed => RunReason.ActionFailed,
+            ResultStatus.TimedOut => RunReason.MaxDuration, ResultStatus.Aborted => RunReason.Cancelled,
+            ResultStatus.Invalid => RunReason.InvalidContract, _ => RunReason.ExplorationFinished };
+        var primary = new PrimaryResult(status, new(reason, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        if (settled)
+            Assert.True(store.Complete(new(primary, [], incomplete ? [new(PostProcessingReason.ResourceReleaseUnconfirmed)] : [], []),
+                [new(ArtifactKind.Trace, status == ResultStatus.Passed ? detail : ArtifactState.NotExecuted),
+                    new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], new DateTimeOffset(2026, 1, day, 1, 0, 0, TimeSpan.Zero)).Saved);
+        return store;
+    }
+    [Fact]
+    public async Task Current_content_build_environment_and_latest_failure_are_independent()
+    {
+        Save(); var failed = Save(ResultStatus.Failed, 2); Save(day: 3, build: "buildB");
+        var snapshot = await Index().ReadAsync(); Assert.Equal("Ready", snapshot.RegistryState);
+        var selected = DashboardIndex.Select(snapshot, "buildA", EnvironmentHash);
+        Assert.Equal("Failed", selected[0].State); Assert.Equal(failed.RunId, selected[0].Latest!.RunId);
+        Assert.Equal("Unrun", selected[1].State); Assert.Equal(3, snapshot.Runs.Count);
+        Assert.Equal("Passed", DashboardIndex.Select(snapshot, "buildB", EnvironmentHash)[0].State);
+        Assert.Equal("Unrun", DashboardIndex.Select(snapshot, "buildA", new string('b', 64))[0].State);
+        Register("Changed content with unchanged version");
+        Assert.Equal("Unrun", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Theory]
+    [InlineData(ResultStatus.Passed)] [InlineData(ResultStatus.Failed)] [InlineData(ResultStatus.TimedOut)]
+    [InlineData(ResultStatus.Aborted)] [InlineData(ResultStatus.Invalid)] [InlineData(ResultStatus.Unverified)]
+    public async Task Saved_status_is_not_regraded(ResultStatus status)
+    {
+        Save(status); var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal(status.ToString(), run.State); Assert.Equal(status, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Missing_old_identity_stays_unknown_but_result_is_retained()
+    {
+        Save(identity: false); var snapshot = await Index().ReadAsync();
+        Assert.Null(snapshot.Runs[0].BuildId); Assert.Null(snapshot.Runs[0].ScenarioSha256);
+        Assert.Equal(ResultStatus.Passed, snapshot.Runs[0].Result!.Status);
+        Assert.Equal("Unrun", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+        Assert.Equal("s1", snapshot.Runs[0].ScenarioId);
+    }
+    [Fact]
+    public async Task Unsettled_corrupt_read_failures_and_exit11_remain_distinct()
+    {
+        var pending = Save(settled: false); var corrupt = Save(day: 2); var incomplete = Save(day: 3, incomplete: true);
+        File.WriteAllText(Path.Combine(corrupt.DirectoryPath, "result.json"), "{broken");
+        var snapshot = await Index().ReadAsync();
+        Assert.Equal("Unsettled", snapshot.Runs.Single(x => x.RunId == pending.RunId).State);
+        Assert.Equal("ResultUnreadable", snapshot.Runs.Single(x => x.RunId == corrupt.RunId).State);
+        var run = snapshot.Runs.Single(x => x.RunId == incomplete.RunId);
+        Assert.Equal("PassedPostProcessingIncomplete", run.State); Assert.False(run.Result!.PostProcessing.Complete);
+        File.WriteAllText(Path.Combine(incomplete.DirectoryPath, "run.json"), "{}");
+        Assert.Equal("RunUnreadable", (await Index().ReadAsync()).Runs.Single(x => x.RunId == incomplete.RunId).State);
+    }
+    [Theory]
+    [InlineData(ArtifactState.OmittedOnSuccess)] [InlineData(ArtifactState.NotExecuted)]
+    [InlineData(ArtifactState.CaptureFailed)] [InlineData(ArtifactState.SaveFailed)]
+    public async Task Detail_states_are_separate(ArtifactState state)
+    { Save(detail: state); Assert.Equal(state.ToString(), (await Index().ReadAsync()).Runs[0].Details[0].State); }
+    [Fact]
+    public async Task Limits_and_root_failure_cannot_claim_unrun_or_latest_pass()
+    {
+        Save(); Save(day: 2);
+        var limited = await Index(new(MaxRuns: 1)).ReadAsync(); Assert.True(limited.Truncated);
+        Assert.All(DashboardIndex.Select(limited, "buildA", EnvironmentHash), x => Assert.Equal("IndexIncomplete", x.State));
+        var missing = new DashboardIndex(Registry, [Path.Combine(root, "absent")], [root]);
+        var unreadable = await missing.ReadAsync(); Assert.Equal(["ArtifactRootUnreadable"], unreadable.Warnings);
+        Assert.All(DashboardIndex.Select(unreadable, "buildA", EnvironmentHash), x => Assert.Equal("IndexIncomplete", x.State));
+    }
+    [Fact]
+    public async Task Unknown_start_does_not_hide_ordering_uncertainty()
+    {
+        var store = Save(); Save(ResultStatus.Failed, 2);
+        var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject(); json.Remove("startedAt");
+        File.WriteAllText(file, json.ToJsonString());
+        Assert.Equal("LatestUnknown", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
+    public async Task Explicit_filesystem_root_authorizes_existing_descendants()
+    {
+        Save(); var drive = Path.GetPathRoot(root)!;
+        var snapshot = await new DashboardIndex(Registry, [Artifacts], [drive]).ReadAsync();
+        Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal("Passed", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+    }
+    [Theory]
+    [InlineData("{}")] [InlineData("{\"kind\":\"Trace\"}")] [InlineData("{\"state\":\"NotExecuted\"}")]
+    [InlineData("{\"kind\":null,\"state\":\"NotExecuted\"}")] [InlineData("{\"kind\":\"Trace\",\"state\":null}")]
+    public async Task Receipt_requires_explicit_string_kind_and_state(string receipt)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse(receipt); File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs[0].Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+    }
+    [Theory]
+    [InlineData("run.json")] [InlineData("primary.json")] [InlineData("completion.json")] [InlineData("result.json")]
+    public async Task Case_equivalent_summary_names_are_not_artifact_receipts(string name)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var bytes = File.ReadAllBytes(Path.Combine(store.DirectoryPath, name));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new
+        { kind = "Trace", state = "Saved", fileName = name.ToUpperInvariant(), bytes = bytes.Length, sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)) }));
+        File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs[0].Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+    }
+    [Theory]
+    [InlineData("scenarioId")] [InlineData("definitionVersion")] [InlineData("scenarioSha256")] [InlineData("buildId")] [InlineData("environmentSha256")]
+    public void Identity_value_redaction_collisions_reject_without_publication(string field)
+    {
+        var identity = Identity();
+        var secret = field switch { "scenarioId" => identity.ScenarioId, "definitionVersion" => identity.DefinitionVersion,
+            "scenarioSha256" => identity.ScenarioSha256, "buildId" => identity.BuildId, _ => identity.EnvironmentSha256 };
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([secret], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity)).Failure);
+        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(path => Path.GetFileName(path)!).ToArray());
+    }
+    [Fact]
+    public void Valid_identity_is_retained_exactly_in_storage()
+    {
+        var identity = Identity(); var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity)).Saved);
+        using var file = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        var saved = file.RootElement.GetProperty("identity");
+        Assert.Equal(identity.ScenarioId, saved.GetProperty("scenarioId").GetString());
+        Assert.Equal(identity.DefinitionVersion, saved.GetProperty("definitionVersion").GetString());
+        Assert.Equal(identity.ScenarioSha256, saved.GetProperty("scenarioSha256").GetString());
+        Assert.Equal(identity.BuildId, saved.GetProperty("buildId").GetString());
+        Assert.Equal(identity.EnvironmentSha256, saved.GetProperty("environmentSha256").GetString());
+    }
+    [Fact]
+    public async Task Registry_yaml_and_references_obey_regular_file_admission()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        var yaml = Path.Combine(root, "registry.yaml");
+        File.WriteAllText(yaml, $"kind: scenarioRegistry\nschemaVersion: 1\nregistryId: registry\nscenarios:\n  - scenarioId: s1\n    definitionVersion: v1\n    file:\n      path: s1.json\n      sha256: {Identity().ScenarioSha256}\nartifactRoots:\n  - runs\n");
+        Assert.Equal("Ready", (await new DashboardIndex(yaml, [Artifacts], [root]).ReadAsync()).RegistryState);
+        var source = Path.Combine(root, "s1.json"); var link = Path.Combine(root, "linked.json");
+        if (OperatingSystem.IsWindows())
+        {
+            // Junctions do not require developer-mode symlink privilege.
+            var linkedDirectory = Path.Combine(root, "linked");
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe")
+            { Arguments = $"/c mklink /J \"{linkedDirectory}\" \"{root}\"", UseShellExecute = false, CreateNoWindow = true });
+            Assert.NotNull(process); process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+            json["scenarios"]![0]!["file"]!["path"] = "linked/s1.json";
+            File.WriteAllText(Registry, json.ToJsonString());
+            try { Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState); }
+            finally { Directory.Delete(linkedDirectory); }
+        }
+        else
+        {
+            File.CreateSymbolicLink(link, source); json["scenarios"]![0]!["file"]!["path"] = "linked.json";
+            File.WriteAllText(Registry, json.ToJsonString());
+            Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState); File.Delete(link);
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("mkfifo")
+            { ArgumentList = { link }, UseShellExecute = false });
+            Assert.NotNull(process); process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+            try { Assert.Equal("RegistryUnreadable", (await Index().ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3))).RegistryState); }
+            finally { File.Delete(link); }
+        }
+    }
+    [Fact]
+    public async Task Timestamp_order_keeps_100ns_precision_and_normalizes_offsets()
+    {
+        var first = Save(); var second = Save(ResultStatus.Failed);
+        var instant = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        void SetStart(RunArtifactStore store, DateTimeOffset start)
+        {
+            var file = Path.Combine(store.DirectoryPath, "run.json");
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!; json["startedAt"] = start;
+            File.WriteAllText(file, json.ToJsonString());
+        }
+        SetStart(first, instant.AddTicks(1)); SetStart(second, instant.AddTicks(2));
+        var snapshot = await Index().ReadAsync();
+        Assert.Equal("Failed", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+        Assert.True(string.CompareOrdinal(snapshot.Runs.Single(r => r.RunId == second.RunId).StartedOrder,
+            snapshot.Runs.Single(r => r.RunId == first.RunId).StartedOrder) > 0);
+        SetStart(first, instant); SetStart(second, instant.ToOffset(TimeSpan.FromHours(1)));
+        snapshot = await Index().ReadAsync(); Assert.Equal(snapshot.Runs[0].StartedOrder, snapshot.Runs[1].StartedOrder);
+        Assert.Equal("LatestUnknown", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
+    public async Task Equal_start_times_do_not_claim_which_result_is_latest()
+    {
+        Save(); Save(ResultStatus.Failed);
+        Assert.Equal("LatestUnknown", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
+    public async Task Real_executor_and_persistence_results_match_independent_expected_unverified()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity(), DateTimeOffset.UtcNow)).Saved);
+        var clock = new MonotonicClock(); var duration = TimeSpan.FromSeconds(2);
+        var run = new RunSession(new(duration, duration, duration, duration, duration, duration, 2, 2, 2, 100), clock, clock);
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true),
+            (_, _) => ValueTask.FromResult(true), confirmPrimary: (snapshot, token) =>
+                ValueTask.FromResult(store.ConfirmPrimary(snapshot, [], [], token).Saved));
+        Assert.Equal(ResultStatus.Unverified, outcome.Primary.Status);
+        Assert.True(store.Complete(outcome, [new(ArtifactKind.Trace, ArtifactState.NotExecuted),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        Assert.Equal("Unverified", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
+    public async Task Gua_common_report_links_revalidate_and_missing_detail_is_not_omission()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity(), DateTimeOffset.UtcNow)).Saved);
+        var primary = new PrimaryResult(ResultStatus.Failed, new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        using var trace = new GuaTraceSession(new GuaTraceOptions
+        { OutputDirectory = Path.Combine(store.DirectoryPath, "gua"), SavePolicy = GuaTraceSavePolicy.Always, Profile = "player" });
+        var step = trace.BeginStep(GuaTraceStepKind.Mark, "dashboard-viewer-fixture"); trace.EndStep(step, GuaTraceOutcome.Failed);
+        Assert.True(await trace.CompleteAsync(GuaTraceOutcome.Failed));
+        var html = Path.Combine(store.DirectoryPath, "report.html");
+        Assert.True(GuaTraceReport.WriteHtml(trace.ArtifactPath, html).Succeeded);
+        var files = Directory.GetFiles(store.DirectoryPath, "*", SearchOption.AllDirectories)
+            .Where(file => Path.GetFileName(file) is not ".owner" and not "run.json" and not "primary.json")
+            .Select(file => { var bytes = File.ReadAllBytes(file); return new ArtifactFileReference(
+                Path.GetRelativePath(store.DirectoryPath, file).Replace('\\', '/'), bytes.Length, Convert.ToHexStringLower(SHA256.HashData(bytes))); }).ToArray();
+        var manifest = files.Single(file => file.FileName.EndsWith("manifest.json", StringComparison.Ordinal));
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.Saved,
+            manifest.FileName, manifest.Bytes, manifest.Sha256, files.Where(file => file != manifest).ToArray()),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var index = Index(); var snapshot = await index.ReadAsync(); var detail = snapshot.Runs[0].Details[0];
+        Assert.Equal("Saved", detail.State); Assert.NotNull(detail.Report);
+        Assert.Contains("dashboard-viewer-fixture", Encoding.UTF8.GetString(index.ReadReport(detail.Report)));
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/../../result.json"));
+        File.WriteAllText(html, "changed"); Assert.Throws<InvalidDataException>(() => index.ReadReport(detail.Report));
+        Assert.Equal("Unreadable", (await index.ReadAsync()).Runs[0].Details[0].State);
+        File.Delete(html); Assert.Equal("Missing", (await index.ReadAsync()).Runs[0].Details[0].State);
+    }
+    [Fact]
+    public async Task Duplicate_metadata_and_paths_outside_authority_fail_closed()
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        File.WriteAllText(file, File.ReadAllText(file).Replace("\"kind\":", "\"kind\":\"playtestRunStorage\",\"kind\":"));
+        var snapshot = await Index().ReadAsync(); Assert.Equal("RunUnreadable", snapshot.Runs[0].State);
+        Assert.Null(snapshot.Runs[0].BuildId);
+        var outside = new DashboardIndex(Registry, [Path.GetDirectoryName(root)!], [root]);
+        Assert.Equal(["ArtifactRootUnreadable"], (await outside.ReadAsync()).Warnings);
+    }
+    [Fact]
+    public async Task Public_run_references_use_caller_authority_and_bounded_admission()
+    {
+        var store = Save();
+        var environment = new EnvironmentDocument("env", "buildA", new("ws://127.0.0.1:9876", null), "Player",
+            new(1000, 2, 2, 1000, 1000, 1000, 1000, 1000, 10, 1000, 1000, 10, 64, 2, 2, 2, 1000, 10, 10, 1000),
+            new([], false, []), new("recent", "onFailure"), null);
+        var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(environment)); File.WriteAllBytes(Path.Combine(root, "environment.json"), bytes);
+        var run = new RunDocument(store.RunId, Identity(), "Explore", ExecutionState.Finished, DateTimeOffset.UtcNow,
+            new("../../s1.json", Identity().ScenarioSha256), new("../../environment.json", Convert.ToHexStringLower(SHA256.HashData(bytes))), null);
+        var file = Path.Combine(store.DirectoryPath, "run.json"); File.WriteAllText(file, ContractJson.Serialize(run));
+        Assert.Equal("Valid", (await new StaticContractValidator([root]).ValidateFileAsync(file)).Code);
+        var snapshot = await Index().ReadAsync(); Assert.Equal("Passed", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+        var outside = run with { Scenario = new("../../../outside.json", run.Scenario.Sha256) };
+        File.WriteAllText(file, ContractJson.Serialize(outside));
+        Assert.Equal("RunUnreadable", (await Index().ReadAsync()).Runs[0].State);
+    }
+    [Fact]
+    public async Task Corrupt_null_receipts_and_bundle_entries_do_not_crash_snapshot()
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json["artifacts"]![0] = null; File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs.Single(r => r.RunId == store.RunId).Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+        Save(ResultStatus.Failed, day: 2);
+        Assert.Equal("Failed", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse("""{"kind":"Trace","state":"Saved","fileName":"trace.gua","bytes":1,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","additionalFiles":[null]}""");
+        File.WriteAllText(file, json.ToJsonString());
+        Assert.All((await Index().ReadAsync()).Runs.Single(r => r.RunId == store.RunId).Details, detail => Assert.Equal("CompletionUnreadable", detail.State));
+    }
+    [Fact]
+    public async Task Packaged_assets_read_only_http_refresh_and_rejected_requests()
+    {
+        Save(); var before = Directory.GetFiles(Artifacts, "*", SearchOption.AllDirectories).ToDictionary(x => x, File.ReadAllBytes);
+        using var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start();
+        var port = ((IPEndPoint)reservation.LocalEndpoint).Port; reservation.Stop();
+        using var cancellation = new CancellationTokenSource(); var ready = new TaskCompletionSource<Uri>();
+        var server = DashboardApplication.RunAsync(Index(), port, uri => ready.SetResult(uri), cancellation.Token);
+        var origin = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)); using var client = new HttpClient { BaseAddress = origin };
+        var html = await client.GetStringAsync("/"); Assert.Contains("Registered Scenarios", html);
+        Assert.Contains("<option>Unrun</option>", html);
+        Assert.Contains("textContent", await client.GetStringAsync("/dashboard.js"));
+        Assert.Contains("color-scheme", await client.GetStringAsync("/dashboard.css"));
+        for (var i = 0; i < 3; i++) Assert.Contains("Passed", await client.GetStringAsync("/api/refresh"));
+        var simultaneous = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => client.GetStringAsync("/api/refresh")));
+        foreach (var json in simultaneous)
+        {
+            using var snapshot = JsonDocument.Parse(json);
+            Assert.Equal(2, snapshot.RootElement.GetProperty("scenarios").GetArrayLength());
+            Assert.Equal(1, snapshot.RootElement.GetProperty("runs").GetArrayLength());
+            Assert.False(snapshot.RootElement.GetProperty("truncated").GetBoolean());
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/result.json")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync("/api/refresh", null)).StatusCode);
+        using var hostile = new HttpRequestMessage(HttpMethod.Get, "/api/refresh"); hostile.Headers.Add("Origin", "https://evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(hostile)).StatusCode);
+        using var hostileHost = new HttpRequestMessage(HttpMethod.Get, "/api/snapshot"); hostileHost.Headers.Host = $"127.0.0.2:{port}";
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(hostileHost)).StatusCode);
+        foreach (var entry in before) Assert.Equal(entry.Value, File.ReadAllBytes(entry.Key));
+        Assert.Equal(before.Count, Directory.GetFiles(Artifacts, "*", SearchOption.AllDirectories).Length);
+        var completion = before.Keys.Single(file => Path.GetFileName(file) == "completion.json");
+        var broken = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(completion))!.AsObject(); broken["artifacts"]![0] = null;
+        File.WriteAllText(completion, broken.ToJsonString());
+        Assert.Contains("CompletionUnreadable", await client.GetStringAsync("/api/refresh"));
+        Save(ResultStatus.Failed, day: 2);
+        Assert.Contains("Failed", await client.GetStringAsync("/api/refresh"));
+        Assert.Contains("CompletionUnreadable", await client.GetStringAsync("/api/snapshot"));
+        cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10));
+        using var released = new TcpListener(IPAddress.Loopback, port); released.Start(); released.Stop();
+    }
+    [Fact]
+    public async Task Ordinary_files_count_against_finite_index_work()
+    {
+        for (var i = 0; i < 5; i++) File.WriteAllText(Path.Combine(Artifacts, $"noise-{i}"), "x");
+        var snapshot = await Index(new(MaxEntries: 2)).ReadAsync();
+        Assert.True(snapshot.Truncated); Assert.Empty(snapshot.Runs);
+        Assert.All(DashboardIndex.Select(snapshot, "buildA", EnvironmentHash), item => Assert.Equal("IndexIncomplete", item.State));
+        using var canceled = new CancellationTokenSource(); canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Index().ReadAsync(canceled.Token).AsTask());
+    }
+    [Fact]
+    public async Task Canceled_start_never_calls_ready_for_a_stopped_listener()
+    {
+        using var canceled = new CancellationTokenSource(); canceled.Cancel(); var ready = false;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => DashboardApplication.RunAsync(Index(), 17839, _ => ready = true, canceled.Token));
+        Assert.False(ready);
+    }
+    [Theory]
+    [InlineData("scenarioId", "")] [InlineData("definitionVersion", "bad/version")] [InlineData("buildId", ".bad")]
+    [InlineData("scenarioSha256", "short")] [InlineData("environmentSha256", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void Malformed_identity_never_publishes_self_unreadable_metadata(string field, string value)
+    {
+        var id = Identity(); id = field switch { "scenarioId" => id with { ScenarioId = value },
+            "definitionVersion" => id with { DefinitionVersion = value }, "buildId" => id with { BuildId = value },
+            "scenarioSha256" => id with { ScenarioSha256 = value }, _ => id with { EnvironmentSha256 = value } };
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], id)).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    private (RunArtifactStore Store, byte[] Html) SavedReportAndRecording()
+    {
+        var store = Save(ResultStatus.Failed, settled: false); var html = Encoding.UTF8.GetBytes("<html><body>independent Trace report</body></html>");
+        File.WriteAllBytes(Path.Combine(store.DirectoryPath, "trace.html"), html);
+        var recording = Encoding.UTF8.GetBytes("independent recording"); File.WriteAllBytes(Path.Combine(store.DirectoryPath, "recording.gua"), recording);
+        var primary = new PrimaryResult(ResultStatus.Failed, new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.html", html.Length, Convert.ToHexStringLower(SHA256.HashData(html))),
+            new(ArtifactKind.Recording, ArtifactState.Saved, "recording.gua", recording.Length, Convert.ToHexStringLower(SHA256.HashData(recording)))], [], DateTimeOffset.UtcNow).Saved);
+        return (store, html);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Recording_failure_preserves_independent_trace_report(bool corrupt)
+    {
+        var (store, html) = SavedReportAndRecording(); var recording = Path.Combine(store.DirectoryPath, "recording.gua");
+        if (corrupt) File.WriteAllText(recording, "corrupt"); else File.Delete(recording);
+        var index = Index(); var details = Assert.Single((await index.ReadAsync()).Runs).Details;
+        var trace = details.Single(d => d.Kind == "Trace"); Assert.Equal("Saved", trace.State); Assert.NotNull(trace.Report);
+        Assert.Equal(corrupt ? "Unreadable" : "Missing", details.Single(d => d.Kind == "Recording").State);
+        Assert.Equal(html, index.ReadReport(trace.Report));
+    }
+    [Theory]
+    [InlineData("run.json")] [InlineData("primary.json")] [InlineData("result.json")]
+    public async Task Summary_hardlinks_cannot_be_saved_details_or_report_routes(string name)
+    {
+        var store = Save(); var source = Path.Combine(store.DirectoryPath, name); var bytes = File.ReadAllBytes(source);
+        CreateHardLink(Path.Combine(store.DirectoryPath, "alias.html"), source);
+        var completion = Path.Combine(store.DirectoryPath, "completion.json"); var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(completion))!;
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new ArtifactReceipt(ArtifactKind.Trace, ArtifactState.Saved,
+            "alias.html", bytes.Length, Convert.ToHexStringLower(SHA256.HashData(bytes))), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } }));
+        File.WriteAllText(completion, json.ToJsonString()); var index = Index();
+        Assert.All(Assert.Single((await index.ReadAsync()).Runs).Details, d => { Assert.Equal("CompletionUnreadable", d.State); Assert.Null(d.Report); });
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/0"));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Cross_receipt_alias_and_late_report_replacement_are_rejected(bool afterSnapshot)
+    {
+        var (store, html) = SavedReportAndRecording(); var index = Index(); var snapshot = await index.ReadAsync();
+        var route = snapshot.Runs[0].Details.Single(d => d.Kind == "Trace").Report!;
+        var recording = Path.Combine(store.DirectoryPath, "recording.gua"); File.Delete(recording);
+        CreateHardLink(recording, Path.Combine(store.DirectoryPath, "trace.html"));
+        var completion = Path.Combine(store.DirectoryPath, "completion.json"); var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(completion))!;
+        json["artifacts"]![1]!["bytes"] = html.Length; json["artifacts"]![1]!["sha256"] = Convert.ToHexStringLower(SHA256.HashData(html));
+        File.WriteAllText(completion, json.ToJsonString());
+        if (afterSnapshot) Assert.ThrowsAny<IOException>(() => index.ReadReport(route));
+        else Assert.All((await index.ReadAsync()).Runs[0].Details, d => Assert.Equal("CompletionUnreadable", d.State));
+    }
+    [Fact]
+    public async Task Allowed_directory_uses_actual_filesystem_case_lookup()
+    {
+        Save(); var alternate = Path.Combine(Path.GetDirectoryName(root)!, Path.GetFileName(root).ToUpperInvariant());
+        if (Directory.Exists(alternate))
+            Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(alternate, "registry.json"), [Path.Combine(alternate, "runs")], [root]).ReadAsync()).RegistryState);
+        else
+        {
+            Directory.CreateDirectory(alternate); Directory.CreateDirectory(Path.Combine(alternate, "runs"));
+            foreach (var file in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, file), Path.Combine(alternate, file));
+            try { Assert.Equal("RegistryUnreadable", (await new DashboardIndex(Path.Combine(alternate, "registry.json"), [Path.Combine(alternate, "runs")], [root]).ReadAsync()).RegistryState); }
+            finally { Directory.Delete(alternate, true); }
+        }
+    }
+    private static void CreateHardLink(string link, string target)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/ln")
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in OperatingSystem.IsWindows() ? new[] { "/c", "mklink", "/H", link, target } : new[] { target, link }) start.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+    }
+    [Fact]
+    public async Task Case_distinct_sibling_never_inherits_allowed_root_authority()
+    {
+        var parent = Path.Combine(root, "case-parent"); Directory.CreateDirectory(parent);
+        if (OperatingSystem.IsWindows())
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", parent, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var safe = Path.Combine(parent, "safe"); var sibling = Path.Combine(parent, "SAFE");
+        Directory.CreateDirectory(safe);
+        var directories = Directory.Exists(sibling) ? new[] { safe } : new[] { safe, sibling };
+        foreach (var directory in directories)
+        {
+            Directory.CreateDirectory(directory); Directory.CreateDirectory(Path.Combine(directory, "runs"));
+            foreach (var file in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, file), Path.Combine(directory, file));
+        }
+        if (directories.Length == 1)
+        {
+            Assert.Equal(FileIdentity.ReadDirectory(safe), FileIdentity.ReadDirectory(sibling));
+            Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [safe]).ReadAsync()).RegistryState);
+            return; // Case-insensitive volumes resolve both spellings to the same authorized directory.
+        }
+        Assert.NotEqual(FileIdentity.ReadDirectory(safe), FileIdentity.ReadDirectory(sibling));
+        Assert.Equal("RegistryUnreadable", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [safe]).ReadAsync()).RegistryState);
+        Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [parent]).ReadAsync()).RegistryState);
+    }
+    [Fact]
+    public async Task Missing_run_document_is_unreadable_and_independent_result_is_retained()
+    {
+        var store = Save(); File.Delete(Path.Combine(store.DirectoryPath, "run.json"));
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task Storage_requires_inputs_even_when_identity_is_optional(bool identity)
+    {
+        var store = Save(identity: identity); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json.Remove("inputs"); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.BuildId); Assert.Null(run.ScenarioId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("null")] [InlineData("{}")]
+    [InlineData("42")] [InlineData("\"inputs\"")]
+    public async Task Storage_inputs_must_be_an_array(string invalid)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json["inputs"] = System.Text.Json.Nodes.JsonNode.Parse(invalid); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Writer_empty_inputs_remain_valid()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [])).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []),
+            [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Null(run.BuildId); Assert.Null(run.ScenarioId);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Independent_omission_receipts_survive_missing_or_corrupt_result(bool corrupt)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "result.json");
+        if (corrupt) File.WriteAllText(file, "{broken"); else File.Delete(file);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal(corrupt ? "ResultUnreadable" : "Unsettled", run.State); Assert.Null(run.Result);
+        Assert.Equal("OmittedOnSuccess", run.Details.Single(x => x.Kind == "Trace").State);
+        Assert.Equal("NotExecuted", run.Details.Single(x => x.Kind == "Recording").State);
+    }
+    [Fact]
+    public async Task Verified_non_passed_result_contradicts_omission_receipt()
+    {
+        var store = Save(ResultStatus.Failed); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        json["artifacts"]![0]!["state"] = "OmittedOnSuccess"; File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Failed", run.State); Assert.All(run.Details, d => Assert.Equal("CompletionUnreadable", d.State));
+    }
+    [Fact]
+    public async Task Registry_declared_root_limit_precedes_physical_admission_and_validation()
+    {
+        var second = Path.Combine(root, "second-runs"); Directory.CreateDirectory(second);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!.AsObject();
+        json["artifactRoots"] = new System.Text.Json.Nodes.JsonArray("runs", "second-runs");
+        File.WriteAllText(Registry, json.ToJsonString());
+        var validated = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root], new(MaxRoots: 1))
+        {
+            ValidateContract = (path, roots, token) =>
+            {
+                validated = true;
+                return new StaticContractValidator(roots).ValidateFileAsync(path, token);
+            }
+        };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState); Assert.False(validated);
+        Assert.Equal("Ready", (await Index(new(MaxRoots: 2)).ReadAsync()).RegistryState);
+    }
+    [Fact]
+    public async Task Declared_artifact_root_requires_physical_authority_before_validation()
+    {
+        var parent = Path.Combine(root, "declared-case-parent"); Directory.CreateDirectory(parent);
+        if (OperatingSystem.IsWindows())
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", parent, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var safe = Path.Combine(parent, "safe"); var sibling = Path.Combine(parent, "SAFE");
+        Directory.CreateDirectory(safe); Directory.CreateDirectory(Path.Combine(safe, "runs"));
+        Directory.CreateDirectory(sibling); Directory.CreateDirectory(Path.Combine(sibling, "runs"));
+        foreach (var file in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, file), Path.Combine(safe, file));
+        var registry = Path.Combine(safe, "registry.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(registry))!.AsObject();
+        json["artifactRoots"] = new System.Text.Json.Nodes.JsonArray("../SAFE/runs"); File.WriteAllText(registry, json.ToJsonString());
+        var same = FileIdentity.ReadDirectory(safe) == FileIdentity.ReadDirectory(sibling);
+        Assert.Equal(same ? "Ready" : "RegistryUnreadable",
+            (await new DashboardIndex(registry, [Path.Combine(safe, "runs")], [safe]).ReadAsync()).RegistryState);
+        Assert.Equal("Ready", (await new DashboardIndex(registry, [Path.Combine(safe, "runs")], [parent]).ReadAsync()).RegistryState);
+    }
+    [Fact]
+    public async Task Registry_budget_reserves_static_validation_second_read()
+    {
+        var files = new[] { Registry, Path.Combine(root, "s1.json"), Path.Combine(root, "s2.json") };
+        var total = files.Sum(path => new FileInfo(path).Length);
+        var largest = checked((int)Math.Max(256, files.Max(path => new FileInfo(path).Length)));
+        Assert.Equal("RegistryUnreadable", (await Index(new(MaxFileBytes: largest, MaxIndexBytes: total)).ReadAsync()).RegistryState);
+        Assert.Equal("Ready", (await Index(new(MaxFileBytes: largest, MaxIndexBytes: 2 * total)).ReadAsync()).RegistryState);
+    }
+    [Fact]
+    public async Task Public_run_budget_is_reserved_before_even_invalid_static_validation()
+    {
+        var store = Save();
+        var environment = new EnvironmentDocument("env", "buildA", new("ws://127.0.0.1:9876", null), "Player",
+            new(1000, 2, 2, 1000, 1000, 1000, 1000, 1000, 10, 1000, 1000, 10, 64, 2, 2, 2, 1000, 10, 10, 1000),
+            new([], false, []), new("recent", "onFailure"), null);
+        var environmentFile = Path.Combine(root, "environment.json");
+        var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(environment)); File.WriteAllBytes(environmentFile, bytes);
+        var run = new RunDocument(store.RunId, Identity(), "InvalidProfile", ExecutionState.Finished, DateTimeOffset.UtcNow,
+            new("../../s1.json", Identity().ScenarioSha256), new("../../environment.json", Convert.ToHexStringLower(SHA256.HashData(bytes))), null);
+        var file = Path.Combine(store.DirectoryPath, "run.json"); File.WriteAllText(file, ContractJson.Serialize(run));
+        File.Delete(Path.Combine(store.DirectoryPath, "result.json")); File.Delete(Path.Combine(store.DirectoryPath, "completion.json"));
+        Assert.False((await new StaticContractValidator([root]).ValidateFileAsync(file)).IsValid);
+        var registryFiles = new[] { Registry, Path.Combine(root, "s1.json"), Path.Combine(root, "s2.json") };
+        var runFiles = new[] { file, Path.Combine(root, "s1.json"), environmentFile };
+        var firstPassBudget = 2 * registryFiles.Sum(p => new FileInfo(p).Length) + runFiles.Sum(p => new FileInfo(p).Length);
+        var largest = checked((int)Math.Max(256, registryFiles.Concat(runFiles).Max(p => new FileInfo(p).Length)));
+        var snapshot = await Index(new(MaxFileBytes: largest, MaxIndexBytes: firstPassBudget)).ReadAsync();
+        Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal("RunUnreadable", Assert.Single(snapshot.Runs).State);
+        // Invalid static validation cannot skip budget accounting: admission must reject before calling it.
+        Assert.True(snapshot.Truncated);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Fixed_input_hash_corruption_never_reassigns_saved_history(bool identity)
+    {
+        var store = Save(identity: identity); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["inputs"]![0]!["document"]!["scenarioId"] = "s2"; File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("name")] [InlineData("sha256")] [InlineData("document")]
+    public async Task Fixed_input_wrapper_missing_fields_are_unreadable(string field)
+    {
+        var store = Save(identity: false); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["inputs"]![0]!.AsObject().Remove(field); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Plan_preparation_preserves_dashboard_metadata_without_granting_ordinary_trial_authority(bool replayPreparation)
+    {
+        var recording = Path.Combine(root, "recording.json");
+        File.WriteAllText(recording, """{"schemaVersion":1,"steps":[{"action":"click","target":{"id":"buy"},"relativeMilliseconds":0,"preRevision":0,"postRevision":1,"sensitive":false}]}""");
+        var plan = Path.Combine(root, "plan.json");
+        File.WriteAllText(plan, ContractJson.Serialize(new ReplayPlanDocument("candidate", new("s1.json", Identity().ScenarioSha256),
+            new("recording.json", Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(recording)))), "conditionSynchronized", "afterPlan", [], null)));
+        var replay = await ResolvedReplay.LoadAsync(plan, [root], new(10, 1000));
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var started = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity(), started);
+        Assert.True((replayPreparation ? store.BeginReplayPreparation(metadata, Identity("buildB")) : store.BeginPreparation(metadata)).Saved);
+        if (replayPreparation) store.BindReplay(replay);
+        else Assert.Throws<InvalidDataException>(() => store.BindReplay(replay));
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Unsettled", run.State); Assert.Equal(replayPreparation ? "buildB" : "buildA", run.BuildId);
+        Assert.Equal(started, run.StartedAt); Assert.Equal(Identity().ScenarioSha256, run.ScenarioSha256);
+    }
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public void Preparation_never_publishes_identity_that_disagrees_with_fixed_scenario(bool replayPreparation, bool versionMismatch)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var identity = versionMismatch ? Identity() with { DefinitionVersion = "v2" } : Identity() with { ScenarioId = "s2" };
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity);
+        var result = replayPreparation ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure); Assert.False(result.Saved);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Fact]
+    public async Task Cancellation_returned_by_public_run_validator_never_becomes_a_normal_snapshot()
+    {
+        var store = Save(); var runFile = Path.Combine(store.DirectoryPath, "run.json");
+        File.WriteAllText(runFile, ContractJson.Serialize(new RunDocument(store.RunId, Identity(), "Explore", ExecutionState.Finished,
+            DateTimeOffset.UtcNow, new("../../s1.json", Identity().ScenarioSha256), new("../../s2.json", new string('b', 64)), null)));
+        File.Delete(Path.Combine(store.DirectoryPath, "result.json")); File.Delete(Path.Combine(store.DirectoryPath, "completion.json"));
+        using var canceled = new CancellationTokenSource(); var interrupted = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ValidateContract = async (path, roots, token) =>
+            {
+                if (path == runFile) canceled.Cancel();
+                var report = await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+                if (path == runFile) interrupted = report.Code == "Interrupted";
+                return report;
+            }
+        };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
+        Assert.True(interrupted); // Real static validator returned its Interrupted report on the final run.
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Redacted_legacy_scenario_grouping_stays_unknown_without_corrupting_saved_result(bool sensitiveName)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, sensitiveName ? new([], ["scenarioId"]) : new(["s1"], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)])).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.NotExecuted), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId); Assert.Null(run.ScenarioSha256);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("missing")] [InlineData("number")] [InlineData("array")] [InlineData("object")]
+    [InlineData("!")] [InlineData(" ")]
+    public async Task Malformed_legacy_scenario_ids_are_corruption_even_with_valid_wrapper_hash(string shape)
+    {
+        var store = Save(identity: false); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        var input = json["inputs"]![0]!; var copy = input["document"]!.AsObject();
+        if (shape == "missing") copy.Remove("scenarioId");
+        else copy["scenarioId"] = shape switch
+        {
+            "number" => System.Text.Json.Nodes.JsonValue.Create(1),
+            "array" => new System.Text.Json.Nodes.JsonArray(),
+            "object" => new System.Text.Json.Nodes.JsonObject(),
+            _ => System.Text.Json.Nodes.JsonValue.Create(shape)
+        };
+        using var document = JsonDocument.Parse(copy.ToJsonString());
+        input["sha256"] = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(document.RootElement)));
+        File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status); // Saved result remains independently inspectable.
+    }
+    [Fact]
+    public async Task Aborted_http_refresh_preserves_old_snapshot_and_live_report_route()
+    {
+        var (_, html) = SavedReportAndRecording(); var validations = 0;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ValidateContract = async (path, roots, token) =>
+            {
+                if (path == Registry && Interlocked.Increment(ref validations) == 2)
+                {
+                    entered.TrySetResult();
+                    try { await Task.Delay(Timeout.Infinite, token); }
+                    finally { interrupted.TrySetResult(); }
+                }
+                return await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+            }
+        };
+        using var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+        using var cancellation = new CancellationTokenSource();
+        var ready = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = DashboardApplication.RunAsync(index, port, uri => ready.TrySetResult(uri), cancellation.Token);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)) };
+            var oldSnapshot = await client.GetStringAsync("/api/snapshot");
+            using var snapshot = JsonDocument.Parse(oldSnapshot);
+            var route = snapshot.RootElement.GetProperty("runs")[0].GetProperty("details")
+                .EnumerateArray().Single(d => d.GetProperty("kind").GetString() == "Trace").GetProperty("report").GetString()!;
+            AssertReportWrapper(html, await client.GetStringAsync(route));
+            using var aborted = new CancellationTokenSource();
+            var refresh = client.GetAsync("/api/refresh", aborted.Token);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); aborted.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+            await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(oldSnapshot, await client.GetStringAsync("/api/snapshot"));
+            AssertReportWrapper(html, await client.GetStringAsync(route));
+            Assert.Equal(oldSnapshot, await client.GetStringAsync("/api/refresh")); // A later full refresh still commits.
+            AssertReportWrapper(html, await client.GetStringAsync(route));
+        }
+        finally { cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10)); }
+    }
+    [Fact]
+    public async Task Entry_limit_stops_all_later_roots_without_advancing_or_admitting_them()
+    {
+        File.WriteAllText(Path.Combine(Artifacts, "noise"), "x");
+        File.WriteAllText(Path.Combine(Artifacts, "second-noise"), "x");
+        var index = new DashboardIndex(Registry, [Artifacts, Path.Combine(root, "unreadable-unused-root")], [root], new(MaxEntries: 1));
+        var snapshot = await index.ReadAsync();
+        Assert.Empty(snapshot.Warnings); Assert.True(snapshot.Truncated); Assert.Empty(snapshot.Runs);
+        Assert.All(DashboardIndex.Select(snapshot, "buildA", EnvironmentHash), item => Assert.Equal("IndexIncomplete", item.State));
+    }
+    [Fact]
+    public async Task Issued_report_route_never_rebinds_to_another_run_after_refresh()
+    {
+        var (first, firstHtml) = SavedReportAndRecording(); var index = Index();
+        var firstRun = Assert.Single((await index.ReadAsync()).Runs); var oldRoute = firstRun.Details.Single(d => d.Kind == "Trace").Report!;
+        Assert.Equal(firstHtml, index.ReadReport(oldRoute));
+        Directory.Delete(first.DirectoryPath, true); var (second, secondHtml) = SavedReportAndRecording();
+        var secondRun = Assert.Single((await index.ReadAsync()).Runs); var newRoute = secondRun.Details.Single(d => d.Kind == "Trace").Report!;
+        Assert.NotEqual(first.RunId, second.RunId); Assert.NotEqual(firstRun.Key, secondRun.Key); Assert.NotEqual(oldRoute, newRoute);
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport(oldRoute)); Assert.Equal(secondHtml, index.ReadReport(newRoute));
+        Assert.Equal(newRoute, Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report);
+    }
+    [Fact]
+    public async Task Summary_to_summary_hardlink_is_rejected_independently_of_receipt_aliases()
+    {
+        var store = Save(); var primary = Path.Combine(store.DirectoryPath, "primary.json"); File.Delete(primary);
+        CreateHardLink(primary, Path.Combine(store.DirectoryPath, "result.json"));
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.All(run.Details, d => Assert.Equal("CompletionUnreadable", d.State));
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status); // Preserve the independent saved result, do not regrade it.
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Conflicting_legacy_scenario_copies_never_choose_by_input_order(bool reverse)
+    {
+        var store = Save(identity: false);
+        using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        using var second = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s2.json")));
+        InputCopy[] inputs = [new("first", first.RootElement), new("second", second.RootElement)];
+        if (reverse) Array.Reverse(inputs);
+        var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["inputs"] = new System.Text.Json.Nodes.JsonArray(inputs.Select(input =>
+            System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new
+            { name = input.Name, sha256 = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input.Document))), document = input.Document }))).ToArray());
+        File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Cancellation_between_receipt_files_stops_remaining_opens_and_preserves_live_routes()
+    {
+        var (_, html) = SavedReportAndRecording(); using var canceled = new CancellationTokenSource();
+        var stop = false; var opened = 0;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ReceiptFileOpened = _ => { if (stop) { opened++; canceled.Cancel(); } }
+        };
+        var route = Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report!;
+        stop = true;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
+        Assert.Equal(1, opened); Assert.Equal(html, index.ReadReport(route));
+    }
+    [Fact]
+    public async Task Identical_legacy_scenario_copies_are_unambiguous()
+    {
+        var store = Save(identity: false); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        var copy = json["inputs"]![0]!.DeepClone(); copy["name"] = "second";
+        json["inputs"]!.AsArray().Add(copy); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Equal("s1", run.ScenarioId); Assert.Null(run.BuildId);
+    }
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public void Explicit_identity_rejects_divergent_scenario_copies_before_publication(bool replay, bool reverse)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var identity = Identity();
+        using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var node = System.Text.Json.Nodes.JsonNode.Parse(first.RootElement.GetRawText())!;
+        node["goal"]!["objective"] = "Different content with the same ID and version";
+        using var second = JsonDocument.Parse(node.ToJsonString());
+        InputCopy[] inputs = [new("first", first.RootElement), new("second", second.RootElement)];
+        if (reverse) Array.Reverse(inputs);
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), inputs, identity);
+        var result = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.False(result.Saved); Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json"))); Assert.Null(store.ReplayIdentity);
+    }
+    [Fact]
+    public void Identityless_writer_also_rejects_divergent_scenario_copies_before_publication()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        using var second = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s2.json")));
+        var result = store.BeginPreparation(new("player", [], new Dictionary<string, string>(),
+            [new("first", first.RootElement), new("second", second.RootElement)]));
+        Assert.False(result.Saved); Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Explicit_identity_identical_scenario_copies_remain_readable(bool replay)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], [])); var identity = Identity();
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(),
+            [new("first", scenario.RootElement), new("second", scenario.RootElement)], identity);
+        Assert.True((replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata)).Saved);
+        Assert.Equal(replay ? identity : null, store.ReplayIdentity);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Equal(identity.BuildId, run.BuildId);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Case_distinct_scenario_files_remain_distinct_fixed_references(bool ownerCase)
+    {
+        var directory = Path.Combine(root, "case-files"); Directory.CreateDirectory(directory);
+        if (OperatingSystem.IsWindows())
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", directory, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var firstName = ownerCase ? "REGISTRY.json" : "case.json"; var secondName = ownerCase ? "other.json" : "CASE.json";
+        File.Copy(Path.Combine(root, "s1.json"), Path.Combine(directory, firstName));
+        if (File.Exists(Path.Combine(directory, ownerCase ? "registry.json" : secondName)))
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(directory, firstName)), File.ReadAllBytes(Path.Combine(directory, ownerCase ? "registry.json" : secondName)));
+            return; // This volume cannot represent two physical files with these spellings.
+        }
+        File.Copy(Path.Combine(root, "s2.json"), Path.Combine(directory, secondName));
+        var registry = Path.Combine(directory, "registry.json"); Directory.CreateDirectory(Path.Combine(directory, "runs"));
+        var firstHash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, firstName))));
+        var secondHash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, secondName))));
+        File.WriteAllText(registry, ContractJson.Serialize(new ScenarioRegistryDocument("case-registry",
+            [new("s1", "v1", new(firstName, firstHash)), new("s2", "v1", new(secondName, secondHash))], ["runs"])));
+        var validation = await new StaticContractValidator([root]).ValidateFileAsync(registry);
+        Assert.Equal("Valid", validation.Code); Assert.Equal(3, validation.Files.Count);
+        var snapshot = await new DashboardIndex(registry, [Path.Combine(directory, "runs")], [root]).ReadAsync();
+        Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal(new[] { "s1", "s2" }, snapshot.Scenarios.Select(s => s.ScenarioId));
+    }
+    [Theory]
+    [InlineData("profile")] [InlineData("settings")] [InlineData("versions")] [InlineData("executionState")]
+    public async Task Storage_required_fields_cannot_be_missing(string field)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+        json.Remove(field); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("profile", "null")] [InlineData("profile", "42")]
+    [InlineData("settings", "null")] [InlineData("settings", "{}")]
+    [InlineData("versions", "null")] [InlineData("versions", "[]")]
+    [InlineData("executionState", "null")] [InlineData("executionState", "1")]
+    [InlineData("executionState", "\"Completed\"")]
+    [InlineData("settings", "[null]")] [InlineData("settings", "[42]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"value\":\"v\",\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"value\":\"v\"}]")]
+    [InlineData("settings", "[{\"name\":null,\"value\":\"v\",\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"value\":42,\"source\":\"host\"}]")]
+    [InlineData("settings", "[{\"name\":\"n\",\"value\":\"v\",\"source\":null}]")]
+    [InlineData("versions", "{\"gua\":42}")] [InlineData("versions", "{\"gua\":{}}")]
+    public async Task Storage_required_fields_reject_corrupt_shapes(string field, string replacement)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+        json[field] = System.Text.Json.Nodes.JsonNode.Parse(replacement); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Storage_required_fields_accept_real_writer_redaction(bool redact)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new(redact ? ["private"] : [], redact ? ["token", "secretVersion"] : []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("private-profile",
+            [new("token", "private-value", "host"), new("normal", "private-value", "private-source")],
+            new Dictionary<string, string> { ["gua"] = "private-version", ["secretVersion"] = "private-value" }, [new("scenario", scenario.RootElement)], Identity())).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Unsettled", run.State); Assert.Equal("buildA", run.BuildId);
+        using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(redact ? "" : "private-profile", saved.RootElement.GetProperty("profile").GetString());
+        Assert.Equal(redact ? JsonValueKind.Null : JsonValueKind.String, saved.RootElement.GetProperty("settings")[0].GetProperty("value").ValueKind);
+        Assert.Equal(redact ? JsonValueKind.Null : JsonValueKind.String, saved.RootElement.GetProperty("versions").GetProperty("secretVersion").ValueKind);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Scenario_identity_hash_must_match_pre_redaction_source_before_publication(bool replay)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var identity = Identity() with { ScenarioSha256 = new('b', 64) };
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity);
+        var saved = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, saved.Failure); Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Redaction_cannot_remove_the_scenario_source_binding(bool replay)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new(["scenario"], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var identity = Identity(); var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity);
+        var saved = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, saved.Failure); Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData("missing")] [InlineData("mismatch")] [InlineData("identity")] [InlineData("no-copy")]
+    public async Task Scenario_source_binding_is_required_during_readback(string corruption)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+        if (corruption == "no-copy") json["inputs"] = new System.Text.Json.Nodes.JsonArray();
+        else if (corruption == "missing") json["inputs"]![0]!.AsObject().Remove("sourceSha256");
+        else if (corruption == "mismatch") json["inputs"]![0]!["sourceSha256"] = new string('b', 64);
+        else json["identity"]!["scenarioSha256"] = new string('b', 64);
+        File.WriteAllText(file, json.ToJsonString()); var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioSha256); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
+    public async Task Exact_source_whitespace_and_redaction_keep_distinct_verified_hashes()
+    {
+        Register("private objective"); var file = Path.Combine(root, "s1.json");
+        var source = Encoding.UTF8.GetBytes(" \n" + File.ReadAllText(file) + "\r\n"); File.WriteAllBytes(file, source);
+        var registry = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Registry))!;
+        registry["scenarios"]![0]!["file"]!["sha256"] = Identity().ScenarioSha256; File.WriteAllText(Registry, registry.ToJsonString());
+        using var scenario = JsonDocument.Parse(source); var store = RunArtifactStore.Create(Artifacts, Limits, new(["private"], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement, source)], Identity())).Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
+        var input = saved.RootElement.GetProperty("inputs")[0];
+        Assert.Equal(Identity().ScenarioSha256, input.GetProperty("sourceSha256").GetString());
+        Assert.NotEqual(input.GetProperty("sourceSha256").GetString(), input.GetProperty("sha256").GetString());
+        Assert.DoesNotContain("private", saved.RootElement.GetRawText());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Unsettled", run.State); Assert.Equal(Identity().ScenarioSha256, run.ScenarioSha256);
+        Assert.Equal("Unsettled", DashboardIndex.Select(await Index().ReadAsync(), "buildA", EnvironmentHash)[0].State);
+    }
+    [Fact]
+    public void Supplied_source_bytes_must_describe_the_actual_fixed_input()
+    {
+        var bytes = File.ReadAllBytes(Path.Combine(root, "s1.json"));
+        using var wrong = JsonDocument.Parse(Encoding.UTF8.GetString(bytes).Replace("Reach target", "Different target", StringComparison.Ordinal));
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", wrong.RootElement, bytes)], Identity());
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(metadata).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(".json", false)] [InlineData(".json", true)] [InlineData(".yaml", false)] [InlineData(".yml", true)]
+    public async Task Exact_source_binding_preserves_supported_format_bom_comments_and_whitespace(string format, bool bom)
+    {
+        var text = format == ".json" ? " \n" + ContractJson.Serialize(new ScenarioDocument("s1", "v1", "Source fixture",
+            new("private objective", null, null), new(1000, 2, null), null)) + "\r\n" :
+            "# exact source comment\nkind: scenario\nschemaVersion: 1\nscenarioId: s1\ndefinitionVersion: v1\nname: Source fixture\ngoal:\n  objective: private objective\nconstraints:\n  maxDurationMilliseconds: 1000\n  maxActions: 2\n";
+        var source = Encoding.UTF8.GetBytes((bom ? "\uFEFF" : "") + text);
+        var file = Path.Combine(root, "source" + format); File.WriteAllBytes(file, source);
+        var hash = Convert.ToHexStringLower(SHA256.HashData(source));
+        var registry = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Registry))!;
+        registry["scenarios"]![0]!["file"]!["path"] = Path.GetFileName(file);
+        registry["scenarios"]![0]!["file"]!["sha256"] = hash; File.WriteAllText(Registry, registry.ToJsonString());
+        var decoded = ContractJson.Inspect(source, format); Assert.Equal("Decoded", decoded.Code);
+        var document = JsonSerializer.SerializeToElement(decoded.Document); var store = RunArtifactStore.Create(Artifacts, Limits, new(["private"], []));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(),
+            [new("scenario", document, source, format)], Identity() with { ScenarioSha256 = hash })).Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(hash, saved.RootElement.GetProperty("inputs")[0].GetProperty("sourceSha256").GetString());
+        Assert.DoesNotContain("private", saved.RootElement.GetRawText());
+        var snapshot = await Index().ReadAsync(); Assert.Equal("Ready", snapshot.RegistryState);
+        Assert.Equal("Unsettled", DashboardIndex.Select(snapshot, "buildA", EnvironmentHash)[0].State);
+    }
+    [Theory]
+    [InlineData(1, true)] [InlineData(2, false)]
+    public void Scenario_source_binding_bounds_aggregate_source_reads(int copies, bool accepted)
+    {
+        var source = Encoding.UTF8.GetBytes(File.ReadAllText(Path.Combine(root, "s1.json")) + new string(' ', 1500));
+        using var document = JsonDocument.Parse(source);
+        var store = RunArtifactStore.Create(Artifacts, new(2048, 4096, 10000, 2000), new([], []));
+        var identity = Identity() with { ScenarioSha256 = Convert.ToHexStringLower(SHA256.HashData(source)) };
+        var inputs = Enumerable.Range(0, copies).Select(i => new InputCopy("copy" + i, document.RootElement, source)).ToArray();
+        var saved = store.BeginPreparation(new("player", [], new Dictionary<string, string>(), inputs, identity));
+        Assert.Equal(accepted ? PersistenceFailure.None : PersistenceFailure.LimitExceeded, saved.Failure);
+        Assert.Equal(accepted, File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData("missing")] [InlineData("corrupt")] [InlineData("invalid")]
+    public async Task Unauthenticated_directory_names_never_enter_browser_snapshot(string shape)
+    {
+        const string secretPath = "private-customer-password"; var directory = Path.Combine(Artifacts, secretPath); Directory.CreateDirectory(directory);
+        if (shape != "missing") File.WriteAllText(Path.Combine(directory, "run.json"), shape == "corrupt" ? "{broken" : "{\"kind\":\"other\",\"runId\":\"private-customer-password\"}");
+        var snapshot = await Index().ReadAsync(); var run = Assert.Single(snapshot.Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.StartsWith("Unknown-", run.RunId); Assert.DoesNotContain(secretPath, JsonSerializer.Serialize(snapshot));
+    }
+    [Theory]
+    [InlineData(29, true)] [InlineData(30, false)]
+    public async Task Writer_maximum_container_depth_matches_dashboard_reader(int nesting, bool accepted)
+    {
+        using var input = JsonDocument.Parse(new string('[', nesting) + "{}" + new string(']', nesting));
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var saved = store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("depth", input.RootElement)]));
+        Assert.Equal(accepted ? PersistenceFailure.None : PersistenceFailure.LimitExceeded, saved.Failure);
+        if (accepted)
+        {
+            using var envelope = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")), new() { MaxDepth = 33 });
+            Assert.ThrowsAny<JsonException>(() => JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")), new() { MaxDepth = 32 }));
+            Assert.Equal("Unsettled", Assert.Single((await Index().ReadAsync()).Runs).State);
+        }
+        else Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public void Identified_preparation_requires_fixed_scenario_before_publication(bool replay, bool otherInput)
+    {
+        using var other = JsonDocument.Parse("{\"kind\":\"environment\"}");
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var identity = Identity();
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(),
+            otherInput ? [new("environment", other.RootElement)] : [], identity);
+        var saved = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, saved.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData("observations", "missing")] [InlineData("observations", "null")] [InlineData("observations", "{}")]
+    [InlineData("observations", "[null]")] [InlineData("observations", "[{}]")]
+    [InlineData("observations", "[{\"boundary\":\"Before\",\"observationId\":\"obs\"}]")]
+    [InlineData("observations", "[{\"boundary\":3,\"observationId\":\"obs\"}]")]
+    [InlineData("observations", "[{\"boundary\":\"AfterCleanup\",\"observationId\":null}]")]
+    [InlineData("observations", "[{\"boundary\":\"AfterCleanup\",\"observationId\":\"../private\"}]")]
+    [InlineData("postProcessing", "missing")] [InlineData("postProcessing", "null")] [InlineData("postProcessing", "{}")]
+    [InlineData("postProcessing", "[null]")] [InlineData("postProcessing", "[{}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"Other\"}]")]
+    [InlineData("postProcessing", "[{\"reason\":0}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":5}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":{}}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":{\"type\":5}}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":{\"type\":\"IOException\",\"stackTrace\":5}}]")]
+    public async Task Completion_required_arrays_and_nested_shapes_are_validated(string field, string value)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        if (value == "missing") json.Remove(field); else json[field] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status); Assert.Equal("Passed", run.State);
+        Assert.All(run.Details, detail => { Assert.Equal("CompletionUnreadable", detail.State); Assert.Null(detail.Report); });
+    }
+    [Fact]
+    public async Task Completion_writer_cleanup_and_redacted_exception_remain_readable()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new(["private"], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity())).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [new(PostProcessingReason.ResourceReleaseUnconfirmed, new("private", "private"))], []),
+            [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess), new(ArtifactKind.Recording, ArtifactState.NotExecuted)],
+            [new(ObservationBoundary.AfterCleanup, "cleanup-1")], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("PassedPostProcessingIncomplete", run.State);
+        Assert.Equal("OmittedOnSuccess", run.Details[0].State); Assert.Equal("NotExecuted", run.Details[1].State);
+    }
+    [Theory]
+    [InlineData("fileName", "null")] [InlineData("fileName", "\"../private\"")]
+    [InlineData("bytes", "null")] [InlineData("bytes", "0")]
+    [InlineData("sha256", "null")] [InlineData("sha256", "\"invalid\"")]
+    [InlineData("additionalFiles", "[null]")]
+    [InlineData("additionalFiles", "[{\"fileName\":null,\"bytes\":1,\"sha256\":\"invalid\"}]")]
+    public async Task Malformed_saved_recording_invalidates_completion_before_any_report_route(string field, string value)
+    {
+        var (store, _) = SavedReportAndRecording(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["artifacts"]![1]![field] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        File.WriteAllText(file, json.ToJsonString()); var index = Index(); var run = Assert.Single((await index.ReadAsync()).Runs);
+        Assert.Equal(ResultStatus.Failed, run.Result!.Status);
+        Assert.All(run.Details, d => { Assert.Equal("CompletionUnreadable", d.State); Assert.Null(d.Report); });
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/" + run.Key));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Cancellation_between_registry_or_public_run_references_stops_remaining_admission(bool publicRun)
+    {
+        var (store, html) = SavedReportAndRecording(); using var canceled = new CancellationTokenSource();
+        var stop = false; var registryValidated = false; var admitted = 0;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        {
+            ReferenceAdmitted = _ => { if (stop && (!publicRun || registryValidated)) { admitted++; canceled.Cancel(); } },
+            ValidateContract = async (path, roots, token) =>
+            { var result = await new StaticContractValidator(roots).ValidateFileAsync(path, token); if (path == Registry) registryValidated = true; return result; }
+        };
+        var route = Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report!;
+        if (publicRun) File.WriteAllText(Path.Combine(store.DirectoryPath, "run.json"), ContractJson.Serialize(new RunDocument(store.RunId,
+            Identity(), "Explore", ExecutionState.Finished, DateTimeOffset.UtcNow,
+            new("../../s1.json", Identity().ScenarioSha256), new("../../s2.json", new string('b', 64)), null)));
+        registryValidated = false; stop = true;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => index.ReadAsync(canceled.Token).AsTask());
+        Assert.Equal(1, admitted); Assert.Equal(html, index.ReadReport(route));
+    }
+    [Theory]
+    [InlineData("\\\\offline-dashboard.invalid\\share\\source.json")]
+    [InlineData("//offline-dashboard.invalid/share/source.json")]
+    [InlineData("\\\\?\\C:\\source.json")]
+    [InlineData("\\\\.\\GLOBALROOT\\source.json")]
+    public void Network_and_device_namespace_constructor_paths_rejected_without_filesystem_access(string unsafePath)
+    {
+        Assert.Throws<InvalidDataException>(() => new DashboardIndex(unsafePath, [Artifacts], [root]));
+        Assert.Throws<InvalidDataException>(() => new DashboardIndex(Registry, [unsafePath], [root]));
+        Assert.Throws<InvalidDataException>(() => new DashboardIndex(Registry, [Artifacts], [unsafePath]));
+    }
+    [Theory]
+    [InlineData(false, "\\\\offline-dashboard.invalid\\share\\source.json")]
+    [InlineData(true, "\\\\offline-dashboard.invalid\\share\\source.json")]
+    [InlineData(false, "\\\\?\\C:\\source.json")]
+    [InlineData(true, "\\\\?\\C:\\source.json")]
+    public async Task Network_and_device_registry_paths_never_reach_probe_boundary(bool artifactRoot, string unsafePath)
+    {
+        if (!OperatingSystem.IsWindows()) return; // Windows normalization is the affected admission lane.
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        if (artifactRoot) json["artifactRoots"]![0] = unsafePath; else json["scenarios"]![0]!["file"]!["path"] = unsafePath;
+        File.WriteAllText(Registry, json.ToJsonString()); var unsafeProbes = 0;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        { PathProbed = path => { if (path.StartsWith("\\\\", StringComparison.Ordinal)) { unsafeProbes++; throw new IOException("BlockedBeforeActualNetworkProbe"); } } };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState);
+        Assert.Equal(0, unsafeProbes); // Observer aborts pre-fix admission before any actual UNC/device contact.
+    }
+    [Theory]
+    [InlineData(false, "null")] [InlineData(true, "null")] [InlineData(false, "42")] [InlineData(true, "42")]
+    public async Task Registry_path_shape_errors_remain_readable_failure_states(bool artifactRoot, string value)
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        if (artifactRoot) json["artifactRoots"]![0] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        else json["scenarios"]![0]!["file"]!["path"] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        File.WriteAllText(Registry, json.ToJsonString());
+        Assert.Equal("RegistryUnreadable", (await Index().ReadAsync()).RegistryState);
+    }
+    private static void AssertReportWrapper(byte[] html, string wrapper)
+    {
+        Assert.Contains("sandbox=\"allow-scripts\"", wrapper);
+        Assert.Contains("srcdoc=\"" + WebUtility.HtmlEncode(Encoding.UTF8.GetString(html)) + "\"", wrapper);
+    }
+    [Fact]
+    public async Task Canceled_report_read_stops_before_sibling_receipts_and_keeps_route()
+    {
+        var (_, html) = SavedReportAndRecording(); using var canceled = new CancellationTokenSource();
+        var opened = 0; var stop = true;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        { ReportFileOpened = (_, _) => { if (stop) { opened++; canceled.Cancel(); } } };
+        var route = Assert.Single((await index.ReadAsync()).Runs).Details.Single(d => d.Kind == "Trace").Report!;
+        Assert.ThrowsAny<OperationCanceledException>(() => index.ReadReport(route, canceled.Token));
+        Assert.Equal(1, opened); stop = false; Assert.Equal(html, index.ReadReport(route));
+    }
+    [Fact]
+    public async Task Registry_second_read_cannot_publish_a_changed_admission()
+    {
+        var valid = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root])
+        { ValidateContract = async (path, roots, token) => {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(path))!;
+            json["registryId"] = "changed-registry"; File.WriteAllText(path, json.ToJsonString());
+            var report = await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+            valid = report.IsValid; return report;
+        } };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState);
+        Assert.True(valid); // Static schema success alone must not grant the changed snapshot.
+    }
+    [Fact]
+    public async Task Oversized_duplicate_registry_stops_before_reference_probes()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+        var scenario = json["scenarios"]![0]!.DeepClone();
+        var entries = new System.Text.Json.Nodes.JsonArray();
+        for (var i = 0; i < 1001; i++) entries.Add(scenario.DeepClone());
+        json["scenarios"] = entries; File.WriteAllText(Registry, json.ToJsonString());
+        var probes = 0; var validated = false;
+        var index = new DashboardIndex(Registry, [Artifacts], [root]) {
+            PathProbed = path => { if (path == Path.Combine(root, "s1.json")) probes++; },
+            ValidateContract = (_, _, _) => { validated = true; throw new InvalidOperationException(); }
+        };
+        Assert.Equal("RegistryUnreadable", (await index.ReadAsync()).RegistryState);
+        Assert.Equal(0, probes); Assert.False(validated);
+    }
+    [Theory]
+    [InlineData("reference")] [InlineData("artifact")] [InlineData("allowed")]
+    public async Task Broken_directory_links_are_rejected_before_identity_or_existence_probes(string lane)
+    {
+        var link = Path.Combine(root, "remote-link");
+        var target = Path.Combine(root, "absent-target");
+        if (OperatingSystem.IsWindows()) {
+            var start = new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "/c", "mklink", "/J", link, target }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        } else Directory.CreateSymbolicLink(link, target);
+        var probes = 0;
+        try {
+            if (lane == "reference") {
+                var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(Registry))!;
+                json["scenarios"]![0]!["file"]!["path"] = "remote-link/s1.json";
+                File.WriteAllText(Registry, json.ToJsonString());
+            }
+            var index = new DashboardIndex(Registry, lane == "artifact" ? [link] : [Artifacts], lane == "allowed" ? [link] : [root]) {
+                PathProbed = path => { if (path.StartsWith(link, StringComparison.Ordinal)) { probes++; throw new IOException("UnsafeProbeBlockedByTest"); } }
+            };
+            var snapshot = await index.ReadAsync();
+            Assert.Equal(0, probes);
+            if (lane == "artifact") { Assert.Equal("Ready", snapshot.RegistryState); Assert.Contains("ArtifactRootUnreadable", snapshot.Warnings); }
+            else Assert.Equal("RegistryUnreadable", snapshot.RegistryState);
+        } finally { if (OperatingSystem.IsWindows()) Directory.Delete(link); else File.Delete(link); }
+    }
+    [Fact]
+    public async Task Aborted_http_report_stops_sibling_work_and_releases_index_gate()
+    {
+        var (_, html) = SavedReportAndRecording(); var opened = 0; var block = true;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var index = new DashboardIndex(Registry, [Artifacts], [root]) {
+            ReportFileOpened = (_, token) => {
+                if (!block) return; Interlocked.Increment(ref opened); entered.TrySetResult();
+                Assert.True(token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10))); interrupted.TrySetResult();
+            }
+        };
+        using var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+        using var cancellation = new CancellationTokenSource();
+        var ready = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = DashboardApplication.RunAsync(index, port, uri => ready.TrySetResult(uri), cancellation.Token);
+        try {
+            using var client = new HttpClient { BaseAddress = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)) };
+            using var snapshot = JsonDocument.Parse(await client.GetStringAsync("/api/snapshot"));
+            var route = snapshot.RootElement.GetProperty("runs")[0].GetProperty("details").EnumerateArray()
+                .Single(d => d.GetProperty("kind").GetString() == "Trace").GetProperty("report").GetString()!;
+            using var aborted = new CancellationTokenSource(); var request = client.GetAsync(route, aborted.Token);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); aborted.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+            await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(10)); block = false;
+            Assert.Equal(1, opened); AssertReportWrapper(html, await client.GetStringAsync(route));
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/snapshot")).StatusCode);
+        } finally { cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10)); }
+    }
+    [Fact]
+    public async Task Case_distinct_second_read_cannot_grant_an_unauthorized_sibling()
+    {
+        var parent = Path.Combine(root, "physical-race"); Directory.CreateDirectory(parent);
+        if (OperatingSystem.IsWindows()) {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", parent, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var safe = Path.Combine(parent, "safe"); var sibling = Path.Combine(parent, "SAFE"); Directory.CreateDirectory(safe);
+        if (Directory.Exists(sibling)) return; // Volume cannot represent the reproduced physical split.
+        Directory.CreateDirectory(sibling); Directory.CreateDirectory(Path.Combine(safe, "runs"));
+        foreach (var name in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, name), Path.Combine(safe, name));
+        File.Copy(Path.Combine(root, "s1.json"), Path.Combine(sibling, "s1.json"));
+        var registry = Path.Combine(safe, "registry.json"); var readUnauthorized = false;
+        var index = new DashboardIndex(registry, [Path.Combine(safe, "runs")], [safe]) {
+            ValidateContract = async (path, roots, token) => {
+                var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(path))!;
+                json["scenarios"]![0]!["file"]!["path"] = "../SAFE/s1.json"; File.WriteAllText(path, json.ToJsonString());
+                var report = await new StaticContractValidator(roots).ValidateFileAsync(path, token);
+                readUnauthorized = report.IsValid; return report;
+            }
+        };
+        Assert.Equal(OperatingSystem.IsWindows() ? "RegistryUnreadable" : "PathOutsideAllowedRoots", (await index.ReadAsync()).RegistryState);
+        if (OperatingSystem.IsWindows()) Assert.True(readUnauthorized); // Reproduce lexical admission without physical authority.
+    }
+    public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
+}

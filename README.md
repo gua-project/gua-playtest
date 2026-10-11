@@ -20,6 +20,11 @@ dotnet test --no-build --no-restore -c Release
 
 `global.json` は SDK 10.0.301 以降の同一 major/minor feature band を許可する。Gua は公開 NuGet **1.1.1** を固定し、依存 lock の content hash を保存する。Gua checkout、`../gua`、Node、engine、Codex 認証は build と offline validate に不要。
 
+フレームワーク依存 CLI / .NET Tool は .NET 10 と ASP.NET Core 10 runtime を使う。
+.NET 10 SDK は両 runtime を含み、self-contained 配布は runtime を同梱する。
+保存済み dashboard の loopback server は Kestrel を使い、Windows の管理者権限や
+HTTP.sys URL 予約を要求しない。UI assets は配布 DLL 内にあり、利用者の Web build は不要。
+
 ```powershell
 dotnet run --project src/Gua.Playtest.Cli -- validate --json --gua-schema selector.schema.json selector.json
 dotnet run --project src/Gua.Playtest.Cli -- doctor --json --native

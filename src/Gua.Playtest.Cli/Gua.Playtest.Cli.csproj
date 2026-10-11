@@ -7,6 +7,8 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <EmbeddedResource Include="DashboardAssets/*" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
     <ProjectReference Include="../Gua.Playtest.Runner/Gua.Playtest.Runner.csproj" />
     <ProjectReference Include="../Gua.Playtest.GuaIntegration/Gua.Playtest.GuaIntegration.csproj" />
