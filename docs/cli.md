@@ -24,10 +24,15 @@ Viewer. The output's existing parent must be inside an allowed root. Output insi
 the source Trace (including filesystem case aliases) or overwriting an existing output is refused. Reader issues or an
 unfinished Trace fail closed. Detail formats remain Gua-owned.
 
-Plan commands use [PlanManager's managed evidence chain](plan-adoption.md).
 Input directory and file identities are checked before an equivalent case alias
 is rebased onto the explicitly supplied root for snapshot validation. A distinct
-directory with matching names or bytes gains no authority.
+directory with matching names or bytes gains no authority. This also applies to
+saved Trace directories and existing report output parents.
+Static commands preserve the contract's symbolic-link and junction resolution,
+and check the final target against the explicit roots. Managed Plan commands
+retain their stricter artifact path rules.
+
+Plan commands use [PlanManager's managed evidence chain](plan-adoption.md).
 Candidates preserve exact validated Scenario and Recording bytes, including Goal
 meaning and hashes. Adoption requires both explicit approval flags and a genuine
 full AI-free ReplayDriver/store trial. A JSON evidence file alone grants no

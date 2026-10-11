@@ -24,10 +24,10 @@ internal static class OfflineCommands
                 ? ["--allow-root", "--trace", "--output"]
                 : ["--allow-root", "--scenario", "--plan", "--environment", "--max-actions", "--max-duration-ms", "--deny-action"]);
             var roots = options.All("--allow-root");
-            var paths = new AllowedPaths(roots);
+            _ = new AllowedPaths(roots);
             if (args[0] == "report")
             {
-                var source = paths.Resolve(options.Required("--trace"), Directory.GetCurrentDirectory());
+                var source = StaticPathAuthority.Directory(options.Required("--trace"), roots, "ReportTraceDirectoryRequired");
                 if (!Directory.Exists(source)) throw new InvalidDataException("ReportTraceDirectoryRequired");
                 var read = GuaTraceReader.Read(source);
                 if (read.Issues.Count != 0 || !read.Manifest.Finalized) throw new InvalidDataException("SavedTraceInvalidOrIncomplete");
@@ -35,7 +35,7 @@ internal static class OfflineCommands
                 if (options.Optional("--output") is { } destination)
                 {
                     var full = Path.GetFullPath(destination);
-                    var parent = paths.Resolve(Path.GetDirectoryName(full)!, Directory.GetCurrentDirectory());
+                    var parent = StaticPathAuthority.Directory(Path.GetDirectoryName(full)!, roots, "ReportWriteRejected");
                     full = Path.Combine(parent, Path.GetFileName(full));
                     if (ArtifactPathAuthority.ContainsDirectory(source, parent))
                         throw new InvalidDataException("ReportOutputInsideSource");
@@ -47,8 +47,10 @@ internal static class OfflineCommands
             }
             var replay = args[0] == "replay";
             if (options.Has(replay ? "--scenario" : "--plan")) throw new InvalidDataException("ExecutionArgumentsRequired");
-            var input = await new StaticContractValidator(roots).ValidateFileAsync(options.Required(replay ? "--plan" : "--scenario"), token);
-            var environment = await new StaticContractValidator(roots).ValidateFileAsync(options.Required("--environment"), token);
+            var inputPath = StaticPathAuthority.File(options.Required(replay ? "--plan" : "--scenario"), roots, "ExecutionInputInvalid");
+            var environmentPath = StaticPathAuthority.File(options.Required("--environment"), roots, "ExecutionInputInvalid");
+            var input = await new StaticContractValidator(roots).ValidateFileAsync(inputPath, token);
+            var environment = await new StaticContractValidator(roots).ValidateFileAsync(environmentPath, token);
             token.ThrowIfCancellationRequested();
             if (!input.IsValid || !environment.IsValid) throw new InvalidDataException("ExecutionInputInvalid");
             if (environment.Document is not EnvironmentDocument env) throw new InvalidDataException("EnvironmentRequired");

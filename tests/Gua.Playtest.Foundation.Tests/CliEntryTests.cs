@@ -133,6 +133,157 @@ public sealed class CliEntryTests
         Assert.Equal(before, source.Files.Values.Single().CopyBytes());
     }
 
+    [Theory]
+    [InlineData("explore", false)]
+    [InlineData("explore", true)]
+    [InlineData("replay", false)]
+    [InlineData("replay", true)]
+    [InlineData("validate", false)]
+    public async Task OfflineFileAliasesRequireActualIdentityBeforeValidation(string command, bool environmentAlias)
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var input = Directory.CreateDirectory(Path.Combine(root.FullName, "input"));
+            var names = new[] { "scenario.json", "recording.json", "plan.json", "environment.json" };
+            foreach (var name in names) File.Copy(Fixture(name), Path.Combine(input.FullName, name));
+            var alias = Path.Combine(root.FullName, "INPUT"); var same = Directory.Exists(alias);
+            if (!same)
+            {
+                Directory.CreateDirectory(alias);
+                foreach (var name in names) File.Copy(Fixture(name), Path.Combine(alias, name));
+            }
+            var before = Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories).ToDictionary(path => path, File.ReadAllBytes);
+            var file = command == "replay" ? "plan.json" : "scenario.json";
+            var args = new List<string> { command, "--json", "--allow-root", input.FullName };
+            if (command != "validate") args.Add(command == "replay" ? "--plan" : "--scenario");
+            args.Add(Path.Combine(environmentAlias ? input.FullName : alias, file));
+            if (command != "validate") args.AddRange(["--environment", Path.Combine(environmentAlias ? alias : input.FullName, "environment.json")]);
+            using var output = new StringWriter(); using var error = new StringWriter();
+            Assert.Equal(command == "validate" && same ? 0 : 2, await CliApplication.ExecuteAsync(args.ToArray(), output, error));
+            using var result = JsonDocument.Parse(output.ToString());
+            var code = result.RootElement.GetProperty("code").GetString();
+            if (same) Assert.Equal(command == "validate" ? "Valid" : "ProductionRuntimeUnavailable", code);
+            else { Assert.NotEqual("Valid", code); Assert.NotEqual("ProductionRuntimeUnavailable", code); }
+            Assert.DoesNotContain("ScenarioPassed", output.ToString());
+            foreach (var (path, bytes) in before) Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SavedReportSourceAndOutputParentAliasesRequireActualIdentity(bool outputParentAlias)
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var input = Directory.CreateDirectory(Path.Combine(root.FullName, "input"));
+            var trace = await Probe("trace", Path.Combine(input.FullName, "trace"));
+            Assert.Equal(0, trace.Exit); Assert.Empty(trace.Error);
+            var source = trace.Output.Trim();
+            Directory.CreateDirectory(Path.Combine(input.FullName, "reports"));
+            var alias = Path.Combine(root.FullName, "INPUT"); var same = Directory.Exists(alias);
+            if (!same)
+            {
+                Directory.CreateDirectory(alias);
+                foreach (var directory in Directory.GetDirectories(input.FullName, "*", SearchOption.AllDirectories))
+                    Directory.CreateDirectory(Path.Combine(alias, Path.GetRelativePath(input.FullName, directory)));
+                foreach (var file in Directory.GetFiles(input.FullName, "*", SearchOption.AllDirectories))
+                    File.Copy(file, Path.Combine(alias, Path.GetRelativePath(input.FullName, file)));
+            }
+            var before = Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories).ToDictionary(path => path, File.ReadAllBytes);
+            var aliasedSource = Path.Combine(alias, Path.GetRelativePath(input.FullName, source));
+            var html = Path.Combine(outputParentAlias ? alias : input.FullName, "reports", "report.html");
+            using var output = new StringWriter(); using var error = new StringWriter();
+            Assert.Equal(same ? 0 : 2, await CliApplication.ExecuteAsync(["report", "--json", "--allow-root", input.FullName,
+                "--trace", outputParentAlias ? source : aliasedSource, "--output", html], output, error));
+            using var result = JsonDocument.Parse(output.ToString());
+            if (same) { Assert.Equal("SavedTraceRead", result.RootElement.GetProperty("code").GetString()); Assert.True(File.Exists(html)); }
+            else Assert.False(File.Exists(html));
+            foreach (var (path, bytes) in before) Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Theory]
+    [InlineData("validate")]
+    [InlineData("explore")]
+    [InlineData("replay")]
+    [InlineData("report")]
+    public async Task StaticEntryCanonicalizesLinksWithoutGrantingOutsideTargets(string command)
+    {
+        var root = PrivateRoot();
+        var linked = Path.Combine(root.FullName, "linked"); var escape = Path.Combine(root.FullName, "escape");
+        try
+        {
+            var input = Directory.CreateDirectory(Path.Combine(root.FullName, "input"));
+            var outside = Directory.CreateDirectory(Path.Combine(root.FullName, "outside"));
+            var tracePaths = new Dictionary<string, string>();
+            foreach (var directory in new[] { input, outside })
+            {
+                foreach (var name in new[] { "scenario.json", "recording.json", "plan.json", "environment.json" })
+                    File.Copy(Fixture(name), Path.Combine(directory.FullName, name));
+                if (command == "report")
+                {
+                    var trace = await Probe("trace", Path.Combine(directory.FullName, "trace"));
+                    Assert.Equal(0, trace.Exit); Assert.Empty(trace.Error);
+                    tracePaths[directory.FullName] = Path.GetRelativePath(directory.FullName, trace.Output.Trim());
+                    Directory.CreateDirectory(Path.Combine(directory.FullName, "reports"));
+                }
+            }
+            await CreateDirectoryLink(linked, input.FullName); await CreateDirectoryLink(escape, outside.FullName);
+            string[] Arguments(string allowed, string entry, string suffix)
+            {
+                var args = new List<string> { command, "--json", "--allow-root", allowed };
+                if (command == "report") args.AddRange(["--trace", Path.Combine(entry, tracePaths[entry == escape ? outside.FullName : input.FullName]),
+                    "--output", Path.Combine(entry, "reports", suffix + ".html")]);
+                else
+                {
+                    if (command != "validate") args.Add(command == "replay" ? "--plan" : "--scenario");
+                    args.Add(Path.Combine(entry, command == "replay" ? "plan.json" : "scenario.json"));
+                    if (command != "validate") args.AddRange(["--environment", Path.Combine(entry, "environment.json")]);
+                }
+                return args.ToArray();
+            }
+            foreach (var allowed in new[] { input.FullName, linked })
+            {
+                using var output = new StringWriter();
+                Assert.Equal(command is "validate" or "report" ? 0 : 2,
+                    await CliApplication.ExecuteAsync(Arguments(allowed, linked, allowed == linked ? "linked-root" : "physical-root"), output));
+                using var result = JsonDocument.Parse(output.ToString());
+                Assert.Equal(command == "validate" ? "Valid" : command == "report" ? "SavedTraceRead" : "ProductionRuntimeUnavailable",
+                    result.RootElement.GetProperty("code").GetString());
+            }
+            using var rejected = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(Arguments(input.FullName, escape, "denied"), rejected));
+            Assert.DoesNotContain("ProductionRuntimeUnavailable", rejected.ToString());
+            Assert.DoesNotContain("SavedTraceRead", rejected.ToString());
+            Assert.False(File.Exists(Path.Combine(outside.FullName, "reports", "denied.html")));
+        }
+        finally
+        {
+            if (Directory.Exists(linked)) Directory.Delete(linked);
+            if (Directory.Exists(escape)) Directory.Delete(escape);
+            root.Delete(true);
+        }
+    }
+
+    private static async Task CreateDirectoryLink(string link, string target)
+    {
+        if (!OperatingSystem.IsWindows()) { Directory.CreateSymbolicLink(link, target); return; }
+        var start = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in new[] { "/c", "mklink", "/J", link, target }) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        Assert.Equal(0, process.ExitCode); await stdout; await stderr;
+    }
+
     [Fact]
     public async Task PlanDispatchPreservesPinnedBytesAndRejectsForgedTrial()
     {
