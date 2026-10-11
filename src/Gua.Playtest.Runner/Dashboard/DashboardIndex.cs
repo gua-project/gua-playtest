@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gua.Playtest.Core.Contracts;
 using Gua.Playtest.Runner.Artifacts;
+using Gua.Playtest.Runner.Execution;
 
 namespace Gua.Playtest.Runner.Dashboard;
 
@@ -241,6 +242,25 @@ public sealed class DashboardIndex
             var completion = doc.RootElement;
             if (Text(completion, "kind") != "playtestCompletionStorage" || completion.GetProperty("storageVersion").GetInt32() != 1 ||
                 Text(completion, "runId") != Path.GetFileName(directory)) throw new InvalidDataException();
+            var observations = completion.GetProperty("observations");
+            if (observations.ValueKind != JsonValueKind.Array) throw new InvalidDataException();
+            foreach (var observation in observations.EnumerateArray())
+                if (Text(observation, "boundary") != nameof(ObservationBoundary.AfterCleanup) ||
+                    !Token(Text(observation, "observationId"))) throw new InvalidDataException();
+            var postProcessing = completion.GetProperty("postProcessing");
+            if (postProcessing.ValueKind != JsonValueKind.Array) throw new InvalidDataException();
+            foreach (var issue in postProcessing.EnumerateArray())
+            {
+                if (!Enum.GetNames<PostProcessingReason>().Contains(Text(issue, "reason"), StringComparer.Ordinal))
+                    throw new InvalidDataException();
+                if (issue.TryGetProperty("exception", out var exception) && exception.ValueKind != JsonValueKind.Null)
+                {
+                    if (exception.ValueKind != JsonValueKind.Object ||
+                        exception.GetProperty("type").ValueKind is not (JsonValueKind.String or JsonValueKind.Null) ||
+                        (exception.TryGetProperty("stackTrace", out var stack) && stack.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)))
+                        throw new InvalidDataException();
+                }
+            }
             var rawReceipts = completion.GetProperty("artifacts");
             if (rawReceipts.ValueKind != JsonValueKind.Array) throw new InvalidDataException();
             foreach (var raw in rawReceipts.EnumerateArray())

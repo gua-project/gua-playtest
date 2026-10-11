@@ -162,14 +162,16 @@ public sealed class DashboardTests : IDisposable
         var secret = field switch { "scenarioId" => identity.ScenarioId, "definitionVersion" => identity.DefinitionVersion,
             "scenarioSha256" => identity.ScenarioSha256, "buildId" => identity.BuildId, _ => identity.EnvironmentSha256 };
         var store = RunArtifactStore.Create(Artifacts, Limits, new([secret], []));
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], identity)).Failure);
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity)).Failure);
         Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(path => Path.GetFileName(path)!).ToArray());
     }
     [Fact]
     public void Valid_identity_is_retained_exactly_in_storage()
     {
         var identity = Identity(); var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
-        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], identity)).Saved);
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity)).Saved);
         using var file = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
         var saved = file.RootElement.GetProperty("identity");
         Assert.Equal(identity.ScenarioId, saved.GetProperty("scenarioId").GetString());
@@ -388,7 +390,8 @@ public sealed class DashboardTests : IDisposable
             "definitionVersion" => id with { DefinitionVersion = value }, "buildId" => id with { BuildId = value },
             "scenarioSha256" => id with { ScenarioSha256 = value }, _ => id with { EnvironmentSha256 = value } };
         var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], id)).Failure);
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], id)).Failure);
         Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
     }
     private (RunArtifactStore Store, byte[] Html) SavedReportAndRecording()
@@ -1099,6 +1102,59 @@ public sealed class DashboardTests : IDisposable
             Assert.Equal("Unsettled", Assert.Single((await Index().ReadAsync()).Runs).State);
         }
         else Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public void Identified_preparation_requires_fixed_scenario_before_publication(bool replay, bool otherInput)
+    {
+        using var other = JsonDocument.Parse("{\"kind\":\"environment\"}");
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var identity = Identity();
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(),
+            otherInput ? [new("environment", other.RootElement)] : [], identity);
+        var saved = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.Equal(PersistenceFailure.InvalidEvidence, saved.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData("observations", "missing")] [InlineData("observations", "null")] [InlineData("observations", "{}")]
+    [InlineData("observations", "[null]")] [InlineData("observations", "[{}]")]
+    [InlineData("observations", "[{\"boundary\":\"Before\",\"observationId\":\"obs\"}]")]
+    [InlineData("observations", "[{\"boundary\":3,\"observationId\":\"obs\"}]")]
+    [InlineData("observations", "[{\"boundary\":\"AfterCleanup\",\"observationId\":null}]")]
+    [InlineData("observations", "[{\"boundary\":\"AfterCleanup\",\"observationId\":\"../private\"}]")]
+    [InlineData("postProcessing", "missing")] [InlineData("postProcessing", "null")] [InlineData("postProcessing", "{}")]
+    [InlineData("postProcessing", "[null]")] [InlineData("postProcessing", "[{}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"Other\"}]")]
+    [InlineData("postProcessing", "[{\"reason\":0}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":5}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":{}}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":{\"type\":5}}]")]
+    [InlineData("postProcessing", "[{\"reason\":\"ArtifactFailed\",\"exception\":{\"type\":\"IOException\",\"stackTrace\":5}}]")]
+    public async Task Completion_required_arrays_and_nested_shapes_are_validated(string field, string value)
+    {
+        var store = Save(); var file = Path.Combine(store.DirectoryPath, "completion.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!.AsObject();
+        if (value == "missing") json.Remove(field); else json[field] = System.Text.Json.Nodes.JsonNode.Parse(value);
+        File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status); Assert.Equal("Passed", run.State);
+        Assert.All(run.Details, detail => { Assert.Equal("CompletionUnreadable", detail.State); Assert.Null(detail.Report); });
+    }
+    [Fact]
+    public async Task Completion_writer_cleanup_and_redacted_exception_remain_readable()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new(["private"], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity())).Saved);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [new(PostProcessingReason.ResourceReleaseUnconfirmed, new("private", "private"))], []),
+            [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess), new(ArtifactKind.Recording, ArtifactState.NotExecuted)],
+            [new(ObservationBoundary.AfterCleanup, "cleanup-1")], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("PassedPostProcessingIncomplete", run.State);
+        Assert.Equal("OmittedOnSuccess", run.Details[0].State); Assert.Equal("NotExecuted", run.Details[1].State);
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }

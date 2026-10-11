@@ -29,7 +29,12 @@ time or a filesystem modification date. Equal start timestamps and multiple Runs
 Trace and Recording show independent receipt states: `NotExecuted`,
 `OmittedOnSuccess`, `CaptureFailed`, `SaveFailed`, `Saved`, `Missing` or
 `Unreadable`. Completion metadata that cannot be decoded has
-`CompletionUnreadable`. A saved common Gua HTML report listed in the Trace
+`CompletionUnreadable`. Version-1 completion requires both the cleanup
+`observations` array (AfterCleanup associations) and the `postProcessing` array
+(defined reason codes and optional exception metadata), including empty arrays
+when no entries exist. Corruption of these fields preserves the independently
+validated saved result while making completion details unreadable.
+A saved common Gua HTML report listed in the Trace
 receipt links to the existing Viewer. Every associated file's bounded size and
 SHA-256 are checked, and the report is checked again when opened. No Playtest
 timeline or Trace format is introduced. Saved Trace without a listed HTML

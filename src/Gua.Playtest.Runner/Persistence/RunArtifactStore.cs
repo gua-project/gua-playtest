@@ -150,6 +150,8 @@ public sealed class RunArtifactStore
                 // The Scenario source digest binds the supplied identity; only sanitized bytes are stored.
                 inputs.Add(new { name = input.Name, sha256 = Hash(safe), sourceSha256, document = JsonSerializer.Deserialize<JsonElement>(safe) });
             }
+            if (identity is not null && scenarioCopyHash is null)
+                throw new InvalidDataException("RunIdentityScenarioMissing");
             Publish("run.json", Encode(new { kind = "playtestRunStorage", storageVersion = 1, runId = RunId,
                 executionState = ExecutionState.Preparing, identity, metadata.Profile, metadata.Settings, metadata.Versions, inputs,
                 metadata.StartedAt }), cancellationToken);
