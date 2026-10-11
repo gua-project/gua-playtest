@@ -25,6 +25,35 @@ public sealed class CliEntryTests
     private static DirectoryInfo PrivateRoot() => Directory.CreateDirectory(Path.Combine(Repository, "TestResults", "cli-private-" + Guid.NewGuid().ToString("N")));
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task InterruptedPlanValidationPreservesExitFourBeforePublication(bool create)
+    {
+        var root = PrivateRoot();
+        try
+        {
+            using var cancellation = new CancellationTokenSource();
+            var calls = 0;
+            async ValueTask<StaticValidationReport> Interrupt(string input, IEnumerable<string> roots, CancellationToken token)
+            {
+                calls++; cancellation.Cancel();
+                return await new StaticContractValidator(roots).ValidateFileAsync(input, token);
+            }
+            string[] args = create
+                ? ["plan", "create", "--managed-root", root.FullName, "--allow-root", Path.GetDirectoryName(Fixture("scenario.json"))!,
+                    "--scenario", Fixture("scenario.json"), "--recording", Fixture("recording.json"), "--timing", "recorded"]
+                : ["plan", "accept", "--managed-root", root.FullName, "--plan", Path.Combine(root.FullName, "plan.json"),
+                    "--trial", new string('a', 32), "--approve", "--approve-expectations"];
+            using var output = new StringWriter(); using var diagnostics = new StringWriter();
+            Assert.Equal(4, await OfflineCommands.ExecuteAsync(args, output, diagnostics, true, cancellation.Token, Interrupt));
+            Assert.Equal(1, calls);
+            Assert.Contains("CommandInterrupted", output.ToString());
+            Assert.Empty(Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Theory]
     [InlineData(ResultStatus.Passed, RunReason.GoalSatisfied, RunOrigin.Condition, 0)]
     [InlineData(ResultStatus.Failed, RunReason.FailureCondition, RunOrigin.Condition, 1)]
     [InlineData(ResultStatus.Invalid, RunReason.InvalidContract, RunOrigin.Contract, 2)]
@@ -226,6 +255,17 @@ public sealed class CliEntryTests
             using var nested = new StringWriter();
             Assert.Equal(2, await CliApplication.ExecuteAsync(["report", "--json", "--allow-root", root, "--trace", source, "--output", Path.Combine(source, "new.html")], nested));
             Assert.Contains("ReportOutputInsideSource", nested.ToString());
+            var caseAlias = Path.Combine(Path.GetDirectoryName(source)!, Path.GetFileName(source).ToUpperInvariant());
+            var sameDirectory = Directory.Exists(caseAlias);
+            if (!sameDirectory) Directory.CreateDirectory(caseAlias);
+            using var aliasResult = new StringWriter();
+            var aliasOutput = Path.Combine(caseAlias, "alias-report.html");
+            Assert.Equal(sameDirectory ? 2 : 0, await CliApplication.ExecuteAsync(["report", "--json", "--allow-root", root, "--trace", source, "--output", aliasOutput], aliasResult));
+            if (sameDirectory)
+            {
+                Assert.Contains("ReportOutputInsideSource", aliasResult.ToString());
+                Assert.False(File.Exists(aliasOutput));
+            }
             Assert.Equal(original.Keys.Order(), Directory.GetFiles(source, "*", SearchOption.AllDirectories).Order());
             foreach (var (path, bytes) in original) Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
         }

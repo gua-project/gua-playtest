@@ -42,7 +42,8 @@ public sealed class PlanManager
     /// The generated candidate always requests full afterPlan coverage.</summary>
     public async ValueTask<string> CreateAsync(string scenarioPath, string recordingPath,
         IEnumerable<string> allowedRoots, string timing, CancellationToken token = default,
-        string? expectedScenarioSha256 = null, string? expectedRecordingSha256 = null)
+        string? expectedScenarioSha256 = null, string? expectedRecordingSha256 = null,
+        Func<string, bool>? candidateResponseAllowed = null)
     {
         token.ThrowIfCancellationRequested();
         var roots = allowedRoots.Select(r => Path.TrimEndingDirectorySeparator(Path.GetFullPath(r))).ToArray();
@@ -87,6 +88,8 @@ public sealed class PlanManager
             if (!validated.IsValid) throw new InvalidDataException(validated.Code);
             token.ThrowIfCancellationRequested(); RunArtifactStore.CheckPath(root);
             var destination = Path.Combine(root, id);
+            if (candidateResponseAllowed is not null && !candidateResponseAllowed(Path.Combine(destination, "plan.json")))
+                throw new InvalidDataException("PlanResponseRejected");
             Directory.Move(staging, destination);
             return Path.Combine(destination, "plan.json");
         }

@@ -21,7 +21,7 @@ replay --allow-root <existing-directory> --plan <file> --environment <file>
 Goal scoring. Their exit 0 means command success. Report reads a finalized Gua
 Trace through `GuaTraceReader`; optional HTML uses the embedded `GuaTraceReport`
 Viewer. The output's existing parent must be inside an allowed root. Output inside
-the source Trace or overwriting an existing output is refused. Reader issues or an
+the source Trace (including filesystem case aliases) or overwriting an existing output is refused. Reader issues or an
 unfinished Trace fail closed. Detail formats remain Gua-owned.
 
 Plan commands use [PlanManager's managed evidence chain](plan-adoption.md).
@@ -42,6 +42,8 @@ values. The CLI passes its secret-reference snapshot hashes through PlanCommand
 to PlanManager. A replaced Scenario, Recording or Plan fails before candidate or
 adoption publication, so secret policy and saved bytes cannot refer to different
 inputs. The managed root and authority key must remain private host resources.
+The complete command response, including its code and candidate path, must also
+pass the private secret policy before candidate or adoption publication.
 
 Explore/Replay accept repeated `--allow-root`, optional positive `--max-actions`
 and `--max-duration-ms`, and repeated `--deny-action`. Offline resolution retains

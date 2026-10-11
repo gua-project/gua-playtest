@@ -13,6 +13,7 @@ using System.Text.Json;
 using Xunit;
 using Gua.Playtest.Runner.Artifacts;
 using Gua.Playtest.Runner.Planning;
+using Gua.Playtest.Cli;
 
 namespace Gua.Playtest.Foundation.Tests;
 
@@ -25,6 +26,66 @@ public sealed class ReplayOwnerTimingCollection { }
 [Collection("Replay owner timing")]
 public sealed class ReplayTests
 {
+    [Theory]
+    [InlineData("Accepted")]
+    [InlineData("PlanAccepted")]
+    public async Task PlanAcceptChecksCompleteResponseBeforePublishingAdoption(string secret)
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var redactor = new PersistenceRedactor([secret], []);
+        bool ResponseAllowed(string reply)
+        {
+            using var document = JsonDocument.Parse(reply);
+            var status = document.RootElement.GetProperty("status").GetString()!;
+            var code = document.RootElement.TryGetProperty("code", out var value) ? value.GetString()! : "PlanAccepted";
+            var result = CommandOutput.Serialize(status, code, document.RootElement);
+            return redactor.Redact(result) == result;
+        }
+        using var output = new StringWriter();
+        Assert.Equal(2, await PlanCommand.ExecuteAsync(["plan", "accept", "--managed-root", Path.Combine(files.Root, "managed"),
+            "--plan", path, "--trial", id, "--approve", "--approve-expectations"], output, redactor,
+            responseAllowed: ResponseAllowed));
+        Assert.DoesNotContain(secret, output.ToString());
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+        Assert.False(await manager.IsAcceptedAsync(path));
+    }
+
+    [Fact]
+    public async Task PlanCancellationReplyAppliesPrivateSecretPolicy()
+    {
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        using var output = new StringWriter();
+        Assert.Equal(4, await PlanCommand.ExecuteAsync([], output, new PersistenceRedactor(["PlanInterrupted"], []), cancellation.Token));
+        Assert.DoesNotContain("PlanInterrupted", output.ToString());
+        using var document = JsonDocument.Parse(output.ToString());
+    }
+
+    [Fact]
+    public async Task CandidateResponsePolicyRunsBeforeDirectoryPublication()
+    {
+        using var files = new Fixture(); var redactor = new PersistenceRedactor(["PlanCandidateCreated"], []);
+        var checkedCandidate = false;
+        bool ResponseAllowed(string reply)
+        {
+            using var document = JsonDocument.Parse(reply);
+            var status = document.RootElement.GetProperty("status").GetString()!;
+            if (status == "Candidate") checkedCandidate = true;
+            var code = document.RootElement.TryGetProperty("code", out var value) ? value.GetString()! : "PlanCandidateCreated";
+            var result = CommandOutput.Serialize(status, code, document.RootElement);
+            return redactor.Redact(result) == result;
+        }
+        var managed = Path.Combine(files.Root, "managed");
+        var scenario = Path.Combine(files.Root, "scenario.json");
+        var recording = Path.Combine(files.Root, "recording.json");
+        using var output = new StringWriter();
+        Assert.Equal(2, await PlanCommand.ExecuteAsync(["plan", "create", "--managed-root", managed, "--allow-root", files.Root,
+            "--scenario", scenario, "--recording", recording, "--timing", "recorded"], output, redactor,
+            responseAllowed: ResponseAllowed));
+        Assert.DoesNotContain("PlanCandidateCreated", output.ToString());
+        Assert.True(checkedCandidate);
+        Assert.Empty(Directory.GetFiles(managed, "plan.json", SearchOption.AllDirectories));
+    }
     private const string Assertion = """{"kind":"assertion","read":{"region":"standard","target":{"source":"ui","selector":{"id":{"value":"buy"}}},"field":"visible","valueType":{"type":"bool"}},"quantifier":"one","operator":"equals","expected":{"type":"bool","value":true}}""";
     private static ConditionObservationUnit Unit(bool value) => new([KeyValuePair.Create("$", new ConditionLeafObservation("source:epoch:scope", true,
         [new ConditionTargetObservation("source:epoch:buy", "{\"type\":\"bool\",\"value\":" + (value ? "true" : "false") + "}")], true))]);

@@ -10,13 +10,15 @@ namespace Gua.Playtest.Cli;
 /// <summary>Explicit offline composition; never creates a game, Planner, Run or adoption proof.</summary>
 internal static class OfflineCommands
 {
+    internal delegate ValueTask<StaticValidationReport> InputValidator(string input, IEnumerable<string> roots, CancellationToken token);
     internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics,
-        bool json, CancellationToken token)
+        bool json, CancellationToken token, InputValidator? validateInput = null)
     {
         try
         {
             token.ThrowIfCancellationRequested();
-            if (args[0] == "plan") return await PlanAsync(args, output, diagnostics, json, token);
+            validateInput ??= static (input, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(input, token);
+            if (args[0] == "plan") return await PlanAsync(args, output, diagnostics, json, token, validateInput);
             var options = Options.Parse(args[1..], args[0] == "report"
                 ? ["--allow-root", "--trace", "--output"]
                 : ["--allow-root", "--scenario", "--plan", "--environment", "--max-actions", "--max-duration-ms", "--deny-action"]);
@@ -34,8 +36,7 @@ internal static class OfflineCommands
                     var full = Path.GetFullPath(destination);
                     var parent = paths.Resolve(Path.GetDirectoryName(full)!, Directory.GetCurrentDirectory());
                     full = Path.Combine(parent, Path.GetFileName(full));
-                    var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                    if (full.Equals(source, comparison) || full.StartsWith(source + Path.DirectorySeparatorChar, comparison))
+                    if (ArtifactPathAuthority.ContainsDirectory(source, parent))
                         throw new InvalidDataException("ReportOutputInsideSource");
                     if (File.Exists(full) || Directory.Exists(full)) throw new InvalidDataException("ReportOutputExists");
                     if (!GuaTraceReport.WriteHtml(source, full).Succeeded) throw new InvalidDataException("ReportWriteRejected");
@@ -84,7 +85,7 @@ internal static class OfflineCommands
         "ReportWriteRejected", "SecretBindingInvalid", "SecretBindingNotReferenced", "SecretUnavailable", "PlanSecretCollision"
     };
 
-    private static async Task<int> PlanAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token)
+    private static async Task<int> PlanAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, InputValidator validateInput)
     {
         if (args.Length < 2 || args[1] is not ("create" or "accept")) throw new InvalidDataException("CommandArgumentsRequired");
         var create = args[1] == "create";
@@ -101,7 +102,8 @@ internal static class OfflineCommands
             var roots = options.All("--allow-root");
             if (roots.Length != 1) throw new InvalidDataException("CommandArgumentsRequired");
             var scenario = options.Required("--scenario"); var recording = options.Required("--recording");
-            var source = await new StaticContractValidator(roots).ValidateFileAsync(scenario, token);
+            var source = await validateInput(scenario, roots, token);
+            token.ThrowIfCancellationRequested();
             if (!source.IsValid || source.Document is not ScenarioDocument) throw new InvalidDataException("ExecutionInputInvalid");
             var recorded = await new StaticContractValidator(roots).ValidateRecordingFileAsync(recording, token);
             token.ThrowIfCancellationRequested();
@@ -115,7 +117,8 @@ internal static class OfflineCommands
         {
             if (!options.Has("--approve") || !options.Has("--approve-expectations")) throw new InvalidDataException("CommandArgumentsRequired");
             var plan = options.Required("--plan");
-            var source = await new StaticContractValidator([managed]).ValidateFileAsync(plan, token);
+            var source = await validateInput(plan, [managed], token);
+            token.ThrowIfCancellationRequested();
             if (!source.IsValid || source.Document is not ReplayPlanDocument) throw new InvalidDataException("ExecutionInputInvalid");
             documents = source.Files.Values.Select(f => (JsonNode)f.CopyJson());
             inputHashes = new(source.Files.Values.Single(f => f.CopyJson()["kind"]?.GetValue<string>() == "replayPlan").Sha256, "", "");
@@ -140,15 +143,40 @@ internal static class OfflineCommands
             secrets.Add(supply);
         }
         var redactor = new PersistenceRedactor(secrets, ["password", "token", "authorization", "secretValue"]);
-        if (command.Any(x => redactor.Redact(x) != x)) throw new InvalidDataException("PlanSecretCollision");
+        if (command.Append(Path.GetFullPath(managed)).Any(x => redactor.Redact(x) != x))
+            return await SecretPolicyFailure(output, diagnostics, json, redactor);
+        bool ReplyAllowed(string reply)
+        {
+            if (redactor.Redact(reply) != reply) return false;
+            using var parsed = JsonDocument.Parse(reply);
+            var status = parsed.RootElement.GetProperty("status").GetString()!;
+            var code = parsed.RootElement.TryGetProperty("code", out var value) ? value.GetString()! : create ? "PlanCandidateCreated" : "PlanAccepted";
+            var document = CommandOutput.Serialize(status, code, parsed.RootElement);
+            return redactor.Redact(document) == document &&
+                (!parsed.RootElement.TryGetProperty("plan", out var path) || redactor.Redact(path.GetString()!) == path.GetString());
+        }
         using var buffer = new StringWriter(CultureInfo.InvariantCulture);
-        var exit = await PlanCommand.ExecuteAsync(command, buffer, redactor, token, inputHashes);
+        var exit = await PlanCommand.ExecuteAsync(command, buffer, redactor, token, inputHashes, ReplyAllowed);
+        if (string.IsNullOrWhiteSpace(buffer.ToString())) return await SecretPolicyFailure(output, diagnostics, json, redactor);
         using var result = JsonDocument.Parse(buffer.ToString());
+        if (result.RootElement.ValueKind != JsonValueKind.Object || !result.RootElement.TryGetProperty("status", out _))
+            return await SecretPolicyFailure(output, diagnostics, json, redactor);
+        if (result.RootElement.TryGetProperty("code", out var rejected) && rejected.GetString() == "PlanSecretCollision")
+            return await SecretPolicyFailure(output, diagnostics, json, redactor);
+        if (!ReplyAllowed(buffer.ToString())) return await SecretPolicyFailure(output, diagnostics, json, redactor);
         var status = result.RootElement.GetProperty("status").GetString()!;
         var code = result.RootElement.TryGetProperty("code", out var c) ? c.GetString()! : create ? "PlanCandidateCreated" : "PlanAccepted";
-        if (redactor.Redact(buffer.ToString()) != buffer.ToString()) throw new InvalidDataException("PlanSecretCollision");
         if (!json && exit == 0 && create) await output.WriteLineAsync(result.RootElement.GetProperty("plan").GetString());
         return await CommandOutput.WriteAsync(output, diagnostics, json, status, code, exit, result.RootElement.Clone());
+    }
+
+    private static async Task<int> SecretPolicyFailure(TextWriter output, TextWriter diagnostics, bool json, PersistenceRedactor redactor)
+    {
+        var code = redactor.Redact("PlanSecretCollision");
+        var document = CommandOutput.PolicyFailureDocument(redactor);
+        await output.WriteLineAsync(json ? document : code);
+        if (code.Length != 0) await diagnostics.WriteLineAsync(code);
+        return 2;
     }
 
     private static void CollectSecretKeys(JsonNode? node, HashSet<string> keys)
