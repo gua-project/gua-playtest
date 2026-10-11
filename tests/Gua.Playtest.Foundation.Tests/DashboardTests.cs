@@ -9,6 +9,7 @@ using Gua.Playtest.Runner;
 using Gua.Playtest.Runner.Artifacts;
 using Gua.Playtest.Runner.Dashboard;
 using Gua.Playtest.Runner.Execution;
+using Gua.Playtest.Runner.Replay;
 using Gua.Testing;
 using Xunit;
 
@@ -535,6 +536,27 @@ public sealed class DashboardTests : IDisposable
         json["inputs"]![0]!.AsObject().Remove(field); File.WriteAllText(file, json.ToJsonString());
         var run = Assert.Single((await Index().ReadAsync()).Runs);
         Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Plan_preparation_preserves_dashboard_metadata_without_granting_ordinary_trial_authority(bool replayPreparation)
+    {
+        var recording = Path.Combine(root, "recording.json");
+        File.WriteAllText(recording, """{"schemaVersion":1,"steps":[{"action":"click","target":{"id":"buy"},"relativeMilliseconds":0,"preRevision":0,"postRevision":1,"sensitive":false}]}""");
+        var plan = Path.Combine(root, "plan.json");
+        File.WriteAllText(plan, ContractJson.Serialize(new ReplayPlanDocument("candidate", new("s1.json", Identity().ScenarioSha256),
+            new("recording.json", Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(recording)))), "conditionSynchronized", "afterPlan", [], null)));
+        var replay = await ResolvedReplay.LoadAsync(plan, [root], new(10, 1000));
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var started = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], Identity(), started);
+        Assert.True((replayPreparation ? store.BeginReplayPreparation(metadata, Identity("buildB")) : store.BeginPreparation(metadata)).Saved);
+        if (replayPreparation) store.BindReplay(replay);
+        else Assert.Throws<InvalidDataException>(() => store.BindReplay(replay));
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Unsettled", run.State); Assert.Equal(replayPreparation ? "buildB" : "buildA", run.BuildId);
+        Assert.Equal(started, run.StartedAt); Assert.Equal(Identity().ScenarioSha256, run.ScenarioSha256);
     }
     [Fact]
     public async Task Issued_report_route_never_rebinds_to_another_run_after_refresh()
