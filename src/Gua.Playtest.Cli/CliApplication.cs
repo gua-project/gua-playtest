@@ -63,7 +63,7 @@ public static class CliApplication
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var authorized = StaticPathAuthority.File(contractFile, [root], "InvalidAllowedRoots");
-                result = await new ValidationRunner(new ContractValidatorAdapter([root])).ValidateAsync(authorized, cancellationToken);
+                result = await new ValidationRunner(new ContractValidatorAdapter(StaticPathAuthority.Validator([root]))).ValidateAsync(authorized, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             { result = new(ValidationStatus.Interrupted, "validation-interrupted"); }

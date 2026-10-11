@@ -142,6 +142,62 @@ public sealed class CliEntryTests
         => Assert.Equal("LocalOnly", Assert.Throws<InvalidDataException>(() => ArtifactPathAuthority.LocalPath(input, "LocalOnly")).Message);
 
     [Theory]
+    [InlineData("scenario.json", 2)]
+    [InlineData("recording.json", 3)]
+    public async Task HostFileAdmissionPrecedesEveryPlanReferenceRead(string rejected, int expectedCalls)
+    {
+        var root = PrivateRoot();
+        try
+        {
+            foreach (var name in new[] { "scenario.json", "recording.json", "plan.json" }) File.Copy(Fixture(name), Path.Combine(root.FullName, name));
+            // If opened first, this produces MalformedDocument instead of the authority refusal.
+            await File.WriteAllTextAsync(Path.Combine(root.FullName, rejected), "not-json");
+            var calls = new List<string>();
+            var validator = new StaticContractValidator([root.FullName], path =>
+            {
+                calls.Add(Path.GetFileName(path));
+                if (Path.GetFileName(path) == rejected) throw new IOException("PrivateAuthorityRefusal");
+                return path;
+            });
+            var result = await validator.ValidateFileAsync(Path.Combine(root.FullName, "plan.json"));
+            Assert.Equal("ReferenceUnreadable", result.Code);
+            Assert.Equal(expectedCalls, calls.Count); Assert.Equal(rejected, calls[^1]);
+            Assert.Empty(result.Files);
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Fact]
+    public async Task ReplayNestedCaseAliasesRemainBoundToPhysicalRoots()
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var input = Directory.CreateDirectory(Path.Combine(root.FullName, "input"));
+            var alias = Path.Combine(root.FullName, "INPUT"); var same = Directory.Exists(alias);
+            if (!same) Directory.CreateDirectory(alias);
+            foreach (var name in new[] { "scenario.json", "recording.json", "plan.json", "environment.json" })
+            {
+                File.Copy(Fixture(name), Path.Combine(input.FullName, name));
+                if (!same) File.Copy(Fixture(name), Path.Combine(alias, name));
+            }
+            var planFile = Path.Combine(input.FullName, "plan.json");
+            var plan = JsonNode.Parse(await File.ReadAllTextAsync(planFile))!;
+            plan["scenario"]!["path"] = "../INPUT/scenario.json";
+            plan["recording"]!["path"] = "../INPUT/recording.json";
+            await File.WriteAllTextAsync(planFile, plan.ToJsonString());
+            using var output = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["replay", "--json", "--allow-root", input.FullName,
+                "--plan", planFile, "--environment", Path.Combine(input.FullName, "environment.json")], output));
+            using var result = JsonDocument.Parse(output.ToString());
+            if (same) Assert.Equal("ProductionRuntimeUnavailable", result.RootElement.GetProperty("code").GetString());
+            else Assert.NotEqual("ProductionRuntimeUnavailable", result.RootElement.GetProperty("code").GetString());
+            Assert.DoesNotContain("ScenarioPassed", output.ToString());
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Theory]
     [InlineData(@"\\unreachable.invalid\share\input.json")]
     [InlineData("//unreachable.invalid/share/input.json")]
     [InlineData(@"\\?\C:\input.json")]

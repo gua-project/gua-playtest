@@ -6,6 +6,13 @@ namespace Gua.Playtest.Cli;
 /// <summary>Preserves static link canonicalization before applying physical root authority.</summary>
 internal static class StaticPathAuthority
 {
+    internal static StaticContractValidator Validator(IEnumerable<string> roots)
+    {
+        var explicitRoots = roots.Select(Canonical).ToArray();
+        return new(explicitRoots,
+            path => File(path, explicitRoots, "ReferenceOutsideAllowedRoots"),
+            path => Directory(path, explicitRoots, "ReferenceOutsideAllowedRoots"));
+    }
     internal static string File(string input, IEnumerable<string> roots, string refusal)
         => ArtifactPathAuthority.AuthorizeFile(Canonical(input), roots.Select(Canonical), refusal);
 

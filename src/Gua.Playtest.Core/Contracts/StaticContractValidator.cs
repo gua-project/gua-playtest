@@ -33,7 +33,17 @@ public sealed record StaticValidationReport(string Code, ContractDocument? Docum
 public sealed class StaticContractValidator
 {
     private readonly AllowedPaths paths;
-    public StaticContractValidator(IEnumerable<string> allowedRoots) => paths = new AllowedPaths(allowedRoots);
+    private readonly Func<string, string>? fileAdmission;
+    private readonly Func<string, string>? directoryAdmission;
+    public StaticContractValidator(IEnumerable<string> allowedRoots) : this(allowedRoots, null, null) { }
+    /// <summary>Host-supplied authority is checked before every referenced file read.
+    /// The Core retains no native filesystem dependency.</summary>
+    public StaticContractValidator(IEnumerable<string> allowedRoots, Func<string, string>? fileAdmission,
+        Func<string, string>? directoryAdmission = null)
+    {
+        paths = new AllowedPaths(allowedRoots);
+        this.fileAdmission = fileAdmission; this.directoryAdmission = directoryAdmission;
+    }
 
     /// <summary>Read a Gua-owned Recording with the same bounded decoder and explicit path authority.
     /// Does not dispatch, adopt or infer a Scenario.</summary>
@@ -97,8 +107,10 @@ public sealed class StaticContractValidator
         return entry;
     }
 
-    private static async Task<ValidatedFile> ReadAsync(string path, Dictionary<string, ValidatedFile> files, CancellationToken token)
+    private async Task<ValidatedFile> ReadAsync(string path, Dictionary<string, ValidatedFile> files, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        path = fileAdmission?.Invoke(path) ?? path;
         if (files.TryGetValue(path, out var old)) return old;
         if (files.Count >= 1000) throw new ContractException("DocumentTooComplex");
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
@@ -160,6 +172,7 @@ public sealed class StaticContractValidator
         foreach (var root in registry.Json["artifactRoots"]!.AsArray())
         {
             var resolved = paths.Resolve(root!.GetValue<string>(), System.IO.Path.GetDirectoryName(registry.Path)!);
+            resolved = directoryAdmission?.Invoke(resolved) ?? resolved;
             if (!Directory.Exists(resolved)) throw new ContractException("InvalidPath");
         }
     }

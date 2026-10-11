@@ -18,7 +18,7 @@ internal static class OfflineCommands
         try
         {
             token.ThrowIfCancellationRequested();
-            validateInput ??= static (input, roots, token) => new StaticContractValidator(roots).ValidateFileAsync(input, token);
+            validateInput ??= static (input, roots, token) => StaticPathAuthority.Validator(roots).ValidateFileAsync(input, token);
             if (args[0] == "plan") return await PlanAsync(args, output, diagnostics, json, token, validateInput, resolvedSecrets);
             var options = Options.Parse(args[1..], args[0] == "report"
                 ? ["--allow-root", "--trace", "--output"]
@@ -49,8 +49,8 @@ internal static class OfflineCommands
             if (options.Has(replay ? "--scenario" : "--plan")) throw new InvalidDataException("ExecutionArgumentsRequired");
             var inputPath = StaticPathAuthority.File(options.Required(replay ? "--plan" : "--scenario"), roots, "ExecutionInputInvalid");
             var environmentPath = StaticPathAuthority.File(options.Required("--environment"), roots, "ExecutionInputInvalid");
-            var input = await new StaticContractValidator(roots).ValidateFileAsync(inputPath, token);
-            var environment = await new StaticContractValidator(roots).ValidateFileAsync(environmentPath, token);
+            var input = await StaticPathAuthority.Validator(roots).ValidateFileAsync(inputPath, token);
+            var environment = await StaticPathAuthority.Validator(roots).ValidateFileAsync(environmentPath, token);
             token.ThrowIfCancellationRequested();
             if (!input.IsValid || !environment.IsValid) throw new InvalidDataException("ExecutionInputInvalid");
             if (environment.Document is not EnvironmentDocument env) throw new InvalidDataException("EnvironmentRequired");
@@ -109,7 +109,7 @@ internal static class OfflineCommands
             var source = await validateInput(scenario, roots, token);
             token.ThrowIfCancellationRequested();
             if (!source.IsValid || source.Document is not ScenarioDocument) throw new InvalidDataException("ExecutionInputInvalid");
-            var recorded = await new StaticContractValidator(roots).ValidateRecordingFileAsync(recording, token);
+            var recorded = await StaticPathAuthority.Validator(roots).ValidateRecordingFileAsync(recording, token);
             token.ThrowIfCancellationRequested();
             if (!recorded.IsValid) throw new InvalidDataException("ExecutionInputInvalid");
             documents = source.Files.Values.Concat(recorded.Files.Values).Select(f => (JsonNode)f.CopyJson());

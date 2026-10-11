@@ -35,6 +35,9 @@ UNC and Windows device namespaces are refused before target filesystem access,
 including managed storage roots and the explicit legacy schema input. Static
 link targets are checked one hop at a time before following them; managed
 artifact paths reject links by inspecting parent entries first.
+Every referenced contract file is physically admitted before reading it, as is
+each declared registry directory. Authorization of an entry document does not
+grant authority to its references.
 
 Plan commands use [PlanManager's managed evidence chain](plan-adoption.md).
 Candidates preserve exact validated Scenario and Recording bytes, including Goal
@@ -61,6 +64,8 @@ is missing, cancellation occurs, or policy construction fails. Resolution stops
 at the persistence policy's 1024-key and 65536-character ceilings. Diagnostics
 that collide with a known value are suppressed; a content-free JSON document
 preserves the final-document boundary when named fields would disclose a value.
+If every possible JSON value contains a known value, output is suppressed and
+the command fails closed without publishing a candidate or adoption.
 
 Explore/Replay accept repeated `--allow-root`, optional positive `--max-actions`
 and `--max-duration-ms`, and repeated `--deny-action`. Offline resolution retains
