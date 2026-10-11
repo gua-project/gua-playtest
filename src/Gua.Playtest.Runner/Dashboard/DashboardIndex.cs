@@ -133,19 +133,26 @@ public sealed class DashboardIndex
                 if (run.TryGetProperty("startedAt", out var at)) started = at.GetDateTimeOffset();
                 if (run.TryGetProperty("inputs", out var inputs))
                     foreach (var input in inputs.EnumerateArray())
-                        if (input.TryGetProperty("document", out var copy) && Text(copy, "kind") == "scenario")
+                    {
+                        if (Text(input, "name") is null || !Hash(Text(input, "sha256")) ||
+                            !input.TryGetProperty("document", out var copy) ||
+                            Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(copy, Json))) != Text(input, "sha256"))
+                            throw new InvalidDataException();
+                        if (Text(copy, "kind") == "scenario")
                         {
                             scenarioId = Text(copy, "scenarioId");
+                            if (!Token(scenarioId)) throw new InvalidDataException();
                             if (identity is not null && (scenarioId != identity.ScenarioId ||
                                 Text(copy, "definitionVersion") != identity.DefinitionVersion)) throw new InvalidDataException();
                         }
+                    }
             }
             else if (kind == "run")
             {
-                AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal));
+                using (var reservation = Open(Path.Combine(directory, "run.json"))) Charge(reservation.Length);
+                AdmitWireReferences(run, directory, new HashSet<string>(StringComparer.Ordinal), reserveValidationRead: true);
                 var validation = await new StaticContractValidator(allowedRoots.Concat(validationRoots).ToArray()).ValidateFileAsync(Path.Combine(directory, "run.json"), token);
                 if (!validation.IsValid || validation.Document is not RunDocument wire) throw new InvalidDataException();
-                foreach (var file in validation.Files.Values) { CheckAllowed(file.Path); Charge(file.ByteLength); }
                 identity = wire.Identity; started = wire.StartedAt;
             }
             else throw new InvalidDataException();
@@ -172,7 +179,7 @@ public sealed class DashboardIndex
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (ReadFailure(e)) { state = e is FileNotFoundException ? "Unsettled" : "ResultUnreadable"; }
         var details = ReadDetails(directory, key, result);
-        if (metadataState == "RunUnreadable") { identity = null; state = "RunUnreadable"; }
+        if (metadataState == "RunUnreadable") { identity = null; scenarioId = null; state = "RunUnreadable"; }
         return new(key, runId, identity?.ScenarioId ?? scenarioId, identity?.DefinitionVersion, identity?.ScenarioSha256,
             identity?.BuildId, identity?.EnvironmentSha256, started, state, result, details);
     }

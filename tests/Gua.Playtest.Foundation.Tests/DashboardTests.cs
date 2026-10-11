@@ -493,6 +493,50 @@ public sealed class DashboardTests : IDisposable
         Assert.Equal("Ready", (await Index(new(MaxFileBytes: largest, MaxIndexBytes: 2 * total)).ReadAsync()).RegistryState);
     }
     [Fact]
+    public async Task Public_run_budget_is_reserved_before_even_invalid_static_validation()
+    {
+        var store = Save();
+        var environment = new EnvironmentDocument("env", "buildA", new("ws://127.0.0.1:9876", null), "Player",
+            new(1000, 2, 2, 1000, 1000, 1000, 1000, 1000, 10, 1000, 1000, 10, 64, 2, 2, 2, 1000, 10, 10, 1000),
+            new([], false, []), new("recent", "onFailure"), null);
+        var environmentFile = Path.Combine(root, "environment.json");
+        var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(environment)); File.WriteAllBytes(environmentFile, bytes);
+        var run = new RunDocument(store.RunId, Identity(), "InvalidProfile", ExecutionState.Finished, DateTimeOffset.UtcNow,
+            new("../../s1.json", Identity().ScenarioSha256), new("../../environment.json", Convert.ToHexStringLower(SHA256.HashData(bytes))), null);
+        var file = Path.Combine(store.DirectoryPath, "run.json"); File.WriteAllText(file, ContractJson.Serialize(run));
+        File.Delete(Path.Combine(store.DirectoryPath, "result.json")); File.Delete(Path.Combine(store.DirectoryPath, "completion.json"));
+        Assert.False((await new StaticContractValidator([root]).ValidateFileAsync(file)).IsValid);
+        var registryFiles = new[] { Registry, Path.Combine(root, "s1.json"), Path.Combine(root, "s2.json") };
+        var runFiles = new[] { file, Path.Combine(root, "s1.json"), environmentFile };
+        var firstPassBudget = 2 * registryFiles.Sum(p => new FileInfo(p).Length) + runFiles.Sum(p => new FileInfo(p).Length);
+        var largest = checked((int)Math.Max(256, registryFiles.Concat(runFiles).Max(p => new FileInfo(p).Length)));
+        var snapshot = await Index(new(MaxFileBytes: largest, MaxIndexBytes: firstPassBudget)).ReadAsync();
+        Assert.Equal("Ready", snapshot.RegistryState); Assert.Equal("RunUnreadable", Assert.Single(snapshot.Runs).State);
+        // Invalid static validation cannot skip budget accounting: admission must reject before calling it.
+        Assert.True(snapshot.Truncated);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Fixed_input_hash_corruption_never_reassigns_saved_history(bool identity)
+    {
+        var store = Save(identity: identity); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["inputs"]![0]!["document"]!["scenarioId"] = "s2"; File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Null(run.BuildId);
+        Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Theory]
+    [InlineData("name")] [InlineData("sha256")] [InlineData("document")]
+    public async Task Fixed_input_wrapper_missing_fields_are_unreadable(string field)
+    {
+        var store = Save(identity: false); var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["inputs"]![0]!.AsObject().Remove(field); File.WriteAllText(file, json.ToJsonString());
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
+    }
+    [Fact]
     public async Task Issued_report_route_never_rebinds_to_another_run_after_refresh()
     {
         var (first, firstHtml) = SavedReportAndRecording(); var index = Index();
