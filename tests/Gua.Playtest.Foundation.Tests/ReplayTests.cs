@@ -146,6 +146,38 @@ public sealed class ReplayTests
 
     private static PlanManager Plans(Fixture files) => new(Path.Combine(files.Root, "managed"), new([], []));
     [Theory]
+    [InlineData("scenario")]
+    [InlineData("recording")]
+    [InlineData("both")]
+    [InlineData("root")]
+    public async Task CandidateInputAuthorizationFollowsActualRootIdentity(string variant)
+    {
+        using var files = new Fixture(); var manager = Plans(files);
+        var inputRoot = Path.Combine(files.Root, "Inputs"); Directory.CreateDirectory(inputRoot);
+        foreach (var name in new[] { "scenario.json", "recording.json" })
+            File.Move(Path.Combine(files.Root, name), Path.Combine(inputRoot, name));
+        var alternate = Path.Combine(files.Root, "inputs"); var insensitive = Directory.Exists(alternate);
+        if (!insensitive)
+        {
+            Directory.CreateDirectory(alternate);
+            foreach (var name in new[] { "scenario.json", "recording.json" })
+                File.Copy(Path.Combine(inputRoot, name), Path.Combine(alternate, name));
+        }
+        var scenario = Path.Combine(variant is "scenario" or "both" ? alternate : inputRoot, "scenario.json");
+        var recording = Path.Combine(variant is "recording" or "both" ? alternate : inputRoot, "recording.json");
+        var allowed = variant == "root" ? alternate : inputRoot;
+        if (!insensitive)
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => manager.CreateAsync(scenario, recording, [allowed], "recorded").AsTask());
+            Assert.Empty(Directory.GetDirectories(Path.Combine(files.Root, "managed")));
+            scenario = Path.Combine(inputRoot, "scenario.json"); recording = Path.Combine(inputRoot, "recording.json"); allowed = inputRoot;
+        }
+        var path = await manager.CreateAsync(scenario, recording, [allowed], "recorded");
+        foreach (var name in new[] { "scenario.json", "recording.json" })
+            Assert.Equal(File.ReadAllBytes(Path.Combine(inputRoot, name)), File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(path)!, name)));
+        Assert.True((await new StaticContractValidator([Path.GetDirectoryName(path)!]).ValidateFileAsync(path)).IsValid);
+    }
+    [Theory]
     [InlineData("conditionSynchronized", false)]
     [InlineData("recording.json", false)]
     [InlineData("timing", true)]

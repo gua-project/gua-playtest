@@ -11,7 +11,9 @@ another trial and approval. Existing Recording waits remain intact.
 Supply the host's `PersistenceRedactor`. Known secret collisions reject publication
 rather than rewriting pinned bytes. Recording must already be a Gua-owned redacted
 export with secret references. The private root and `.plan-authority` key are host
-resources excluded from Planner access and public artifact bundles. Reparse points
+resources excluded from Planner access and public artifact bundles. Allowed roots and differently cased
+input paths must resolve to the same actual directory and file identities before
+their spelling is normalized for contract validation. Reparse points
 and nonregular files are rejected; this is not an OS sandbox against another
 process modifying the trusted root or stealing its key. HMAC authenticates local
 host provenance, not publisher approval, permissions or safe actions. Losing the

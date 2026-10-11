@@ -44,11 +44,10 @@ public sealed class PlanManager
         IEnumerable<string> allowedRoots, string timing, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
-        var roots = allowedRoots.ToArray();
-        var recordingFullPath = Path.GetFullPath(recordingPath);
-        if (!roots.Any(r => Within(Path.GetFullPath(r), recordingFullPath)))
-            throw new InvalidDataException("RecordingOutsideAllowedRoots");
-        var scenarioReport = await new StaticContractValidator(roots).ValidateFileAsync(scenarioPath, token);
+        var roots = allowedRoots.Select(r => Path.TrimEndingDirectorySeparator(Path.GetFullPath(r))).ToArray();
+        var recordingFullPath = AuthorizeInput(recordingPath, roots, "RecordingOutsideAllowedRoots");
+        var scenarioFullPath = AuthorizeInput(scenarioPath, roots, "ScenarioOutsideAllowedRoots");
+        var scenarioReport = await new StaticContractValidator(roots).ValidateFileAsync(scenarioFullPath, token);
         token.ThrowIfCancellationRequested();
         if (!scenarioReport.IsValid || scenarioReport.Document is not ScenarioDocument) throw new InvalidDataException("ScenarioInvalid");
         var source = scenarioReport.Files.Values.Single();
@@ -324,11 +323,31 @@ public sealed class PlanManager
     }
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static string Relative(string directory, string path) => Path.GetRelativePath(directory, path).Replace('\\', '/');
-    private static bool Within(string directory, string file)
+    private static string AuthorizeInput(string input, IEnumerable<string> roots, string refusal)
     {
-        var relative = Path.GetRelativePath(directory, file);
-        return !Path.IsPathRooted(relative) && relative != ".." &&
-            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        var path = Path.GetFullPath(input);
+        RunArtifactStore.CheckPath(path);
+        foreach (var allowed in roots)
+        {
+            if (!Directory.Exists(allowed)) continue;
+            var identity = FileIdentity.ReadDirectory(allowed);
+            for (var ancestor = Path.GetDirectoryName(path); ancestor is not null; ancestor = Path.GetDirectoryName(ancestor))
+            {
+                if (FileIdentity.ReadDirectory(ancestor) != identity) continue;
+                // This relative suffix uses the input's own ancestor spelling. Rebase
+                // it onto the verified allowed root for the static lexical validator.
+                var canonical = Path.GetFullPath(Path.Combine(allowed, Path.GetRelativePath(ancestor, path)));
+                var requested = FileIdentity.OpenRegular(path);
+                using (requested.Stream)
+                {
+                    var expected = FileIdentity.OpenRegular(canonical);
+                    using (expected.Stream)
+                        if (requested.Identity != expected.Identity) throw new InvalidDataException(refusal);
+                }
+                return canonical;
+            }
+        }
+        throw new InvalidDataException(refusal);
     }
     private sealed record Envelope(string Payload, string Signature);
     private sealed record TrialProof(string RunId, RunIdentity Identity, string PlanSha256, string ScenarioSha256,
