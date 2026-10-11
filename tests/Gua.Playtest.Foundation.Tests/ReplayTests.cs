@@ -61,6 +61,28 @@ public sealed class ReplayTests
         using var document = JsonDocument.Parse(output.ToString());
     }
 
+    [Fact]
+    public async Task CliAcceptAuthorizesCaseAliasAndRejectsDistinctRootBeforeSnapshot()
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var aliasRoot = Path.Combine(files.Root, "MANAGED"); var same = Directory.Exists(aliasRoot);
+        var directory = Path.Combine(aliasRoot, Path.GetFileName(Path.GetDirectoryName(path))!);
+        var alias = Path.Combine(directory, "plan.json");
+        if (!same)
+        {
+            Directory.CreateDirectory(directory);
+            foreach (var name in new[] { "plan.json", "scenario.json", "recording.json" })
+                File.Copy(Path.Combine(Path.GetDirectoryName(path)!, name), Path.Combine(directory, name));
+        }
+        var bytes = File.ReadAllBytes(path);
+        using var output = new StringWriter();
+        Assert.Equal(same ? 0 : 2, await CliApplication.ExecuteAsync(["plan", "accept", "--json", "--managed-root", Path.Combine(files.Root, "managed"),
+            "--plan", alias, "--trial", id, "--approve", "--approve-expectations"], output));
+        Assert.Equal(same, await manager.IsAcceptedAsync(path)); Assert.Equal(bytes, File.ReadAllBytes(path));
+        if (!same) Assert.False(File.Exists(Path.Combine(directory, "accepted.json")));
+    }
+
     [Theory]
     [InlineData("Accepted", true)]
     [InlineData("PlanAccepted", true)]

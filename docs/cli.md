@@ -25,6 +25,9 @@ the source Trace (including filesystem case aliases) or overwriting an existing 
 unfinished Trace fail closed. Detail formats remain Gua-owned.
 
 Plan commands use [PlanManager's managed evidence chain](plan-adoption.md).
+Input directory and file identities are checked before an equivalent case alias
+is rebased onto the explicitly supplied root for snapshot validation. A distinct
+directory with matching names or bytes gains no authority.
 Candidates preserve exact validated Scenario and Recording bytes, including Goal
 meaning and hashes. Adoption requires both explicit approval flags and a genuine
 full AI-free ReplayDriver/store trial. A JSON evidence file alone grants no

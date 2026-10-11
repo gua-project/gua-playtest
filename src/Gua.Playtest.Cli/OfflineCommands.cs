@@ -102,7 +102,8 @@ internal static class OfflineCommands
             // PlanManager retains these bytes again and enforces its create-only publication policy.
             var roots = options.All("--allow-root");
             if (roots.Length != 1) throw new InvalidDataException("CommandArgumentsRequired");
-            var scenario = options.Required("--scenario"); var recording = options.Required("--recording");
+            var scenario = ArtifactPathAuthority.AuthorizeFile(options.Required("--scenario"), roots, "ScenarioOutsideAllowedRoots");
+            var recording = ArtifactPathAuthority.AuthorizeFile(options.Required("--recording"), roots, "RecordingOutsideAllowedRoots");
             var source = await validateInput(scenario, roots, token);
             token.ThrowIfCancellationRequested();
             if (!source.IsValid || source.Document is not ScenarioDocument) throw new InvalidDataException("ExecutionInputInvalid");
@@ -117,7 +118,7 @@ internal static class OfflineCommands
         else
         {
             if (!options.Has("--approve") || !options.Has("--approve-expectations")) throw new InvalidDataException("CommandArgumentsRequired");
-            var plan = options.Required("--plan");
+            var plan = ArtifactPathAuthority.AuthorizeFile(options.Required("--plan"), [managed], "ManagedPlanRequired");
             var source = await validateInput(plan, [managed], token);
             token.ThrowIfCancellationRequested();
             if (!source.IsValid || source.Document is not ReplayPlanDocument) throw new InvalidDataException("ExecutionInputInvalid");

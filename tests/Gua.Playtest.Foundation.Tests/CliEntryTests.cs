@@ -39,16 +39,20 @@ public sealed class CliEntryTests
                 calls++; cancellation.Cancel();
                 return await new StaticContractValidator(roots).ValidateFileAsync(input, token);
             }
+            var plan = create ? "" : await new Gua.Playtest.Runner.Planning.PlanManager(root.FullName, new PersistenceRedactor([], []))
+                .CreateAsync(Fixture("scenario.json"), Fixture("recording.json"), [Path.GetDirectoryName(Fixture("scenario.json"))!], "recorded");
+            var original = Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories).ToDictionary(path => path, File.ReadAllBytes);
             string[] args = create
                 ? ["plan", "create", "--managed-root", root.FullName, "--allow-root", Path.GetDirectoryName(Fixture("scenario.json"))!,
                     "--scenario", Fixture("scenario.json"), "--recording", Fixture("recording.json"), "--timing", "recorded"]
-                : ["plan", "accept", "--managed-root", root.FullName, "--plan", Path.Combine(root.FullName, "plan.json"),
+                : ["plan", "accept", "--managed-root", root.FullName, "--plan", plan,
                     "--trial", new string('a', 32), "--approve", "--approve-expectations"];
             using var output = new StringWriter(); using var diagnostics = new StringWriter();
             Assert.Equal(4, await OfflineCommands.ExecuteAsync(args, output, diagnostics, true, cancellation.Token, Interrupt));
             Assert.Equal(1, calls);
             Assert.Contains("CommandInterrupted", output.ToString());
-            Assert.Empty(Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories));
+            Assert.Equal(original.Keys.Order(), Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories).Order());
+            foreach (var (path, bytes) in original) Assert.Equal(bytes, File.ReadAllBytes(path));
         }
         finally { root.Delete(true); }
     }
@@ -147,6 +151,34 @@ public sealed class CliEntryTests
                 "--trial", new string('a', 32), "--approve", "--approve-expectations"], rejected));
             Assert.Contains("PlanRejected", rejected.ToString());
             Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Fact]
+    public async Task PlanCreateAuthorizesActualCaseAliasBeforeSnapshotValidation()
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var input = Directory.CreateDirectory(Path.Combine(root.FullName, "input"));
+            foreach (var name in new[] { "scenario.json", "recording.json" }) File.Copy(Fixture(name), Path.Combine(input.FullName, name));
+            var alias = Path.Combine(root.FullName, "INPUT"); var same = Directory.Exists(alias);
+            if (!same)
+            {
+                Directory.CreateDirectory(alias);
+                foreach (var name in new[] { "scenario.json", "recording.json" }) File.Copy(Fixture(name), Path.Combine(alias, name));
+            }
+            using var output = new StringWriter();
+            Assert.Equal(same ? 0 : 2, await CliApplication.ExecuteAsync(["plan", "create", "--json", "--managed-root", Path.Combine(root.FullName, "managed"),
+                "--allow-root", input.FullName, "--scenario", Path.Combine(alias, "scenario.json"), "--recording", Path.Combine(alias, "recording.json"), "--timing", "recorded"], output));
+            if (same)
+            {
+                using var document = JsonDocument.Parse(output.ToString());
+                var plan = document.RootElement.GetProperty("details").GetProperty("plan").GetString()!;
+                Assert.Equal(await File.ReadAllBytesAsync(Fixture("scenario.json")), await File.ReadAllBytesAsync(Path.Combine(Path.GetDirectoryName(plan)!, "scenario.json")));
+            }
+            else Assert.Empty(Directory.GetFiles(root.FullName, "plan.json", SearchOption.AllDirectories));
         }
         finally { root.Delete(true); }
     }
@@ -270,6 +302,60 @@ public sealed class CliEntryTests
             Assert.Empty(Directory.GetFiles(root.FullName, "plan.json", SearchOption.AllDirectories));
         }
         finally { Environment.SetEnvironmentVariable(first, null); Environment.SetEnvironmentVariable(second, null); root.Delete(true); }
+    }
+
+    [Fact]
+    public async Task PartialSecretFailureRetainsOneSafeJsonDocumentWhenInitialCandidatesCollide()
+    {
+        var root = PrivateRoot();
+        string[] secrets = ["{", "[", "n", "f", "t", "0", "1", "2"];
+        var variables = secrets.Select(_ => "GUA_JSON_" + Guid.NewGuid().ToString("N")).ToArray();
+        try
+        {
+            var recording = JsonNode.Parse(await File.ReadAllTextAsync(Fixture("recording.json")))!;
+            var template = recording["steps"]![0]!.DeepClone();
+            template["sensitive"] = true; template["action"] = "set_value";
+            var steps = (JsonArray)recording["steps"]!; steps.Clear();
+            var args = new List<string> { "plan", "create", "--json", "--managed-root", Path.Combine(root.FullName, "managed"),
+                "--allow-root", root.FullName, "--scenario", Path.Combine(root.FullName, "scenario.json"),
+                "--recording", Path.Combine(root.FullName, "recording.json"), "--timing", "recorded" };
+            for (var index = 0; index <= secrets.Length; index++)
+            {
+                var step = template.DeepClone(); step["secretKey"] = "key" + index; steps.Add(step);
+                if (index == secrets.Length) continue; // Required final reference is deliberately unbound.
+                Environment.SetEnvironmentVariable(variables[index], secrets[index]);
+                args.AddRange(["--secret-env", "key" + index + "=" + variables[index]]);
+            }
+            File.Copy(Fixture("scenario.json"), Path.Combine(root.FullName, "scenario.json"));
+            await File.WriteAllTextAsync(Path.Combine(root.FullName, "recording.json"), recording.ToJsonString());
+            using var output = new StringWriter(); using var error = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(args.ToArray(), output, error));
+            Assert.NotEmpty(output.ToString());
+            using var document = JsonDocument.Parse(output.ToString());
+            foreach (var secret in secrets) Assert.DoesNotContain(secret, output.ToString() + error);
+            Assert.Empty(Directory.GetFiles(root.FullName, "plan.json", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(root.FullName, "accepted.json", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            foreach (var variable in variables) Environment.SetEnvironmentVariable(variable, null);
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task ContentFreeJsonCanAvoidAllPrimitiveCandidatesAndEmptyString()
+    {
+        string[] secrets = ["{", "[", "n", "f", "t", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\"\""];
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(2, await CommandOutput.WriteKnownFailureAsync(output, error, true, "Invalid", "SecretUnavailable", 2, secrets));
+        Assert.NotEmpty(output.ToString());
+        using var document = JsonDocument.Parse(output.ToString());
+        foreach (var secret in secrets) Assert.DoesNotContain(secret, output.ToString() + error);
+        var redactor = new PersistenceRedactor(secrets, []);
+        var policyDocument = CommandOutput.PolicyFailureDocument(redactor);
+        using var policy = JsonDocument.Parse(policyDocument);
+        foreach (var secret in secrets) Assert.DoesNotContain(secret, policyDocument);
     }
 
     [Fact]

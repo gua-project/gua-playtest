@@ -12,11 +12,32 @@ internal static class CommandOutput
         var result = Serialize(redactor.Redact("Invalid"), redactor.Redact("PlanSecretCollision"));
         if (redactor.Redact(result) == result) return result;
         // If a credential collides with protocol field names, use a content-free document.
-        // An unrepresentable policy must remain silent rather than disclose any known value.
+        // Never disclose a known value when no safe candidate can be represented.
         return ContentFreeDocument(value => redactor.Redact(value) == value);
     }
     private static string ContentFreeDocument(Func<string, bool> allowed)
-        => new[] { "{}", "[]", "null", "false", "true", "0", "1", "2" }.FirstOrDefault(allowed) ?? string.Empty;
+    {
+        foreach (var value in new[] { "{}", "[]", "null", "false", "true", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\"\"" })
+            if (allowed(value)) return value;
+        // At most 1024 resolved values are admitted. If quotation marks themselves
+        // are safe, each forbidden value can exclude at most one distinct single-
+        // character JSON string. Raw non-control characters avoid shared escape text.
+        if (allowed("\""))
+        {
+            var tried = 0;
+            for (var character = ' '; tried < 1025; character++)
+            {
+                if (character is '"' or '\\' || char.IsControl(character)) continue;
+                tried++;
+                var value = "\"" + character + "\"";
+                if (allowed(value)) return value;
+            }
+        }
+        foreach (var whitespace in new[] { " ", "\t", "\r", "\n" })
+            foreach (var value in new[] { "{" + whitespace + "}", "[" + whitespace + "]" })
+                if (allowed(value)) return value;
+        return string.Empty;
+    }
     internal static async Task<int> WriteKnownFailureAsync(TextWriter output, TextWriter diagnostics, bool json,
         string status, string code, int exit, IReadOnlyList<string> secrets)
     {

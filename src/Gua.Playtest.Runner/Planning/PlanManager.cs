@@ -334,31 +334,7 @@ public sealed class PlanManager
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static string Relative(string directory, string path) => Path.GetRelativePath(directory, path).Replace('\\', '/');
     private static string AuthorizeInput(string input, IEnumerable<string> roots, string refusal)
-    {
-        var path = Path.GetFullPath(input);
-        RunArtifactStore.CheckPath(path);
-        foreach (var allowed in roots)
-        {
-            if (!Directory.Exists(allowed)) continue;
-            var identity = FileIdentity.ReadDirectory(allowed);
-            for (var ancestor = Path.GetDirectoryName(path); ancestor is not null; ancestor = Path.GetDirectoryName(ancestor))
-            {
-                if (FileIdentity.ReadDirectory(ancestor) != identity) continue;
-                // This relative suffix uses the input's own ancestor spelling. Rebase
-                // it onto the verified allowed root for the static lexical validator.
-                var canonical = Path.GetFullPath(Path.Combine(allowed, Path.GetRelativePath(ancestor, path)));
-                var requested = FileIdentity.OpenRegular(path);
-                using (requested.Stream)
-                {
-                    var expected = FileIdentity.OpenRegular(canonical);
-                    using (expected.Stream)
-                        if (requested.Identity != expected.Identity) throw new InvalidDataException(refusal);
-                }
-                return canonical;
-            }
-        }
-        throw new InvalidDataException(refusal);
-    }
+        => ArtifactPathAuthority.AuthorizeFile(input, roots, refusal);
     private sealed record Envelope(string Payload, string Signature);
     private sealed record TrialProof(string RunId, RunIdentity Identity, string PlanSha256, string ScenarioSha256,
         string RecordingSha256, ReplayProgress Progress, int TotalCheckpoints, string ResultSha256, string CompletionSha256, string RunSha256, int SummaryMaxBytes);
