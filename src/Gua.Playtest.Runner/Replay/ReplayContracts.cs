@@ -15,4 +15,26 @@ public interface IReplayObservationFeed : IRunObservationFeed
 public sealed record ReplayPreparedHost(PreparedHost Host, ConditionObservationUnit? Initial);
 public sealed record ReplayProgress(int TotalSteps, int DispatchedSteps, int CompletedSteps,
     int CompletedCheckpoints, bool PlanCompleted, int? OmittedFromStep, bool GoalVerified);
-public sealed record ReplayOutcome(RunOutcome Run, ReplayProgress Progress);
+/// <summary>Only ReplayDriver can issue completion evidence. Callers cannot construct or
+/// use a record 'with' expression to replace the progress or retained identities.</summary>
+public sealed class ReplayOutcome
+{
+    public RunOutcome Run { get; }
+    public ReplayProgress Progress { get; }
+    public string PlanSha256 { get; }
+    public string ScenarioSha256 { get; }
+    public string RecordingSha256 { get; }
+    public CompletionPolicy Completion { get; }
+    public int TotalCheckpoints { get; }
+    internal string? TrialRunId { get; }
+    internal ReplayOutcome(RunOutcome run, ReplayProgress progress, ResolvedReplay replay, string? trialRunId)
+    {
+        Run = run with { Events = Array.AsReadOnly(run.Events.ToArray()),
+            PostProcessing = Array.AsReadOnly(run.PostProcessing.ToArray()),
+            Exceptions = Array.AsReadOnly(run.Exceptions.ToArray()) };
+        Progress = progress; PlanSha256 = replay.PlanSha256; ScenarioSha256 = replay.ScenarioSha256;
+        RecordingSha256 = replay.RecordingSha256; Completion = replay.Completion;
+        TotalCheckpoints = replay.Checkpoints.Count;
+        TrialRunId = trialRunId;
+    }
+}

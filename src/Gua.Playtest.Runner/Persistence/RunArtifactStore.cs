@@ -23,6 +23,34 @@ public sealed class RunArtifactStore
     private bool completionAttempted;
     private bool persistenceIncomplete;
     private long sanitizedChars;
+    private bool completedSuccessfully;
+    private Gua.Playtest.Runner.Replay.ReplayOutcome? certifiedReplay;
+    private bool replayBound;
+    private readonly Dictionary<string, string> publishedHashes = new(StringComparer.Ordinal);
+    internal bool MatchesPublishedSummary(string name, byte[] bytes)
+        => publishedHashes.TryGetValue(name, out var expected) && expected == Hash(bytes);
+    internal RunIdentity? ReplayIdentity { get; private set; }
+    internal int SummaryMaxBytes => limits.MaxFileBytes;
+    internal void BindReplay(Gua.Playtest.Runner.Replay.ResolvedReplay replay)
+    {
+        if (replayBound || primary is not null || completionAttempted || persistenceIncomplete ||
+            ReplayIdentity is null || ReplayIdentity.ScenarioSha256 != replay.ScenarioSha256 ||
+            ReplayIdentity.ScenarioId != replay.CopyScenario().ScenarioId ||
+            ReplayIdentity.DefinitionVersion != replay.CopyScenario().DefinitionVersion ||
+            !File.Exists(Path.Combine(DirectoryPath, "run.json"))) throw new InvalidDataException("ReplayStorageBindingInvalid");
+        replayBound = true;
+    }
+
+    public PersistenceResult CompleteReplay(Gua.Playtest.Runner.Replay.ReplayOutcome replay,
+        IReadOnlyList<ArtifactReceipt> artifacts, IReadOnlyList<ObservationReference> cleanupObservations,
+        DateTimeOffset finishedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(replay);
+        if (!replayBound || replay.TrialRunId != RunId) return Failure(PersistenceFailure.InvalidEvidence);
+        var result = Complete(replay.Run, artifacts, cleanupObservations, finishedAt, cancellationToken);
+        if (result.Saved && completedSuccessfully) certifiedReplay = replay;
+        return result;
+    }
     public string RunId { get; }
     public string DirectoryPath { get; }
     private RunArtifactStore(string root, ArtifactLimits limits, PersistenceRedactor redactor)
@@ -49,10 +77,22 @@ public sealed class RunArtifactStore
     }
     /// <summary>Call before launch/connect, at Preparing entry. Input copies are sanitized, never raw files.</summary>
     public PersistenceResult BeginPreparation(RunArtifactMetadata metadata, CancellationToken cancellationToken = default)
+        => BeginPreparationCore(metadata, null, cancellationToken);
+    /// <summary>Fix the effective host-certified build and Environment identity before execution.
+    /// Ordinary preparation without this identity cannot issue an adoption trial.</summary>
+    public PersistenceResult BeginReplayPreparation(RunArtifactMetadata metadata, RunIdentity identity,
+        CancellationToken cancellationToken = default)
+        => BeginPreparationCore(metadata, identity, cancellationToken);
+    private PersistenceResult BeginPreparationCore(RunArtifactMetadata metadata, RunIdentity? identity,
+        CancellationToken cancellationToken)
         => Attempt(() =>
         {
             if (primary is not null || completionAttempted || File.Exists(Path.Combine(DirectoryPath, "run.json")))
                 throw new InvalidDataException("RunAlreadyStarted");
+            if (identity is not null && (!Token(identity.ScenarioId) || !Token(identity.BuildId) ||
+                !Token(identity.DefinitionVersion) ||
+                !Sha256(identity.ScenarioSha256) || !Sha256(identity.EnvironmentSha256)))
+                throw new InvalidDataException("RunIdentityInvalid");
             var inputs = new List<object>();
             if (metadata.Inputs.Count > limits.MaxItems) throw new ArtifactLimitException();
             long inputBytes = 0;
@@ -66,7 +106,8 @@ public sealed class RunArtifactStore
                 inputs.Add(new { name = input.Name, sha256 = Hash(safe), document = JsonSerializer.Deserialize<JsonElement>(safe) });
             }
             Publish("run.json", Encode(new { kind = "playtestRunStorage", storageVersion = 1, runId = RunId,
-                executionState = ExecutionState.Preparing, metadata.Profile, metadata.Settings, metadata.Versions, inputs }), cancellationToken);
+                executionState = ExecutionState.Preparing, identity, metadata.Profile, metadata.Settings, metadata.Versions, inputs }), cancellationToken);
+            ReplayIdentity = identity;
         });
     /// <summary>Snapshot machine authority at confirmation, before diagnostics or input/resource release.</summary>
     public PersistenceResult ConfirmPrimary(RunSnapshot snapshot, IReadOnlyList<ObservationReference> observations,
@@ -119,10 +160,16 @@ public sealed class RunArtifactStore
                 new(issues.All(x => x.Reason == PostProcessingReason.Cancelled), issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
             // ResultDocument is the existing public schema. No storage extension changes its wire format.
             Publish("result.json", Encode(document), cancellationToken);
+            completedSuccessfully = !persistenceIncomplete && issues.All(x => x.Reason == PostProcessingReason.Cancelled);
         });
         return saved with { PostProcessingIncomplete = persistenceIncomplete || !outcome.PostProcessingComplete ||
             artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed) };
     }
+    // Called only by the trusted Plan service after Complete has published the same
+    // immutable primary and mandatory postprocessing. No file can supply this authority.
+    internal bool CanCertifyReplay(Gua.Playtest.Runner.Replay.ReplayOutcome replay)
+        => completedSuccessfully && !persistenceIncomplete && ReferenceEquals(certifiedReplay, replay) &&
+            replay.TrialRunId == RunId && primary == replay.Run.Primary && replay.Run.PostProcessingComplete;
     private void ValidateReferences(IReadOnlyList<ObservationReference> observations, IReadOnlyList<DecisionReference> decisions)
     {
         if (observations.Count + decisions.Count > limits.MaxItems) throw new ArtifactLimitException();
@@ -322,7 +369,8 @@ public sealed class RunArtifactStore
         var safeKey = redactor.Redact(key);
         if (structural && (safeKey != key || redactor.Sensitive(key))) throw new InvalidDataException("StructuralRedactionCollision");
         if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason" or
-            "observationId" or "decisionId" or "actionId" or "reasonCode") &&
+            "observationId" or "decisionId" or "actionId" or "reasonCode" or "scenarioId" or "definitionVersion" or
+            "buildId" or "scenarioSha256" or "environmentSha256") &&
             value is string structuralText && redactor.Redact(structuralText) != structuralText)
             throw new InvalidDataException("StructuralRedactionCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
@@ -351,6 +399,7 @@ public sealed class RunArtifactStore
             { file.Write(bytes); file.Flush(flushToDisk: true); }
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporary, Path.Combine(DirectoryPath, name), overwrite: false);
+            publishedHashes.Add(name, Hash(bytes));
             usedBytes += bytes.Length;
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
@@ -373,6 +422,8 @@ public sealed class RunArtifactStore
     }
     private static bool Token(string value) => value is not null && value.Length is >= 1 and <= 128 &&
         char.IsAsciiLetterOrDigit(value[0]) && value.All(x => char.IsAsciiLetterOrDigit(x) || x is '.' or '_' or '-');
+    private static bool Sha256(string value) => value is not null && value.Length == 64 &&
+        value.All(x => x is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static bool FileSegment(string value) => Token(value) && value[^1] != '.';
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private sealed class LimitedBuffer(int maximum) : MemoryStream

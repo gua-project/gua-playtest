@@ -1,5 +1,7 @@
 # Replay composition
 
+Candidate creation and driver-issued trial persistence use [Plan adoption](plan-adoption.md).
+
 `ResolvedReplay.LoadAsync` validates the Plan graph with the static contract validator
 and retains its exact source bytes. Scenario, Recording and Plan hashes refer to UTF-8
 file bytes, including BOM, whitespace and YAML spelling. Parsing or public copy mutation

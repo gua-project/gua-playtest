@@ -17,7 +17,8 @@ public sealed class ReplayDriver
         IClock realClock, IClock conditionClock, OwnedCleanup cleanup, IReplayPlayback playback,
         Func<RunSession, OwnedCleanup, CancellationToken, ValueTask<ReplayPreparedHost>> prepare,
         CancellationToken cancellationToken = default,
-        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null,
+        Artifacts.RunArtifactStore? trialStore = null)
     {
         ArgumentNullException.ThrowIfNull(replay); ArgumentNullException.ThrowIfNull(playback);
         ArgumentNullException.ThrowIfNull(prepare);
@@ -28,6 +29,7 @@ public sealed class ReplayDriver
         if ((scenario.Constraints.MaxActions != 0 && limits.MaxActions > scenario.Constraints.MaxActions) || limits.MaxDuration.TotalMilliseconds > scenario.Constraints.MaxDurationMilliseconds)
             throw new ArgumentException("ReplayLimitsMismatch");
         var run = new RunSession(limits, realClock, conditionClock, replay.Success, replay.Failure, replay.Completion);
+        trialStore?.BindReplay(replay);
         IReplayObservationFeed? feed = null;
         RunSession.ApprovedOperation? active = null;
         var checkpointReady = false;
@@ -162,7 +164,7 @@ public sealed class ReplayDriver
             if (first.Condition is not null) RegisterPoint(owner, first.Timeout);
         }).ConfigureAwait(false);
         return new(outcome, new(replay.StepCount, dispatched, completed, checkpoints, planCompleted,
-            outcome.Primary.Status == ResultStatus.Passed && !planCompleted ? dispatched : null, run.GoalVerified));
+            outcome.Primary.Status == ResultStatus.Passed && !planCompleted ? dispatched : null, run.GoalVerified), replay, trialStore?.RunId);
     }
 
     private static async ValueTask<ReplayReceipt> PlayAsync(IReplayPlayback playback, ReplayBatch batch, IReplayCalls calls,
