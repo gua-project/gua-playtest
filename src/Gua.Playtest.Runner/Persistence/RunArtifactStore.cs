@@ -53,6 +53,9 @@ public sealed class RunArtifactStore
         {
             if (primary is not null || completionAttempted || File.Exists(Path.Combine(DirectoryPath, "run.json")))
                 throw new InvalidDataException("RunAlreadyStarted");
+            if (metadata.Identity is { } identity && (!Token(identity.ScenarioId) || !Token(identity.DefinitionVersion) ||
+                !Token(identity.BuildId) || !ValidHash(identity.ScenarioSha256) || !ValidHash(identity.EnvironmentSha256)))
+                throw new InvalidDataException("RunIdentityInvalid");
             var inputs = new List<object>();
             if (metadata.Inputs.Count > limits.MaxItems) throw new ArtifactLimitException();
             long inputBytes = 0;
@@ -377,6 +380,7 @@ public sealed class RunArtifactStore
         char.IsAsciiLetterOrDigit(value[0]) && value.All(x => char.IsAsciiLetterOrDigit(x) || x is '.' or '_' or '-');
     private static bool FileSegment(string value) => Token(value) && value[^1] != '.';
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static bool ValidHash(string? value) => value is { Length: 64 } && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
     private sealed class LimitedBuffer(int maximum) : MemoryStream
     {
         public override void Write(byte[] buffer, int offset, int count) { Check(count); base.Write(buffer, offset, count); }

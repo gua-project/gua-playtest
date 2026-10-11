@@ -14,11 +14,13 @@ public static class DashboardApplication
         CancellationToken cancellationToken = default)
     {
         if (port is < 1024 or > 65535) throw new ArgumentOutOfRangeException(nameof(port));
+        cancellationToken.ThrowIfCancellationRequested();
         var origin = $"http://127.0.0.1:{port}";
         using var listener = new HttpListener(); listener.Prefixes.Add(origin + "/");
         listener.Start();
         using var registration = cancellationToken.Register(listener.Stop);
         var snapshot = await index.ReadAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         ready?.Invoke(new(origin));
         while (!cancellationToken.IsCancellationRequested)
         {

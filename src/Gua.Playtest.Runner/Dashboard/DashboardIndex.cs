@@ -7,12 +7,12 @@ using Gua.Playtest.Runner.Artifacts;
 namespace Gua.Playtest.Runner.Dashboard;
 
 public sealed record DashboardLimits(int MaxRuns = 1000, int MaxFileBytes = 1024 * 1024,
-    long MaxIndexBytes = 32 * 1024 * 1024, int MaxRoots = 16)
+    long MaxIndexBytes = 32 * 1024 * 1024, int MaxRoots = 16, int MaxEntries = 10000)
 {
     internal void Validate()
     {
         if (MaxRuns is < 1 or > 10000 || MaxFileBytes is < 256 or > 16 * 1024 * 1024 ||
-            MaxIndexBytes < MaxFileBytes || MaxIndexBytes > 256L * 1024 * 1024 || MaxRoots is < 1 or > 64)
+            MaxIndexBytes < MaxFileBytes || MaxIndexBytes > 256L * 1024 * 1024 || MaxRoots is < 1 or > 64 || MaxEntries is < 1 or > 100000)
             throw new ArgumentOutOfRangeException(nameof(MaxRuns));
     }
 }
@@ -36,7 +36,7 @@ public sealed class DashboardIndex
     private readonly string[] roots;
     private readonly string[] allowedRoots;
     private readonly DashboardLimits limits;
-    private readonly Dictionary<string, (string Directory, ArtifactFileReference File)> reports = [];
+    private readonly Dictionary<string, (string Directory, ArtifactFileReference File, FileIdentity Identity, ArtifactFileReference[] Files)> reports = [];
     private long remaining;
     public DashboardIndex(string registry, IEnumerable<string> artifactRoots, IEnumerable<string> allowedRoots,
         DashboardLimits? limits = null)
@@ -50,6 +50,7 @@ public sealed class DashboardIndex
     }
     public async ValueTask<DashboardSnapshot> ReadAsync(CancellationToken token = default)
     {
+        token.ThrowIfCancellationRequested();
         reports.Clear(); remaining = limits.MaxIndexBytes;
         var warnings = new List<string>(); var runs = new List<DashboardRun>();
         var scenarios = new List<DashboardScenario>(); var truncated = false;
@@ -59,6 +60,7 @@ public sealed class DashboardIndex
             using (var admission = ReadContract(registry))
                 AdmitWireReferences(admission.RootElement, Path.GetDirectoryName(registry)!, new HashSet<string>(StringComparer.Ordinal));
             var report = await new StaticContractValidator(allowedRoots).ValidateFileAsync(registry, token);
+            token.ThrowIfCancellationRequested();
             if (!report.IsValid || report.Document is not ScenarioRegistryDocument population)
                 return new(report.Code == "Valid" ? "RegistryInvalid" : report.Code, [], [], [], false);
             foreach (var entry in population.Scenarios)
@@ -71,7 +73,7 @@ public sealed class DashboardIndex
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (ReadFailure(e)) { return new("RegistryUnreadable", [], [], [], false); }
-        var visited = new HashSet<FileIdentity>();
+        var visited = new HashSet<FileIdentity>(); var examined = 0;
         foreach (var root in roots)
         {
             token.ThrowIfCancellationRequested();
@@ -80,9 +82,11 @@ public sealed class DashboardIndex
                 CheckAllowed(root);
                 if (!visited.Add(FileIdentity.ReadDirectory(root))) continue;
                 // Enumerate immediate Run entries only, never recurse or sort an unbounded directory.
-                foreach (var directory in Directory.EnumerateDirectories(root))
+                foreach (var directory in Directory.EnumerateFileSystemEntries(root))
                 {
                     token.ThrowIfCancellationRequested();
+                    if (++examined > limits.MaxEntries) { truncated = true; break; }
+                    if ((File.GetAttributes(directory) & FileAttributes.Directory) == 0) continue;
                     if (runs.Count == limits.MaxRuns || remaining <= 0) { truncated = true; break; }
                     runs.Add(await ReadRunAsync(directory, runs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), token));
                 }
@@ -188,6 +192,9 @@ public sealed class DashboardIndex
             if (receipts is null || receipts.Length != 2 || receipts.Any(x => x is null) ||
                 receipts.Select(x => x.Kind).Distinct().Count() != 2) throw new InvalidDataException();
             var details = new List<DashboardDetail>();
+            var identities = SummaryIdentities(directory);
+            var allFiles = receipts.Where(r => r.State == ArtifactState.Saved).SelectMany(r =>
+                new[] { new ArtifactFileReference(r.FileName!, r.Bytes ?? 0, r.Sha256!) }.Concat(r.AdditionalFiles ?? [])).ToArray();
             foreach (var receipt in receipts)
             {
                 if (!Enum.IsDefined(receipt.State) || !Enum.IsDefined(receipt.Kind)) throw new InvalidDataException();
@@ -207,29 +214,40 @@ public sealed class DashboardIndex
                     foreach (var entry in entries)
                     {
                         using var stream = OpenReceipt(directory, entry); Charge(stream.Length);
+                        var identity = FileIdentity.Read(stream.SafeFileHandle);
+                        if (!identities.Add(identity)) throw new ReceiptAliasException();
                         if (Convert.ToHexStringLower(SHA256.HashData(stream)) != entry.Sha256) throw new InvalidDataException();
                         if (receipt.Kind == ArtifactKind.Trace && entry.FileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
                         {
                             link = $"/reports/{key}";
-                            reports[link] = (directory, entry);
+                            reports[link] = (directory, entry, identity, allFiles);
                         }
                     }
                     details.Add(new(receipt.Kind.ToString(), "Saved", link));
                 }
-                catch (Exception e) when (ReadFailure(e))
+                catch (Exception e) when (ReadFailure(e) && e is not ReceiptAliasException)
                 {
-                    reports.Remove($"/reports/{key}");
+                    if (receipt.Kind == ArtifactKind.Trace) reports.Remove($"/reports/{key}");
                     details.Add(new(receipt.Kind.ToString(), e is FileNotFoundException ? "Missing" : "Unreadable"));
                 }
             }
             return details;
         }
-        catch (Exception e) when (ReadFailure(e)) { return [new("Trace", "CompletionUnreadable"), new("Recording", "CompletionUnreadable")]; }
+        catch (Exception e) when (ReadFailure(e))
+        { reports.Remove($"/reports/{key}"); return [new("Trace", "CompletionUnreadable"), new("Recording", "CompletionUnreadable")]; }
     }
     public byte[] ReadReport(string route)
     {
         if (!reports.TryGetValue(route, out var reference)) throw new FileNotFoundException();
         using var stream = OpenReceipt(reference.Directory, reference.File);
+        var identity = FileIdentity.Read(stream.SafeFileHandle);
+        if (identity != reference.Identity || SummaryIdentities(reference.Directory).Contains(identity)) throw new InvalidDataException();
+        foreach (var file in reference.Files.Where(f => f != reference.File))
+        {
+            try { using var other = Open(Path.Combine(reference.Directory, Path.Combine(file.FileName.Split('/'))));
+                if (FileIdentity.Read(other.SafeFileHandle) == identity) throw new ReceiptAliasException(); }
+            catch (Exception e) when (ReadFailure(e) && e is not ReceiptAliasException) { } // Unreadable Recording is independent of Trace.
+        }
         var bytes = new byte[checked((int)stream.Length)]; stream.ReadExactly(bytes);
         if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != reference.File.Sha256) throw new InvalidDataException();
         return bytes;
@@ -310,12 +328,22 @@ public sealed class DashboardIndex
     private void CheckAllowed(string path)
     {
         var full = Path.GetFullPath(path);
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (!allowedRoots.Any(root => full.Equals(root, comparison) ||
-            full.StartsWith(Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, comparison)))
-            throw new InvalidDataException();
-        RunArtifactStore.CheckPath(full);
+        var identities = allowedRoots.Select(FileIdentity.ReadDirectory).ToHashSet();
+        for (var directory = Directory.Exists(full) ? full : Path.GetDirectoryName(full); directory is not null;
+            directory = Path.GetDirectoryName(directory))
+            if (Directory.Exists(directory) && identities.Contains(FileIdentity.ReadDirectory(directory)))
+            { RunArtifactStore.CheckPath(full); return; }
+        throw new InvalidDataException();
     }
+    private HashSet<FileIdentity> SummaryIdentities(string directory)
+    {
+        var identities = new HashSet<FileIdentity>();
+        foreach (var name in new[] { ".owner", "run.json", "primary.json", "completion.json", "result.json" })
+            try { using var file = Open(Path.Combine(directory, name)); identities.Add(FileIdentity.Read(file.SafeFileHandle)); }
+            catch (FileNotFoundException) { }
+        return identities;
+    }
+    private sealed class ReceiptAliasException : IOException { }
     private void Charge(long length)
     { remaining -= length; if (remaining < 0) throw new InvalidDataException("IndexLimit"); }
     private static RunIdentity DecodeIdentity(JsonElement element)

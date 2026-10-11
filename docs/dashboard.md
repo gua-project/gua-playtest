@@ -47,7 +47,7 @@ The CLI composition owner resolves its explicit inputs and calls
 `DashboardApplication.RunAsync(DashboardIndex, port, readyCallback, token)`.
 `DashboardIndex` takes the registry path, artifact roots, caller allowed roots
 and `DashboardLimits`. It indexes immediate Run directories only. Defaults bound
-the index to 1000 Runs, 16 roots, 1 MiB per opened file and 32 MiB total index
+the index to 1000 Runs, 10000 examined filesystem entries, 16 roots, 1 MiB per opened file and 32 MiB total index
 read bytes; configuration can lower these limits within hard ceilings.
 Registry validation uses the existing bounded static contract validator.
 JSON and YAML registry/Scenario references pass regular-file, no-link and byte
@@ -73,3 +73,6 @@ never infers a final result from `primary.json`, a Trace event or a pending file
 The output tree must be owner-private. Linked paths and non-regular files are
 rejected. Read-only viewing is not an OS sandbox against concurrent changes by
 another process with write access to that tree.
+Allowed roots use actual directory identities, including case-sensitive Windows
+directories. Summary and cross-receipt hard-link aliases are rejected; a missing
+or corrupt Recording does not remove an independently valid Trace report.

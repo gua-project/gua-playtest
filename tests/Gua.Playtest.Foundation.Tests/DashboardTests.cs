@@ -348,5 +348,132 @@ public sealed class DashboardTests : IDisposable
         Assert.Contains("CompletionUnreadable", await client.GetStringAsync("/api/snapshot"));
         cancellation.Cancel(); await server.WaitAsync(TimeSpan.FromSeconds(10));
     }
+    [Fact]
+    public async Task Ordinary_files_count_against_finite_index_work()
+    {
+        for (var i = 0; i < 5; i++) File.WriteAllText(Path.Combine(Artifacts, $"noise-{i}"), "x");
+        var snapshot = await Index(new(MaxEntries: 2)).ReadAsync();
+        Assert.True(snapshot.Truncated); Assert.Empty(snapshot.Runs);
+        Assert.All(DashboardIndex.Select(snapshot, "buildA", EnvironmentHash), item => Assert.Equal("IndexIncomplete", item.State));
+        using var canceled = new CancellationTokenSource(); canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Index().ReadAsync(canceled.Token).AsTask());
+    }
+    [Fact]
+    public async Task Canceled_start_never_calls_ready_for_a_stopped_listener()
+    {
+        using var canceled = new CancellationTokenSource(); canceled.Cancel(); var ready = false;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => DashboardApplication.RunAsync(Index(), 17839, _ => ready = true, canceled.Token));
+        Assert.False(ready);
+    }
+    [Theory]
+    [InlineData("scenarioId", "")] [InlineData("definitionVersion", "bad/version")] [InlineData("buildId", ".bad")]
+    [InlineData("scenarioSha256", "short")] [InlineData("environmentSha256", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void Malformed_identity_never_publishes_self_unreadable_metadata(string field, string value)
+    {
+        var id = Identity(); id = field switch { "scenarioId" => id with { ScenarioId = value },
+            "definitionVersion" => id with { DefinitionVersion = value }, "buildId" => id with { BuildId = value },
+            "scenarioSha256" => id with { ScenarioSha256 = value }, _ => id with { EnvironmentSha256 = value } };
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [], id)).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    private (RunArtifactStore Store, byte[] Html) SavedReportAndRecording()
+    {
+        var store = Save(ResultStatus.Failed, settled: false); var html = Encoding.UTF8.GetBytes("<html><body>independent Trace report</body></html>");
+        File.WriteAllBytes(Path.Combine(store.DirectoryPath, "trace.html"), html);
+        var recording = Encoding.UTF8.GetBytes("independent recording"); File.WriteAllBytes(Path.Combine(store.DirectoryPath, "recording.gua"), recording);
+        var primary = new PrimaryResult(ResultStatus.Failed, new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.Saved, "trace.html", html.Length, Convert.ToHexStringLower(SHA256.HashData(html))),
+            new(ArtifactKind.Recording, ArtifactState.Saved, "recording.gua", recording.Length, Convert.ToHexStringLower(SHA256.HashData(recording)))], [], DateTimeOffset.UtcNow).Saved);
+        return (store, html);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Recording_failure_preserves_independent_trace_report(bool corrupt)
+    {
+        var (store, html) = SavedReportAndRecording(); var recording = Path.Combine(store.DirectoryPath, "recording.gua");
+        if (corrupt) File.WriteAllText(recording, "corrupt"); else File.Delete(recording);
+        var index = Index(); var details = Assert.Single((await index.ReadAsync()).Runs).Details;
+        var trace = details.Single(d => d.Kind == "Trace"); Assert.Equal("Saved", trace.State); Assert.NotNull(trace.Report);
+        Assert.Equal(corrupt ? "Unreadable" : "Missing", details.Single(d => d.Kind == "Recording").State);
+        Assert.Equal(html, index.ReadReport(trace.Report));
+    }
+    [Theory]
+    [InlineData("run.json")] [InlineData("primary.json")] [InlineData("result.json")]
+    public async Task Summary_hardlinks_cannot_be_saved_details_or_report_routes(string name)
+    {
+        var store = Save(); var source = Path.Combine(store.DirectoryPath, name); var bytes = File.ReadAllBytes(source);
+        CreateHardLink(Path.Combine(store.DirectoryPath, "alias.html"), source);
+        var completion = Path.Combine(store.DirectoryPath, "completion.json"); var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(completion))!;
+        json["artifacts"]![0] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new ArtifactReceipt(ArtifactKind.Trace, ArtifactState.Saved,
+            "alias.html", bytes.Length, Convert.ToHexStringLower(SHA256.HashData(bytes))), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } }));
+        File.WriteAllText(completion, json.ToJsonString()); var index = Index();
+        Assert.All(Assert.Single((await index.ReadAsync()).Runs).Details, d => { Assert.Equal("CompletionUnreadable", d.State); Assert.Null(d.Report); });
+        Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/0"));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Cross_receipt_alias_and_late_report_replacement_are_rejected(bool afterSnapshot)
+    {
+        var (store, html) = SavedReportAndRecording(); var index = Index(); var snapshot = await index.ReadAsync();
+        var route = snapshot.Runs[0].Details.Single(d => d.Kind == "Trace").Report!;
+        var recording = Path.Combine(store.DirectoryPath, "recording.gua"); File.Delete(recording);
+        CreateHardLink(recording, Path.Combine(store.DirectoryPath, "trace.html"));
+        var completion = Path.Combine(store.DirectoryPath, "completion.json"); var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(completion))!;
+        json["artifacts"]![1]!["bytes"] = html.Length; json["artifacts"]![1]!["sha256"] = Convert.ToHexStringLower(SHA256.HashData(html));
+        File.WriteAllText(completion, json.ToJsonString());
+        if (afterSnapshot) Assert.ThrowsAny<IOException>(() => index.ReadReport(route));
+        else Assert.All((await index.ReadAsync()).Runs[0].Details, d => Assert.Equal("CompletionUnreadable", d.State));
+    }
+    [Fact]
+    public async Task Allowed_directory_uses_actual_filesystem_case_lookup()
+    {
+        Save(); var alternate = Path.Combine(Path.GetDirectoryName(root)!, Path.GetFileName(root).ToUpperInvariant());
+        if (Directory.Exists(alternate))
+            Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(alternate, "registry.json"), [Path.Combine(alternate, "runs")], [root]).ReadAsync()).RegistryState);
+        else
+        {
+            Directory.CreateDirectory(alternate); Directory.CreateDirectory(Path.Combine(alternate, "runs"));
+            foreach (var file in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, file), Path.Combine(alternate, file));
+            try { Assert.Equal("RegistryUnreadable", (await new DashboardIndex(Path.Combine(alternate, "registry.json"), [Path.Combine(alternate, "runs")], [root]).ReadAsync()).RegistryState); }
+            finally { Directory.Delete(alternate, true); }
+        }
+    }
+    private static void CreateHardLink(string link, string target)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/ln")
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in OperatingSystem.IsWindows() ? new[] { "/c", "mklink", "/H", link, target } : new[] { target, link }) start.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+    }
+    [Fact]
+    public async Task Case_distinct_sibling_never_inherits_allowed_root_authority()
+    {
+        var parent = Path.Combine(root, "case-parent"); Directory.CreateDirectory(parent);
+        if (OperatingSystem.IsWindows())
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("fsutil.exe") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "file", "setCaseSensitiveInfo", parent, "enable" }) start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
+        }
+        var safe = Path.Combine(parent, "safe"); var sibling = Path.Combine(parent, "SAFE");
+        Directory.CreateDirectory(safe);
+        var directories = Directory.Exists(sibling) ? new[] { safe } : new[] { safe, sibling };
+        foreach (var directory in directories)
+        {
+            Directory.CreateDirectory(directory); Directory.CreateDirectory(Path.Combine(directory, "runs"));
+            foreach (var file in new[] { "registry.json", "s1.json", "s2.json" }) File.Copy(Path.Combine(root, file), Path.Combine(directory, file));
+        }
+        if (directories.Length == 1)
+        {
+            Assert.Equal(FileIdentity.ReadDirectory(safe), FileIdentity.ReadDirectory(sibling));
+            Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [safe]).ReadAsync()).RegistryState);
+            return; // Case-insensitive volumes resolve both spellings to the same authorized directory.
+        }
+        Assert.NotEqual(FileIdentity.ReadDirectory(safe), FileIdentity.ReadDirectory(sibling));
+        Assert.Equal("RegistryUnreadable", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [safe]).ReadAsync()).RegistryState);
+        Assert.Equal("Ready", (await new DashboardIndex(Path.Combine(sibling, "registry.json"), [Path.Combine(sibling, "runs")], [parent]).ReadAsync()).RegistryState);
+    }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
