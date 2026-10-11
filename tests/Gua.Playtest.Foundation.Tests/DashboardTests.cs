@@ -813,16 +813,17 @@ public sealed class DashboardTests : IDisposable
     [InlineData(false)] [InlineData(true)]
     public async Task Conflicting_legacy_scenario_copies_never_choose_by_input_order(bool reverse)
     {
-        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var store = Save(identity: false);
         using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
         using var second = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s2.json")));
         InputCopy[] inputs = [new("first", first.RootElement), new("second", second.RootElement)];
         if (reverse) Array.Reverse(inputs);
-        Assert.True(store.BeginPreparation(new("player", [], new Dictionary<string, string>(), inputs)).Saved);
-        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
-        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
-        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess),
-            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var file = Path.Combine(store.DirectoryPath, "run.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes(file))!;
+        json["inputs"] = new System.Text.Json.Nodes.JsonArray(inputs.Select(input =>
+            System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new
+            { name = input.Name, sha256 = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input.Document))), document = input.Document }))).ToArray());
+        File.WriteAllText(file, json.ToJsonString());
         var run = Assert.Single((await Index().ReadAsync()).Runs);
         Assert.Equal("RunUnreadable", run.State); Assert.Null(run.ScenarioId); Assert.Equal(ResultStatus.Passed, run.Result!.Status);
     }
@@ -849,6 +850,51 @@ public sealed class DashboardTests : IDisposable
         json["inputs"]!.AsArray().Add(copy); File.WriteAllText(file, json.ToJsonString());
         var run = Assert.Single((await Index().ReadAsync()).Runs);
         Assert.Equal("Passed", run.State); Assert.Equal("s1", run.ScenarioId); Assert.Null(run.BuildId);
+    }
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public void Explicit_identity_rejects_divergent_scenario_copies_before_publication(bool replay, bool reverse)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        var identity = Identity();
+        using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var node = System.Text.Json.Nodes.JsonNode.Parse(first.RootElement.GetRawText())!;
+        node["goal"]!["objective"] = "Different content with the same ID and version";
+        using var second = JsonDocument.Parse(node.ToJsonString());
+        InputCopy[] inputs = [new("first", first.RootElement), new("second", second.RootElement)];
+        if (reverse) Array.Reverse(inputs);
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(), inputs, identity);
+        var result = replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata);
+        Assert.False(result.Saved); Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json"))); Assert.Null(store.ReplayIdentity);
+    }
+    [Fact]
+    public void Identityless_writer_also_rejects_divergent_scenario_copies_before_publication()
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], []));
+        using var first = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        using var second = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s2.json")));
+        var result = store.BeginPreparation(new("player", [], new Dictionary<string, string>(),
+            [new("first", first.RootElement), new("second", second.RootElement)]));
+        Assert.False(result.Saved); Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Explicit_identity_identical_scenario_copies_remain_readable(bool replay)
+    {
+        var store = RunArtifactStore.Create(Artifacts, Limits, new([], [])); var identity = Identity();
+        using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(),
+            [new("first", scenario.RootElement), new("second", scenario.RootElement)], identity);
+        Assert.True((replay ? store.BeginReplayPreparation(metadata, identity) : store.BeginPreparation(metadata)).Saved);
+        Assert.Equal(replay ? identity : null, store.ReplayIdentity);
+        var primary = new PrimaryResult(ResultStatus.Passed, new(RunReason.GoalSatisfied, RunPhase.Execution, RunOrigin.Host));
+        Assert.True(store.ConfirmPrimary(primary, [], [], []).Saved);
+        Assert.True(store.Complete(new(primary, [], [], []), [new(ArtifactKind.Trace, ArtifactState.OmittedOnSuccess),
+            new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow).Saved);
+        var run = Assert.Single((await Index().ReadAsync()).Runs);
+        Assert.Equal("Passed", run.State); Assert.Equal(identity.BuildId, run.BuildId);
     }
     [Theory]
     [InlineData(false)] [InlineData(true)]
