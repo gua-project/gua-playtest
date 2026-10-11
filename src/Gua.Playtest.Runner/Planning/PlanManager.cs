@@ -13,7 +13,6 @@ namespace Gua.Playtest.Runner.Planning;
 public sealed class PlanManager
 {
     private const int MaxBytes = 4 * 1024 * 1024;
-    private static readonly StringComparison Paths = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly string root;
     private readonly FileIdentity rootIdentity;
@@ -168,18 +167,28 @@ public sealed class PlanManager
     {
         var path = Path.GetFullPath(planPath);
         var directory = Path.GetDirectoryName(path)!;
-        if (!string.Equals(Path.GetFileName(path), "plan.json", Paths) || !string.Equals(Path.GetDirectoryName(directory), root, Paths) ||
+        if (!string.Equals(Path.GetFileName(path), "plan.json", StringComparison.OrdinalIgnoreCase) ||
             !Guid.TryParseExact(Path.GetFileName(directory), "N", out _)) throw new InvalidDataException("ManagedPlanRequired");
         if (FileIdentity.ReadDirectory(Path.GetDirectoryName(directory)!) != rootIdentity)
             throw new InvalidDataException("ManagedPlanRequired");
         RunArtifactStore.CheckPath(path);
-        var report = await new StaticContractValidator([directory]).ValidateFileAsync(path, token);
+        var canonical = Path.Combine(directory, "plan.json");
+        // Case sensitivity is a filesystem property, not an OS property. Keep the
+        // managed entry name, and accept alternate casing only for the same object.
+        var requested = FileIdentity.OpenRegular(path);
+        using (requested.Stream)
+        {
+            var expected = FileIdentity.OpenRegular(canonical);
+            using (expected.Stream)
+                if (requested.Identity != expected.Identity) throw new InvalidDataException("ManagedPlanRequired");
+        }
+        var report = await new StaticContractValidator([directory]).ValidateFileAsync(canonical, token);
         token.ThrowIfCancellationRequested();
         if (!report.IsValid || report.Document is not ReplayPlanDocument model || model.Completion != "afterPlan")
             throw new InvalidDataException("CandidateInvalid");
         foreach (var file in report.Files.Values)
         { RejectSecrets(file.CopyBytes()); RejectStructuredSecrets(file.CopyJson()); }
-        return (directory, report.Files.Values.Single(f => string.Equals(f.Path, path, Paths)),
+        return (directory, report.Files.Values.Single(f => f.Path == canonical),
             report.Files.Values.Single(f => f.Sha256 == model.Scenario.Sha256),
             report.Files.Values.Single(f => f.Sha256 == model.Recording.Sha256));
     }

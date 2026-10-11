@@ -284,14 +284,27 @@ public sealed class ReplayTests
     }
 
     [Fact]
-    public async Task WindowsPathCasingDoesNotInvalidateManagedCandidate()
+    public async Task ManagedPathCasingFollowsActualFilesystemIdentity()
     {
-        if (!OperatingSystem.IsWindows()) return;
         using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
-        var alternate = new PlanManager(Path.Combine(files.Root, "managed").ToUpperInvariant(), new([], []));
-        var id = await Trial(files, alternate, path.ToUpperInvariant());
-        await alternate.AcceptAsync(path.ToUpperInvariant(), id, true, true);
-        Assert.True(await alternate.IsAcceptedAsync(path));
+        var alternatePath = Path.Combine(Path.GetDirectoryName(path)!, "PLAN.JSON");
+        if (File.Exists(alternatePath))
+        {
+            // Executes on insensitive Windows/macOS volumes rather than guessing by OS.
+            var alternate = new PlanManager(Path.Combine(files.Root, "managed").ToUpperInvariant(), new([], []));
+            var id = await Trial(files, alternate, path.ToUpperInvariant());
+            await alternate.AcceptAsync(path.ToUpperInvariant(), id, true, true);
+            Assert.True(await alternate.IsAcceptedAsync(path));
+        }
+        else
+        {
+            // Equal contents at another case-sensitive pathname are still a different object.
+            File.WriteAllBytes(alternatePath, File.ReadAllBytes(path));
+            var error = await Assert.ThrowsAsync<InvalidDataException>(() => manager.IsAcceptedAsync(alternatePath).AsTask());
+            Assert.Equal("ManagedPlanRequired", error.Message);
+            var id = await Trial(files, manager, path);
+            await manager.AcceptAsync(path, id, true, true); Assert.True(await manager.IsAcceptedAsync(path));
+        }
     }
 
     [Theory]
