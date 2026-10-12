@@ -16,6 +16,7 @@ public sealed class PersistenceRedactor
     }
     private readonly List<Node> nodes = [new()];
     private readonly HashSet<string> fields;
+    private readonly string[] literals;
     public PersistenceRedactor(IEnumerable<string> secrets, IEnumerable<string> sensitiveFields)
         : this(secrets, sensitiveFields, MaxSecretCharacters) { }
     private PersistenceRedactor(IEnumerable<string> secrets, IEnumerable<string> sensitiveFields, int characterLimit)
@@ -27,6 +28,7 @@ public sealed class PersistenceRedactor
             names.Any(x => string.IsNullOrEmpty(x) || x.Length > 256))
             throw new ArgumentException("RedactionPolicyInvalid");
         if (patterns.Sum(x => (long)x.Length) > characterLimit) throw new ArgumentException("RedactionPolicyInvalid");
+        literals = patterns;
         foreach (var pattern in patterns)
         {
             var state = 0;
@@ -49,6 +51,35 @@ public sealed class PersistenceRedactor
                 pending.Enqueue(next);
             }
         fields = new(names, StringComparer.OrdinalIgnoreCase);
+    }
+    /// <summary>Refuse literal policies intersecting a provider's conservative generated
+    /// token language. Secrets stay private; this does not generate or inspect provider IDs.</summary>
+    public bool IsSafeGeneratedTokens(string alphabet, int maxLength, string prefix, string suffix)
+    {
+        ArgumentNullException.ThrowIfNull(alphabet); ArgumentNullException.ThrowIfNull(prefix);
+        ArgumentNullException.ThrowIfNull(suffix);
+        if (alphabet.Length is < 1 or > 128 || maxLength is < 1 or > 256 || prefix.Length > 256 || suffix.Length > 256)
+            throw new ArgumentException("GeneratedTokenLanguageInvalid");
+        foreach (var literal in literals)
+        {
+            if (prefix.Contains(literal, StringComparison.Ordinal) || suffix.Contains(literal, StringComparison.Ordinal)) return false;
+            if (literal.Length > prefix.Length + maxLength + suffix.Length) continue;
+            for (var split = 0; split <= Math.Min(literal.Length, prefix.Length); split++)
+            {
+                if (!prefix.AsSpan().EndsWith(literal.AsSpan(0, split), StringComparison.Ordinal)) continue;
+                for (var end = 0; end <= Math.Min(literal.Length - split, suffix.Length); end++)
+                {
+                    if (!suffix.AsSpan().StartsWith(literal.AsSpan(literal.Length - end), StringComparison.Ordinal)) continue;
+                    var middle = literal.AsSpan(split, literal.Length - split - end);
+                    if (middle.Length > maxLength) continue;
+                    var possible = true;
+                    foreach (var character in middle)
+                        if (!alphabet.Contains(character)) { possible = false; break; }
+                    if (possible) return false;
+                }
+            }
+        }
+        return true;
     }
     /// <summary>Protect a resolution failure including the single supply that exceeded
     /// the storage ceiling. This returns only a JSON value, never a relaxed storage policy.</summary>

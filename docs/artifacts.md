@@ -99,6 +99,13 @@ Pinned native event/quality vocabulary and unavoidable JSON delimiters are
 admitted before session creation. Native construction failure releases its
 pending directory. Optional source-line numeric tokens and encoded strings use
 the same host literal policy before queue admission.
+Gua 1.1.1 generates sequence/timing values, GUIDs and blob hashes inside its
+session. Policies intersecting conservative bounded numeric/timestamp or
+lowercase-hex token languages (including collection-clock and native blob-reference
+prefixes/suffixes) are
+unsupported and rejected before native construction. Sampling a current clock
+or random ID does not certify future generated values. This gate exposes no
+resolved secrets and does not change Gua's generated encodings.
 Raw tree/value JSON is checked for UTF-8 bytes, decoded string lengths, depth and
 nodes before a DOM is allocated. Recording admission counts its complete native
 serialized document, including targets and scalar fields, before attachment/save.

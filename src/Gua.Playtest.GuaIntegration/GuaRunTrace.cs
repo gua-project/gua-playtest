@@ -22,7 +22,8 @@ public sealed class GuaRunTrace
         "native-request-outside-correlation-window", "native-source-changed", "native-source-limit", "native-stop-timeout",
         "observe-storage-gap", "observe-unsubscribe-failed", "screenshot-unavailable", "spatial-storage-omitted",
         "owner-disconnected", "release-requested", "late-completion", "unavailable-or-not-authorized", "subscription-start",
-        "received-live-result", "caller-authorized", "available", "stale", "unverified", "[redacted]", "redacted"
+        "received-live-result", "caller-authorized", "available", "stale", "unverified", "[redacted]", "redacted",
+        "observation-partial", "observation-gap", "observation-stale", "observation-failed", "observation-outsideRetention"
     ];
     private readonly GuaTraceSession session;
     private readonly Func<JsonElement, JsonElement> redact;
@@ -41,8 +42,18 @@ public sealed class GuaRunTrace
         Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars, int maxFileBytes, int maxNodes)
     { this.session = session; this.redact = redact; this.sensitiveField = sensitiveField; this.redactText = redactText;
         this.maxStringChars = maxStringChars; this.maxFileBytes = maxFileBytes; this.maxNodes = maxNodes; }
-    internal static void ValidatePolicy(Func<string, bool> sensitiveField, Func<string, bool> safeLiteral)
+    internal static void ValidatePolicy(Func<string, bool> sensitiveField, Func<string, bool> safeLiteral,
+        Func<string, int, string, string, bool> safeGeneratedTokens)
     {
+        // 1.1.1 creates these envelope values internally, beyond public payload gates.
+        // Never sample random IDs/current clocks as proof for a future event. Refuse
+        // intersecting conservative token languages before its session/worker exists.
+        if (!safeGeneratedTokens("0123456789abcdef", 64, "", "") ||
+            !safeGeneratedTokens("0123456789abcdef", 32, "collector-monotonic:", "") ||
+            !safeGeneratedTokens("0123456789-+.eETZ:", 64, "", "") ||
+            !safeGeneratedTokens("0123456789abcdef", 64, "snapshots/", ".json") ||
+            !safeGeneratedTokens("0123456789abcdef", 64, "attachments/", ".json"))
+            throw new ArgumentException("GuaTraceGeneratedEnvelopeUnsupported");
         // These Gua-owned envelope/identity fields cannot be removed through 1.1.1's
         // public writer. Reject that policy before starting rather than bypassing it.
         var names = new[] { typeof(GuaTraceEvent), typeof(GuaTraceManifest), typeof(GuaTraceStatus),
@@ -54,7 +65,12 @@ public sealed class GuaRunTrace
         // Unlike payload JSON, the pinned native envelope is not redacted by Gua.
         // Check both decoded names and fixed encoded key/value/schema tokens before
         // constructing its session/worker; late report rejection cannot undo a write.
-        var fixedTokens = envelopeNames.Concat(["recent", "streaming", "onFailure", "always", "debug", "player",
+        // Public native methods construct these payload keys internally. Literal
+        // key collisions cannot be corrected by sanitizing only their input values.
+        var nativePayloadNames = new[] { "label", "parentStepId", "source", "file", "line", "name", "value",
+            "target", "operator", "expected", "actual", "truth", "role", "observations", "callerOutcome",
+            "before", "after", "change", "reason", "phase", "result", "content", "references" };
+        var fixedTokens = envelopeNames.Concat(nativePayloadNames).Concat(["recent", "streaming", "onFailure", "always", "debug", "player",
             "unknown", "passed", "failed", "interrupted", "collector-monotonic:", "true", "false", "0", "1",
             "index", "recording", "steps", "gua.trace.recording.v1", "gua.recording.references.v1"])
             .Concat(Enum.GetNames<GuaTraceStepKind>().Select(JsonNamingPolicy.CamelCase.ConvertName)).Concat(NativeVocabulary);
@@ -62,7 +78,7 @@ public sealed class GuaRunTrace
         var delimiters = new[] { "{", "}", "[", "]", ",", ":", "\"", "\r", "\n", "\t", " " };
         if (delimiters.Any(token => !safeLiteral(token)) ||
             fixedTokens.Any(token => !safeLiteral(token) || !safeLiteral(JsonSerializer.Serialize(token))) ||
-            envelopeNames.Any(name => !safeLiteral(JsonSerializer.Serialize(name) + ":\"")))
+            envelopeNames.Concat(nativePayloadNames).Any(name => !safeLiteral(JsonSerializer.Serialize(name) + ":\"")))
             throw new ArgumentException("GuaTraceLiteralEnvelopeUnsupported");
     }
     private string Bound(string value)
