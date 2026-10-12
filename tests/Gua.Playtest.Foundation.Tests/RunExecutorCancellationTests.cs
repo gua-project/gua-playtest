@@ -7,6 +7,91 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory] [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task FirstCaptureSuccessErrorSurvivesStalledSecondCapture(bool deadline, bool invalidEnvelope)
+    {
+        var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), real, condition, Condition());
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield(); condition.Driver.Value = true; var reads = 0;
+                void Read()
+                { if (++reads == (invalidEnvelope ? 1 : 3)) { entered.TrySetResult(); resume.Wait(); } else condition.OnDriverRead = Read; }
+                condition.OnDriverRead = Read;
+                owner.EvaluateCapturedUnits([new(invalidEnvelope ? TimeSpan.FromTicks(-1) : TimeSpan.Zero, Unit("\"bad\""), Unit("false")), new(TimeSpan.Zero, Unit(), Unit("false"))], [], false);
+                return false;
+            }
+            finally { condition.Driver.Value = false; ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) real.At(Limits().MaxDuration); else caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(ResultStatus.Invalid, outcome.Primary.Status);
+            Assert.Equal(RunReason.ObservationContractViolation, outcome.Primary.Cause.Reason);
+            Assert.Contains(outcome.Events, item => item.Reason == (deadline ? RunReason.MaxDuration : RunReason.Cancelled));
+            Assert.False(ended.Task.IsCompleted); resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events); Assert.False(run.GoalVerified);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Theory]
+    [InlineData("action")] [InlineData("planner")] [InlineData("observation")] [InlineData("elapsed")]
+    public async Task InterruptedResultConfirmationCannotAcceptLateReceipt(string kind)
+    {
+        var real = new CancellationArbitrationClock(); var condition = new Clock(); var run = new RunSession(Limits(), real, condition);
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var confirmed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        RunSession.ApprovedOperation? operation = null;
+        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield(); real.Driver.Value = true;
+                if (kind == "planner")
+                {
+                    var permit = owner.RequestPlanner()!;
+                    real.OnDriverRead = () => { entered.TrySetResult(); resume.Wait(); };
+                    confirmed.TrySetResult(permit.ConfirmResponse());
+                }
+                else
+                {
+                    operation = kind == "action" ? owner.ApproveOperation(1, TimeSpan.FromSeconds(1)) :
+                        kind == "elapsed" ? owner.RequestPlanner()!.ApproveElapsedWait(TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(100)) :
+                        owner.ApproveObservation(TimeSpan.FromSeconds(1));
+                    if (kind == "action") { operation!.BeginDispatch(0); operation.Actions!.ConfirmSent(0); }
+                    if (kind == "elapsed") condition.At(10);
+                    real.OnDriverRead = () => { entered.TrySetResult(); resume.Wait(); };
+                    confirmed.TrySetResult(operation!.ConfirmResult());
+                }
+                return true;
+            }
+            finally { real.Driver.Value = false; ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(kind == "action" ? RunReason.ActionUnconfirmed : RunReason.Cancelled, outcome.Primary.Cause.Reason);
+            Assert.False(ended.Task.IsCompleted); resume.Set();
+            Assert.False(await confirmed.Task.WaitAsync(TimeSpan.FromSeconds(1)));
+            await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (operation is not null) { Assert.False(operation.IsOpen); Assert.False(operation.ResultConfirmed); }
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
     [Fact]
     public async Task ValidatedDeadlineCannotLoseToGoalWhileTimeoutCandidatesAreMaterializing()
     {
@@ -259,15 +344,19 @@ public sealed partial class RunTests
         finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
     }
 
-    [Fact]
-    public async Task InterruptedCloseProbeRetainsDrainedProviderDiagnostics()
+    [Theory] [InlineData(0, 1024)] [InlineData(256, 32)]
+    public async Task InterruptedCloseProbeRetainsDrainedProviderDiagnostics(int depth, int evidenceLimit)
     {
-        var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, new Clock());
+        var clock = new CancellationArbitrationClock(); var limits = Limits();
+        limits = new(limits.MaxDuration, limits.ActionTimeout, limits.WaitTimeout, limits.PlannerTimeout, limits.PreparationTimeout,
+            limits.CleanupTimeout, limits.MaxActions, limits.MaxDecisions, limits.RecoveryDecisions, evidenceLimit);
+        var run = new RunSession(limits, clock, new Clock());
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Exception source; try { throw new InvalidDataException("original provider"); } catch (Exception exception) { source = exception; }
-        var failure = new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), source);
+        Exception wrapped = source; for (var index = 0; index < depth; index++) wrapped = new AggregateException(wrapped);
+        var failure = new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), wrapped);
         var polls = 0; var armed = false;
         var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (owner, _, _) =>
         {
@@ -292,6 +381,7 @@ public sealed partial class RunTests
             var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Equal(failure.Cause, outcome.Primary.Cause);
             Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName && !string.IsNullOrEmpty(item.StackTrace));
+            Assert.True(outcome.Exceptions.Count <= evidenceLimit);
             resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Equal(outcome.Exceptions, run.Exceptions);
         }

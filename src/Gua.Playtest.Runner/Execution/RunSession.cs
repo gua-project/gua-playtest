@@ -425,23 +425,34 @@ public sealed class RunSession
         }
         internal void CompleteAt(TimeSpan now)
         {
-            if (IsOpen && owner.State == ExecutionState.Running)
+            lock (owner.arbitrationGate)
             {
-                var unconfirmed = !ResultConfirmed && Actions?.Deliveries.Any(x => x is DeliveryState.Sent or DeliveryState.Uncertain) == true;
-                if (unconfirmed || now >= NextDeadline)
-                    owner.QueuePending(new(IsPlanner && !ResultConfirmed ? RunReason.PlannerTimeout : unconfirmed ? RunReason.ActionUnconfirmed : RunReason.WaitExpired,
-                        RunPhase.Execution, IsPlanner && !ResultConfirmed ? RunOrigin.Planner : RunOrigin.Host));
+                if (IsOpen && owner.State == ExecutionState.Running)
+                {
+                    var unconfirmed = !ResultConfirmed && Actions?.Deliveries.Any(x => x is DeliveryState.Sent or DeliveryState.Uncertain) == true;
+                    if (unconfirmed || now >= NextDeadline)
+                        owner.QueuePending(new(IsPlanner && !ResultConfirmed ? RunReason.PlannerTimeout : unconfirmed ? RunReason.ActionUnconfirmed : RunReason.WaitExpired,
+                            RunPhase.Execution, IsPlanner && !ResultConfirmed ? RunOrigin.Planner : RunOrigin.Host));
+                }
+                IsOpen = false; Actions?.CancelUnsent();
             }
-            IsOpen = false; Actions?.CancelUnsent();
         }
         public bool ConfirmResult()
         {
-            if (!IsOpen || owner.State != ExecutionState.Running) return false;
-            if (ResultConfirmed) return true;
+            lock (owner.arbitrationGate)
+            {
+                if (!IsOpen || owner.State != ExecutionState.Running) return false;
+                if (ResultConfirmed) return true;
+            }
             var now = owner.ReadReal();
             if (now >= ResultDeadline) return false;
             if (waitCompletesAt is { } waitBoundary && owner.ReadCondition() < waitBoundary) return false;
-            resultConfirmedAt = now; ResultConfirmed = true; return true;
+            lock (owner.arbitrationGate)
+            {
+                if (!IsOpen || owner.State != ExecutionState.Running || owner.AbandonedEvaluation || owner.lastReal >= ResultDeadline) return false;
+                if (ResultConfirmed) return true;
+                resultConfirmedAt = now; ResultConfirmed = true; return true;
+            }
         }
         /// <summary>Owner-only accounting for reported side effects that bypassed the dispatch guard.
         /// Consumes an uncertain attempt without granting dispatch authority or confirming its result.
@@ -539,6 +550,7 @@ public sealed class RunSession
         postedExceptions.Clear(); postedCausalEvidence = false;
         if (postedExceptionsOverflow) cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
         postedExceptionsOverflow = false;
+        cycle.AddRange(pendingEvents); pendingEvents.Clear();
         // Closing the final opportunity makes budget/verified Goal/declared plan
         // completion evidence eligible even though the provider unit was revoked.
         // Collect only already-known completion; never infer it from a stalled task.
@@ -546,22 +558,7 @@ public sealed class RunSession
         return PublishPrimary(cycle.Distinct().ToList(), lastReal);
     }
     private void RecordEmergencyException(Exception exception)
-    {
-        var pending = new Queue<Exception>(); pending.Enqueue(exception);
-        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
-        var traversed = 0;
-        while (pending.TryDequeue(out var item) && exceptions.Count < Limits.MaxEvidenceItems && traversed++ < 4096)
-        {
-            if (!seen.Add(item)) continue;
-            // Do not invoke user-overridden diagnostic getters during emergency closure.
-            var trace = new System.Diagnostics.StackTrace(item, true);
-            var stack = trace.FrameCount == 0 ? null : trace.ToString().TrimEnd('\r', '\n');
-            exceptions.Add(new(item.GetType().FullName ?? item.GetType().Name, stack));
-            if (item is AggregateException aggregate)
-                foreach (var child in aggregate.InnerExceptions.Take(Limits.MaxEvidenceItems)) pending.Enqueue(child);
-            else if (item.InnerException is { } child) pending.Enqueue(child);
-        }
-    }
+        => RecordExceptionCore(exception, emergency: true);
     private PrimaryResult? EvaluateUnit(IReadOnlyList<CapturedUnit> units, IEnumerable<RunEvent>? candidates,
         bool cancelled, bool executionComplete)
     {
@@ -607,12 +604,13 @@ public sealed class RunSession
                         throw new InvalidOperationException("ConditionObservationTimeInvalid");
                     validCapture = true;
                 }
-                catch (Exception exception) { RecordException(exception); validCapture = false; }
-                if (!validCapture)
+                catch (Exception exception)
                 {
                     cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
-                    continue;
+                    if (!PublishActiveEvidence(cycle)) return Primary;
+                    RecordException(exception); validCapture = false;
                 }
+                if (!validCapture) continue;
                 if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
                 lastCapture = captured.At;
                 // Mandatory failure evaluation even if success has latched or the plan is not yet complete.
@@ -622,8 +620,9 @@ public sealed class RunSession
                     try { return session?.EvaluateAt(evidence ?? new ConditionObservationUnit([]), captured.At); }
                     catch (Exception exception)
                     {
-                        RecordException(exception);
                         cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
+                        if (!PublishActiveEvidence(cycle)) return null;
+                        RecordException(exception);
                         return null;
                     }
                 }
@@ -634,12 +633,17 @@ public sealed class RunSession
                 if (!PublishActiveEvidence(cycle)) return Primary;
                 var passed = EvaluateCondition(successSession, captured.Success);
                 if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
-                var wakes = new[] { failed?.NextEvaluationAt, passed?.NextEvaluationAt }.Where(x => x.HasValue).ToArray();
-                nextConditionEvaluationAt = wakes.Length == 0 ? null : wakes.Min();
-                AddError(passed);
-                if (IsTrue(passed)) goalVerified = true;
-                if (passed?.Completion == ConditionCompletion.Expired && !goalVerified)
-                    cycle.Add(new(RunReason.GoalImpossible, Phase, RunOrigin.Condition));
+                lock (arbitrationGate)
+                {
+                    if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+                    var wakes = new[] { failed?.NextEvaluationAt, passed?.NextEvaluationAt }.Where(x => x.HasValue).ToArray();
+                    nextConditionEvaluationAt = wakes.Length == 0 ? null : wakes.Min();
+                    AddError(passed);
+                    if (IsTrue(passed)) goalVerified = true;
+                    if (passed?.Completion == ConditionCompletion.Expired && !goalVerified)
+                        cycle.Add(new(RunReason.GoalImpossible, Phase, RunOrigin.Condition));
+                    if (currentEvaluation.Value is { } frame) frame.Evidence = cycle.ToArray();
+                }
             }
             if (now >= RunningOrigin!.Value + Limits.MaxDuration) cycle.Add(new(RunReason.MaxDuration, Phase, RunOrigin.Clock));
             foreach (var operation in operations.Where(x => x.IsOpen && now >= x.NextDeadline))
@@ -795,9 +799,11 @@ public sealed class RunSession
         }
     }
     public void RecordException(Exception exception)
+        => RecordExceptionCore(exception, emergency: false);
+    private void RecordExceptionCore(Exception exception, bool emergency)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        if (AbandonedEvaluation || State == ExecutionState.Finished) return;
+        if (!emergency && (AbandonedEvaluation || State == ExecutionState.Finished)) return;
         if (exception is ClockProviderException) QueueClockRejection();
         var remaining = Limits.MaxEvidenceItems - exceptions.Count;
         if (remaining <= 0) return;
@@ -838,9 +844,12 @@ public sealed class RunSession
         }
         void Record(Exception current)
         {
-            var evidence = new ExceptionEvidence(current.GetType().FullName ?? current.GetType().Name, current.StackTrace);
+            // Emergency publication must not invoke user-overridden diagnostics.
+            var trace = emergency ? new System.Diagnostics.StackTrace(current, true) : null;
+            var stack = emergency ? trace!.FrameCount == 0 ? null : trace.ToString().TrimEnd('\r', '\n') : current.StackTrace;
+            var evidence = new ExceptionEvidence(current.GetType().FullName ?? current.GetType().Name, stack);
             lock (arbitrationGate)
-                if (!AbandonedEvaluation && State != ExecutionState.Finished && exceptions.Count < Limits.MaxEvidenceItems)
+                if ((emergency || !AbandonedEvaluation && State != ExecutionState.Finished) && exceptions.Count < Limits.MaxEvidenceItems)
                     exceptions.Add(evidence);
         }
     }

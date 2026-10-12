@@ -45,6 +45,14 @@ candidate materialization. This needs no additional provider-clock read. Late to
 or deadline evidence follows the ordinary terminal closure, completion recollection
 and closing lifecycle sample before primary publication; probes remain outside the
 short gate and interruption can still revoke a stalled sample.
+Each processed capture publishes its success-side errors and verified Goal under
+that gate before validating the next capture. An interrupted later read cannot
+erase an earlier unit's contract failure. Result confirmation reads clocks outside
+the gate, then rechecks the operation's open state, Run state and deadline under
+the same gate as closure; a clock read that returns after closure cannot confirm
+a receipt or reopen its observation opportunity. Emergency diagnostics share the
+ordinary bounded traversal that prioritizes original leaves over deep wrappers,
+while using CLR stack capture without invoking overridden diagnostic getters.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.
