@@ -12,6 +12,7 @@ public sealed class GuaRunTrace
     private readonly Func<JsonElement, JsonElement> redact;
     private readonly Func<string, bool> sensitiveField;
     private readonly Func<string, string> redactText;
+    private readonly int maxStringChars;
     private int failed;
     internal GuaTraceSession Session => session;
     internal bool CaptureFailed => Volatile.Read(ref failed) != 0;
@@ -19,8 +20,8 @@ public sealed class GuaRunTrace
     public string ArtifactPath => session.ArtifactPath;
     public string TraceId => session.TraceId;
     internal GuaRunTrace(GuaTraceSession session, Func<JsonElement, JsonElement> redact,
-        Func<string, bool> sensitiveField, Func<string, string> redactText)
-    { this.session = session; this.redact = redact; this.sensitiveField = sensitiveField; this.redactText = redactText; }
+        Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars)
+    { this.session = session; this.redact = redact; this.sensitiveField = sensitiveField; this.redactText = redactText; this.maxStringChars = maxStringChars; }
     internal static void ValidatePolicy(Func<string, bool> sensitiveField)
     {
         // These Gua-owned envelope/identity fields cannot be removed through 1.1.1's
@@ -31,7 +32,20 @@ public sealed class GuaRunTrace
         if (names.Concat(["request", "schema", "blob", "observationId", "channel", "availability", "host", "continuity", "metadata", "kind", "outcome"])
             .Any(sensitiveField)) throw new ArgumentException("GuaTraceSensitiveEnvelopeUnsupported");
     }
-    private string Text(string name, string value) => sensitiveField(name) ? string.Empty : redactText(value);
+    private string Bound(string value)
+    { if (value.Length > maxStringChars) throw new InvalidDataException("TraceStringLimit"); return value; }
+    private string? Optional(string? value) => value is null ? null : Bound(value);
+    private string Text(string name, string value)
+    { Bound(value); return sensitiveField(name) ? string.Empty : redactText(value); }
+    private GuaTraceRequest Request(GuaTraceRequest value)
+    { Bound(value.SourceId); Bound(value.SessionEpoch); Bound(value.RequestId); return value; }
+    private GuaTraceHost Host(GuaTraceHost value)
+    {
+        Bound(value.SourceId); Bound(value.SessionEpoch); Optional(value.Frame); Optional(value.Revision);
+        Optional(value.Timestamp); Optional(value.ClockId); return value;
+    }
+    private IReadOnlyList<string> References(IReadOnlyList<string> values)
+    { foreach (var value in values) Bound(value); return values; }
     private T Capture<T>(Func<T> operation, T missing)
     {
         try { return operation(); }
@@ -45,25 +59,25 @@ public sealed class GuaRunTrace
     }
     public string BeginStep(GuaTraceStepKind kind, string label, GuaTraceRequest? request = null,
         string? parentStepId = null, string? sourceFile = null, int? sourceLine = null)
-        => Capture(() => session.BeginStep(kind, Text("label", label), request,
-            sensitiveField("parentStepId") ? null : parentStepId,
-            sourceFile is null || new[] { "source", "file", "sourceFile" }.Any(sensitiveField) ? null : redactText(sourceFile),
+        => Capture(() => session.BeginStep(kind, Text("label", label), request is null ? null : Request(request),
+            sensitiveField("parentStepId") ? null : Optional(parentStepId),
+            sourceFile is null || new[] { "source", "file", "sourceFile" }.Any(sensitiveField) ? null : redactText(Bound(sourceFile)),
             sensitiveField("line") || sensitiveField("sourceLine") ? null : sourceLine), string.Empty);
     public string Mark(string label) => Capture(() => session.Mark(Text("label", label)), string.Empty);
     public bool Record(string step, string type, JsonElement data, bool sensitive = false)
-        => Capture(() => session.Record(step, type, sensitive ? JsonSerializer.SerializeToElement<object?>(null) : redact(data), sensitive));
+        => Capture(() => session.Record(step, Text("type", type), sensitive ? JsonSerializer.SerializeToElement<object?>(null) : redact(data), sensitive));
     public bool RecordRequest(GuaTraceRequest request, string phase, JsonElement data)
-        => Capture(() => session.RecordRequest(request, Text("phase", phase),
+        => Capture(() => session.RecordRequest(Request(request), Text("phase", phase),
             sensitiveField("result") ? JsonSerializer.SerializeToElement<object?>(null) : redact(data)));
     public void EndStep(string step, GuaTraceOutcome outcome) => session.EndStep(step, outcome);
-    public bool Correlate(string step, GuaTraceRequest request) => Capture(() => session.Correlate(step, request));
+    public bool Correlate(string step, GuaTraceRequest request) => Capture(() => session.Correlate(step, Request(request)));
     public bool Attach(string step, string schema, JsonElement content, bool sensitive = false)
-        => Capture(() => session.Attach(step, schema,
+        => Capture(() => session.Attach(step, Bound(schema),
             sensitive ? JsonSerializer.SerializeToElement<object?>(null) : redact(content), sensitive));
     public string Observe(string step, string channel, string reason, string availability, GuaTraceHost host,
         JsonElement? snapshot = null, string continuity = "unverified", bool sensitive = false)
-        => Capture(() => session.Observe(step, channel, Text("reason", reason), availability, host,
-            sensitive || snapshot is null ? null : redact(snapshot.Value), continuity, sensitive), string.Empty);
+        => Capture(() => session.Observe(step, Bound(channel), Text("reason", reason), Bound(availability), Host(host),
+            sensitive || snapshot is null ? null : redact(snapshot.Value), Bound(continuity), sensitive), string.Empty);
     private bool MaskedValue(GuaValue? value)
     {
         if (value is null) return false;
@@ -76,14 +90,14 @@ public sealed class GuaRunTrace
     public bool Evaluate(string step, string target, string @operator, GuaValue? expected, GuaValue? actual,
         string truth, string role, IReadOnlyList<string> observations, GuaTraceOutcome callerOutcome, bool sensitive = false)
         => Capture(() => session.Evaluate(step, Text("target", target), Text("operator", @operator), expected, actual,
-            truth, Text("role", role), observations, callerOutcome,
+            Bound(truth), Text("role", role), References(observations), callerOutcome,
             sensitive || new[] { "target", "operator", "expected", "actual", "truth", "role", "observations", "callerOutcome" }.Any(sensitiveField) ||
             MaskedValue(expected) || MaskedValue(actual)));
     public bool Change(string step, string target, string change, GuaTraceHost host, GuaValue? before,
         GuaValue? after, string continuity = "unverified", bool sensitive = false)
-        => Capture(() => session.Change(step, Text("target", target), change, host, before, after, continuity,
+        => Capture(() => session.Change(step, Text("target", target), Bound(change), Host(host), before, after, Bound(continuity),
             sensitive || new[] { "target", "change", "before", "after" }.Any(sensitiveField) || MaskedValue(before) || MaskedValue(after)));
     public string CaptureTree(string step, string channel, string sourceId, string reason, Func<string> getter, string? epoch = null)
-        => Capture(() => GuaTraceCapture.Tree(session, step, channel, sourceId, Text("reason", reason), () =>
-        { using var document = JsonDocument.Parse(getter()); return redact(document.RootElement).GetRawText(); }, epoch), string.Empty);
+        => Capture(() => GuaTraceCapture.Tree(session, step, Bound(channel), Bound(sourceId), Text("reason", reason), () =>
+        { using var document = JsonDocument.Parse(getter()); return redact(document.RootElement).GetRawText(); }, Optional(epoch)), string.Empty);
 }

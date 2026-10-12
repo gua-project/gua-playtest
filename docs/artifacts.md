@@ -47,6 +47,10 @@ objects retain their whole-object masking. Policies that require masking an
 unmodifiable Gua envelope/identity field are rejected before writer creation.
 The projection counts every retained mask/null node and bounds the final escaped
 UTF-8 encoding before returning a document to Gua.
+The same explicit string ceiling applies to caller-supplied Trace labels, request
+and host fields, phases, schemas, observations and typed evidence text, and to
+Recording target/value fields before attachment or file creation. Sensitive-field
+null replacements obey the retained-document depth ceiling as ordinary children do.
 `Observe` associates a Gua-generated observation ID with an owner observation
 identity and its Before/After/PrimaryDecision/AfterCleanup boundary.
 `RecordPlannerDecision` accepts only the same Run ID, a previously associated

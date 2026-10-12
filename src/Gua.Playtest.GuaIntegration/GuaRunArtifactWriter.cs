@@ -21,7 +21,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     private readonly string runDirectory;
     private readonly GuaTraceSavePolicy policy;
     private readonly string profile;
-    private readonly int maxFileBytes, maxFiles;
+    private readonly int maxFileBytes, maxFiles, maxStringChars;
     private readonly long maxBundleBytes;
     private readonly Func<string, bool> safeRecordingText;
     private readonly Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding;
@@ -32,7 +32,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     public GuaRunArtifactWriter(string runDirectory, GuaTraceOptions options,
         int maxFileBytes, long maxBundleBytes, int maxFiles, Func<string, bool> safeRecordingText,
         Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding, Func<JsonElement, JsonElement> redact,
-        Func<string, bool> sensitiveField, Func<string, string> redactText)
+        Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(safeRecordingText);
@@ -42,12 +42,14 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
         // Its artifact budget must fit one file; its separate manifest reserve must too.
         if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 3 ||
+            maxStringChars < 1 || maxStringChars > maxFileBytes ||
             options.MaxArtifactBytes > maxFileBytes ||
             options.MaxArtifactBytes > maxBundleBytes - 65536L - maxFileBytes ||
             options.MaxAttachmentBytes > maxFileBytes || options.MaxEventBytes > maxFileBytes)
             throw new ArgumentException("ArtifactWriterLimitsInvalid");
         this.runDirectory = Path.GetFullPath(runDirectory);
         this.maxFileBytes = maxFileBytes; this.maxBundleBytes = maxBundleBytes; this.maxFiles = maxFiles;
+        this.maxStringChars = maxStringChars;
         this.safeRecordingText = safeRecordingText;
         this.safeRecordingEncoding = safeRecordingEncoding;
         policy = options.SavePolicy; profile = options.Profile;
@@ -60,7 +62,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             MaxQueueItems = options.MaxQueueItems, MaxArtifactBytes = options.MaxArtifactBytes,
             MaxAttachmentBytes = options.MaxAttachmentBytes, MaxEventBytes = options.MaxEventBytes,
             FlushTimeout = options.FlushTimeout
-        }), redact, sensitiveField, redactText);
+        }), redact, sensitiveField, redactText, maxStringChars);
     }
 
     public bool ConfirmPrimary(GuaTraceOutcome outcome)
@@ -159,7 +161,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             foreach (var step in recording.Steps)
                 foreach (var text in new[] { step.Target?.Id, step.Target?.Role, step.Target?.Name,
                     step.Target?.Scope, step.WaitCondition, step.Value, step.SecretKey })
-                    if (text is not null && (text.Length > maxFileBytes / 6 || !safeRecordingText(text)))
+                    if (text is not null && (text.Length > maxStringChars || text.Length > maxFileBytes / 6 || !safeRecordingText(text)))
                     { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
             GuaRecordingFile.Validate(recording);
             // Count safe serialization before Gua's writer, including escape expansion.

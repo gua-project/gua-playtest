@@ -196,7 +196,7 @@ public sealed class PersistenceRedactor
                         if (output.ContainsKey(name)) throw new InvalidDataException("RedactionNameCollision");
                         if (Sensitive(property.Name))
                         {
-                            if (++count > limits.MaxItems) throw new ArtifactLimitException();
+                            if (depth == 32 || ++count > limits.MaxItems) throw new ArtifactLimitException();
                             output[name] = null;
                         }
                         else output[name] = Visit(property.Value, depth + 1);

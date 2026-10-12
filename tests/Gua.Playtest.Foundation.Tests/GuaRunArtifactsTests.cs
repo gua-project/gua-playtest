@@ -485,7 +485,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         Directory.CreateDirectory(root);
         await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
-            3, _ => true, _ => true, document => document, _ => false, text => text);
+            3, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars);
         writer.Trace.Mark("safe"); Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
         var completed = await writer.CompleteAsync();
         Assert.Equal(GuaArtifactState.Saved, completed.Trace.State);
@@ -563,13 +563,78 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var redactor = new PersistenceRedactor(["Trace"], []);
         await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
             Limits.MaxItems, text => redactor.Redact(text) == text, bytes => redactor.IsSafeUtf8(bytes.Span),
-            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact);
+            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact, Limits.MaxStringChars);
         Assert.NotEmpty(writer.Trace.Mark("safe"));
         Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
         Assert.Equal(GuaArtifactState.CaptureFailed, (await writer.CompleteAsync()).Trace.State);
         Assert.False(File.Exists(Path.Combine(writer.Trace.ArtifactPath, "report.html")));
         foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
             Assert.DoesNotContain("Trace", File.ReadAllText(file));
+    }
+
+    [Fact]
+    public void Review3_sensitive_replacement_at_depth32_is_rejected_and_depth31_is_admitted()
+    {
+        var redactor = new PersistenceRedactor([], ["credential"]);
+        using var tooDeep = JsonDocument.Parse(new string('[', 32) + "{\"credential\":1}" + new string(']', 32));
+        Assert.Throws<ArtifactLimitException>(() => redactor.RedactDocument(tooDeep.RootElement, Limits));
+        using var admitted = JsonDocument.Parse(new string('[', 31) + "{\"credential\":1}" + new string(']', 31));
+        Assert.DoesNotContain("1", redactor.RedactDocument(admitted.RootElement, Limits).GetRawText());
+    }
+
+    [Theory]
+    [InlineData("label")] [InlineData("sourceFile")] [InlineData("request")]
+    [InlineData("eventType")] [InlineData("phase")] [InlineData("schema")]
+    [InlineData("reason")] [InlineData("host")] [InlineData("annotation")]
+    [InlineData("evaluation")] [InlineData("change")] [InlineData("tree")]
+    public async Task Review3_direct_gua_strings_are_bounded_before_queue_or_capture(string lane)
+    {
+        var limits = new ArtifactLimits(Limits.MaxFileBytes, Limits.MaxRunBytes, Limits.MaxItems, 16);
+        var store = RunArtifactStore.Create(root, limits, Redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, limits, Options(), Redactor);
+        var trace = capture.Trace; var step = trace.Mark("safe"); Assert.NotEmpty(step);
+        var request = new GuaTraceRequest("host", "1", "1");
+        Assert.True(trace.Correlate(step, request));
+        const string oversized = "too-long-string-field";
+        var empty = JsonSerializer.SerializeToElement(new { });
+        using var one = GuaValue.Integer(1);
+        switch (lane)
+        {
+            case "label": Assert.Empty(trace.Mark(oversized)); break;
+            case "sourceFile": Assert.Empty(trace.BeginStep(GuaTraceStepKind.Mark, "safe", sourceFile: oversized)); break;
+            case "request": Assert.Empty(trace.BeginStep(GuaTraceStepKind.Action, "safe", request with { SourceId = oversized })); break;
+            case "eventType": Assert.False(trace.Record(step, oversized, empty)); break;
+            case "phase": Assert.False(trace.RecordRequest(request, oversized, empty)); break;
+            case "schema": Assert.False(trace.Attach(step, oversized, empty)); break;
+            case "reason": Assert.Empty(trace.Observe(step, "ui", oversized, "available", new("host", "1"))); break;
+            case "host": Assert.Empty(trace.Observe(step, "ui", "safe", "available", new("host", "1", Revision: oversized))); break;
+            case "annotation": Assert.False(trace.Annotate(step, oversized, one)); break;
+            case "evaluation": Assert.False(trace.Evaluate(step, oversized, "equal", one, one, "true", "success", [], GuaTraceOutcome.Passed)); break;
+            case "change": Assert.False(trace.Change(step, oversized, "changed", new("host", "1"), one, one)); break;
+            case "tree":
+                var calls = 0;
+                Assert.Empty(trace.CaptureTree(step, "ui", oversized, "safe", () => { calls++; return "{}"; }));
+                Assert.Equal(0, calls); break;
+        }
+        Assert.False(trace.Status.DetailStopped); // host admission precedes Gua's own byte-limit shutdown
+    }
+
+    [Theory]
+    [InlineData("target")] [InlineData("value")]
+    public async Task Review3_recording_strings_use_configured_ceiling_before_attachment_or_file(string lane)
+    {
+        var limits = new ArtifactLimits(Limits.MaxFileBytes, Limits.MaxRunBytes, Limits.MaxItems, 4);
+        var store = RunArtifactStore.Create(root, limits, Redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, limits, Options(), Redactor);
+        var primary = Primary(true);
+        await capture.ConfirmPrimaryAsync(new(primary, [], []), default);
+        var recording = lane == "value" ? Recording("too-long") : new GuaRecording(1,
+            [new(GuaRecordedAction.click, 0, 1, 2, false, RequestId: 17, Target: new(Id: "too-long"))]);
+        var completed = await capture.CompleteAsync(new(primary, [], [], []), DateTimeOffset.UtcNow, recording);
+        Assert.Equal(ArtifactState.CaptureFailed, completed.Receipts[1].State);
+        Assert.False(Directory.Exists(Path.Combine(store.DirectoryPath, "recording")));
+        Assert.DoesNotContain(GuaTraceReader.Read(capture.Trace.ArtifactPath).Events,
+            x => x.Type == "attachment" && x.Data.GetRawText().Contains("recording"));
     }
 
     [Fact]

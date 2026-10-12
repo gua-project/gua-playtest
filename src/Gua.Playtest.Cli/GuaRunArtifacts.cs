@@ -44,7 +44,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
             limits.MaxItems, text => recordingRedactor.Redact(text) == text,
             bytes => SafeRecordingEncoding(recordingRedactor, bytes),
             document => recordingRedactor.RedactDocument(document, limits),
-            recordingRedactor.IsSensitiveField, recordingRedactor.Redact);
+            recordingRedactor.IsSensitiveField, recordingRedactor.Redact, limits.MaxStringChars);
         PreparationPersistence = store.BeginPreparation(metadata, token);
     }
     private static bool SafeRecordingEncoding(PersistenceRedactor redactor, ReadOnlyMemory<byte> bytes)
