@@ -48,14 +48,12 @@ public static class RunExecutor
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(cleanup); ArgumentNullException.ThrowIfNull(prepare); ArgumentNullException.ThrowIfNull(execute);
         realClock = run.AuthoritativeRealClock;
-        using var cancellationEvidence = cancellationToken.Register(() =>
-            run.PostProviderException(new RunFailureException(new(RunReason.Cancelled,
-                run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation, RunOrigin.User))));
         RunStartBoundary? completedBoundary = null;
         IReadOnlyList<RunEvent> completedPreparationEvents = [];
         Task<bool>? executionTask = null;
         try
         {
+            run.BindCancellation(cancellationToken);
             run.BeginPreparation();
             Task<T>? preparationTask = null;
             T preparation;
@@ -108,7 +106,12 @@ public static class RunExecutor
                     var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
                     var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
                         token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
-                    run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
+                    var cancelledAtCompletion = cancellationToken.IsCancellationRequested;
+                    // A known false driver result belongs to this same unit. Sampling
+                    // later cancellation must not publish before that failure is included.
+                    run.Evaluate(candidates: !complete && !cancelledAtCompletion
+                        ? [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)] : [],
+                        cancelled: cancelledAtCompletion, executionComplete: complete);
                     if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
                         cancelled: cancellationToken.IsCancellationRequested);
                 }

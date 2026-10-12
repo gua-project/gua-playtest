@@ -24,16 +24,19 @@ Other transition requests fail with fixed codes. `BeginRunning` uses one real Ru
 
 One `Evaluate` call reads real time once and handles a complete evaluation unit, including current cancellation/global deadline. The owner must not call Evaluate separately for callbacks that belong to one unit. Both condition trees are evaluated even after Goal success, and errors remain candidates. The earliest enum in a class wins, then phase enum, then origin enum; event arrival order cannot choose the result.
 
-Evaluation and executor safety finalization serialize the entire synchronous unit,
-from pending-evidence drain through primary publication. Cancellation or the original
-global deadline cannot publish a second result while the driver holds a higher-priority
-cause in that unit. The competing finalizer observes the already-frozen primary.
-The executor's cancellation callback posts through the existing bounded causal
-queue at receipt, independent of finalizer continuation scheduling. A competing
-cancellation evaluation also posts before waiting, so an in-flight Goal unit retains cancellation received before
-its existing confirmation boundary. Posts after that boundary cannot rewrite primary.
-This does not grant provider callbacks Run mutation authority or join uncooperative
-driver tasks; their existing cancellation and absolute-deadline bounds remain unchanged.
+Only short data publication holds the evaluation arbitration gate; its clocks, lifecycle watches
+and condition providers run outside it. An active unit retains a bounded immutable
+snapshot of already-authoritative causes before draining pending evidence. If an
+executor interruption arrives while that unit is stalled, it revokes the unit's
+publication authority and finalizes from those known causes and the interruption
+without joining the dependency. Resource cleanup still runs, and the abandoned unit
+cannot rewrite primary, the event ledger or diagnostic snapshots when it returns.
+Unfinished observations never manufacture Goal confirmation. The executor binds its
+caller token to the session; primary publication samples IsCancellationRequested
+directly, so delayed cancellation callbacks cannot permit an in-flight Goal to pass.
+A known false driver result is included in the same unit before that sampling.
+Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
+cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.
 
 | Priority | Reasons in tie-break order | Status |
 | --- | --- | --- |
@@ -175,7 +178,7 @@ Superseding a finite capture wrapper does not prove the underlying feed call end
 Trusted lifecycle integration retains an already-armed exact process watch on the opaque start boundary. The serialized owner samples it after initial observation/clock processing in the same first Running arbitration cycle, before choosing primary; initial goal success cannot skip known host failure. This is internal adapter evidence, not a new public readiness/permission capability. Late provider callbacks use a bounded exception posting queue. Only the owner drains posts and freezes registration before primary confirmation, preventing worker mutation of pending events or snapshot lists.
 The same internal queue distinguishes secondary callback diagnostics from actual provider failure evidence. A typed provider failure ready before closure carries its guarded cause into owner arbitration; callback faults cannot claim that cause. Queue overflow latches a constant-size fail-closed flag under the same lock: the owner emits Runner ExecutionError rather than allowing goal success after causal evidence was dropped. The queue and recorded evidence retain their existing limits. Both diagnostic and cause registration close atomically before the immutable primary. Later posts cannot change the primary, operation accounting or exception snapshots.
 
-Final primary confirmation closes the posted-evidence gate and samples the already-armed exact lifecycle watch inside that same lock. An earlier Running poll is not final readiness proof; the close sample retains known lifecycle failure before primary assignment. Later completion belongs after the confirmation boundary and cannot rewrite the primary.
+Final primary confirmation closes the posted-evidence gate under its short publication lock, then samples the already-armed exact lifecycle watch outside that lock. An earlier Running poll is not final readiness proof; the close sample retains known lifecycle failure before primary assignment. Executor interruption may revoke a stalled close sample without joining the watch and confirms only already-known evidence. A late revoked sample cannot rewrite the primary.
 Queued causal evidence and queue overflow immediately close ActionsClosing, Planner requests, operation approval and dispatch through the shared terminal-evidence gate, before the next owner evaluation. That owner gate also samples the already-armed exact lifecycle watch under the posting lock: a completed exit/fault closes authority without depending on a feed call or async notification. Their final authority checks and reservation transitions share the posting lock; provider clock reads precede that lock, and the check repeats afterward. This linearizes internal reservation authority with causal posting; the external transport's check/enqueue guard remains separate. Diagnostic-only posts preserve those gates; workers never mutate Run state or budgets.
 
 When OnGoal latches while a sent result is pending, the existing operation closes

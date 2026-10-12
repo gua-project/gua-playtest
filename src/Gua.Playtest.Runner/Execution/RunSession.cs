@@ -9,10 +9,20 @@ namespace Gua.Playtest.Runner.Execution;
 /// Evaluate receives a complete same-cycle event set and reads real time once.</summary>
 public sealed class RunSession
 {
-    // Executor safety finalization can arrive while the trusted driver is evaluating.
-    // A whole evidence unit, including its drained pending causes, owns publication
-    // until primary is frozen; a competing evaluation must observe that result.
-    private readonly object arbitrationGate = new();
+    // Only data publication holds this gate. Provider reads never own finalization.
+    private object arbitrationGate => postedExceptionGate;
+    private sealed class EvaluationFrame
+    {
+        public RunEvent[] Evidence = [];
+        public volatile bool Abandoned;
+    }
+    private EvaluationFrame? activeEvaluation;
+    private readonly AsyncLocal<EvaluationFrame?> currentEvaluation = new();
+    private CancellationToken callerCancellation;
+    private bool frozenGoalVerified;
+    internal void BindCancellation(CancellationToken token)
+    { Require(ExecutionState.Created); callerCancellation = token; }
+    private bool AbandonedEvaluation => currentEvaluation.Value?.Abandoned == true;
     private sealed class ValidatedClock(RunSession owner, bool condition) : IClock
     {
         public TimeSpan Elapsed => condition ? owner.ReadCondition() : owner.ReadReal();
@@ -60,7 +70,7 @@ public sealed class RunSession
     public RunBudget Budget { get; }
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
-    public bool GoalVerified => goalVerified;
+    public bool GoalVerified => State is ExecutionState.Completing or ExecutionState.Finished ? frozenGoalVerified : goalVerified;
     public TimeSpan? RunningOrigin { get; private set; }
     public TimeSpan NextRealEvaluationAt => State == ExecutionState.Preparing ? preparationOrigin + Limits.PreparationTimeout :
         operations.Where(x => x.IsOpen).Select(x => x.NextDeadline).Append(RunningOrigin!.Value + Limits.MaxDuration).Min();
@@ -103,6 +113,7 @@ public sealed class RunSession
         try
         {
             var now = conditionClock.Elapsed;
+            if (AbandonedEvaluation) return lastCondition;
             if (now < lastCondition || now < TimeSpan.Zero || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
                 throw new InvalidOperationException("ConditionClockInvalid");
             return lastCondition = now;
@@ -111,8 +122,34 @@ public sealed class RunSession
     }
     private void QueueClockRejection()
     {
-        if (!pendingEvents.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
-            pendingEvents.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
+        QueuePending(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
+    }
+    private void QueuePending(RunEvent cause)
+    {
+        lock (arbitrationGate)
+        {
+            if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return;
+            if (!pendingEvents.Contains(cause)) pendingEvents.Add(cause);
+        }
+    }
+    private bool DrainPending(List<RunEvent> cycle)
+    {
+        lock (arbitrationGate)
+        {
+            if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return false;
+            cycle.AddRange(pendingEvents);
+            if (currentEvaluation.Value is { } frame) frame.Evidence = cycle.ToArray();
+            pendingEvents.Clear(); return true;
+        }
+    }
+    private bool PublishActiveEvidence(List<RunEvent> cycle)
+    {
+        lock (arbitrationGate)
+        {
+            if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return false;
+            if (currentEvaluation.Value is { } frame) frame.Evidence = cycle.ToArray();
+            return true;
+        }
     }
     internal bool HasPendingClockRejection => pendingEvents.Any(item => item.Reason == RunReason.InvalidContract && item.Origin == RunOrigin.Clock);
     private ConditionSession? StartCondition(PreparedCondition? prepared, TimeSpan origin)
@@ -131,6 +168,7 @@ public sealed class RunSession
         try
         {
             var now = realClock.Elapsed;
+            if (AbandonedEvaluation) return lastReal;
             if (now < TimeSpan.Zero || now < lastReal || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
                 throw new InvalidOperationException("RunClockInvalid");
             return lastReal = now;
@@ -344,7 +382,7 @@ public sealed class RunSession
         public void Complete()
         {
             if (requiresSettlement && !ResultConfirmed && IsOpen && owner.State == ExecutionState.Running)
-                owner.pendingEvents.Add(new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Host));
+                owner.QueuePending(new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Host));
             CompleteAt(owner.State == ExecutionState.Running ? owner.ReadReal() : TimeSpan.Zero);
         }
         internal void CompleteAt(TimeSpan now)
@@ -353,7 +391,7 @@ public sealed class RunSession
             {
                 var unconfirmed = !ResultConfirmed && Actions?.Deliveries.Any(x => x is DeliveryState.Sent or DeliveryState.Uncertain) == true;
                 if (unconfirmed || now >= NextDeadline)
-                    owner.pendingEvents.Add(new(IsPlanner && !ResultConfirmed ? RunReason.PlannerTimeout : unconfirmed ? RunReason.ActionUnconfirmed : RunReason.WaitExpired,
+                    owner.QueuePending(new(IsPlanner && !ResultConfirmed ? RunReason.PlannerTimeout : unconfirmed ? RunReason.ActionUnconfirmed : RunReason.WaitExpired,
                         RunPhase.Execution, IsPlanner && !ResultConfirmed ? RunOrigin.Planner : RunOrigin.Host));
             }
             IsOpen = false; Actions?.CancelUnsent();
@@ -417,38 +455,92 @@ public sealed class RunSession
     private PrimaryResult? EvaluateCore(IReadOnlyList<CapturedUnit> units, IEnumerable<RunEvent>? candidates,
         bool cancelled, bool executionComplete)
     {
-        if (!Monitor.TryEnter(arbitrationGate))
+        if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+        var incoming = candidates?.Take(Limits.MaxEvidenceItems + 1).ToList() ?? [];
+        if (incoming.Any(x => !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) || !Enum.IsDefined(x.Origin)))
+            throw new ArgumentException("RunEventInvalid", nameof(candidates));
+        if (incoming.Any(x => x.Reason == RunReason.GoalSatisfied)) throw new ArgumentException("GoalRequiresEvidence", nameof(candidates));
+        EvaluationFrame frame;
+        lock (arbitrationGate)
         {
-            // Waiting must not conceal cancellation that arrived before the active
-            // unit's confirmation boundary. Posting is bounded and cannot publish primary.
-            if (cancelled) PostProviderException(new RunFailureException(new(RunReason.Cancelled, Phase, RunOrigin.User)));
-            Monitor.Enter(arbitrationGate);
+            if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+            if (activeEvaluation is { } active)
+            {
+                if (!cancelled && !callerCancellation.IsCancellationRequested && incoming.Count == 0)
+                    throw new InvalidOperationException("RunEvaluationAlreadyActive");
+                return InterruptEvaluation(active, incoming, cancelled);
+            }
+            frame = new() { Evidence = incoming.Concat(pendingEvents).ToArray() };
+            activeEvaluation = frame;
         }
-        try { return EvaluateUnit(units, candidates, cancelled, executionComplete); }
-        finally { Monitor.Exit(arbitrationGate); }
+        var previous = currentEvaluation.Value; currentEvaluation.Value = frame;
+        try { return EvaluateUnit(units, incoming, cancelled, executionComplete); }
+        finally
+        {
+            currentEvaluation.Value = previous;
+            lock (arbitrationGate) if (ReferenceEquals(activeEvaluation, frame)) activeEvaluation = null;
+        }
+    }
+    // Caller holds the short publication gate; never sample a provider or join a task.
+    private PrimaryResult? InterruptEvaluation(EvaluationFrame active, List<RunEvent> incoming, bool cancelled)
+    {
+        active.Abandoned = true;
+        var cycle = active.Evidence.Concat(pendingEvents).Concat(incoming).ToList();
+        if (cancelled || callerCancellation.IsCancellationRequested) cycle.Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
+        foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(lastReal);
+        cycle.AddRange(pendingEvents); pendingEvents.Clear();
+        postedExceptionsClosed = true;
+        foreach (var item in postedExceptions)
+        {
+            if (item.Cause is { } cause) cycle.Add(cause);
+            RecordEmergencyException(item.Exception);
+        }
+        postedExceptions.Clear(); postedCausalEvidence = false;
+        if (postedExceptionsOverflow) cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
+        postedExceptionsOverflow = false;
+        return PublishPrimary(cycle.Distinct().ToList(), lastReal);
+    }
+    private void RecordEmergencyException(Exception exception)
+    {
+        var pending = new Queue<Exception>(); pending.Enqueue(exception);
+        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        var traversed = 0;
+        while (pending.TryDequeue(out var item) && exceptions.Count < Limits.MaxEvidenceItems && traversed++ < 4096)
+        {
+            if (!seen.Add(item)) continue;
+            // Do not invoke user-overridden diagnostic getters during emergency closure.
+            var trace = new System.Diagnostics.StackTrace(item, false);
+            var stack = trace.FrameCount == 0 ? null : trace.ToString();
+            exceptions.Add(new(item.GetType().FullName ?? item.GetType().Name, stack));
+            if (item is AggregateException aggregate)
+                foreach (var child in aggregate.InnerExceptions.Take(Limits.MaxEvidenceItems)) pending.Enqueue(child);
+            else if (item.InnerException is { } child) pending.Enqueue(child);
+        }
     }
     private PrimaryResult? EvaluateUnit(IReadOnlyList<CapturedUnit> units, IEnumerable<RunEvent>? candidates,
         bool cancelled, bool executionComplete)
     {
         if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
         var cycle = candidates?.Take(Limits.MaxEvidenceItems + 1).ToList() ?? [];
+        void CollectCompletionEvidence() => this.CollectCompletionEvidence(cycle, executionComplete);
+        void AddError(ConditionEvaluation? value) => this.AddError(cycle, value);
         // Caller argument rejection must not consume already-authoritative operation evidence.
         if (cycle.Any(x => !Enum.IsDefined(x.Reason) || !Enum.IsDefined(x.Phase) || !Enum.IsDefined(x.Origin)))
             throw new ArgumentException("RunEventInvalid", nameof(candidates));
         if (cycle.Any(x => x.Reason == RunReason.GoalSatisfied)) throw new ArgumentException("GoalRequiresEvidence", nameof(candidates));
         DrainPostedExceptions(close: false);
-        cycle.AddRange(pendingEvents); pendingEvents.Clear();
+        if (!DrainPending(cycle)) return Primary;
         TimeSpan now;
         try { now = ReadReal(); }
         catch (Exception exception)
         {
             RecordException(exception); now = lastReal;
             // Keep any evidence queued during the read, including the rejecting clock itself.
-            cycle.AddRange(pendingEvents);
-            pendingEvents.Clear();
+            if (!DrainPending(cycle)) return Primary;
             if (!cycle.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
                 cycle.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
         }
+        if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
         if (cycle.Count > Limits.MaxEvidenceItems)
         {
             cycle = cycle.OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).ThenBy(x => x.Phase).ThenBy(x => x.Origin).Take(Limits.MaxEvidenceItems - 1).ToList();
@@ -476,6 +568,7 @@ public sealed class RunSession
                     cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
                     continue;
                 }
+                if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
                 lastCapture = captured.At;
                 // Mandatory failure evaluation even if success has latched or the plan is not yet complete.
                 // Paths are local to each prepared tree. Missing failure evidence is Unknown, never the success tree's reads.
@@ -490,11 +583,15 @@ public sealed class RunSession
                     }
                 }
                 var failed = EvaluateCondition(failureSession, captured.Failure);
+                if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+                AddError(failed);
+                if (IsTrue(failed)) cycle.Add(new(RunReason.FailureCondition, Phase, RunOrigin.Condition));
+                if (!PublishActiveEvidence(cycle)) return Primary;
                 var passed = EvaluateCondition(successSession, captured.Success);
+                if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
                 var wakes = new[] { failed?.NextEvaluationAt, passed?.NextEvaluationAt }.Where(x => x.HasValue).ToArray();
                 nextConditionEvaluationAt = wakes.Length == 0 ? null : wakes.Min();
-                AddError(failed); AddError(passed);
-                if (IsTrue(failed)) cycle.Add(new(RunReason.FailureCondition, Phase, RunOrigin.Condition));
+                AddError(passed);
                 if (IsTrue(passed)) goalVerified = true;
                 if (passed?.Completion == ConditionCompletion.Expired && !goalVerified)
                     cycle.Add(new(RunReason.GoalImpossible, Phase, RunOrigin.Condition));
@@ -504,9 +601,10 @@ public sealed class RunSession
             {
                 operation.CompleteAt(now);
             }
-            cycle.AddRange(pendingEvents); pendingEvents.Clear();
+            if (!DrainPending(cycle)) return Primary;
             CollectCompletionEvidence();
         }
+        if (!PublishActiveEvidence(cycle)) return Primary;
         // Sample the exact lifecycle watch after observation/clock processing,
         // before terminal operation closure collects abandoned delivery evidence.
         if (initialLifecycleFailure is { } lifecycle)
@@ -514,18 +612,42 @@ public sealed class RunSession
             if (lifecycle() is { } failure)
             { initialLifecycleFailure = null; RecordException(failure); cycle.Add(failure.Cause); }
         }
+        if (!PublishActiveEvidence(cycle)) return Primary;
         if (cycle.Count != 0 && State == ExecutionState.Running)
         {
             // A terminal unit abandons outstanding results. Include that uncertainty before choosing/fixing primary.
             foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
-            cycle.AddRange(pendingEvents); pendingEvents.Clear();
+            if (!DrainPending(cycle)) return Primary;
             CollectCompletionEvidence();
         }
         if (cycle.Count != 0)
         {
             DrainPostedExceptions(close: true);
-            cycle.AddRange(pendingEvents); pendingEvents.Clear();
+            if (!DrainPending(cycle)) return Primary;
         }
+        lock (arbitrationGate)
+        {
+            if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+            if (callerCancellation.IsCancellationRequested && !cycle.Any(x => x.Reason == RunReason.Cancelled && x.Origin == RunOrigin.User))
+            {
+                cycle.Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
+                foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
+                cycle.AddRange(pendingEvents); pendingEvents.Clear();
+                // Callback order cannot hide already posted higher-priority causes.
+                foreach (var item in postedExceptions)
+                {
+                    if (item.Cause is { } cause) cycle.Add(cause);
+                    RecordEmergencyException(item.Exception);
+                }
+                postedExceptions.Clear(); postedExceptionsClosed = true; postedCausalEvidence = false;
+                if (postedExceptionsOverflow) cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
+                postedExceptionsOverflow = false;
+            }
+            return PublishPrimary(cycle, now);
+        }
+    }
+    private PrimaryResult? PublishPrimary(List<RunEvent> cycle, TimeSpan now)
+    {
         // Budget exhaustion is terminal only after the final approved result/observation opportunity.
         // A verified success in that final unit wins over mere exhaustion; errors/cancel/deadline still win.
         if (events.Count + cycle.Count > Limits.MaxEvidenceItems)
@@ -542,13 +664,14 @@ public sealed class RunSession
             .OrderBy(x => Priority(x.Reason)).ThenBy(x => x.Reason).ThenBy(x => x.Phase).ThenBy(x => x.Origin).FirstOrDefault();
         if (chosen is not null)
         {
+            frozenGoalVerified = goalVerified;
             Primary = new(Status(chosen.Reason), chosen); State = ExecutionState.Completing;
             Budget.Settle(); foreach (var operation in operations) operation.CompleteAt(now);
         }
         return Primary;
-
-        void CollectCompletionEvidence()
-        {
+    }
+    private void CollectCompletionEvidence(List<RunEvent> cycle, bool executionComplete)
+    {
             void Add(RunReason reason, RunOrigin origin)
             {
                 if (!cycle.Any(x => x.Reason == reason && x.Phase == Phase && x.Origin == origin))
@@ -568,14 +691,13 @@ public sealed class RunSession
                 Add(exhausted, RunOrigin.Budget);
             if (executionComplete && !goalVerified) Add(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, RunOrigin.Runner);
             if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete)) Add(RunReason.GoalSatisfied, RunOrigin.Condition);
-        }
-        void AddError(ConditionEvaluation? value)
+    }
+    private void AddError(List<RunEvent> cycle, ConditionEvaluation? value)
         {
             if (value?.Evaluation.Error is EvaluationError.InvalidConfiguration)
                 cycle.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Contract));
             else if (value?.Evaluation.Error is EvaluationError.ObservationContractViolation)
                 cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
-        }
     }
     private static bool IsTrue(ConditionEvaluation? value) => value?.Evaluation.Error == EvaluationError.None && value.Evaluation.Truth == TruthValue.True;
     public TimeSpan? NextConditionEvaluationAt => new[] { successSession, failureSession }.Any(x => x is not null) ? nextConditionEvaluationAt : null;
@@ -598,35 +720,33 @@ public sealed class RunSession
     private void DrainPostedExceptions(bool close)
     {
         (Exception Exception, RunEvent? Cause)[] ready;
-        bool overflow;
-        RunFailureException? closingLifecycleFailure = null;
+        Func<RunFailureException?>? closingLifecycle = null;
         lock (postedExceptionGate)
         {
+            if (AbandonedEvaluation) return;
             if (close)
             {
-                // This is the confirmation linearization boundary, before Primary.
-                // Sample the exact watch inside the same closed posting gate; an
-                // earlier nonterminal poll cannot stand in for readiness here.
                 postedExceptionsClosed = true;
-                if (initialLifecycleFailure is { } lifecycle && lifecycle() is { } failure)
-                { closingLifecycleFailure = failure; initialLifecycleFailure = null; }
+                closingLifecycle = initialLifecycleFailure;
             }
-            ready = postedExceptions.ToArray(); postedExceptions.Clear();
-            overflow = postedExceptionsOverflow; postedExceptionsOverflow = false;
+            ready = postedExceptions.ToArray();
+            // Publish causes before removing their queue ownership or reading diagnostics.
+            foreach (var item in ready) if (item.Cause is { } cause) QueuePending(cause);
+            if (postedExceptionsOverflow) QueuePending(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
+            postedExceptions.Clear(); postedExceptionsOverflow = false;
             postedCausalEvidence = false;
         }
-        if (overflow) pendingEvents.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
-        if (closingLifecycleFailure is { } lifecycleFailure)
-        { RecordException(lifecycleFailure); pendingEvents.Add(lifecycleFailure.Cause); }
+        // A synchronous watch may stall. It cannot hold the publication gate or
+        // prevent executor interruption from revoking this evaluation's authority.
+        if (closingLifecycle?.Invoke() is { } lifecycleFailure && !AbandonedEvaluation)
+        { initialLifecycleFailure = null; QueuePending(lifecycleFailure.Cause); RecordException(lifecycleFailure); }
         foreach (var item in ready)
-        {
             RecordException(item.Exception);
-            if (item.Cause is { } cause && !pendingEvents.Contains(cause)) pendingEvents.Add(cause);
-        }
     }
     public void RecordException(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        if (AbandonedEvaluation || State == ExecutionState.Finished) return;
         if (exception is ClockProviderException) QueueClockRejection();
         var remaining = Limits.MaxEvidenceItems - exceptions.Count;
         if (remaining <= 0) return;
@@ -665,7 +785,13 @@ public sealed class RunSession
             if (exceptions.Count >= Limits.MaxEvidenceItems) break;
             Record(wrapper);
         }
-        void Record(Exception current) => exceptions.Add(new(current.GetType().FullName ?? current.GetType().Name, current.StackTrace));
+        void Record(Exception current)
+        {
+            var evidence = new ExceptionEvidence(current.GetType().FullName ?? current.GetType().Name, current.StackTrace);
+            lock (arbitrationGate)
+                if (!AbandonedEvaluation && State != ExecutionState.Finished && exceptions.Count < Limits.MaxEvidenceItems)
+                    exceptions.Add(evidence);
+        }
     }
 
     internal RunOutcome Finish(IReadOnlyList<PostProcessingIssue> postProcessing)
