@@ -28,7 +28,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         GuaTraceSavePolicy policy = GuaTraceSavePolicy.Always, int attachmentBytes = 32768) => new()
     {
         CaptureMode = mode, SavePolicy = policy, Profile = "player", Secrets = [Secret], MaxSteps = 100,
-        MaxMemoryBytes = 1024 * 1024, MaxQueueItems = 256, MaxArtifactBytes = 2 * 1024 * 1024,
+        MaxMemoryBytes = 1024 * 1024, MaxQueueItems = 256, MaxArtifactBytes = 1024 * 1024,
         MaxAttachmentBytes = attachmentBytes, MaxEventBytes = 32768, FlushTimeout = TimeSpan.FromSeconds(5)
     };
     private static RunArtifactMetadata Metadata => new("player", [new("token", Secret, "environment")],
@@ -338,6 +338,70 @@ public sealed class GuaRunArtifactsTests : IDisposable
         Assert.Equal(ArtifactState.Saved, saved.Receipts[0].State);
         Assert.Contains("uncertain-step-outcome", GuaTraceReader.Read(artifacts.Trace.ArtifactPath).Manifest.Quality.Issues);
         Assert.Equal("passed", GuaTraceReader.Read(artifacts.Trace.ArtifactPath).Manifest.PrimaryOutcome);
+    }
+
+    [Theory]
+    [InlineData("click")]
+    [InlineData("action")]
+    [InlineData("123456789")]
+    [InlineData("\"action\": \"click\"")]
+    public async Task Recording_generated_enum_key_numeric_and_token_boundary_secrets_are_rejected_before_save(string secret)
+    {
+        var redactor = new PersistenceRedactor([secret], []);
+        var store = RunArtifactStore.Create(root, Limits, redactor);
+        var options = Options();
+        await using var artifacts = new GuaRunArtifacts(store, new("player", [], new Dictionary<string, string>(), []),
+            Limits, options, redactor);
+        var primary = Primary(true); await Confirm(artifacts, primary);
+        var recording = new GuaRecording(1,
+            [new(GuaRecordedAction.click, 0, 1, 2, false, RequestId: 123456789, Target: new(Id: "buy"))]);
+        var completed = await artifacts.CompleteAsync(Outcome(primary), DateTimeOffset.UtcNow, recording);
+        Assert.Equal(ArtifactState.CaptureFailed, completed.Receipts[1].State);
+        Assert.Equal(11, completed.ExitCode(Outcome(primary)));
+        Assert.False(Directory.Exists(Path.Combine(store.DirectoryPath, "recording")));
+        Assert.False(File.Exists(Path.Combine(artifacts.Trace.ArtifactPath, "report.html")));
+        foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            Assert.DoesNotContain(secret, File.ReadAllText(file));
+    }
+
+    [Fact]
+    public async Task Streaming_cumulative_events_never_exceed_individual_file_ceiling()
+    {
+        var store = Store();
+        var options = new GuaTraceOptions
+        {
+            CaptureMode = GuaTraceCaptureMode.Streaming, SavePolicy = GuaTraceSavePolicy.Always,
+            Profile = "player", Secrets = [Secret], MaxSteps = 100, MaxMemoryBytes = 4 * 1024 * 1024,
+            MaxQueueItems = 256, MaxArtifactBytes = 1024 * 1024, MaxEventBytes = 32768,
+            MaxAttachmentBytes = 32768, FlushTimeout = TimeSpan.FromSeconds(5)
+        };
+        await using var artifacts = new GuaRunArtifacts(store, Metadata, Limits, options, Redactor);
+        for (var i = 0; i < 70; i++)
+        {
+            var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, "large");
+            artifacts.Trace.Record(step, "fixture.large", JsonSerializer.SerializeToElement(new { text = new string('x', 20000) }));
+            artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
+        }
+        var primary = Primary(true); await Confirm(artifacts, primary);
+        var completed = await artifacts.CompleteAsync(Outcome(primary), DateTimeOffset.UtcNow);
+        Assert.Equal(ArtifactState.CaptureFailed, completed.Receipts[0].State);
+        Assert.Contains("artifact-limit", artifacts.Trace.Status.Issues);
+        Assert.Equal(11, completed.ExitCode(Outcome(primary)));
+        var events = new FileInfo(Path.Combine(artifacts.Trace.ArtifactPath, "events.jsonl"));
+        Assert.True(events.Exists); Assert.InRange(events.Length, 1, Limits.MaxFileBytes);
+        foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            Assert.InRange(new FileInfo(file).Length, 0, Limits.MaxFileBytes);
+    }
+
+    [Fact]
+    public void Unguaranteed_file_ceiling_is_rejected_before_creating_a_writer()
+    {
+        var store = Store();
+        var options = new GuaTraceOptions { Profile = "player", SavePolicy = GuaTraceSavePolicy.Always,
+            MaxArtifactBytes = 2 * 1024 * 1024, MaxEventBytes = 32768, MaxAttachmentBytes = 32768 };
+        Assert.Throws<ArgumentException>(() => new GuaRunArtifacts(store, Metadata, Limits, options, Redactor));
+        Assert.Equal(".owner", Path.GetFileName(Assert.Single(Directory.GetFiles(store.DirectoryPath))));
+        Assert.Empty(Directory.GetDirectories(store.DirectoryPath));
     }
 
     [Fact]

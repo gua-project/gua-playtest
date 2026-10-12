@@ -47,13 +47,23 @@ After cleanup, call `CompleteAsync` with the unchanged `RunOutcome` and a genuin
 Gua Recording from authorized capture, or explicit capture failure/null for
 CaptureFailed/NotExecuted. Gua writes and reads its Recording format; unsafe
 Recording text is rejected before serialization rather than rewriting replay
-identity. The actual completed Trace is read by Gua, and Gua's self-contained
+identity. A bounded final encoding admission check additionally rejects secrets
+in generated enum/key/scalar values and JSON token boundaries before Gua
+attachment queues, its file writer or output hashes. Unsafe Recording admission
+also prevents rendering an HTML report from that capture. The actual completed Trace is read by Gua, and Gua's self-contained
 HTML report is the saved Dashboard entry. Its receipt inventories the manifest,
 events, snapshots, attachments and report, with exact byte lengths and SHA-256.
 `RunArtifactStore` independently admits every associated file before publishing
 the existing final Result. Success omission requires actual successful Gua
 completion/omission. Capture or save failure contributes only postprocessing;
 the returned completion applies the existing exit-11 projection.
+
+Gua 1.1.1 limits total event/blob bytes rather than the individual cumulative
+`events.jsonl`. Therefore explicit `MaxArtifactBytes` must fit `MaxFileBytes`,
+and `MaxFileBytes` must also fit Gua's separate 64 KiB manifest reserve. The
+adapter rejects unguaranteed settings before creating a writer. It does not
+save an oversized file and then treat later receipt rejection as enforcement
+of the effective file ceiling.
 
 Gua 1.1.1 queue admission, writer scheduling, lifecycle stopping and synchronous
 filesystem operations do not provide a hard absolute deadline or a proof that

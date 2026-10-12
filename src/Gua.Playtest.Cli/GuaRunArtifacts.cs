@@ -41,7 +41,8 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
         if (metadata.Profile != options.Profile) throw new ArgumentException("ArtifactProfileMismatch");
         this.store = store; maxReferences = limits.MaxItems;
         writer = new(store.DirectoryPath, options, limits.MaxFileBytes, limits.MaxRunBytes,
-            limits.MaxItems, text => recordingRedactor.Redact(text) == text);
+            limits.MaxItems, text => recordingRedactor.Redact(text) == text,
+            bytes => recordingRedactor.IsSafeUtf8(bytes.Span));
         PreparationPersistence = store.BeginPreparation(metadata, token);
         Record(new(PreparationStage.Started, PreparationCode.Started));
     }

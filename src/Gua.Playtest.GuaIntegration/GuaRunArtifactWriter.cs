@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Gua.Testing;
 using Gua.Testing.Recording;
 
@@ -22,22 +23,29 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     private readonly int maxFileBytes, maxFiles;
     private readonly long maxBundleBytes;
     private readonly Func<string, bool> safeRecordingText;
+    private readonly Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding;
     private GuaTraceOutcome? primary;
-    private bool completed;
+    private bool completed, unsafeRecording;
     public GuaTraceSession Trace { get; }
 
     public GuaRunArtifactWriter(string runDirectory, GuaTraceOptions options,
-        int maxFileBytes, long maxBundleBytes, int maxFiles, Func<string, bool> safeRecordingText)
+        int maxFileBytes, long maxBundleBytes, int maxFiles, Func<string, bool> safeRecordingText,
+        Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(safeRecordingText);
-        if (maxFileBytes < 256 || maxBundleBytes < maxFileBytes || maxFiles < 2 ||
+        ArgumentNullException.ThrowIfNull(safeRecordingEncoding);
+        // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
+        // Its artifact budget must fit one file; its separate manifest reserve must too.
+        if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 2 ||
+            options.MaxArtifactBytes > maxFileBytes ||
             options.MaxArtifactBytes > maxBundleBytes - 65536L - maxFileBytes ||
             options.MaxAttachmentBytes > maxFileBytes || options.MaxEventBytes > maxFileBytes)
             throw new ArgumentException("ArtifactWriterLimitsInvalid");
         this.runDirectory = Path.GetFullPath(runDirectory);
         this.maxFileBytes = maxFileBytes; this.maxBundleBytes = maxBundleBytes; this.maxFiles = maxFiles;
         this.safeRecordingText = safeRecordingText;
+        this.safeRecordingEncoding = safeRecordingEncoding;
         policy = options.SavePolicy; profile = options.Profile;
         // Output authority is the Run owner, never an input-supplied Trace root.
         Trace = new GuaTraceSession(new GuaTraceOptions
@@ -70,7 +78,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         var status = Trace.Status;
         if (!flushed || status.Issues.Any(x => x is "write-failed" or "flush-timeout" or "flush-failed" or "flush-pending"))
             return new(new(GuaArtifactState.SaveFailed), recordingBundle);
-        if (status.DetailStopped || status.DroppedEvents != 0 || status.Issues.Any(x =>
+        if (unsafeRecording || status.DetailStopped || status.DroppedEvents != 0 || status.Issues.Any(x =>
             x is "capture-failed" or "tree-failed" or "attachment-failed" or "native-capture-failed"))
             return new(new(GuaArtifactState.CaptureFailed), recordingBundle);
         if (primary == GuaTraceOutcome.Passed && policy == GuaTraceSavePolicy.OnFailure &&
@@ -119,12 +127,18 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
                 foreach (var text in new[] { step.Target?.Id, step.Target?.Role, step.Target?.Name,
                     step.Target?.Scope, step.WaitCondition, step.Value, step.SecretKey })
                     if (text is not null && (text.Length > maxFileBytes / 6 || !safeRecordingText(text)))
-                        return new(GuaArtifactState.CaptureFailed);
+                    { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
             GuaRecordingFile.Validate(recording);
             // Count safe serialization before Gua's writer, including escape expansion.
-            using var counter = new BoundedCounter(maxFileBytes);
-            JsonSerializer.Serialize(counter, recording, new JsonSerializerOptions(JsonSerializerDefaults.Web)
-                { WriteIndented = true });
+            // Use Gua's public model/converters and pinned 1.1.1 file encoding options
+            // only for admission. GuaRecordingFile remains the sole disk writer.
+            // Check keys, enums, scalars, escapes and JSON token boundaries before
+            // attaching to Gua queues, invoking its file writer or hashing output.
+            using var encoding = new BoundedEncoding(maxFileBytes);
+            JsonSerializer.Serialize(encoding, recording, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            if (!safeRecordingEncoding(encoding.Bytes))
+            { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
             var association = Trace.BeginStep(GuaTraceStepKind.Mark, "Recording association");
             var attached = GuaRecordingTrace.Attach(Trace, association, recording,
                 profile == "player" ? Gua.Core.GuaObservationProfile.Player : Gua.Core.GuaObservationProfile.Debug);
@@ -195,5 +209,24 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         public override int Read(byte[] buffer, int offset, int length) => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
+    }
+
+    private sealed class BoundedEncoding(int limit) : Stream
+    {
+        private readonly MemoryStream memory = new();
+        internal ReadOnlyMemory<byte> Bytes => memory.GetBuffer().AsMemory(0, checked((int)memory.Length));
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => memory.Length;
+        public override long Position { get => memory.Length; set => throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int length) => Write(buffer.AsSpan(offset, length));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        { if (buffer.Length > limit - memory.Length) throw new IOException("RecordingByteLimit"); memory.Write(buffer); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int length) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if (disposing) memory.Dispose(); base.Dispose(disposing); }
     }
 }

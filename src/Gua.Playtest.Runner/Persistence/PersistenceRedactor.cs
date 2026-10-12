@@ -156,6 +156,9 @@ public sealed class PersistenceRedactor
         return false;
     }
     internal bool Sensitive(string name) => fields.Contains(name);
+    /// <summary>Read-only admission check for an adapter's bounded final UTF-8 encoding.
+    /// Reuses the host policy matcher; does not expose secrets or change the supplied bytes.</summary>
+    public bool IsSafeUtf8(ReadOnlySpan<byte> bytes) => !ContainsUtf8Secret(bytes);
     internal bool ContainsUtf8Secret(ReadOnlySpan<byte> bytes)
     {
         var state = 0;
