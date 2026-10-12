@@ -19,20 +19,21 @@ public sealed record GuaRunArtifactBundles(GuaArtifactBundle Trace, GuaArtifactB
 public sealed class GuaRunArtifactWriter : IAsyncDisposable
 {
     private readonly string runDirectory;
+    private readonly string stagingDirectory, stagingParent;
     private readonly GuaTraceSavePolicy policy;
     private readonly string profile;
-    private readonly int maxFileBytes, maxFiles, maxStringChars;
+    private readonly int maxFileBytes, maxFiles, maxStringChars, maxJsonNodes;
     private readonly long maxBundleBytes;
     private readonly Func<string, bool> safeRecordingText;
     private readonly Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding;
     private GuaTraceOutcome? primary;
-    private bool completed, unsafeRecording;
+    private bool completed, unsafeRecording, flushedSuccessfully;
     public GuaRunTrace Trace { get; }
 
     public GuaRunArtifactWriter(string runDirectory, GuaTraceOptions options,
         int maxFileBytes, long maxBundleBytes, int maxFiles, Func<string, bool> safeRecordingText,
         Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding, Func<JsonElement, JsonElement> redact,
-        Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars)
+        Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars, int maxJsonNodes)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(safeRecordingText);
@@ -42,7 +43,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
         // Its artifact budget must fit one file; its separate manifest reserve must too.
         if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 3 ||
-            maxStringChars < 1 || maxStringChars > maxFileBytes ||
+            maxStringChars < 1 || maxStringChars > maxFileBytes || maxJsonNodes < 1 ||
             options.MaxArtifactBytes > maxFileBytes ||
             options.MaxArtifactBytes > maxBundleBytes - 65536L - maxFileBytes ||
             options.MaxAttachmentBytes > maxFileBytes || options.MaxEventBytes > maxFileBytes)
@@ -50,19 +51,26 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         this.runDirectory = Path.GetFullPath(runDirectory);
         this.maxFileBytes = maxFileBytes; this.maxBundleBytes = maxBundleBytes; this.maxFiles = maxFiles;
         this.maxStringChars = maxStringChars;
+        this.maxJsonNodes = maxJsonNodes;
         this.safeRecordingText = safeRecordingText;
         this.safeRecordingEncoding = safeRecordingEncoding;
         policy = options.SavePolicy; profile = options.Profile;
-        // Output authority is the Run owner, never an input-supplied Trace root.
+        // The supplied parent is the trusted private artifact root. Gua writes its
+        // native formats in an isolated, bounded pending directory; publication into
+        // the Run is admitted by its summary owner after actual native completion.
+        Directory.CreateDirectory(this.runDirectory); CheckNoLinks(this.runDirectory);
+        stagingParent = Path.GetDirectoryName(this.runDirectory)!;
+        stagingDirectory = Path.Combine(stagingParent, ".gua-pending-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stagingDirectory); CheckNoLinks(stagingDirectory);
         Trace = new GuaRunTrace(new GuaTraceSession(new GuaTraceOptions
         {
-            OutputDirectory = Path.Combine(this.runDirectory, "trace"), CaptureMode = options.CaptureMode,
+            OutputDirectory = Path.Combine(stagingDirectory, "trace"), CaptureMode = options.CaptureMode,
             SavePolicy = options.SavePolicy, Profile = options.Profile, Secrets = options.Secrets.ToArray(),
             MaxSteps = options.MaxSteps, MaxMemoryBytes = options.MaxMemoryBytes,
             MaxQueueItems = options.MaxQueueItems, MaxArtifactBytes = options.MaxArtifactBytes,
             MaxAttachmentBytes = options.MaxAttachmentBytes, MaxEventBytes = options.MaxEventBytes,
             FlushTimeout = options.FlushTimeout
-        }), redact, sensitiveField, redactText, maxStringChars);
+        }), redact, sensitiveField, redactText, maxStringChars, maxFileBytes, maxJsonNodes);
     }
 
     public bool ConfirmPrimary(GuaTraceOutcome outcome)
@@ -73,7 +81,57 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
 
     /// <summary>Recording must come from the authorized execution owner after capture has joined.
     /// Null means not executed. Capture failure is explicit, never an empty substitute Recording.</summary>
-    public async Task<GuaRunArtifactBundles> CompleteAsync(GuaRecording? recording = null, bool recordingCaptureFailed = false)
+    public async Task<GuaRunArtifactBundles> CompleteAsync(GuaRecording? recording = null, bool recordingCaptureFailed = false,
+        Func<GuaRunArtifactBundles, bool>? admitPublication = null)
+    {
+        var bundles = await CaptureAsync(recording, recordingCaptureFailed).ConfigureAwait(false);
+        try
+        {
+            if (admitPublication is not null && !admitPublication(bundles))
+                return new(Refused(bundles.Trace), Refused(bundles.Recording));
+            return new(Publish(bundles.Trace, "trace", true), Publish(bundles.Recording, "recording", false));
+        }
+        finally
+        {
+            // A successfully completed native checkpoint has closed capture and
+            // finished all admitted output writes. This does not claim worker/thread
+            // termination. Unjoined/failed native providers retain their isolated path.
+            if (flushedSuccessfully && bundles.Trace.State is GuaArtifactState.Saved or GuaArtifactState.OmittedOnSuccess)
+                RemoveStaging();
+        }
+        static GuaArtifactBundle Refused(GuaArtifactBundle bundle) => bundle.State == GuaArtifactState.Saved
+            ? new(GuaArtifactState.SaveFailed) : bundle;
+    }
+    private GuaArtifactBundle Publish(GuaArtifactBundle bundle, string name, bool trace)
+    {
+        if (bundle.State != GuaArtifactState.Saved) return bundle;
+        try
+        {
+            var source = Path.Combine(stagingDirectory, name);
+            var destination = Path.Combine(runDirectory, name);
+            CheckNoLinks(runDirectory); CheckNoLinks(source);
+            if (Directory.Exists(destination) || File.Exists(destination)) throw new IOException("ArtifactOutputExists");
+            Directory.Move(source, destination);
+            if (trace) Trace.Published(Path.Combine(destination, Trace.TraceId));
+            return bundle;
+        }
+        catch { return new(GuaArtifactState.SaveFailed); }
+    }
+    private void RemoveStaging()
+    {
+        try
+        {
+            var path = Path.GetFullPath(stagingDirectory);
+            if (Path.GetDirectoryName(path) != stagingParent || !Path.GetFileName(path).StartsWith(".gua-pending-", StringComparison.Ordinal))
+                throw new IOException("ArtifactStagingPathInvalid");
+            if (!Directory.Exists(path)) return;
+            CheckNoLinks(path);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(path, "*", SearchOption.AllDirectories)) CheckNoLinks(entry);
+            Directory.Delete(path, recursive: true);
+        }
+        catch { /* Preserve an isolated pending directory rather than claim provider termination. */ }
+    }
+    private async Task<GuaRunArtifactBundles> CaptureAsync(GuaRecording? recording, bool recordingCaptureFailed)
     {
         if (completed || primary is null) throw new InvalidOperationException("ArtifactWriterStateInvalid");
         completed = true;
@@ -82,6 +140,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         try { flushed = await Trace.Session.CompleteAsync(primary.Value).ConfigureAwait(false); }
         catch { return new(new(GuaArtifactState.SaveFailed), recordingBundle); }
         var status = Trace.Status;
+        flushedSuccessfully = flushed;
         if (!flushed || status.Issues.Any(x => x is "write-failed" or "flush-timeout" or "flush-failed" or "flush-pending"))
             return new(new(GuaArtifactState.SaveFailed), recordingBundle);
         if (unsafeRecording || Trace.CaptureFailed || status.DetailStopped || status.DroppedEvents != 0 || status.Issues.Any(x =>
@@ -93,7 +152,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         try
         {
             // Validate the actual Gua-owned manifest/event/blob association before issuing a receipt.
-            var read = GuaTraceReader.Read(Trace.ArtifactPath, maxBundleBytes, maxFiles, maxFileBytes);
+            var read = GuaTraceReader.Read(Trace.ArtifactPath, maxBundleBytes, maxJsonNodes, maxFileBytes);
             if (!read.Manifest.Finalized || read.Issues.Any(x => x is "reader-limit" or "invalid-record" or
                 "incomplete-tail" or "sequence-incomplete" or "blob-hash-mismatch" or "blob-unavailable" or "invalid-blob-reference"))
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
@@ -175,6 +234,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             using var encoding = new BoundedEncoding(maxFileBytes);
             JsonSerializer.Serialize(encoding, recording, new JsonSerializerOptions(JsonSerializerDefaults.Web)
                 { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            GuaJsonAdmission.Validate(encoding.Bytes.Span, maxJsonNodes, maxStringChars);
             if (!safeRecordingEncoding(encoding.Bytes))
             { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
             var association = Trace.BeginStep(GuaTraceStepKind.Mark, "Recording association");
@@ -186,11 +246,11 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
                 return new(GuaArtifactState.OmittedOnSuccess);
         }
         catch { return new(GuaArtifactState.CaptureFailed); }
-        var directory = Path.Combine(runDirectory, "recording");
+        var directory = Path.Combine(stagingDirectory, "recording");
         var path = Path.Combine(directory, "recording.json");
         try
         {
-            CheckNoLinks(runDirectory);
+            CheckNoLinks(stagingDirectory);
             if (Directory.Exists(directory) || File.Exists(directory)) throw new IOException("RecordingOutputExists");
             Directory.CreateDirectory(directory);
             GuaRecordingFile.Save(path, recording);
@@ -205,7 +265,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     {
         var files = new List<GuaArtifactFile>(); long bytes = 0;
         Visit(directory);
-        var entryName = Path.GetRelativePath(runDirectory, entry).Replace('\\', '/');
+        var entryName = Path.GetRelativePath(stagingDirectory, entry).Replace('\\', '/');
         var main = files.Single(x => x.Name == entryName);
         return new(GuaArtifactState.Saved, main, files.Where(x => x != main).ToArray());
         void Visit(string path)
@@ -219,7 +279,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
                 using var stream = new FileStream(item, FileMode.Open, FileAccess.Read, FileShare.Read);
                 if (stream.Length <= 0 || stream.Length > maxFileBytes || (bytes += stream.Length) > maxBundleBytes)
                     throw new IOException("ArtifactByteLimit");
-                files.Add(new(Path.GetRelativePath(runDirectory, item).Replace('\\', '/'), stream.Length,
+                files.Add(new(Path.GetRelativePath(stagingDirectory, item).Replace('\\', '/'), stream.Length,
                     Convert.ToHexStringLower(SHA256.HashData(stream))));
             }
         }

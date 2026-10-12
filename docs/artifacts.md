@@ -80,6 +80,26 @@ the existing final Result. Success omission requires actual successful Gua
 completion/omission. Capture or save failure contributes only postprocessing;
 the returned completion applies the existing exit-11 projection.
 
+Native Gua output is first written into an isolated `.gua-pending-*` directory
+under the trusted private artifact root. After genuine native completion, the
+summary owner admits the actual bundle bytes together with already charged
+run/primary bytes and the exact mandatory completion/result encodings. Only an
+admitted bundle is moved into its Run directory. Budget refusal produces failed
+artifact receipts while preserving space for the final summaries; independent
+receipt validation still reads every published file. Successfully published or
+omitted output releases its pending directory. Failed capture or an incomplete
+native checkpoint retains isolated diagnostic output and grants no saved receipt.
+This staging does not impose a hard deadline on native scheduling or flush.
+
+Every raw identity/enum/schema/reference string uses the authoritative host
+redaction policy before entering Gua, even when Gua's separately supplied secret
+list omits that secret. Structural Preparing, primary, Planner and postprocessing
+evidence must survive sanitization unchanged; a collision is a capture failure.
+Pinned native event and quality vocabulary is admitted before session creation.
+Raw tree/value JSON is checked for UTF-8 bytes, decoded string lengths, depth and
+nodes before a DOM is allocated. Recording admission counts its complete native
+serialized document, including targets and scalar fields, before attachment/save.
+
 Gua 1.1.1 limits total event/blob bytes rather than the individual cumulative
 `events.jsonl`. Therefore explicit `MaxArtifactBytes` must fit `MaxFileBytes`,
 and `MaxFileBytes` must also fit Gua's separate 64 KiB manifest reserve. The

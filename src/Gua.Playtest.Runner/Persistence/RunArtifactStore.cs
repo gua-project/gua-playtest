@@ -53,6 +53,29 @@ public sealed class RunArtifactStore
     }
     public string RunId { get; }
     public string DirectoryPath { get; }
+    /// <summary>Trusted owner's exact, read-only pre-publication admission. The Gua
+    /// adapter supplies proposed receipts from private staging; Complete still opens
+    /// and validates every published file independently. No Result authority is granted.</summary>
+    public bool CanPublishArtifacts(RunOutcome outcome, IReadOnlyList<ArtifactReceipt> artifacts,
+        IReadOnlyList<ObservationReference> cleanupObservations, DateTimeOffset finishedAt)
+    {
+        try
+        {
+            if (completionAttempted || primary != outcome.Primary || persistenceIncomplete) return false;
+            ValidateReferences(cleanupObservations, []);
+            if (cleanupObservations.Any(x => x.Boundary != ObservationBoundary.AfterCleanup) ||
+                artifacts.Count != 2 || artifacts.Select(x => x.Kind).Distinct().Count() != 2) return false;
+            if (artifacts.Any(x => x.State == ArtifactState.Saved &&
+                (x.FileName is null || x.Bytes is null || x.Sha256 is null))) return false;
+            var files = artifacts.Where(x => x.State == ArtifactState.Saved).SelectMany(x =>
+                new[] { new ArtifactFileReference(x.FileName!, x.Bytes!.Value, x.Sha256!) }.Concat(x.AdditionalFiles ?? [])).ToArray();
+            if (files.Length > limits.MaxItems || files.Any(x => x.Bytes <= 0 || x.Bytes > limits.MaxFileBytes)) return false;
+            var summaries = EncodeCompletion(outcome, artifacts, cleanupObservations, finishedAt);
+            return checked(usedBytes + files.Sum(x => x.Bytes) + summaries.Completion.Length + summaries.Result.Length) <= limits.MaxRunBytes;
+        }
+        catch (Exception error) when (error is ArtifactLimitException or InvalidDataException or JsonException or OverflowException)
+        { return false; }
+    }
     private RunArtifactStore(string root, ArtifactLimits limits, PersistenceRedactor redactor)
     {
         this.limits = limits; this.redactor = redactor;
@@ -199,20 +222,27 @@ public sealed class RunArtifactStore
             var identities = new HashSet<FileIdentity>();
             SeedSummaryIdentities(identities);
             foreach (var receipt in artifacts) ValidateReceipt(receipt, outcome.Primary, associated, identities, cancellationToken);
-            var issues = outcome.PostProcessing.ToList();
-            if (persistenceIncomplete || artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed))
-                issues.Add(new(PostProcessingReason.ArtifactFailed));
-            Publish("completion.json", Encode(new { kind = "playtestCompletionStorage", storageVersion = 1, runId = RunId,
-                artifacts, observations = cleanupObservations, postProcessing = issues }), cancellationToken);
-            var document = new ResultDocument(RunId, outcome.Primary.Status, outcome.Primary.Cause.Phase.ToString(),
-                outcome.Primary.Cause.Origin.ToString(), outcome.Primary.Cause.Reason.ToString(),
-                new(issues.All(x => x.Reason == PostProcessingReason.Cancelled), issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
-            // ResultDocument is the existing public schema. No storage extension changes its wire format.
-            Publish("result.json", Encode(document), cancellationToken);
-            completedSuccessfully = !persistenceIncomplete && issues.All(x => x.Reason == PostProcessingReason.Cancelled);
+            var summaries = EncodeCompletion(outcome, artifacts, cleanupObservations, finishedAt);
+            if (usedBytes + summaries.Completion.Length + summaries.Result.Length > limits.MaxRunBytes) throw new ArtifactLimitException();
+            Publish("completion.json", summaries.Completion, cancellationToken);
+            Publish("result.json", summaries.Result, cancellationToken);
+            completedSuccessfully = summaries.Success;
         });
         return saved with { PostProcessingIncomplete = persistenceIncomplete || !outcome.PostProcessingComplete ||
             artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed) };
+    }
+    private (byte[] Completion, byte[] Result, bool Success) EncodeCompletion(RunOutcome outcome,
+        IReadOnlyList<ArtifactReceipt> artifacts, IReadOnlyList<ObservationReference> cleanupObservations, DateTimeOffset finishedAt)
+    {
+        var issues = outcome.PostProcessing.ToList();
+        if (persistenceIncomplete || artifacts.Any(x => x.State is ArtifactState.CaptureFailed or ArtifactState.SaveFailed))
+            issues.Add(new(PostProcessingReason.ArtifactFailed));
+        var completion = Encode(new { kind = "playtestCompletionStorage", storageVersion = 1, runId = RunId,
+            artifacts, observations = cleanupObservations, postProcessing = issues });
+        var document = new ResultDocument(RunId, outcome.Primary.Status, outcome.Primary.Cause.Phase.ToString(),
+            outcome.Primary.Cause.Origin.ToString(), outcome.Primary.Cause.Reason.ToString(),
+            new(issues.All(x => x.Reason == PostProcessingReason.Cancelled), issues.Select(x => x.Reason.ToString()).Distinct().ToArray()), finishedAt);
+        return (completion, Encode(document), !persistenceIncomplete && issues.All(x => x.Reason == PostProcessingReason.Cancelled));
     }
     // Called only by the trusted Plan service after Complete has published the same
     // immutable primary and mandatory postprocessing. No file can supply this authority.

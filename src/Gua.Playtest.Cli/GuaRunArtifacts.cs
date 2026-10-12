@@ -44,7 +44,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
             limits.MaxItems, text => recordingRedactor.Redact(text) == text,
             bytes => SafeRecordingEncoding(recordingRedactor, bytes),
             document => recordingRedactor.RedactDocument(document, limits),
-            recordingRedactor.IsSensitiveField, recordingRedactor.Redact, limits.MaxStringChars);
+            recordingRedactor.IsSensitiveField, recordingRedactor.Redact, limits.MaxStringChars, limits.MaxItems);
         PreparationPersistence = store.BeginPreparation(metadata, token);
     }
     private static bool SafeRecordingEncoding(PersistenceRedactor redactor, ReadOnlyMemory<byte> bytes)
@@ -61,7 +61,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
         {
             if (completionAttempted) { captureFailed = true; return; }
             var step = Trace.BeginStep(GuaTraceStepKind.Lifecycle, "Preparing");
-            if (string.IsNullOrEmpty(step) || !Trace.Record(step, "runner.preparation",
+            if (string.IsNullOrEmpty(step) || !Trace.RecordStructural(step, "runner.preparation",
                 JsonSerializer.SerializeToElement(new { stage = evidence.Stage.ToString(), code = evidence.Code.ToString() })))
                 captureFailed = true;
             Trace.EndStep(step, evidence.Code is PreparationCode.Started or PreparationCode.Completed
@@ -96,7 +96,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
                 throw new InvalidOperationException("TraceDecisionReferenceInvalid");
             var value = new DecisionReference(reference.DecisionRequestId, observation, approvedActionId, reference.Code.ToString());
             decisions.Add(value);
-            var accepted = Trace.Record(step, "planner.reference", JsonSerializer.SerializeToElement(new
+            var accepted = Trace.RecordStructural(step, "planner.reference", JsonSerializer.SerializeToElement(new
                 { decisionId = value.DecisionId, observationId = observation, actionId = approvedActionId, code = value.ReasonCode }));
             captureFailed |= !accepted; return accepted;
         }
@@ -111,7 +111,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
             primary = snapshot.Primary;
             captureFailed |= !writer.ConfirmPrimary(Map(snapshot.Primary.Status));
             var step = Trace.BeginStep(GuaTraceStepKind.Lifecycle, "Primary confirmation");
-            captureFailed |= !Trace.Record(step, "runner.primary", JsonSerializer.SerializeToElement(new
+            captureFailed |= !Trace.RecordStructural(step, "runner.primary", JsonSerializer.SerializeToElement(new
                 { status = primary.Status.ToString(), reason = primary.Cause.Reason.ToString(),
                     phase = primary.Cause.Phase.ToString(), origin = primary.Cause.Origin.ToString() }));
             Trace.EndStep(step, Map(primary.Status));
@@ -130,11 +130,13 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
             completionAttempted = true;
             cleanup = observations.Where(x => x.Boundary == ObservationBoundary.AfterCleanup).ToArray();
             var step = Trace.BeginStep(GuaTraceStepKind.Lifecycle, "Postprocessing");
-            captureFailed |= !Trace.Record(step, "runner.postprocessing", JsonSerializer.SerializeToElement(new
+            captureFailed |= !Trace.RecordStructural(step, "runner.postprocessing", JsonSerializer.SerializeToElement(new
                 { complete = original.PostProcessingComplete, reasons = original.PostProcessing.Select(x => x.Reason.ToString()).ToArray() }));
             Trace.EndStep(step, original.PostProcessingComplete ? GuaTraceOutcome.Passed : GuaTraceOutcome.Failed);
         }
-        var bundles = await writer.CompleteAsync(recording, recordingCaptureFailed).ConfigureAwait(false);
+        var bundles = await writer.CompleteAsync(recording, recordingCaptureFailed, proposed =>
+            store.CanPublishArtifacts(original, [Receipt(ArtifactKind.Trace, proposed.Trace), Receipt(ArtifactKind.Recording, proposed.Recording)],
+                cleanup, finishedAt)).ConfigureAwait(false);
         var trace = captureFailed && bundles.Trace.State is GuaArtifactState.Saved or GuaArtifactState.OmittedOnSuccess
             ? new ArtifactReceipt(ArtifactKind.Trace, ArtifactState.CaptureFailed) : Receipt(ArtifactKind.Trace, bundles.Trace);
         ArtifactReceipt[] receipts = [trace, Receipt(ArtifactKind.Recording, bundles.Recording)];

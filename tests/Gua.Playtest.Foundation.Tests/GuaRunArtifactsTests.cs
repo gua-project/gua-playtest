@@ -140,7 +140,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         var store = Store(); await using var capture = new GuaRunArtifacts(store, Metadata, Limits, Options(), Redactor);
         // Actual Gua writer cannot create its owned output below this regular file.
-        File.WriteAllText(Path.Combine(store.DirectoryPath, "trace"), "blocked");
+        File.WriteAllText(Path.GetDirectoryName(capture.Trace.ArtifactPath)!, "blocked");
         var primary = Primary(true); await Confirm(capture, primary);
         var completed = await capture.CompleteAsync(Outcome(primary), DateTimeOffset.UtcNow, Recording(Secret));
         Assert.Equal(ArtifactState.SaveFailed, completed.Receipts[0].State);
@@ -495,7 +495,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         Directory.CreateDirectory(root);
         await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
-            3, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars);
+            3, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems);
         writer.Trace.Mark("safe"); Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
         var completed = await writer.CompleteAsync();
         Assert.Equal(GuaArtifactState.Saved, completed.Trace.State);
@@ -573,7 +573,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var redactor = new PersistenceRedactor(["Trace"], []);
         await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
             Limits.MaxItems, text => redactor.Redact(text) == text, bytes => redactor.IsSafeUtf8(bytes.Span),
-            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact, Limits.MaxStringChars);
+            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact, Limits.MaxStringChars, Limits.MaxItems);
         Assert.NotEmpty(writer.Trace.Mark("safe"));
         Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
         Assert.Equal(GuaArtifactState.CaptureFailed, (await writer.CompleteAsync()).Trace.State);
@@ -666,7 +666,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         Directory.CreateDirectory(root);
         await using var capture = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
-            slots, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars);
+            slots, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems);
         var step = slots == 5 ? string.Empty : capture.Trace.Mark("safe");
         if (extraAttachment) Assert.True(capture.Trace.Attach(step, "extra", JsonSerializer.SerializeToElement(new { extra = 1 })));
         Assert.True(capture.ConfirmPrimary(GuaTraceOutcome.Passed));
@@ -686,7 +686,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
             Directory.CreateDirectory(Path.Combine(root, "six-slots"));
             await using var control = new GuaRunArtifactWriter(Path.Combine(root, "six-slots"), Options(),
                 Limits.MaxFileBytes, Limits.MaxRunBytes, 6, _ => true, _ => true, document => document,
-                _ => false, text => text, Limits.MaxStringChars);
+                _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems);
             Assert.True(control.ConfirmPrimary(GuaTraceOutcome.Passed));
             var accepted = await control.CompleteAsync(Recording());
             Assert.True(accepted.Trace.State == GuaArtifactState.Saved, JsonSerializer.Serialize(new
@@ -724,7 +724,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var baselineOptions = Options(eventBytes: 131072);
         await using var baseline = new GuaRunArtifactWriter(Path.Combine(root, "baseline"), baselineOptions,
             Limits.MaxFileBytes, Limits.MaxRunBytes, Limits.MaxItems, _ => true, _ => true, document => document,
-            _ => false, text => text, Limits.MaxFileBytes);
+            _ => false, text => text, Limits.MaxFileBytes, Limits.MaxItems);
         var step = baseline.Trace.Mark("safe"); Assert.True(baseline.Trace.Record(step, "payload", payload));
         Assert.True(baseline.ConfirmPrimary(GuaTraceOutcome.Passed));
         var saved = await baseline.CompleteAsync(); Assert.Equal(GuaArtifactState.Saved, saved.Trace.State);
@@ -733,12 +733,118 @@ public sealed class GuaRunArtifactsTests : IDisposable
         await using var bounded = new GuaRunArtifactWriter(Path.Combine(root, "bounded"),
             Options(artifactBytes: ceiling, eventBytes: Math.Min(ceiling, 131072)),
             ceiling, Limits.MaxRunBytes, Limits.MaxItems, _ => true, _ => true, document => document,
-            _ => false, text => text, ceiling);
+            _ => false, text => text, ceiling, Limits.MaxItems);
         var boundedStep = bounded.Trace.Mark("safe"); Assert.True(bounded.Trace.Record(boundedStep, "payload", payload));
         Assert.True(bounded.ConfirmPrimary(GuaTraceOutcome.Passed));
         var completed = await bounded.CompleteAsync(); Assert.Equal(GuaArtifactState.Saved, completed.Trace.State);
         Assert.InRange(completed.Trace.Entry!.Bytes, 1, ceiling);
         Assert.Empty(GuaTraceReader.Read(bounded.Trace.ArtifactPath).Issues);
+    }
+
+    [Theory]
+    [InlineData("observation.change")] [InlineData("assertion.evaluation")] [InlineData("capture.failure")]
+    [InlineData("tree-failed")] [InlineData("flush-timeout")] [InlineData("native-lifecycle-not-provided")]
+    public void Review5_generated_event_and_quality_literals_are_rejected_before_worker(string secret)
+    {
+        var redactor = new PersistenceRedactor([secret], []); var store = RunArtifactStore.Create(root, Limits, redactor);
+        Assert.Throws<ArgumentException>(() => new GuaRunArtifacts(store, Metadata, Limits, Options(), redactor));
+        Assert.Empty(Directory.GetDirectories(store.DirectoryPath));
+    }
+
+    [Theory]
+    [InlineData("source")] [InlineData("epoch")] [InlineData("request")] [InlineData("host")]
+    [InlineData("schema")] [InlineData("channel")] [InlineData("availability")] [InlineData("references")]
+    public async Task Review5_host_policy_rejects_pass_through_strings_missing_from_native_options(string lane)
+    {
+        var secret = lane is "epoch" or "request" ? "71357924" : "private-identity-marker";
+        var redactor = new PersistenceRedactor([secret], []); var store = RunArtifactStore.Create(root, Limits, redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, Limits, Options(), redactor);
+        var trace = capture.Trace; var step = trace.Mark("safe"); var empty = JsonSerializer.SerializeToElement(new { });
+        var request = new GuaTraceRequest(lane == "source" ? secret : "host", lane == "epoch" ? secret : "1", lane == "request" ? secret : "1");
+        using var one = GuaValue.Integer(1);
+        switch (lane)
+        {
+            case "source": case "epoch": case "request":
+                Assert.Empty(trace.BeginStep(GuaTraceStepKind.Action, "safe", request)); break;
+            case "host": Assert.Empty(trace.Observe(step, "ui", "safe", "available", new(secret, "1"))); break;
+            case "schema": Assert.False(trace.Attach(step, secret, empty)); break;
+            case "channel": Assert.Empty(trace.Observe(step, secret, "safe", "available", new("host", "1"))); break;
+            case "availability": Assert.Empty(trace.Observe(step, "ui", "safe", secret, new("host", "1"))); break;
+            case "references": Assert.False(trace.Evaluate(step, "safe", "equal", one, one, "true", "success", [secret], GuaTraceOutcome.Passed)); break;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Review5_structural_preparation_redaction_is_capture_failure(bool sensitiveField)
+    {
+        var redactor = new PersistenceRedactor(sensitiveField ? [] : ["Started"], sensitiveField ? ["stage"] : []);
+        var store = RunArtifactStore.Create(root, Limits, redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, Limits, Options(), redactor);
+        capture.Record(new(PreparationStage.Started, PreparationCode.Started));
+        var primary = Primary(true); await ConfirmCore(capture, new(primary, [], []));
+        var original = new RunOutcome(primary, [], [], []); var completed = await capture.CompleteAsync(original, DateTimeOffset.UtcNow);
+        Assert.Equal(ArtifactState.CaptureFailed, completed.Receipts[0].State);
+        Assert.Equal(11, completed.ExitCode(original)); Assert.Same(primary, original.Primary);
+        Assert.DoesNotContain(GuaTraceReader.Read(capture.Trace.ArtifactPath).Events, x => x.Type == "runner.preparation");
+    }
+
+    [Fact]
+    public async Task Review5_tree_raw_byte_ceiling_precedes_DOM_allocation()
+    {
+        var limits = new ArtifactLimits(65536, Limits.MaxRunBytes, Limits.MaxItems, 4096);
+        var store = RunArtifactStore.Create(root, limits, Redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, limits, Options(artifactBytes: 65536), Redactor);
+        var step = capture.Trace.Mark("safe"); var text = new string(' ', limits.MaxFileBytes * 40) + "{}";
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        capture.Trace.CaptureTree(step, "ui", "host", "before", () => text);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.InRange(allocated, 0, limits.MaxFileBytes * 8L);
+        Assert.Contains("tree-failed", capture.Trace.Status.Issues);
+    }
+
+    [Fact]
+    public async Task Review5_recording_counts_complete_retained_nodes_before_attachment()
+    {
+        var limits = new ArtifactLimits(Limits.MaxFileBytes, Limits.MaxRunBytes, 100, Limits.MaxStringChars);
+        var store = RunArtifactStore.Create(root, limits, Redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, limits, Options(), Redactor);
+        var primary = Primary(true); await ConfirmCore(capture, new(primary, [], []));
+        var recording = new GuaRecording(1, Enumerable.Range(0, 10).Select(i =>
+            new GuaRecordingStep(GuaRecordedAction.click, i, 1, 2, false, RequestId: (ulong)(i + 1), Target: new(Id: "buy"))).ToArray());
+        var completed = await capture.CompleteAsync(new(primary, [], [], []), DateTimeOffset.UtcNow, recording);
+        Assert.Equal(ArtifactState.CaptureFailed, completed.Receipts[1].State);
+        Assert.False(Directory.Exists(Path.Combine(store.DirectoryPath, "recording")));
+        Assert.DoesNotContain(GuaTraceReader.Read(capture.Trace.ArtifactPath).Events, x => x.Type == "attachment");
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Review5_shared_run_budget_reserves_existing_and_mandatory_summaries(bool large)
+    {
+        var limits = new ArtifactLimits(1024 * 1024, 2 * 1024 * 1024 + 65536 + 20000, 1000, 1024 * 1024);
+        var store = RunArtifactStore.Create(root, limits, Redactor);
+        var text = new string('x', large ? 500000 : 16);
+        var metadata = new RunArtifactMetadata("player", [], new Dictionary<string, string>(),
+            [new("input", JsonSerializer.SerializeToElement(new { payload = text }))]);
+        await using var capture = new GuaRunArtifacts(store, metadata, limits,
+            Options(attachmentBytes: 650000), Redactor);
+        Assert.True(capture.PreparationPersistence.Saved);
+        var primary = Primary(true);
+        await ConfirmCore(capture, new(primary, [], [new("Provider", text)]));
+        var original = new RunOutcome(primary, [], [], []);
+        var completed = await capture.CompleteAsync(original, DateTimeOffset.UtcNow, Recording(text));
+        Assert.True(completed.Persistence.Saved);
+        Assert.Equal(large ? 11 : 0, completed.ExitCode(original));
+        Assert.Equal(large ? ArtifactState.SaveFailed : ArtifactState.Saved, completed.Receipts[0].State);
+        Assert.Equal(large ? ArtifactState.SaveFailed : ArtifactState.Saved, completed.Receipts[1].State);
+        Assert.Equal(!large, Directory.Exists(Path.Combine(store.DirectoryPath, "trace")));
+        Assert.Equal(!large, Directory.Exists(Path.Combine(store.DirectoryPath, "recording")));
+        Assert.True(Directory.GetFiles(store.DirectoryPath, "*", SearchOption.AllDirectories)
+            .Sum(path => new FileInfo(path).Length) <= limits.MaxRunBytes);
+        Assert.True(File.Exists(Path.Combine(store.DirectoryPath, "completion.json")));
+        Assert.True(File.Exists(Path.Combine(store.DirectoryPath, "result.json")));
+        Assert.Same(primary, original.Primary);
     }
 
     [Fact]
