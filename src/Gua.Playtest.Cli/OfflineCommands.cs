@@ -12,13 +12,15 @@ internal static class OfflineCommands
 {
     internal delegate ValueTask<StaticValidationReport> InputValidator(string input, IEnumerable<string> roots, CancellationToken token);
     internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics,
-        bool json, CancellationToken token, InputValidator? validateInput = null)
+        bool json, CancellationToken token, InputValidator? validateInput = null, Action<string>? reportBoundary = null)
     {
         var resolvedSecrets = new List<string>();
         try
         {
             token.ThrowIfCancellationRequested();
-            validateInput ??= static (input, roots, token) => StaticPathAuthority.Validator(roots).ValidateFileAsync(input, token);
+            validateInput ??= args[0] == "plan"
+                ? static (input, roots, token) => ManagedValidator(roots).ValidateFileAsync(input, token)
+                : static (input, roots, token) => StaticPathAuthority.Validator(roots).ValidateFileAsync(input, token);
             if (args[0] == "plan") return await PlanAsync(args, output, diagnostics, json, token, validateInput, resolvedSecrets);
             var options = Options.Parse(args[1..], args[0] == "report"
                 ? ["--allow-root", "--trace", "--output"]
@@ -29,7 +31,7 @@ internal static class OfflineCommands
             {
                 var source = StaticPathAuthority.Directory(options.Required("--trace"), roots, "ReportTraceDirectoryRequired");
                 if (!Directory.Exists(source)) throw new InvalidDataException("ReportTraceDirectoryRequired");
-                var read = GuaTraceReader.Read(source);
+                var read = GuaOperation(() => GuaTraceReader.Read(source), "read", token, reportBoundary);
                 if (read.Issues.Count != 0 || !read.Manifest.Finalized) throw new InvalidDataException("SavedTraceInvalidOrIncomplete");
                 token.ThrowIfCancellationRequested();
                 if (options.Optional("--output") is { } destination)
@@ -40,7 +42,8 @@ internal static class OfflineCommands
                     if (ArtifactPathAuthority.ContainsDirectory(source, parent))
                         throw new InvalidDataException("ReportOutputInsideSource");
                     if (File.Exists(full) || Directory.Exists(full)) throw new InvalidDataException("ReportOutputExists");
-                    if (!GuaTraceReport.WriteHtml(source, full).Succeeded) throw new InvalidDataException("ReportWriteRejected");
+                    var written = GuaOperation(() => GuaTraceReport.WriteHtml(source, full), "write", token, reportBoundary);
+                    if (!written.Succeeded) throw new InvalidDataException("ReportWriteRejected");
                 }
                 return await CommandOutput.WriteAsync(output, diagnostics, json, "CommandSucceeded", "SavedTraceRead", 0,
                     new { finalized = read.Manifest.Finalized, eventCount = read.Events.Count });
@@ -88,6 +91,19 @@ internal static class OfflineCommands
         "ReportWriteRejected", "SecretBindingInvalid", "SecretBindingNotReferenced", "SecretUnavailable", "PlanSecretCollision"
     };
 
+    private static T GuaOperation<T>(Func<T> operation, string stage, CancellationToken token, Action<string>? boundary)
+    {
+        try { return operation(); }
+        finally { boundary?.Invoke(stage); token.ThrowIfCancellationRequested(); }
+    }
+    private static StaticContractValidator ManagedValidator(IEnumerable<string> roots)
+    {
+        var explicitRoots = roots.ToArray();
+        return new(explicitRoots,
+            path => ArtifactPathAuthority.AuthorizeFile(path, explicitRoots, "ManagedPlanRequired"),
+            path => ArtifactPathAuthority.AuthorizeDirectory(path, explicitRoots, "ManagedPlanRequired"));
+    }
+
     private static async Task<int> PlanAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, InputValidator validateInput, List<string> secrets)
     {
         if (args.Length < 2 || args[1] is not ("create" or "accept")) throw new InvalidDataException("CommandArgumentsRequired");
@@ -109,7 +125,7 @@ internal static class OfflineCommands
             var source = await validateInput(scenario, roots, token);
             token.ThrowIfCancellationRequested();
             if (!source.IsValid || source.Document is not ScenarioDocument) throw new InvalidDataException("ExecutionInputInvalid");
-            var recorded = await StaticPathAuthority.Validator(roots).ValidateRecordingFileAsync(recording, token);
+            var recorded = await ManagedValidator(roots).ValidateRecordingFileAsync(recording, token);
             token.ThrowIfCancellationRequested();
             if (!recorded.IsValid) throw new InvalidDataException("ExecutionInputInvalid");
             documents = source.Files.Values.Concat(recorded.Files.Values).Select(f => (JsonNode)f.CopyJson());

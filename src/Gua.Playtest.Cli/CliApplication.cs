@@ -34,12 +34,12 @@ public static class CliApplication
         if (args is ["--help"] or [])
         {
             var help = "gua-playtest validate --allow-root <existing-directory> <json-or-yaml-file>\ngua-playtest validate --gua-schema <packaged-schema-name> <json-file>\ngua-playtest doctor --native\ngua-playtest plan create|accept (see docs/cli.md)\ngua-playtest report --allow-root <root> --trace <saved-trace-directory> [--output <new-html>]\ngua-playtest explore --allow-root <root> --scenario <file> --environment <file>\ngua-playtest replay --allow-root <root> --plan <file> --environment <file>\ngua-playtest dashboard --registry <file> --artifact-root <root> --allow-root <root> --port <1024..65535>\nUse --json for one final JSON document. Execution requires an approved runtime composition.";
-            await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", help }) : help);
+            await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", code = "HelpShown", help }) : help);
             return 0;
         }
         if (args is ["--version"])
         {
-            await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", version = "0.1.0-dev", guaVersion = "1.1.1" }) : "0.1.0-dev (Gua packages 1.1.1)");
+            await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", code = "VersionShown", version = "0.1.0-dev", guaVersion = "1.1.1" }) : "0.1.0-dev (Gua packages 1.1.1)");
             return 0;
         }
         if (args.FirstOrDefault() == "dashboard")

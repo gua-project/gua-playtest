@@ -97,6 +97,52 @@ public sealed class CliEntryTests
     }
 
     [Theory]
+    [InlineData("--help", "HelpShown", "help")]
+    [InlineData("--version", "VersionShown", "version")]
+    public async Task SuccessfulInformationJsonHasTheSameStatusCodeContract(string argument, string code, string detail)
+    {
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(0, await CliApplication.ExecuteAsync([argument, "--json"], output, error));
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal("CommandSucceeded", document.RootElement.GetProperty("status").GetString());
+        Assert.Equal(code, document.RootElement.GetProperty("code").GetString());
+        Assert.True(document.RootElement.TryGetProperty(detail, out _)); Assert.Empty(error.ToString());
+    }
+
+    [Theory]
+    [InlineData("read", true)]
+    [InlineData("write", false)]
+    public async Task ReportRechecksCancellationAfterRealSynchronousGuaOperation(string cancelStage, bool incomplete)
+    {
+        var root = PrivateRoot();
+        try
+        {
+            var trace = await Probe("trace", Path.Combine(root.FullName, "trace"));
+            Assert.Equal(0, trace.Exit); var source = trace.Output.Trim();
+            if (incomplete)
+            {
+                var manifestPath = Directory.GetFiles(source, "*manifest*.json").Single();
+                var manifest = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!;
+                Assert.NotNull(manifest["finalized"]); manifest["finalized"] = false;
+                await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString());
+            }
+            var before = Directory.GetFiles(source, "*", SearchOption.AllDirectories).ToDictionary(path => path, File.ReadAllBytes);
+            using var cancellation = new CancellationTokenSource();
+            using var output = new StringWriter(); using var error = new StringWriter();
+            var html = Path.Combine(root.FullName, "report.html"); var observed = new List<string>();
+            var exit = await OfflineCommands.ExecuteAsync(["report", "--allow-root", root.FullName, "--trace", source, "--output", html],
+                output, error, true, cancellation.Token, reportBoundary: stage =>
+                { observed.Add(stage); if (stage == cancelStage) cancellation.Cancel(); });
+            Assert.Equal(4, exit); Assert.Contains(cancelStage, observed);
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.Equal("CommandInterrupted", document.RootElement.GetProperty("code").GetString());
+            Assert.Equal(cancelStage == "write", File.Exists(html));
+            foreach (var (path, bytes) in before) Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Theory]
     [InlineData("explore", "--scenario", "scenario.json")]
     [InlineData("replay", "--plan", "plan.json")]
     public async Task ValidInputsFailClosedWithoutRuntimeAndNeverBecomePassed(string command, string option, string file)

@@ -27,6 +27,47 @@ public sealed class ReplayOwnerTimingCollection { }
 public sealed class ReplayTests
 {
     [Theory]
+    [InlineData("scenario")]
+    [InlineData("recording")]
+    public async Task ManagedGraphRejectsSameByteReparseReferencesAfterGenuineTrial(string selected)
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var directory = Path.GetDirectoryName(path)!;
+        var nested = Directory.CreateDirectory(Path.Combine(directory, "inputs"));
+        File.Move(Path.Combine(directory, selected + ".json"), Path.Combine(nested.FullName, selected + ".json"));
+        var plan = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        plan[selected]!["path"] = "inputs/" + selected + ".json";
+        await File.WriteAllTextAsync(path, plan.ToJsonString());
+        var id = await Trial(files, manager, path); // genuine full ReplayDriver/store trial before any link
+        var sibling = Path.Combine(directory, "same-byte-sibling"); Directory.Move(nested.FullName, sibling);
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var start = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                foreach (var argument in new[] { "/c", "mklink", "/J", nested.FullName, sibling }) start.ArgumentList.Add(argument);
+                using var child = System.Diagnostics.Process.Start(start)!;
+                var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Equal(0, child.ExitCode); await stdout; await stderr;
+            }
+            else Directory.CreateSymbolicLink(nested.FullName, sibling);
+            using var output = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["plan", "accept", "--json", "--managed-root", Path.Combine(files.Root, "managed"),
+                "--plan", path, "--trial", id, "--approve", "--approve-expectations"], output));
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.False(File.Exists(Path.Combine(directory, "accepted.json")));
+            await Assert.ThrowsAsync<InvalidDataException>(() => manager.IsAcceptedAsync(path).AsTask());
+        }
+        finally
+        {
+            if (Directory.Exists(nested.FullName)) Directory.Delete(nested.FullName);
+            Directory.Move(sibling, nested.FullName);
+        }
+        Assert.False(await manager.IsAcceptedAsync(path));
+    }
+    [Theory]
     [InlineData("Accepted")]
     [InlineData("PlanAccepted")]
     public async Task PlanAcceptChecksCompleteResponseBeforePublishingAdoption(string secret)

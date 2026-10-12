@@ -91,6 +91,8 @@ function Assert-PackagedDashboard([string]$Command, [string]$Label) {
 }
 
 function Assert-OfflineCommands([string]$Command, [string]$Label) {
+    Assert-Cli $Command @('--help') 0 'HelpShown'
+    Assert-Cli $Command @('--version') 0 'VersionShown'
     Assert-Cli $Command @('validate', '--allow-root', $contractRoot, (Join-Path $contractRoot 'scenario.json')) 0 'Valid'
     Assert-Cli $Command @('plan', 'create', '--managed-root', (Join-Path $stage ('reject-' + $Label)), '--allow-root', $contractRoot, '--scenario', (Join-Path $contractRoot 'multiple-goals.json'), '--recording', (Join-Path $contractRoot 'recording.json'), '--timing', 'recorded') 2 'ExecutionInputInvalid'
     $html = Join-Path $stage ('report-' + $Label + '.html')

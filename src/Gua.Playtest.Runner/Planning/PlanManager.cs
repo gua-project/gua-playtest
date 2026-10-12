@@ -49,7 +49,7 @@ public sealed class PlanManager
         var roots = allowedRoots.Select(r => Path.TrimEndingDirectorySeparator(Path.GetFullPath(r))).ToArray();
         var recordingFullPath = AuthorizeInput(recordingPath, roots, "RecordingOutsideAllowedRoots");
         var scenarioFullPath = AuthorizeInput(scenarioPath, roots, "ScenarioOutsideAllowedRoots");
-        var scenarioReport = await new StaticContractValidator(roots).ValidateFileAsync(scenarioFullPath, token);
+        var scenarioReport = await StrictValidator(roots).ValidateFileAsync(scenarioFullPath, token);
         token.ThrowIfCancellationRequested();
         if (!scenarioReport.IsValid || scenarioReport.Document is not ScenarioDocument) throw new InvalidDataException("ScenarioInvalid");
         var source = scenarioReport.Files.Values.Single();
@@ -69,7 +69,7 @@ public sealed class PlanManager
         {
             var entry = Path.Combine(staging, "source.json");
             Publish(entry, sourcePlanBytes, token);
-            var report = await new StaticContractValidator(roots.Append(root)).ValidateFileAsync(entry, token);
+            var report = await StrictValidator(roots.Append(root)).ValidateFileAsync(entry, token);
             token.ThrowIfCancellationRequested();
             if (!report.IsValid) throw new InvalidDataException(report.Code);
             var scenario = report.Files.Values.Single(f => f.Sha256 == source.Sha256);
@@ -83,7 +83,7 @@ public sealed class PlanManager
             var plan = sourcePlan with { PlanId = id, Scenario = new(scenarioName, scenario.Sha256), Recording = new(recordingName, recording.Sha256) };
             Publish(Path.Combine(staging, "plan.json"), CheckedPlanBytes(plan), token);
             File.Delete(entry);
-            var validated = await new StaticContractValidator([root]).ValidateFileAsync(Path.Combine(staging, "plan.json"), token);
+            var validated = await StrictValidator([root]).ValidateFileAsync(Path.Combine(staging, "plan.json"), token);
             token.ThrowIfCancellationRequested();
             if (!validated.IsValid) throw new InvalidDataException(validated.Code);
             token.ThrowIfCancellationRequested(); RunArtifactStore.CheckPath(root);
@@ -172,6 +172,14 @@ public sealed class PlanManager
         return true;
     }
 
+    private static StaticContractValidator StrictValidator(IEnumerable<string> roots)
+    {
+        var explicitRoots = roots.ToArray();
+        return new(explicitRoots,
+            file => ArtifactPathAuthority.AuthorizeFile(file, explicitRoots, "ManagedPlanRequired"),
+            directory => ArtifactPathAuthority.AuthorizeDirectory(directory, explicitRoots, "ManagedPlanRequired"));
+    }
+
     private async ValueTask<(string, ValidatedFile, ValidatedFile, ValidatedFile)> Load(string planPath, CancellationToken token)
     {
         var path = Path.GetFullPath(planPath);
@@ -191,7 +199,7 @@ public sealed class PlanManager
             using (expected.Stream)
                 if (requested.Identity != expected.Identity) throw new InvalidDataException("ManagedPlanRequired");
         }
-        var report = await new StaticContractValidator([directory]).ValidateFileAsync(canonical, token);
+        var report = await StrictValidator([directory]).ValidateFileAsync(canonical, token);
         token.ThrowIfCancellationRequested();
         if (!report.IsValid || report.Document is not ReplayPlanDocument model || model.Completion != "afterPlan")
             throw new InvalidDataException("CandidateInvalid");
