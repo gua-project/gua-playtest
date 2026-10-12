@@ -651,6 +651,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     [InlineData("type", GuaTraceCaptureMode.Recent)] [InlineData("type", GuaTraceCaptureMode.Streaming)]
     [InlineData("schemaVersion", GuaTraceCaptureMode.Recent)] [InlineData("collector-monotonic", GuaTraceCaptureMode.Streaming)]
     [InlineData("index", GuaTraceCaptureMode.Recent)] [InlineData("mark", GuaTraceCaptureMode.Streaming)]
+    [InlineData("0", GuaTraceCaptureMode.Streaming)]
     public void Review4_literal_fixed_trace_tokens_are_rejected_before_session_creation(string secret, GuaTraceCaptureMode mode)
     {
         var redactor = new PersistenceRedactor([secret], []); var store = RunArtifactStore.Create(root, Limits, redactor);

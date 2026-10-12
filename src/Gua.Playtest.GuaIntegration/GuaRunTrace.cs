@@ -36,7 +36,7 @@ public sealed class GuaRunTrace
         // Check both decoded names and fixed encoded key/value/schema tokens before
         // constructing its session/worker; late report rejection cannot undo a write.
         var fixedTokens = envelopeNames.Concat(["recent", "streaming", "onFailure", "always", "debug", "player",
-            "unknown", "passed", "failed", "interrupted", "collector-monotonic:", "true", "false", "1",
+            "unknown", "passed", "failed", "interrupted", "collector-monotonic:", "true", "false", "0", "1",
             "index", "recording", "steps", "gua.trace.recording.v1", "gua.recording.references.v1"])
             .Concat(Enum.GetNames<GuaTraceStepKind>().Select(JsonNamingPolicy.CamelCase.ConvertName));
         if (fixedTokens.Any(token => !safeLiteral(token) || !safeLiteral(JsonSerializer.Serialize(token))) ||
