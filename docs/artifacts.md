@@ -95,7 +95,10 @@ Every raw identity/enum/schema/reference string uses the authoritative host
 redaction policy before entering Gua, even when Gua's separately supplied secret
 list omits that secret. Structural Preparing, primary, Planner and postprocessing
 evidence must survive sanitization unchanged; a collision is a capture failure.
-Pinned native event and quality vocabulary is admitted before session creation.
+Pinned native event/quality vocabulary and unavoidable JSON delimiters are
+admitted before session creation. Native construction failure releases its
+pending directory. Optional source-line numeric tokens and encoded strings use
+the same host literal policy before queue admission.
 Raw tree/value JSON is checked for UTF-8 bytes, decoded string lengths, depth and
 nodes before a DOM is allocated. Recording admission counts its complete native
 serialized document, including targets and scalar fields, before attachment/save.

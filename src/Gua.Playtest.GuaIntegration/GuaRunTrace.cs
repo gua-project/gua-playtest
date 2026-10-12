@@ -22,7 +22,7 @@ public sealed class GuaRunTrace
         "native-request-outside-correlation-window", "native-source-changed", "native-source-limit", "native-stop-timeout",
         "observe-storage-gap", "observe-unsubscribe-failed", "screenshot-unavailable", "spatial-storage-omitted",
         "owner-disconnected", "release-requested", "late-completion", "unavailable-or-not-authorized", "subscription-start",
-        "received-live-result", "caller-authorized", "available", "stale", "[redacted]", "redacted"
+        "received-live-result", "caller-authorized", "available", "stale", "unverified", "[redacted]", "redacted"
     ];
     private readonly GuaTraceSession session;
     private readonly Func<JsonElement, JsonElement> redact;
@@ -58,17 +58,28 @@ public sealed class GuaRunTrace
             "unknown", "passed", "failed", "interrupted", "collector-monotonic:", "true", "false", "0", "1",
             "index", "recording", "steps", "gua.trace.recording.v1", "gua.recording.references.v1"])
             .Concat(Enum.GetNames<GuaTraceStepKind>().Select(JsonNamingPolicy.CamelCase.ConvertName)).Concat(NativeVocabulary);
-        if (fixedTokens.Any(token => !safeLiteral(token) || !safeLiteral(JsonSerializer.Serialize(token))) ||
+        // Native JSON syntax is unavoidable even when no caller payload is retained.
+        var delimiters = new[] { "{", "}", "[", "]", ",", ":", "\"", "\r", "\n", "\t", " " };
+        if (delimiters.Any(token => !safeLiteral(token)) ||
+            fixedTokens.Any(token => !safeLiteral(token) || !safeLiteral(JsonSerializer.Serialize(token))) ||
             envelopeNames.Any(name => !safeLiteral(JsonSerializer.Serialize(name) + ":\"")))
             throw new ArgumentException("GuaTraceLiteralEnvelopeUnsupported");
     }
     private string Bound(string value)
     { if (value.Length > maxStringChars) throw new InvalidDataException("TraceStringLimit"); return value; }
     private string Identity(string value)
-    { Bound(value); if (redactText(value) != value) throw new InvalidDataException("GuaTraceIdentitySecret"); return value; }
+    { Bound(value); if (redactText(value) != value || UnsafeEncoding(value)) throw new InvalidDataException("GuaTraceIdentitySecret"); return value; }
+    private bool UnsafeEncoding(string value)
+    { var encoding = JsonSerializer.Serialize(value); return redactText(encoding) != encoding; }
     private string? Optional(string? value) => value is null ? null : Identity(value);
     private string Text(string name, string value)
-    { Bound(value); return sensitiveField(name) ? string.Empty : redactText(value); }
+    { Bound(value); var safe = sensitiveField(name) ? string.Empty : redactText(value); return UnsafeEncoding(safe) ? string.Empty : safe; }
+    private int? SourceLine(int? value)
+    {
+        if (sensitiveField("line") || sensitiveField("sourceLine")) return null;
+        if (value is not null) Identity(JsonSerializer.Serialize(value.Value));
+        return value;
+    }
     private GuaTraceRequest Request(GuaTraceRequest value)
     { Identity(value.SourceId); Identity(value.SessionEpoch); Identity(value.RequestId); return value; }
     private GuaTraceHost Host(GuaTraceHost value)
@@ -93,8 +104,8 @@ public sealed class GuaRunTrace
         string? parentStepId = null, string? sourceFile = null, int? sourceLine = null)
         => Capture(() => session.BeginStep(kind, Text("label", label), request is null ? null : Request(request),
             sensitiveField("parentStepId") ? null : Optional(parentStepId),
-            sourceFile is null || new[] { "source", "file", "sourceFile" }.Any(sensitiveField) ? null : redactText(Bound(sourceFile)),
-            sensitiveField("line") || sensitiveField("sourceLine") ? null : sourceLine), string.Empty);
+            sourceFile is null || new[] { "source", "file", "sourceFile" }.Any(sensitiveField) ? null : Text("sourceFile", sourceFile),
+            SourceLine(sourceLine)), string.Empty);
     public string Mark(string label) => Capture(() => session.Mark(Text("label", label)), string.Empty);
     public bool Record(string step, string type, JsonElement data, bool sensitive = false)
         => Capture(() => session.Record(step, Text("type", type), sensitive ? JsonSerializer.SerializeToElement<object?>(null) : redact(data), sensitive));

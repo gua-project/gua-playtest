@@ -62,15 +62,25 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         stagingParent = Path.GetDirectoryName(this.runDirectory)!;
         stagingDirectory = Path.Combine(stagingParent, ".gua-pending-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stagingDirectory); CheckNoLinks(stagingDirectory);
-        Trace = new GuaRunTrace(new GuaTraceSession(new GuaTraceOptions
+        try
         {
-            OutputDirectory = Path.Combine(stagingDirectory, "trace"), CaptureMode = options.CaptureMode,
-            SavePolicy = options.SavePolicy, Profile = options.Profile, Secrets = options.Secrets.ToArray(),
-            MaxSteps = options.MaxSteps, MaxMemoryBytes = options.MaxMemoryBytes,
-            MaxQueueItems = options.MaxQueueItems, MaxArtifactBytes = options.MaxArtifactBytes,
-            MaxAttachmentBytes = options.MaxAttachmentBytes, MaxEventBytes = options.MaxEventBytes,
-            FlushTimeout = options.FlushTimeout
-        }), redact, sensitiveField, redactText, maxStringChars, maxFileBytes, maxJsonNodes);
+            Trace = new GuaRunTrace(new GuaTraceSession(new GuaTraceOptions
+            {
+                OutputDirectory = Path.Combine(stagingDirectory, "trace"), CaptureMode = options.CaptureMode,
+                SavePolicy = options.SavePolicy, Profile = options.Profile, Secrets = options.Secrets.ToArray(),
+                MaxSteps = options.MaxSteps, MaxMemoryBytes = options.MaxMemoryBytes,
+                MaxQueueItems = options.MaxQueueItems, MaxArtifactBytes = options.MaxArtifactBytes,
+                MaxAttachmentBytes = options.MaxAttachmentBytes, MaxEventBytes = options.MaxEventBytes,
+                FlushTimeout = options.FlushTimeout
+            }), redact, sensitiveField, redactText, maxStringChars, maxFileBytes, maxJsonNodes);
+        }
+        catch
+        {
+            // Native option validation can reject before an instance is returned.
+            // No caller can Dispose that failed construction, so release our staging.
+            RemoveStaging();
+            throw;
+        }
     }
 
     public bool ConfirmPrimary(GuaTraceOutcome outcome)
