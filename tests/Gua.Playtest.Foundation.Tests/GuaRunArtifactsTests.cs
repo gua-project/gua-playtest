@@ -176,6 +176,47 @@ public sealed class GuaRunArtifactsTests : IDisposable
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken cancellationToken) => new(Task.Delay(Timeout.Infinite, cancellationToken));
     }
 
+    [Fact]
+    public async Task Actual_preparation_owner_routes_launch_failure_to_common_gua_trace_before_connect()
+    {
+        var store = Store(); await using var artifacts = new GuaRunArtifacts(store, Metadata, Limits, Options(), Redactor);
+        var clock = new ImmediateClock();
+        var run = new RunSession(new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 3, 3, 2, 100), clock, clock);
+        var launcher = new FailingLauncher(store); var connector = new UnusedConnector();
+        var policy = new PreparationPolicy(HostMode.Launch, PlayMode.Replay,
+            new Uri("ws://localhost:7777/" + Guid.NewGuid().ToString("N")), "game", "1", "Player", "real",
+            ["observe"], true, true, new("explicit.exe", "explicit-directory", []),
+            TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(1), 1, TimeSpan.FromSeconds(1));
+        var preparation = new HostPreparation(policy, clock, launcher, connector, artifacts);
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (cleanup, token) =>
+        {
+            await preparation.PrepareAsync(run, cleanup, null, null, token); return true;
+        }, (_, _) => throw new Exception("Unreachable"), confirmPrimary: artifacts.ConfirmPrimaryAsync);
+        Assert.Equal(1, launcher.Calls); Assert.Equal(0, connector.Calls);
+        Assert.Equal(ResultStatus.Failed, outcome.Primary.Status); Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+        Assert.Contains(outcome.Exceptions, x => x.Type == typeof(IOException).FullName);
+        var complete = await artifacts.CompleteAsync(outcome, DateTimeOffset.UtcNow);
+        Assert.Equal(1, complete.ExitCode(outcome)); Assert.Equal(ArtifactState.Saved, complete.Receipts[0].State);
+        var trace = GuaTraceReader.Read(artifacts.Trace.ArtifactPath);
+        var lifecycle = trace.Events.Where(x => x.Type == "runner.preparation").ToArray();
+        Assert.Equal("Started", lifecycle[0].Data.GetProperty("stage").GetString());
+        Assert.Contains(lifecycle, x => x.Data.GetProperty("stage").GetString() == "Launch" && x.Data.GetProperty("code").GetString() == "LaunchFailed");
+        Assert.DoesNotContain(lifecycle, x => x.Data.GetProperty("stage").GetString() == "Connect");
+    }
+    private sealed class FailingLauncher(RunArtifactStore store) : IProcessLauncher
+    {
+        public int Calls;
+        public ValueTask<IOwnedProcess> LaunchAsync(LaunchCommand command, CancellationToken token)
+        { Calls++; Assert.True(File.Exists(Path.Combine(store.DirectoryPath, "run.json"))); throw new IOException(Secret); }
+    }
+    private sealed class UnusedConnector : IPreparationConnector
+    {
+        public int Calls;
+        public ValueTask<IPreparationConnection> ConnectAsync(Uri endpoint, CancellationToken token)
+        { Calls++; throw new Exception("Unreachable"); }
+    }
+
     [Theory]
     [InlineData(ResultStatus.Aborted, RunReason.Cancelled, 4, "interrupted")]
     [InlineData(ResultStatus.TimedOut, RunReason.MaxDuration, 3, "failed")]
