@@ -38,7 +38,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(safeRecordingText);
         ArgumentNullException.ThrowIfNull(safeRecordingEncoding);
         ArgumentNullException.ThrowIfNull(redact); ArgumentNullException.ThrowIfNull(sensitiveField);
-        ArgumentNullException.ThrowIfNull(redactText); GuaRunTrace.ValidatePolicy(sensitiveField);
+        ArgumentNullException.ThrowIfNull(redactText); GuaRunTrace.ValidatePolicy(sensitiveField, safeRecordingText);
         // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
         // Its artifact budget must fit one file; its separate manifest reserve must too.
         if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 3 ||
@@ -99,24 +99,22 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
             // Existing saved Dashboard consumes a Gua HTML entry. Retain the manifest,
             // events and every attachment in AdditionalFiles, without changing their bytes.
-            var manifestBundle = Inventory(Trace.ArtifactPath, Path.Combine(Trace.ArtifactPath, "manifest.json"), reserve: 1);
+            var recordingFiles = recordingBundle.State == GuaArtifactState.Saved
+                ? 1 + (recordingBundle.AdditionalFiles?.Count ?? 0) : 0;
+            var manifestBundle = Inventory(Trace.ArtifactPath, Path.Combine(Trace.ArtifactPath, "manifest.json"), reserve: 1 + recordingFiles);
             using var viewer = typeof(GuaTraceReport).Assembly.GetManifestResourceStream("Gua.Trace.Viewer.js")
                 ?? throw new IOException("ViewerUnavailable");
-            using var reportData = new BoundedCounter(maxFileBytes);
-            JsonSerializer.Serialize(reportData, read, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            // Gua 1.1.1 uses default JSON escaping and a fixed HTML envelope. Including
-            // nulls overestimates its omitted nulls; 4096 covers the fixed envelope/hash.
-            var reportCeiling = viewer.Length + reportData.Length + 4096;
             var existingBytes = manifestBundle.Entry!.Bytes + manifestBundle.AdditionalFiles!.Sum(x => x.Bytes);
-            var recordingBytes = recordingBundle.Entry?.Bytes ?? 0;
-            if (reportCeiling > maxFileBytes || reportCeiling > maxBundleBytes - existingBytes - recordingBytes)
-                return new(new(GuaArtifactState.SaveFailed), recordingBundle);
+            var recordingBytes = (recordingBundle.Entry?.Bytes ?? 0) + (recordingBundle.AdditionalFiles?.Sum(x => x.Bytes) ?? 0);
             // Admission only: reproduce the pinned 1.1.1 HTML encoding in a bounded
             // buffer, including static viewer/envelope and token boundaries. Gua remains
             // the only report writer; refuse collisions before it creates any HTML file.
             using var scriptReader = new StreamReader(viewer, Encoding.UTF8);
+            if (viewer.Length > maxFileBytes) return new(new(GuaArtifactState.SaveFailed), recordingBundle);
             var script = scriptReader.ReadToEnd();
             using var admission = ReportAdmission(read, script);
+            if (admission.Length > maxBundleBytes - existingBytes - recordingBytes)
+                return new(new(GuaArtifactState.SaveFailed), recordingBundle);
             if (!safeRecordingText(Encoding.UTF8.GetString(admission.Bytes.Span)))
                 return new(new(GuaArtifactState.CaptureFailed), recordingBundle);
             var reportPath = Path.Combine(Trace.ArtifactPath, "report.html");
@@ -124,7 +122,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
             if (!File.ReadAllBytes(reportPath).AsSpan().SequenceEqual(admission.Bytes.Span))
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
-            return new(Inventory(Trace.ArtifactPath, reportPath), recordingBundle);
+            return new(Inventory(Trace.ArtifactPath, reportPath, reserve: recordingFiles), recordingBundle);
         }
         catch { return new(new(GuaArtifactState.SaveFailed), recordingBundle); }
     }
@@ -152,6 +150,11 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     {
         if (captureFailed) return new(GuaArtifactState.CaptureFailed);
         if (recording is null) return new(GuaArtifactState.NotExecuted);
+        // Saved Recording contributes its two native attachments and recording.json
+        // to the same Run file ceiling as manifest/events/report. Refuse an impossible
+        // minimum before attachment or file creation; success omission writes neither.
+        if (!(primary == GuaTraceOutcome.Passed && policy == GuaTraceSavePolicy.OnFailure) && maxFiles < 6)
+            return new(GuaArtifactState.SaveFailed);
         try
         {
             if (recording.Steps.Count > maxFiles) return new(GuaArtifactState.CaptureFailed);
@@ -161,7 +164,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             foreach (var step in recording.Steps)
                 foreach (var text in new[] { step.Target?.Id, step.Target?.Role, step.Target?.Name,
                     step.Target?.Scope, step.WaitCondition, step.Value, step.SecretKey })
-                    if (text is not null && (text.Length > maxStringChars || text.Length > maxFileBytes / 6 || !safeRecordingText(text)))
+                    if (text is not null && (text.Length > maxStringChars || !safeRecordingText(text)))
                     { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
             GuaRecordingFile.Validate(recording);
             // Count safe serialization before Gua's writer, including escape expansion.
@@ -228,23 +231,6 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new IOException("ArtifactLink");
     }
     public ValueTask DisposeAsync() => Trace.Session.DisposeAsync();
-
-    private sealed class BoundedCounter(long limit) : Stream
-    {
-        private long count;
-        public override bool CanRead => false;
-        public override bool CanSeek => false;
-        public override bool CanWrite => true;
-        public override long Length => count;
-        public override long Position { get => count; set => throw new NotSupportedException(); }
-        public override void Write(byte[] buffer, int offset, int length) => Write(buffer.AsSpan(offset, length));
-        public override void Write(ReadOnlySpan<byte> buffer)
-        { if (buffer.Length > limit - count) throw new IOException("RecordingByteLimit"); count += buffer.Length; }
-        public override void Flush() { }
-        public override int Read(byte[] buffer, int offset, int length) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-    }
 
     private sealed class BoundedEncoding(int limit) : Stream
     {

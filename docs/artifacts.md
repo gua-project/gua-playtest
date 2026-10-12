@@ -45,6 +45,9 @@ Configured sensitive JSON fields become null before Gua queues, attachments or
 hashes, including fields whose values are not literal secrets. Explicit marked
 objects retain their whole-object masking. Policies that require masking an
 unmodifiable Gua envelope/identity field are rejected before writer creation.
+Literal secrets colliding with fixed native envelope keys/schema tokens are also
+rejected before the session worker is constructed; late report rejection cannot
+undo native JSON writes.
 The projection counts every retained mask/null node and bounds the final escaped
 UTF-8 encoding before returning a document to Gua.
 The same explicit string ceiling applies to caller-supplied Trace labels, request
@@ -85,6 +88,11 @@ save an oversized file and then treat later receipt rejection as enforcement
 of the effective file ceiling. The manifest, events and mandatory HTML entry
 require at least three file slots; the report slot is reserved during the
 pre-report inventory rather than added after exhausting the configured count.
+Trace and Recording share that file budget. A saved Recording additionally needs
+its two native Trace attachments and recording JSON, so at least six slots are required
+when both artifacts are saved. Recording slots remain reserved during final Trace
+inventory. Encoding admission uses actual bounded Recording/HTML bytes, including
+escape expansion, rather than a worst-case character multiplier or report estimate.
 
 Gua 1.1.1 queue admission, writer scheduling, lifecycle stopping and synchronous
 filesystem operations do not provide a hard absolute deadline or a proof that

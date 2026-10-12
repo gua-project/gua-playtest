@@ -22,15 +22,26 @@ public sealed class GuaRunTrace
     internal GuaRunTrace(GuaTraceSession session, Func<JsonElement, JsonElement> redact,
         Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars)
     { this.session = session; this.redact = redact; this.sensitiveField = sensitiveField; this.redactText = redactText; this.maxStringChars = maxStringChars; }
-    internal static void ValidatePolicy(Func<string, bool> sensitiveField)
+    internal static void ValidatePolicy(Func<string, bool> sensitiveField, Func<string, bool> safeLiteral)
     {
         // These Gua-owned envelope/identity fields cannot be removed through 1.1.1's
         // public writer. Reject that policy before starting rather than bypassing it.
         var names = new[] { typeof(GuaTraceEvent), typeof(GuaTraceManifest), typeof(GuaTraceStatus),
             typeof(GuaTraceHost), typeof(GuaTraceRequest) }.SelectMany(type => type.GetProperties())
             .Select(property => JsonNamingPolicy.CamelCase.ConvertName(property.Name));
-        if (names.Concat(["request", "schema", "blob", "observationId", "channel", "availability", "host", "continuity", "metadata", "kind", "outcome"])
-            .Any(sensitiveField)) throw new ArgumentException("GuaTraceSensitiveEnvelopeUnsupported");
+        var envelopeNames = names.Concat(["request", "schema", "blob", "observationId", "channel", "availability", "host", "continuity", "metadata", "kind", "outcome"])
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (envelopeNames.Any(sensitiveField)) throw new ArgumentException("GuaTraceSensitiveEnvelopeUnsupported");
+        // Unlike payload JSON, the pinned native envelope is not redacted by Gua.
+        // Check both decoded names and fixed encoded key/value/schema tokens before
+        // constructing its session/worker; late report rejection cannot undo a write.
+        var fixedTokens = envelopeNames.Concat(["recent", "streaming", "onFailure", "always", "debug", "player",
+            "unknown", "passed", "failed", "interrupted", "collector-monotonic:", "true", "false", "1",
+            "index", "recording", "steps", "gua.trace.recording.v1", "gua.recording.references.v1"])
+            .Concat(Enum.GetNames<GuaTraceStepKind>().Select(JsonNamingPolicy.CamelCase.ConvertName));
+        if (fixedTokens.Any(token => !safeLiteral(token) || !safeLiteral(JsonSerializer.Serialize(token))) ||
+            envelopeNames.Any(name => !safeLiteral(JsonSerializer.Serialize(name) + ":\"")))
+            throw new ArgumentException("GuaTraceLiteralEnvelopeUnsupported");
     }
     private string Bound(string value)
     { if (value.Length > maxStringChars) throw new InvalidDataException("TraceStringLimit"); return value; }
