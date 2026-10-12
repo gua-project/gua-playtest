@@ -41,18 +41,24 @@ public sealed class PlanManager
     /// <summary>Copy supplied expectations only; do not infer a Goal from observed bugs.
     /// The generated candidate always requests full afterPlan coverage.</summary>
     public async ValueTask<string> CreateAsync(string scenarioPath, string recordingPath,
-        IEnumerable<string> allowedRoots, string timing, CancellationToken token = default)
+        IEnumerable<string> allowedRoots, string timing, CancellationToken token = default,
+        string? expectedScenarioSha256 = null, string? expectedRecordingSha256 = null,
+        Func<string, bool>? candidateResponseAllowed = null)
     {
         token.ThrowIfCancellationRequested();
         var roots = allowedRoots.Select(r => Path.TrimEndingDirectorySeparator(Path.GetFullPath(r))).ToArray();
         var recordingFullPath = AuthorizeInput(recordingPath, roots, "RecordingOutsideAllowedRoots");
         var scenarioFullPath = AuthorizeInput(scenarioPath, roots, "ScenarioOutsideAllowedRoots");
-        var scenarioReport = await new StaticContractValidator(roots).ValidateFileAsync(scenarioFullPath, token);
+        var scenarioReport = await StrictValidator(roots).ValidateFileAsync(scenarioFullPath, token);
         token.ThrowIfCancellationRequested();
         if (!scenarioReport.IsValid || scenarioReport.Document is not ScenarioDocument) throw new InvalidDataException("ScenarioInvalid");
         var source = scenarioReport.Files.Values.Single();
+        if (expectedScenarioSha256 is not null && source.Sha256 != expectedScenarioSha256)
+            throw new InvalidDataException("PlanInputChanged");
         RejectSecrets(source.CopyBytes());
         var recordingBytes = Read(recordingFullPath); RejectSecrets(recordingBytes);
+        if (expectedRecordingSha256 is not null && Hash(recordingBytes) != expectedRecordingSha256)
+            throw new InvalidDataException("PlanInputChanged");
         // Use static reference validation to authorize and retain Recording bytes too.
         var sourcePlan = new ReplayPlanDocument("candidate", new(source.Path, source.Sha256),
             new(recordingFullPath, Hash(recordingBytes)), timing, "afterPlan", [], null);
@@ -63,7 +69,7 @@ public sealed class PlanManager
         {
             var entry = Path.Combine(staging, "source.json");
             Publish(entry, sourcePlanBytes, token);
-            var report = await new StaticContractValidator(roots.Append(root)).ValidateFileAsync(entry, token);
+            var report = await StrictValidator(roots.Append(root)).ValidateFileAsync(entry, token);
             token.ThrowIfCancellationRequested();
             if (!report.IsValid) throw new InvalidDataException(report.Code);
             var scenario = report.Files.Values.Single(f => f.Sha256 == source.Sha256);
@@ -77,11 +83,13 @@ public sealed class PlanManager
             var plan = sourcePlan with { PlanId = id, Scenario = new(scenarioName, scenario.Sha256), Recording = new(recordingName, recording.Sha256) };
             Publish(Path.Combine(staging, "plan.json"), CheckedPlanBytes(plan), token);
             File.Delete(entry);
-            var validated = await new StaticContractValidator([root]).ValidateFileAsync(Path.Combine(staging, "plan.json"), token);
+            var validated = await StrictValidator([root]).ValidateFileAsync(Path.Combine(staging, "plan.json"), token);
             token.ThrowIfCancellationRequested();
             if (!validated.IsValid) throw new InvalidDataException(validated.Code);
             token.ThrowIfCancellationRequested(); RunArtifactStore.CheckPath(root);
             var destination = Path.Combine(root, id);
+            if (candidateResponseAllowed is not null && !candidateResponseAllowed(Path.Combine(destination, "plan.json")))
+                throw new InvalidDataException("PlanResponseRejected");
             Directory.Move(staging, destination);
             return Path.Combine(destination, "plan.json");
         }
@@ -134,10 +142,12 @@ public sealed class PlanManager
     /// <summary>Explicit approval applies to these exact expectation and timing bytes.
     /// A changed Plan needs a new full trial and approval. Never overwrites an adoption.</summary>
     public async ValueTask AcceptAsync(string planPath, string trialId, bool explicitlyApprove,
-        bool expectationsApproved, CancellationToken token = default)
+        bool expectationsApproved, CancellationToken token = default, string? expectedPlanSha256 = null)
     {
         if (!explicitlyApprove || !expectationsApproved) throw new InvalidDataException("ExplicitApprovalRequired");
         var (directory, plan, scenario, recording) = await Load(planPath, token);
+        if (expectedPlanSha256 is not null && plan.Sha256 != expectedPlanSha256)
+            throw new InvalidDataException("PlanInputChanged");
         var proof = VerifyTrial(directory, trialId, plan, scenario, recording);
         var evidence = new AdoptionEvidenceDocument(new("plan.json", plan.Sha256),
             new(Relative(directory, scenario.Path), scenario.Sha256), new(Relative(directory, recording.Path), recording.Sha256),
@@ -162,6 +172,14 @@ public sealed class PlanManager
         return true;
     }
 
+    private static StaticContractValidator StrictValidator(IEnumerable<string> roots)
+    {
+        var explicitRoots = roots.ToArray();
+        return new(explicitRoots,
+            file => ArtifactPathAuthority.AuthorizeFile(file, explicitRoots, "ManagedPlanRequired"),
+            directory => ArtifactPathAuthority.AuthorizeDirectory(directory, explicitRoots, "ManagedPlanRequired"));
+    }
+
     private async ValueTask<(string, ValidatedFile, ValidatedFile, ValidatedFile)> Load(string planPath, CancellationToken token)
     {
         var path = Path.GetFullPath(planPath);
@@ -181,7 +199,7 @@ public sealed class PlanManager
             using (expected.Stream)
                 if (requested.Identity != expected.Identity) throw new InvalidDataException("ManagedPlanRequired");
         }
-        var report = await new StaticContractValidator([directory]).ValidateFileAsync(canonical, token);
+        var report = await StrictValidator([directory]).ValidateFileAsync(canonical, token);
         token.ThrowIfCancellationRequested();
         if (!report.IsValid || report.Document is not ReplayPlanDocument model || model.Completion != "afterPlan")
             throw new InvalidDataException("CandidateInvalid");
@@ -324,31 +342,7 @@ public sealed class PlanManager
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static string Relative(string directory, string path) => Path.GetRelativePath(directory, path).Replace('\\', '/');
     private static string AuthorizeInput(string input, IEnumerable<string> roots, string refusal)
-    {
-        var path = Path.GetFullPath(input);
-        RunArtifactStore.CheckPath(path);
-        foreach (var allowed in roots)
-        {
-            if (!Directory.Exists(allowed)) continue;
-            var identity = FileIdentity.ReadDirectory(allowed);
-            for (var ancestor = Path.GetDirectoryName(path); ancestor is not null; ancestor = Path.GetDirectoryName(ancestor))
-            {
-                if (FileIdentity.ReadDirectory(ancestor) != identity) continue;
-                // This relative suffix uses the input's own ancestor spelling. Rebase
-                // it onto the verified allowed root for the static lexical validator.
-                var canonical = Path.GetFullPath(Path.Combine(allowed, Path.GetRelativePath(ancestor, path)));
-                var requested = FileIdentity.OpenRegular(path);
-                using (requested.Stream)
-                {
-                    var expected = FileIdentity.OpenRegular(canonical);
-                    using (expected.Stream)
-                        if (requested.Identity != expected.Identity) throw new InvalidDataException(refusal);
-                }
-                return canonical;
-            }
-        }
-        throw new InvalidDataException(refusal);
-    }
+        => ArtifactPathAuthority.AuthorizeFile(input, roots, refusal);
     private sealed record Envelope(string Payload, string Signature);
     private sealed record TrialProof(string RunId, RunIdentity Identity, string PlanSha256, string ScenarioSha256,
         string RecordingSha256, ReplayProgress Progress, int TotalCheckpoints, string ResultSha256, string CompletionSha256, string RunSha256, int SummaryMaxBytes);

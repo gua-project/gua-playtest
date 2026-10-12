@@ -20,13 +20,27 @@ public sealed class SystemProcessLauncher : IProcessLauncher
             throw new IOException("LaunchConfigurationUnavailable");
         var start = new ProcessStartInfo(command.Executable)
         {
-            WorkingDirectory = command.WorkingDirectory, UseShellExecute = false, CreateNoWindow = true
+            WorkingDirectory = command.WorkingDirectory, UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
         };
         foreach (var argument in command.Arguments) start.ArgumentList.Add(argument);
         return new OwnedProcess(Process.Start(start) ?? throw new IOException("ProcessCreationFailed"));
     }
-    private sealed class OwnedProcess(Process process) : IOwnedProcess
+    private sealed class OwnedProcess : IOwnedProcess
     {
+        private readonly Process process;
+        // Drain to a non-buffering sink. Untrusted child text is neither a CLI document nor
+        // trusted Trace evidence and must not enter stdout, diagnostics or persisted artifacts.
+        private readonly Task stdout;
+        private readonly Task stderr;
+        internal OwnedProcess(Process process)
+        {
+            this.process = process;
+            stdout = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
+            stderr = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+            _ = stdout.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+            _ = stderr.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        }
         private bool disposed;
         public bool HasExited => disposed || process.HasExited;
         public ValueTask WaitForExitAsync(CancellationToken cancellationToken) => new(process.WaitForExitAsync(cancellationToken));

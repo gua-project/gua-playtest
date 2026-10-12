@@ -4,6 +4,7 @@ namespace Gua.Playtest.Core.Contracts;
 public sealed class ContractValidatorAdapter : IStaticValidator
 {
     private readonly StaticContractValidator validator;
+    public ContractValidatorAdapter(StaticContractValidator validator) => this.validator = validator;
     public ContractValidatorAdapter(IEnumerable<string> allowedRoots)
     {
         try { validator = new(allowedRoots); }

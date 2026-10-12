@@ -31,11 +31,18 @@ public sealed class AllowedPaths
         {
             if (OperatingSystem.IsWindows() && part.Contains(':')) throw new ContractException("InvalidPath");
             current = Path.Combine(current, part);
-            FileSystemInfo info = Directory.Exists(current) ? new DirectoryInfo(current) : new FileInfo(current);
+            // Read the directory entry without first following a link target.
+            // Directory.Exists could contact a network target before LinkTarget is checked.
+            FileSystemInfo info = new FileInfo(current);
+            if (info.LinkTarget is null && Directory.Exists(current)) info = new DirectoryInfo(current);
             // LinkTarget also detects broken links; normal absent paths are rejected explicitly.
             if (info.LinkTarget is not null)
             {
-                var target = info.ResolveLinkTarget(true) ?? throw new ContractException("InvalidPath");
+                if (info.LinkTarget.StartsWith("\\\\", StringComparison.Ordinal) || info.LinkTarget.StartsWith("//", StringComparison.Ordinal))
+                    throw new ContractException("InvalidPath");
+                // Resolve one hop so every subsequent target passes the local
+                // namespace guard before any target filesystem probe.
+                var target = info.ResolveLinkTarget(false) ?? throw new ContractException("InvalidPath");
                 current = Canonical(Path.GetFullPath(target.FullName), links + 1);
             }
             else if (!info.Exists) throw new ContractException("ReferenceMissing");

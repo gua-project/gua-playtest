@@ -49,7 +49,7 @@ public sealed class FoundationTests
         {
             await File.WriteAllTextAsync(file, json);
             using var output = new StringWriter();
-            Assert.Equal(exit, await CliApplication.ExecuteAsync(["validate", "--gua-schema", "selector.schema.json", file], output));
+            Assert.Equal(exit, await CliApplication.ExecuteAsync(["--json", "validate", "--gua-schema", "selector.schema.json", file], output));
             using var doc = JsonDocument.Parse(output.ToString());
             Assert.Equal(result.Code, doc.RootElement.GetProperty("code").GetString());
             Assert.Equal(expected.ToString(), doc.RootElement.GetProperty("status").GetString());
@@ -61,7 +61,7 @@ public sealed class FoundationTests
     public async Task ScenarioValidationRequiresExplicitAllowedRoot()
     {
         using var output = new StringWriter();
-        Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "scenario.json"], output));
+        Assert.Equal(2, await CliApplication.ExecuteAsync(["--json", "validate", "scenario.json"], output));
         Assert.Contains("explicit-validation-arguments-required", output.ToString());
     }
 
@@ -86,7 +86,7 @@ public sealed class FoundationTests
             foreach (var root in new[] { missing, broken })
             {
                 using var output = new StringWriter();
-                Assert.Equal(2,await CliApplication.ExecuteAsync(["validate","--allow-root",root,"input.json"],output));
+                Assert.Equal(2,await CliApplication.ExecuteAsync(["--json", "validate","--allow-root",root,"input.json"],output));
                 using var document = JsonDocument.Parse(output.ToString());
                 Assert.Equal("Invalid",document.RootElement.GetProperty("status").GetString());
                 Assert.Equal("InvalidAllowedRoots",document.RootElement.GetProperty("code").GetString());
@@ -155,18 +155,18 @@ public sealed class FoundationTests
     public async Task FileFaultsAndSizeLimitAreNonzeroAndSanitized()
     {
         using var missing = new StringWriter();
-        Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "--gua-schema", "selector.schema.json", "secret-path/not-found.json"], missing));
+        Assert.Equal(2, await CliApplication.ExecuteAsync(["--json", "validate", "--gua-schema", "selector.schema.json", "secret-path/not-found.json"], missing));
         Assert.DoesNotContain("secret-path", missing.ToString());
         var path = Path.GetTempFileName();
         try
         {
             await File.WriteAllBytesAsync(path, new byte[CliApplication.MaxDocumentBytes + 1]);
             using var large = new StringWriter();
-            Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "--gua-schema", "selector.schema.json", path], large));
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["--json", "validate", "--gua-schema", "selector.schema.json", path], large));
             Assert.Contains("document-too-large", large.ToString());
             await File.WriteAllBytesAsync(path, [0xff]);
             using var bad = new StringWriter();
-            Assert.Equal(2, await CliApplication.ExecuteAsync(["validate", "--gua-schema", "selector.schema.json", path], bad));
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["--json", "validate", "--gua-schema", "selector.schema.json", path], bad));
             Assert.Contains("document-unreadable", bad.ToString());
         }
         finally { File.Delete(path); }

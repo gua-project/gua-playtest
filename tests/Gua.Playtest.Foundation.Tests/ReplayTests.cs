@@ -13,6 +13,7 @@ using System.Text.Json;
 using Xunit;
 using Gua.Playtest.Runner.Artifacts;
 using Gua.Playtest.Runner.Planning;
+using Gua.Playtest.Cli;
 
 namespace Gua.Playtest.Foundation.Tests;
 
@@ -25,6 +26,156 @@ public sealed class ReplayOwnerTimingCollection { }
 [Collection("Replay owner timing")]
 public sealed class ReplayTests
 {
+    [Theory]
+    [InlineData("scenario")]
+    [InlineData("recording")]
+    public async Task ManagedGraphRejectsSameByteReparseReferencesAfterGenuineTrial(string selected)
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var directory = Path.GetDirectoryName(path)!;
+        var nested = Directory.CreateDirectory(Path.Combine(directory, "inputs"));
+        File.Move(Path.Combine(directory, selected + ".json"), Path.Combine(nested.FullName, selected + ".json"));
+        var plan = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        plan[selected]!["path"] = "inputs/" + selected + ".json";
+        await File.WriteAllTextAsync(path, plan.ToJsonString());
+        var id = await Trial(files, manager, path); // genuine full ReplayDriver/store trial before any link
+        var sibling = Path.Combine(directory, "same-byte-sibling"); Directory.Move(nested.FullName, sibling);
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var start = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                foreach (var argument in new[] { "/c", "mklink", "/J", nested.FullName, sibling }) start.ArgumentList.Add(argument);
+                using var child = System.Diagnostics.Process.Start(start)!;
+                var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Equal(0, child.ExitCode); await stdout; await stderr;
+            }
+            else Directory.CreateSymbolicLink(nested.FullName, sibling);
+            using var output = new StringWriter();
+            Assert.Equal(2, await CliApplication.ExecuteAsync(["plan", "accept", "--json", "--managed-root", Path.Combine(files.Root, "managed"),
+                "--plan", path, "--trial", id, "--approve", "--approve-expectations"], output));
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.False(File.Exists(Path.Combine(directory, "accepted.json")));
+            await Assert.ThrowsAsync<InvalidDataException>(() => manager.IsAcceptedAsync(path).AsTask());
+        }
+        finally
+        {
+            if (Directory.Exists(nested.FullName)) Directory.Delete(nested.FullName);
+            Directory.Move(sibling, nested.FullName);
+        }
+        Assert.False(await manager.IsAcceptedAsync(path));
+    }
+    [Theory]
+    [InlineData("Accepted")]
+    [InlineData("PlanAccepted")]
+    public async Task PlanAcceptChecksCompleteResponseBeforePublishingAdoption(string secret)
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var redactor = new PersistenceRedactor([secret], []);
+        bool ResponseAllowed(string reply)
+        {
+            using var document = JsonDocument.Parse(reply);
+            var status = document.RootElement.GetProperty("status").GetString()!;
+            var code = document.RootElement.TryGetProperty("code", out var value) ? value.GetString()! : "PlanAccepted";
+            var result = CommandOutput.Serialize(status, code, document.RootElement);
+            return redactor.Redact(result) == result;
+        }
+        using var output = new StringWriter();
+        Assert.Equal(2, await PlanCommand.ExecuteAsync(["plan", "accept", "--managed-root", Path.Combine(files.Root, "managed"),
+            "--plan", path, "--trial", id, "--approve", "--approve-expectations"], output, redactor,
+            responseAllowed: ResponseAllowed));
+        Assert.DoesNotContain(secret, output.ToString());
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+        Assert.False(await manager.IsAcceptedAsync(path));
+    }
+
+    [Fact]
+    public async Task PlanCancellationReplyAppliesPrivateSecretPolicy()
+    {
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        using var output = new StringWriter();
+        Assert.Equal(4, await PlanCommand.ExecuteAsync([], output, new PersistenceRedactor(["PlanInterrupted"], []), cancellation.Token));
+        Assert.DoesNotContain("PlanInterrupted", output.ToString());
+        using var document = JsonDocument.Parse(output.ToString());
+    }
+
+    [Fact]
+    public async Task CliAcceptAuthorizesCaseAliasAndRejectsDistinctRootBeforeSnapshot()
+    {
+        using var files = new Fixture(); var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var aliasRoot = Path.Combine(files.Root, "MANAGED"); var same = Directory.Exists(aliasRoot);
+        var directory = Path.Combine(aliasRoot, Path.GetFileName(Path.GetDirectoryName(path))!);
+        var alias = Path.Combine(directory, "plan.json");
+        if (!same)
+        {
+            Directory.CreateDirectory(directory);
+            foreach (var name in new[] { "plan.json", "scenario.json", "recording.json" })
+                File.Copy(Path.Combine(Path.GetDirectoryName(path)!, name), Path.Combine(directory, name));
+        }
+        var bytes = File.ReadAllBytes(path);
+        using var output = new StringWriter();
+        Assert.Equal(same ? 0 : 2, await CliApplication.ExecuteAsync(["plan", "accept", "--json", "--managed-root", Path.Combine(files.Root, "managed"),
+            "--plan", alias, "--trial", id, "--approve", "--approve-expectations"], output));
+        Assert.Equal(same, await manager.IsAcceptedAsync(path)); Assert.Equal(bytes, File.ReadAllBytes(path));
+        if (!same) Assert.False(File.Exists(Path.Combine(directory, "accepted.json")));
+    }
+
+    [Theory]
+    [InlineData("Accepted", true)]
+    [InlineData("PlanAccepted", true)]
+    [InlineData("Accepted: PlanAccepted", false)]
+    [InlineData("\n", true)]
+    public async Task CliAdoptionPreflightsResolvedSecretAgainstEntireResponse(string secret, bool json)
+    {
+        using var files = new Fixture(steps: 1, gameInput: true, secretInput: true);
+        var manager = Plans(files); var path = await Candidate(files, manager);
+        var id = await Trial(files, manager, path);
+        var variable = "GUA_TEST_REPLY_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(variable, secret);
+        try
+        {
+            using var output = new StringWriter(); using var diagnostics = new StringWriter();
+            var args = new List<string> { "plan", "accept", "--managed-root", Path.Combine(files.Root, "managed"),
+                "--plan", path, "--trial", id, "--approve", "--approve-expectations", "--secret-env", "input=" + variable };
+            if (json) args.Add("--json");
+            Assert.Equal(2, await CliApplication.ExecuteAsync(args.ToArray(), output, diagnostics));
+            Assert.DoesNotContain(secret, output.ToString()); Assert.DoesNotContain(secret, diagnostics.ToString());
+            if (json) { using var document = JsonDocument.Parse(output.ToString()); }
+            Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "accepted.json")));
+            Assert.False(await manager.IsAcceptedAsync(path));
+        }
+        finally { Environment.SetEnvironmentVariable(variable, null); }
+    }
+
+    [Fact]
+    public async Task CandidateResponsePolicyRunsBeforeDirectoryPublication()
+    {
+        using var files = new Fixture(); var redactor = new PersistenceRedactor(["PlanCandidateCreated"], []);
+        var checkedCandidate = false;
+        bool ResponseAllowed(string reply)
+        {
+            using var document = JsonDocument.Parse(reply);
+            var status = document.RootElement.GetProperty("status").GetString()!;
+            if (status == "Candidate") checkedCandidate = true;
+            var code = document.RootElement.TryGetProperty("code", out var value) ? value.GetString()! : "PlanCandidateCreated";
+            var result = CommandOutput.Serialize(status, code, document.RootElement);
+            return redactor.Redact(result) == result;
+        }
+        var managed = Path.Combine(files.Root, "managed");
+        var scenario = Path.Combine(files.Root, "scenario.json");
+        var recording = Path.Combine(files.Root, "recording.json");
+        using var output = new StringWriter();
+        Assert.Equal(2, await PlanCommand.ExecuteAsync(["plan", "create", "--managed-root", managed, "--allow-root", files.Root,
+            "--scenario", scenario, "--recording", recording, "--timing", "recorded"], output, redactor,
+            responseAllowed: ResponseAllowed));
+        Assert.DoesNotContain("PlanCandidateCreated", output.ToString());
+        Assert.True(checkedCandidate);
+        Assert.Empty(Directory.GetFiles(managed, "plan.json", SearchOption.AllDirectories));
+    }
     private const string Assertion = """{"kind":"assertion","read":{"region":"standard","target":{"source":"ui","selector":{"id":{"value":"buy"}}},"field":"visible","valueType":{"type":"bool"}},"quantifier":"one","operator":"equals","expected":{"type":"bool","value":true}}""";
     private static ConditionObservationUnit Unit(bool value) => new([KeyValuePair.Create("$", new ConditionLeafObservation("source:epoch:scope", true,
         [new ConditionTargetObservation("source:epoch:buy", "{\"type\":\"bool\",\"value\":" + (value ? "true" : "false") + "}")], true))]);
