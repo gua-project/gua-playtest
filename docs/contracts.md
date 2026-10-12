@@ -24,6 +24,12 @@ Every object controlling Playtest behavior rejects unknown properties. Version 1
 
 ## Gua 1.1.1 reuse and version checks
 
+Environment may additionally contain the versioned optional [NavigationProfile](navigation.md).
+It declares actor/space, capsule offsets, explicit movement basis, scalar observations,
+bounded survey and budgets, author-approved approaches and a named preparation fixture.
+Static form validity is separate from trusted host preparation and current input/query authority.
+Omitting navigation retains the existing Environment/Scenario/Replay contract.
+
 Gua schemas under `schemas/gua-1.1.1` are unchanged copies from tag `gua-v1.1.1`, commit `88f5dca4aa97c5d5187ab66ea4416377f3affc96`, with the upstream MIT license and SHA-256 manifest. The product embeds these files and resolves their `$id` references locally. An unresolved reference fails; there is no HTTP fallback. Package consumers use Gua.Testing 1.1.1 `GuaDistribution.ReadSchema/ValidateJson` for Gua-only validation. Core reuses the exact public Value schema without calling `GuaValue` P/Invoke.
 
 Value v1 uses bool/integer/number/string/enum/list/set; integer range is ±9007199254740991, numbers are finite, enum identity includes enumType, and collection element type survives empty values. No null/object/nested collection is introduced into Value. Existing Gua nullable state and Input vector objects keep their distinct schemas. Enum membership comes from Gua enum-catalog-v1; catalog availability and dynamic type consistency are runtime checks.

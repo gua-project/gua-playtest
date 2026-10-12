@@ -59,7 +59,14 @@ public sealed class HostPreparation
             throw new ArgumentException("PreparationPolicyInvalid", nameof(policy));
         foreach (var duration in new[] { policy.OperationTimeout, policy.RetryDelay, policy.ShutdownTimeout })
             if (duration <= TimeSpan.Zero || duration > TimeSpan.FromDays(1)) throw new ArgumentException("PreparationLimitInvalid", nameof(policy));
+        if (policy.Navigation is { } navigation && (NavigationPreparationCheck.ValidatePolicy(navigation) != "Valid" ||
+            navigation.Profile.Preparation.Clock != policy.Clock))
+            throw new ArgumentException("NavigationPolicyInvalid", nameof(policy));
         this.policy = policy with { Capabilities = policy.Capabilities.ToArray(),
+            Navigation = policy.Navigation is null ? null : policy.Navigation with {
+                Profile = Gua.Playtest.Core.Contracts.NavigationProfileValidation.Copy(policy.Navigation.Profile),
+                AllowedActionIds = new HashSet<string>(policy.Navigation.AllowedActionIds, StringComparer.Ordinal),
+                AllowedReads = policy.Navigation.AllowedReads.Select(r => (System.Text.Json.Nodes.JsonObject)r.DeepClone()).ToArray() },
             Launch = policy.Launch is null ? null : policy.Launch with { Arguments = policy.Launch.Arguments.ToArray() } };
         this.launcher = launcher; this.connector = connector; this.trace = trace;
     }
@@ -201,6 +208,8 @@ public sealed class HostPreparation
         var connected = connection!;
         var identity = await Step(PreparationStage.Identity, preparationDeadline, connected.IdentifyAsync, cancellationToken).ConfigureAwait(false);
         await ValidateIdentityAsync(identity, preparationDeadline, cancellationToken).ConfigureAwait(false);
+        if (policy.Navigation is not null && setup is null)
+            await FailAsync(PreparationStage.Setup, PreparationCode.SetupForbidden);
         if (setup is not null)
         {
             var setupStartedAt = preparationClock.Elapsed;
@@ -241,6 +250,18 @@ public sealed class HostPreparation
         if (!boundary.Continuous || boundary.CapturedIdentity.SourceId != identity.SourceId || boundary.CapturedIdentity.Epoch != identity.Epoch)
             await FailAsync(PreparationStage.Synchronize, PreparationCode.StaleObservation);
         if (!boundary.PreconditionsSatisfied) await FailAsync(PreparationStage.Preconditions, PreparationCode.PreconditionsUnsatisfied);
+        if (policy.Navigation is { } navigationPolicy)
+        {
+            // Same subscribe/capture receipt, run-owned real clock, bounded pure checks. Never a separate query/input route.
+            var now = preparationClock.Elapsed;
+            var navigationCode = await ReadPureAsync(PreparationStage.Preconditions, preparationDeadline, _ =>
+                NavigationPreparationCheck.Validate(navigationPolicy, boundary.Navigation, boundary.CapturedIdentity,
+                    capture.RequestId, boundary.RealCapturedAt, now, "run-real"), cancellationToken).ConfigureAwait(false);
+            if (navigationCode != "Valid") await FailAsync(PreparationStage.Preconditions,
+                boundary.Navigation is null ? PreparationCode.NavigationUnavailable : PreparationCode.NavigationIncompatible);
+            if (preparationClock.Elapsed - boundary.RealCapturedAt > TimeSpan.FromMilliseconds(navigationPolicy.Profile.Budgets.MaxObservationAgeMilliseconds))
+                await FailAsync(PreparationStage.Preconditions, PreparationCode.StaleObservation);
+        }
         if (process is not null && await ReadProcessStatusAsync(process, RunPhase.Preparation, cancellationToken).ConfigureAwait(false)) await FailAsync(PreparationStage.Launch, PreparationCode.ProcessExited);
         await CheckDeadlineAsync(preparationDeadline); cancellationToken.ThrowIfCancellationRequested();
         RunStartBoundary certificate;
@@ -397,6 +418,8 @@ public sealed class HostPreparation
             // blocking getter cannot prevent its original timer/cancellation from running.
             // A late worker may finish reading, but has no Run, cleanup or dispatch authority.
             if (!setup.IsAuthorized(policy.HostMode)) throw new PreparationException(PreparationStage.Setup, PreparationCode.SetupForbidden);
+              if (policy.Navigation is { } navigation && setup.FixtureId != navigation.FixtureId)
+                  throw new PreparationException(PreparationStage.Setup, PreparationCode.SetupForbidden);
             var source = setup.OperationIds; var allowed = setup.AllowedOperationIds;
             var maximum = setup.MaximumOperations; var timeout = setup.Timeout;
             if (source is null || allowed is null || maximum is < 1 or > 1000 ||

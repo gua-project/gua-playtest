@@ -22,7 +22,7 @@ public sealed record ResourceLimits(long MaxDurationMilliseconds, long MaxAction
     long TraceMaxAttachmentBytes, long TraceRecentSteps = 100);
 public sealed record EnvironmentDocument(string EnvironmentId, string BuildId, ConnectionDefinition Connection,
     string Profile, ResourceLimits Limits, PermissionDefinition Permissions, TraceDefinition Trace,
-    JsonObject? Fixture) : ContractDocument("environment", 1);
+    JsonObject? Fixture, NavigationProfile? Navigation = null) : ContractDocument("environment", 1);
 public sealed record CheckpointDefinition(long BeforeStep, JsonObject Condition, long TimeoutMilliseconds);
 public sealed record ReplayPlanDocument(string PlanId, FixedFileReference Scenario, FixedFileReference Recording,
     string Timing, string Completion, CheckpointDefinition[] Checkpoints, JsonObject? Initial) : ContractDocument("replayPlan", 1);

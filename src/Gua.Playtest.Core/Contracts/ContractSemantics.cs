@@ -19,6 +19,13 @@ internal static class ContractSemantics
                     || endpoint.Scheme is not ("ws" or "wss") || string.IsNullOrEmpty(endpoint.Host)
                     || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0)
                     throw new ContractException("EndpointInvalid");
+                if (document["navigation"] is { } navigation)
+                {
+                    var p = System.Text.Json.JsonSerializer.Deserialize<NavigationProfile>(navigation, ContractJson.Options)!;
+                    NavigationProfileValidation.ValidateSemantics(p);
+                    if (Text(document["fixture"] ?? new JsonObject(), "fixtureId") != p.Preparation.FixtureId)
+                        throw new ContractException("NavigationFixtureMismatch");
+                }
                 break;
             case "plannerDecision":
                 var decision = document["decision"]!.AsObject();

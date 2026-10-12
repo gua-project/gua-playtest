@@ -110,6 +110,9 @@
         "captureMode",
         "savePolicy"
       ]
+    },
+    "navigation": {
+      "$ref": "navigation-profile.schema.json"
     }
   },
   "required": [

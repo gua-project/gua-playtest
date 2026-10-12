@@ -1,0 +1,329 @@
+{
+  "kind": "environment",
+  "schemaVersion": 1,
+  "environmentId": "local-test",
+  "buildId": "fixture-build-A",
+  "connection": {
+    "endpoint": "ws://127.0.0.1:17777",
+    "credential": {
+      "secretKey": "bridge-token"
+    }
+  },
+  "profile": "Player",
+  "limits": {
+    "maxDurationMilliseconds": 30000,
+    "maxActions": 50,
+    "maxDecisions": 50,
+    "prepareTimeoutMilliseconds": 1000,
+    "cleanupTimeoutMilliseconds": 1000,
+    "plannerTimeoutMilliseconds": 1000,
+    "waitTimeoutMilliseconds": 1000,
+    "maxSegmentMilliseconds": 1000,
+    "maxLatenessMilliseconds": 1000,
+    "maxObservationNodes": 1000,
+    "maxObservationBytes": 1048576,
+    "regexTimeoutMilliseconds": 100,
+    "regexMaxPatternLength": 1024,
+    "stagnationActionLimit": 12,
+    "stagnationRepeatLimit": 4,
+    "recoveryDecisionLimit": 2,
+    "traceMaxBytes": 8388608,
+    "traceMaxEvents": 10000,
+    "traceQueueCapacity": 1024,
+    "traceMaxAttachmentBytes": 1048576
+  },
+  "permissions": {
+    "actionIds": [
+      "move"
+    ],
+    "rawInput": false,
+    "reads": [
+      {
+        "target": {
+          "source": "object",
+          "selector": {
+            "label": {
+              "value": "player"
+            }
+          }
+        },
+        "region": "observe",
+        "name": "velocityX",
+        "valueType": {
+          "type": "number"
+        }
+      },
+      {
+        "target": {
+          "source": "object",
+          "selector": {
+            "label": {
+              "value": "player"
+            }
+          }
+        },
+        "region": "observe",
+        "name": "velocityY",
+        "valueType": {
+          "type": "number"
+        }
+      },
+      {
+        "target": {
+          "source": "object",
+          "selector": {
+            "label": {
+              "value": "player"
+            }
+          }
+        },
+        "region": "observe",
+        "name": "velocityZ",
+        "valueType": {
+          "type": "number"
+        }
+      },
+      {
+        "target": {
+          "source": "object",
+          "selector": {
+            "label": {
+              "value": "player"
+            }
+          }
+        },
+        "region": "observe",
+        "name": "grounded",
+        "valueType": {
+          "type": "bool"
+        }
+      },
+      {
+        "target": {
+          "source": "object",
+          "selector": {
+            "label": {
+              "value": "coin"
+            }
+          }
+        },
+        "region": "observe",
+        "name": "uncollected",
+        "valueType": {
+          "type": "bool"
+        }
+      }
+    ]
+  },
+  "trace": {
+    "captureMode": "recent",
+    "savePolicy": "onFailure"
+  },
+  "navigation": {
+    "schemaVersion": 1,
+    "actorSelector": {
+      "label": {
+        "value": "player"
+      }
+    },
+    "actorDomainId": "player-domain",
+    "positionField": "position",
+    "spaceId": "room",
+    "spaceEpoch": 1,
+    "plane": {
+      "up": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      },
+      "axisX": {
+        "x": 1,
+        "y": 0,
+        "z": 0
+      },
+      "axisY": {
+        "x": 0,
+        "y": 0,
+        "z": 1
+      }
+    },
+    "capsule": {
+      "representation": "approximation",
+      "radius": 0.3,
+      "height": 1.8,
+      "footOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "centerOffset": {
+        "x": 0,
+        "y": 0.9,
+        "z": 0
+      }
+    },
+    "queryPolicyId": "walking",
+    "consistency": "samePhysicsSample",
+    "movement": {
+      "model": "planarTranslation",
+      "actionId": "move",
+      "relativeTo": "world",
+      "axisX": {
+        "minimum": -1,
+        "maximum": 1,
+        "polarity": 1
+      },
+      "axisY": {
+        "minimum": -1,
+        "maximum": 1,
+        "polarity": -1
+      },
+      "release": "neutralAtSegmentEnd"
+    },
+    "motion": {
+      "maxSpeed": 4,
+      "maxStoppingDistance": 0.5,
+      "maxStoppingMilliseconds": 300,
+      "velocity": {
+        "x": {
+          "target": {
+            "source": "object",
+            "selector": {
+              "label": {
+                "value": "player"
+              }
+            }
+          },
+          "region": "observe",
+          "name": "velocityX",
+          "valueType": {
+            "type": "number"
+          }
+        },
+        "y": {
+          "target": {
+            "source": "object",
+            "selector": {
+              "label": {
+                "value": "player"
+              }
+            }
+          },
+          "region": "observe",
+          "name": "velocityY",
+          "valueType": {
+            "type": "number"
+          }
+        },
+        "z": {
+          "target": {
+            "source": "object",
+            "selector": {
+              "label": {
+                "value": "player"
+              }
+            }
+          },
+          "region": "observe",
+          "name": "velocityZ",
+          "valueType": {
+            "type": "number"
+          }
+        }
+      },
+      "grounded": {
+        "target": {
+          "source": "object",
+          "selector": {
+            "label": {
+              "value": "player"
+            }
+          }
+        },
+        "region": "observe",
+        "name": "grounded",
+        "valueType": {
+          "type": "bool"
+        }
+      }
+    },
+    "arrival": {
+      "radius": 0.4,
+      "speedTolerance": 0.1,
+      "heightTolerance": 0.1,
+      "maxSlopeDegrees": 25
+    },
+    "survey": {
+      "min": {
+        "x": -5,
+        "y": -1,
+        "z": -5
+      },
+      "max": {
+        "x": 5,
+        "y": 3,
+        "z": 5
+      },
+      "minHeight": -0.1,
+      "maxHeight": 1,
+      "cellSize": 0.5,
+      "supportSpacing": 0.2,
+      "topology": "singleGroundedSurface"
+    },
+    "budgets": {
+      "maxObservationAgeMilliseconds": 100,
+      "maxInputMilliseconds": 50,
+      "maxQueries": 1000,
+      "maxNodes": 2000,
+      "maxEdges": 10000,
+      "maxReplans": 10,
+      "maxLlmCalls": 0,
+      "queryDeadlineMilliseconds": 20,
+      "maxApproachCandidates": 8
+    },
+    "targets": [
+      {
+        "selector": {
+          "label": {
+            "value": "coin"
+          }
+        },
+        "domainId": "coin-domain",
+        "approachPoints": [
+          {
+            "x": 1,
+            "y": 0,
+            "z": 1
+          }
+        ],
+        "approachRadius": 0.3,
+        "uncollected": {
+          "target": {
+            "source": "object",
+            "selector": {
+              "label": {
+                "value": "coin"
+              }
+            }
+          },
+          "region": "observe",
+          "name": "uncollected",
+          "valueType": {
+            "type": "bool"
+          }
+        }
+      }
+    ],
+    "preparation": {
+      "fixtureId": "walk-room",
+      "clock": "real"
+    },
+    "provenance": {
+      "author": "fixture-author",
+      "parameterSource": "Synthetic unit fixture values; no engine measurement or recommendation."
+    }
+  },
+  "fixture": {
+    "fixtureId": "walk-room"
+  }
+}
