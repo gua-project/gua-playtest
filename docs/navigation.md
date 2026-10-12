@@ -80,7 +80,15 @@ The check reuses pinned Gua Action-map and spatial-r1 provider schemas, verifies
 an active public holdable vector2 action with explicit compatible range, and
 requires raycast/overlap/sweep, capsule, policy, consistency, deadline and space
 support. Confirmation-required/private actions are refused for automatic walking.
+The action-map revision and context must match independently captured current
+identity at the same boundary, as well as session epoch. Generic best-effort
+segment availability is insufficient: strict timing is a separate required
+attestation. Host definitions, scalar Values and movement mappings are encoded
+through a capacity-limited UTF-8 writer before complete strings/copies can grow.
 Position, grounded, velocity, public dynamic basis and target existence/uncollected
 facts are separately validated. A valid preparation check grants no dispatch or
 Goal authority. Every later query and Timed Segment still goes through the
 existing Runner permission, budget, cancellation and fresh-observation gates.
+The start certificate carries the real-time observation expiry; its owner
+rechecks that expiry at BeginRunning, including time spent in Ready tracing or
+the preparation handoff. A late certificate cannot start Running or a driver.

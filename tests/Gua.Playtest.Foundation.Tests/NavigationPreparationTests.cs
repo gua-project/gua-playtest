@@ -18,8 +18,9 @@ public sealed class NavigationPreparationTests
     private static readonly HostIdentity Identity = new("game", "2", "Player", "real", new HashSet<string>(), "source", "1", false);
     private static readonly NavigationSample Sample = new("source", "1", "capture", "run-real", "physics-1",
         TimeSpan.FromMilliseconds(10), "room", 1);
-    private static NavigationStartEvidence Evidence(NavigationProfile p)
+    internal static NavigationStartEvidence Evidence(NavigationProfile p, NavigationSample? capturedSample = null)
     {
+        var sample = capturedSample ?? Sample;
         var actions = JsonNode.Parse("""
             {"schemaVersion":1,"sessionEpoch":1,"revision":0,"context":"game","actions":[
              {"id":"move","description":"translation declared by author","valueType":"vector2","holdable":true,
@@ -35,10 +36,11 @@ public sealed class NavigationPreparationTests
             """)!.AsObject();
         var scalars = NavigationProfileValidation.Reads(p).Select(r => new NavigationScalarEvidence(r,
             new JsonObject { ["type"] = r["valueType"]!["type"]!.DeepClone(),
-                ["value"] = r["valueType"]!["type"]!.GetValue<string>() == "bool" ? JsonValue.Create(true) : JsonValue.Create(0.0) }, "available", Sample)).ToArray();
-        return new(Sample, actions, provider, p.Movement, p.Survey.Topology, "real", true, true, true, p.Survey,
-            new(p.ActorSelector, p.ActorDomainId, "runtime-player-1", new(0,0,0), "world3d", Sample, true, 1),
-            p.Targets.Select(t => new NavigationObjectEvidence(t.Selector, t.DomainId, "runtime-coin-1", new(1,0,1), "world3d", Sample, false, 1)).ToArray(), scalars);
+                ["value"] = r["valueType"]!["type"]!.GetValue<string>() == "bool" ? JsonValue.Create(true) : JsonValue.Create(0.0) }, "available", sample)).ToArray();
+        return new(sample, actions, provider, p.Movement, p.Survey.Topology, "real", true, true, true, true, p.Survey,
+            new(p.ActorSelector, p.ActorDomainId, "runtime-player-1", new(0,0,0), "world3d", sample, true, 1),
+            p.Targets.Select(t => new NavigationObjectEvidence(t.Selector, t.DomainId, "runtime-coin-1", new(1,0,1), "world3d", sample, false, 1)).ToArray(), scalars,
+            new(0, "game", sample));
     }
     private static string Check(NavigationPreparationPolicy p, NavigationStartEvidence? e, TimeSpan? now = null) =>
         NavigationPreparationCheck.Validate(p, e, Identity, "capture", Sample.CapturedAt, now ?? Sample.CapturedAt, "run-real");
@@ -63,6 +65,10 @@ public sealed class NavigationPreparationTests
     [InlineData("loaded", "NavigationRegionUnconfirmed")]
     [InlineData("clock", "NavigationClockUnavailable")]
     [InlineData("release", "NavigationClockUnavailable")]
+    [InlineData("strict", "NavigationClockUnavailable")]
+    [InlineData("revision", "NavigationActionMapStale")]
+    [InlineData("context", "NavigationActionMapStale")]
+    [InlineData("actionSample", "NavigationActionMapStale")]
     [InlineData("shape", "NavigationCapabilityUnavailable")]
     [InlineData("policy", "NavigationCapabilityUnavailable")]
     [InlineData("operation", "NavigationCapabilityUnavailable")]
@@ -91,6 +97,10 @@ public sealed class NavigationPreparationTests
             case "loaded": e = e with { LoadedRegionConfirmed = false }; break;
             case "clock": e = e with { Clock = "game" }; break;
             case "release": e = e with { NeutralAtSegmentEndSupported = false }; break;
+            case "strict": e = e with { StrictTimedSegmentsSupported = false }; break;
+            case "revision": e = e with { ActionMapIdentity = e.ActionMapIdentity with { Revision = 1 } }; break;
+            case "context": e = e with { ActionMapIdentity = e.ActionMapIdentity with { Context = "new-current-context" } }; break;
+            case "actionSample": e = e with { ActionMapIdentity = e.ActionMapIdentity with { Sample = sampleForAction() } }; break;
             case "shape": e.SpatialProvider["shapes"] = new JsonArray("sphere"); break;
             case "policy": e.SpatialProvider["policies"] = new JsonArray("other"); break;
             case "operation": e.SpatialProvider["operations"] = new JsonArray("raycast"); break;
@@ -104,6 +114,29 @@ public sealed class NavigationPreparationTests
             case "collected": e.Scalars[^1].Value["value"] = false; break;
         }
         Assert.Equal(code, Check(p,e));
+        NavigationSample sampleForAction() => Sample with { SampleId = "old-action-sample" };
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task OversizedHostDefinitionIsRefusedBeforeWholeCopies(bool provider)
+    {
+        var p = await Policy(); var e = Evidence(p.Profile);
+        Assert.Equal("Valid", NavigationProfileValidation.ValidateHostDefinitions(e.ActionDefinitions, e.SpatialProvider));
+        var huge = new string('x', 12 * 1024 * 1024);
+        if (provider) e.SpatialProvider["engine"]!["backendVersion"] = huge;
+        else e.ActionDefinitions["actions"]![0]!["description"] = huge;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var code = NavigationProfileValidation.ValidateHostDefinitions(e.ActionDefinitions, e.SpatialProvider);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal("NavigationCapabilityUnavailable", code);
+        Assert.True(allocated < 8 * 1024 * 1024, $"Unexpected whole-copy allocation: {allocated}");
+    }
+    [Fact]
+    public async Task OversizedScalarAndMovementUseTheSameBoundedWriter()
+    {
+        var p = await Policy(); var huge = new string('x', 12 * 1024 * 1024);
+        Assert.False(NavigationProfileValidation.ValidScalar(new JsonObject { ["type"] = "string", ["value"] = huge }));
+        Assert.False(NavigationProfileValidation.SameMovement(p.Profile.Movement with { Model = huge }, p.Profile.Movement));
     }
     [Theory]
     [InlineData("camera")]

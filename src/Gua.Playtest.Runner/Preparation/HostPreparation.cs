@@ -268,7 +268,8 @@ public sealed class HostPreparation
         try
         {
             certificate = capture.Certify(boundary.CaptureRequestId, boundary.RealCapturedAt, boundary.Observation,
-                boundary.SynchronizationEvidence, boundary.PreconditionsSatisfied);
+                boundary.SynchronizationEvidence, boundary.PreconditionsSatisfied,
+                policy.Navigation is { } navigation ? TimeSpan.FromMilliseconds(navigation.Profile.Budgets.MaxObservationAgeMilliseconds) : null);
         }
         catch (InvalidOperationException exception) when (!run.HasPendingClockRejection)
         {

@@ -41,28 +41,31 @@ public sealed record NavigationProfile(int SchemaVersion, JsonObject ActorSelect
 
 public static class NavigationProfileValidation
 {
+    public static bool SameMovement(NavigationMovement a, NavigationMovement b)
+    {
+        try { return JsonNode.DeepEquals(BoundedContractJson.Encode(a), BoundedContractJson.Encode(b)); }
+        catch (Exception e) when (e is ContractException or JsonException or ArgumentException or InvalidOperationException or OverflowException)
+        { return false; }
+    }
     public static bool ValidScalar(JsonObject value)
     {
         try
         {
-            ContractDecoder.Decode(System.Text.Encoding.UTF8.GetBytes(value.ToJsonString()), ".json");
-            ContractSchemas.Validate("value-v1.schema.json", value);
+            ContractSchemas.Validate("value-v1.schema.json", BoundedContractJson.Encode(value));
             return true;
         }
         catch (Exception e) when (e is ContractException or JsonException or ArgumentException or InvalidOperationException or OverflowException)
         { return false; }
     }
     public static NavigationProfile Copy(NavigationProfile p) => JsonSerializer.Deserialize<NavigationProfile>(
-        JsonSerializer.Serialize(p, ContractJson.Options), ContractJson.Options)!;
+        BoundedContractJson.Encode(p), ContractJson.Options)!;
     public static string ValidateHostDefinitions(JsonObject actions, JsonObject provider)
     {
         try
         {
-            // Bounded decoding checks nonfinite values before the reused schemas.
-            ContractDecoder.Decode(System.Text.Encoding.UTF8.GetBytes(actions.ToJsonString()), ".json");
-            ContractDecoder.Decode(System.Text.Encoding.UTF8.GetBytes(provider.ToJsonString()), ".json");
-            ContractSchemas.Validate("game-input-actions.schema.json", actions);
-            ContractSchemas.Validate("spatial-r1.schema.json", provider);
+            // Fixed-capacity UTF-8 writer refuses growth before allocating a full host copy.
+            ContractSchemas.Validate("game-input-actions.schema.json", BoundedContractJson.Encode(actions));
+            ContractSchemas.Validate("spatial-r1.schema.json", BoundedContractJson.Encode(provider));
             if (provider["documentType"]?.GetValue<string>() != "provider") return "NavigationCapabilityUnavailable";
             return "Valid";
         }
@@ -74,7 +77,7 @@ public static class NavigationProfileValidation
     {
         try
         {
-            var json = JsonSerializer.SerializeToNode(profile, ContractJson.Options)!;
+            var json = BoundedContractJson.Encode(profile);
             ContractSchemas.Validate("navigation-profile.schema.json", json);
             ValidateSemantics(profile);
             return "Valid";

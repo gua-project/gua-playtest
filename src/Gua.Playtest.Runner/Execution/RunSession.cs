@@ -186,6 +186,8 @@ public sealed class RunSession
         failureSession = StartCondition(failure, boundary.InitialObservation.CapturedAt);
         DrainPostedExceptions(close: false);
         initialLifecycleFailure = boundary.InitialLifecycleFailure;
+        if (boundary.ObservationExpiresRealAt is { } expires && ReadReal() > expires)
+            RejectStartObservation("RunningBoundaryObservationExpired");
         boundary.Used = true;
         RunningOrigin = boundary.RealCapturedAt; State = ExecutionState.Running;
     }

@@ -13,7 +13,8 @@ public sealed class RunStartCapture
     internal RunStartCapture(RunSession owner, TimeSpan readyReal, TimeSpan readyCondition)
     { this.owner = owner; this.readyReal = readyReal; this.readyCondition = readyCondition; }
     public RunStartBoundary Certify(string captureRequestId, TimeSpan capturedRealAt,
-        RunObservation initialObservation, string synchronizationEvidence, bool preconditionsSatisfied)
+        RunObservation initialObservation, string synchronizationEvidence, bool preconditionsSatisfied,
+        TimeSpan? maxObservationAge = null)
     {
         if (certified || owner.State != ExecutionState.Preparing || captureRequestId != RequestId ||
             !preconditionsSatisfied || string.IsNullOrWhiteSpace(synchronizationEvidence) || synchronizationEvidence.Length > 256)
@@ -27,8 +28,11 @@ public sealed class RunStartCapture
         if (capturedRealAt < readyReal || initialObservation.CapturedAt < readyCondition)
             owner.RejectStartObservation("RunningBoundaryUncertified");
         owner.ValidateStartTimes(capturedRealAt, initialObservation.CapturedAt);
+        if (maxObservationAge is { } age && (age <= TimeSpan.Zero || age > TimeSpan.FromDays(1)))
+            throw new ArgumentOutOfRangeException(nameof(maxObservationAge));
         certified = true;
-        return new(owner, capturedRealAt, initialObservation, synchronizationEvidence);
+        return new(owner, capturedRealAt, initialObservation, synchronizationEvidence,
+            maxObservationAge is { } maximumAge ? capturedRealAt + maximumAge : null);
     }
 }
 
@@ -41,9 +45,12 @@ public sealed class RunStartBoundary
     // Trusted adapter's already-armed exact lifecycle task, sampled by the
     // serialized owner in the first Running arbitration unit; no async mutation.
     internal Func<RunFailureException?>? InitialLifecycleFailure { get; set; }
+    internal TimeSpan? ObservationExpiresRealAt { get; }
     public TimeSpan RealCapturedAt { get; }
     public RunObservation InitialObservation { get; }
     public string SynchronizationEvidence { get; }
-    internal RunStartBoundary(RunSession owner, TimeSpan realCapturedAt, RunObservation observation, string evidence)
-    { Owner = owner; RealCapturedAt = realCapturedAt; InitialObservation = observation; SynchronizationEvidence = evidence; }
+    internal RunStartBoundary(RunSession owner, TimeSpan realCapturedAt, RunObservation observation, string evidence,
+        TimeSpan? observationExpiresRealAt = null)
+    { Owner = owner; RealCapturedAt = realCapturedAt; InitialObservation = observation; SynchronizationEvidence = evidence;
+        ObservationExpiresRealAt = observationExpiresRealAt; }
 }

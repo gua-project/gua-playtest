@@ -12,12 +12,13 @@ public sealed record NavigationSample(string SourceId, string Epoch, string Capt
 public sealed record NavigationScalarEvidence(JsonObject Read, JsonObject Value, string Status, NavigationSample Sample);
 public sealed record NavigationObjectEvidence(JsonObject Selector, string DomainId, string RuntimeId,
     NavigationVector Position, string Space, NavigationSample Sample, bool Controllable, long MatchCount);
+public sealed record NavigationActionMapIdentity(long Revision, string Context, NavigationSample Sample);
 /// <summary>Read-only public host evidence at the same synchronized capture boundary. No dispatch or Setup handle.</summary>
 public sealed record NavigationStartEvidence(NavigationSample Sample, JsonObject ActionDefinitions,
     JsonObject SpatialProvider, NavigationMovement Movement, string Topology, string Clock,
-    bool TimedSegmentsSupported, bool NeutralAtSegmentEndSupported, bool LoadedRegionConfirmed,
+    bool TimedSegmentsSupported, bool StrictTimedSegmentsSupported, bool NeutralAtSegmentEndSupported, bool LoadedRegionConfirmed,
     NavigationSurvey LoadedSurvey, NavigationObjectEvidence Actor, NavigationObjectEvidence[] Targets,
-    NavigationScalarEvidence[] Scalars);
+    NavigationScalarEvidence[] Scalars, NavigationActionMapIdentity ActionMapIdentity);
 
 public static class NavigationPreparationCheck
 {
@@ -56,15 +57,19 @@ public static class NavigationPreparationCheck
             && s.CapturedAt <= captureTime && captureTime <= now
             && now - s.CapturedAt <= TimeSpan.FromMilliseconds(p.Budgets.MaxObservationAgeMilliseconds);
         if (!Fresh(e.Sample) || e.Sample.CapturedAt != captureTime) return "NavigationStaleObservation";
-        if (e.Clock != p.Preparation.Clock || e.Clock != identity.Clock || !e.TimedSegmentsSupported || !e.NeutralAtSegmentEndSupported)
+        if (e.Clock != p.Preparation.Clock || e.Clock != identity.Clock || !e.TimedSegmentsSupported ||
+            !e.StrictTimedSegmentsSupported || !e.NeutralAtSegmentEndSupported)
             return "NavigationClockUnavailable";
-        if (!JsonNode.DeepEquals(System.Text.Json.JsonSerializer.SerializeToNode(e.Movement),
-                System.Text.Json.JsonSerializer.SerializeToNode(p.Movement)) || e.Topology != p.Survey.Topology) return "NavigationUnsupported";
+        if (!NavigationProfileValidation.SameMovement(e.Movement, p.Movement) || e.Topology != p.Survey.Topology) return "NavigationUnsupported";
         if (!e.LoadedRegionConfirmed || e.LoadedSurvey != p.Survey) return "NavigationRegionUnconfirmed";
         if (NavigationProfileValidation.ValidateHostDefinitions(e.ActionDefinitions, e.SpatialProvider) != "Valid")
             return "NavigationCapabilityUnavailable";
         // Gua action-map epoch is numeric; never reinterpret an unrelated clock/epoch.
         if (e.ActionDefinitions["sessionEpoch"]!.ToJsonString() != identity.Epoch) return "NavigationIdentityMismatch";
+        if (e.ActionMapIdentity is null || !Fresh(e.ActionMapIdentity.Sample) ||
+            e.ActionMapIdentity.Sample.SampleId != e.Sample.SampleId || e.ActionMapIdentity.Sample.CapturedAt != e.Sample.CapturedAt ||
+            e.ActionMapIdentity.Revision != e.ActionDefinitions["revision"]!.GetValue<long>() ||
+            e.ActionMapIdentity.Context != e.ActionDefinitions["context"]!.GetValue<string>()) return "NavigationActionMapStale";
         var actions = e.ActionDefinitions["actions"]!.AsArray().Where(a => a!["id"]!.GetValue<string>() == p.Movement.ActionId).ToArray();
         if (actions.Length != 1) return "NavigationActionUnavailable";
         var action = actions[0]!;
