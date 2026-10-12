@@ -30,7 +30,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
     private bool completionAttempted, captureFailed;
     public PersistenceResult PreparationPersistence { get; }
     public string RunId => store.RunId;
-    public GuaTraceSession Trace => writer.Trace;
+    public GuaRunTrace Trace => writer.Trace;
 
     /// <summary>Construct at Preparing entry before launch/connect. The existing store owns
     /// metadata sanitization and immutable summaries; Gua owns its Trace/Recording bytes.</summary>
@@ -42,9 +42,18 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
         this.store = store; maxReferences = limits.MaxItems;
         writer = new(store.DirectoryPath, options, limits.MaxFileBytes, limits.MaxRunBytes,
             limits.MaxItems, text => recordingRedactor.Redact(text) == text,
-            bytes => recordingRedactor.IsSafeUtf8(bytes.Span));
+            bytes => SafeRecordingEncoding(recordingRedactor, bytes),
+            document => recordingRedactor.RedactDocument(document, limits),
+            recordingRedactor.IsSensitiveField, recordingRedactor.Redact);
         PreparationPersistence = store.BeginPreparation(metadata, token);
         Record(new(PreparationStage.Started, PreparationCode.Started));
+    }
+    private static bool SafeRecordingEncoding(PersistenceRedactor redactor, ReadOnlyMemory<byte> bytes)
+    {
+        if (!redactor.IsSafeUtf8(bytes.Span)) return false;
+        using var document = JsonDocument.Parse(bytes);
+        return !redactor.HasSensitiveFields(document.RootElement) &&
+            !redactor.IsSensitiveField("recording") && !redactor.IsSensitiveField("index");
     }
 
     public void Record(PreparationEvent evidence)

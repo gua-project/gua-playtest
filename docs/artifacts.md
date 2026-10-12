@@ -35,8 +35,13 @@ Gua options and host-only Recording redaction policy. Pass it as
 to `RunExecutor`'s pre-cleanup confirmation hook. The hook freezes Gua's primary
 outcome and the existing create-only primary summary separately from cleanup.
 
-The trusted owner uses the Gua session's public `BeginStep`, `RecordRequest`,
-`Evaluate`, `Change` and `Attach` APIs for already-authorized evidence.
+The trusted owner uses the `GuaRunTrace` policy port's `BeginStep`, `RecordRequest`,
+`Evaluate`, `Change` and `Attach` APIs for already-authorized evidence. Each
+delegates to the actual public Gua session; the raw session is not exposed.
+Configured sensitive JSON fields become null before Gua queues, attachments or
+hashes, including fields whose values are not literal secrets. Explicit marked
+objects retain their whole-object masking. Policies that require masking an
+unmodifiable Gua envelope/identity field are rejected before writer creation.
 `Observe` associates a Gua-generated observation ID with an owner observation
 identity and its Before/After/PrimaryDecision/AfterCleanup boundary.
 `RecordPlannerDecision` accepts only the same Run ID, a previously associated
@@ -48,7 +53,8 @@ Gua Recording from authorized capture, or explicit capture failure/null for
 CaptureFailed/NotExecuted. Gua writes and reads its Recording format; unsafe
 Recording text is rejected before serialization rather than rewriting replay
 identity. A bounded final encoding admission check additionally rejects secrets
-in generated enum/key/scalar values and JSON token boundaries before Gua
+in generated enum/key/scalar values and JSON token boundaries, and populated
+sensitive Recording fields are rejected without rewriting replay identity, before Gua
 attachment queues, its file writer or output hashes. Unsafe Recording admission
 also prevents rendering an HTML report from that capture. The actual completed Trace is read by Gua, and Gua's self-contained
 HTML report is the saved Dashboard entry. Its receipt inventories the manifest,
@@ -63,7 +69,9 @@ Gua 1.1.1 limits total event/blob bytes rather than the individual cumulative
 and `MaxFileBytes` must also fit Gua's separate 64 KiB manifest reserve. The
 adapter rejects unguaranteed settings before creating a writer. It does not
 save an oversized file and then treat later receipt rejection as enforcement
-of the effective file ceiling.
+of the effective file ceiling. The manifest, events and mandatory HTML entry
+require at least three file slots; the report slot is reserved during the
+pre-report inventory rather than added after exhausting the configured count.
 
 Gua 1.1.1 queue admission, writer scheduling, lifecycle stopping and synchronous
 filesystem operations do not provide a hard absolute deadline or a proof that
