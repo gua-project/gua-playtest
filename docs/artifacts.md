@@ -34,6 +34,9 @@ Gua options and host-only Recording redaction policy. Pass it as
 `IPreparationTrace` to `HostPreparation`, and pass `ConfirmPrimaryAsync` directly
 to `RunExecutor`'s pre-cleanup confirmation hook. The hook freezes Gua's primary
 outcome and the existing create-only primary summary separately from cleanup.
+The preparation owner emits the single `Started` transition; constructing the
+adapter only initializes persistence. Evidence producers cannot set the primary
+through the capture port.
 
 The trusted owner uses the `GuaRunTrace` policy port's `BeginStep`, `RecordRequest`,
 `Evaluate`, `Change` and `Attach` APIs for already-authorized evidence. Each
@@ -42,6 +45,8 @@ Configured sensitive JSON fields become null before Gua queues, attachments or
 hashes, including fields whose values are not literal secrets. Explicit marked
 objects retain their whole-object masking. Policies that require masking an
 unmodifiable Gua envelope/identity field are rejected before writer creation.
+The projection counts every retained mask/null node and bounds the final escaped
+UTF-8 encoding before returning a document to Gua.
 `Observe` associates a Gua-generated observation ID with an owner observation
 identity and its Before/After/PrimaryDecision/AfterCleanup boundary.
 `RecordPlannerDecision` accepts only the same Run ID, a previously associated
@@ -59,6 +64,10 @@ attachment queues, its file writer or output hashes. Unsafe Recording admission
 also prevents rendering an HTML report from that capture. The actual completed Trace is read by Gua, and Gua's self-contained
 HTML report is the saved Dashboard entry. Its receipt inventories the manifest,
 events, snapshots, attachments and report, with exact byte lengths and SHA-256.
+Before Gua writes HTML, the host admits the complete bounded encoding of the pinned
+1.1.1 report, including the bundled viewer, envelope and JSON boundaries. A literal
+secret collision prevents HTML creation. Gua remains the sole report writer, and
+its actual output must equal the admitted bytes before receipt publication.
 `RunArtifactStore` independently admits every associated file before publishing
 the existing final Result. Success omission requires actual successful Gua
 completion/omission. Capture or save failure contributes only postprocessing;

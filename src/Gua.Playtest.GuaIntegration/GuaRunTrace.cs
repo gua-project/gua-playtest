@@ -56,7 +56,6 @@ public sealed class GuaRunTrace
         => Capture(() => session.RecordRequest(request, Text("phase", phase),
             sensitiveField("result") ? JsonSerializer.SerializeToElement<object?>(null) : redact(data)));
     public void EndStep(string step, GuaTraceOutcome outcome) => session.EndStep(step, outcome);
-    public bool SetPrimaryOutcome(GuaTraceOutcome outcome) => session.SetPrimaryOutcome(outcome);
     public bool Correlate(string step, GuaTraceRequest request) => Capture(() => session.Correlate(step, request));
     public bool Attach(string step, string schema, JsonElement content, bool sensitive = false)
         => Capture(() => session.Attach(step, schema,

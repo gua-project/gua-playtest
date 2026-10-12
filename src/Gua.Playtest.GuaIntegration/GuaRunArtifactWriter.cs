@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gua.Testing;
@@ -64,7 +65,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
 
     public bool ConfirmPrimary(GuaTraceOutcome outcome)
     {
-        if (primary.HasValue || !Trace.SetPrimaryOutcome(outcome)) return false;
+        if (primary.HasValue || !Trace.Session.SetPrimaryOutcome(outcome)) return false;
         primary = outcome; return true;
     }
 
@@ -108,12 +109,41 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             var recordingBytes = recordingBundle.Entry?.Bytes ?? 0;
             if (reportCeiling > maxFileBytes || reportCeiling > maxBundleBytes - existingBytes - recordingBytes)
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
+            // Admission only: reproduce the pinned 1.1.1 HTML encoding in a bounded
+            // buffer, including static viewer/envelope and token boundaries. Gua remains
+            // the only report writer; refuse collisions before it creates any HTML file.
+            using var scriptReader = new StreamReader(viewer, Encoding.UTF8);
+            var script = scriptReader.ReadToEnd();
+            using var admission = ReportAdmission(read, script);
+            if (!safeRecordingText(Encoding.UTF8.GetString(admission.Bytes.Span)))
+                return new(new(GuaArtifactState.CaptureFailed), recordingBundle);
             var reportPath = Path.Combine(Trace.ArtifactPath, "report.html");
             if (!GuaTraceReport.WriteHtml(Trace.ArtifactPath, reportPath).Succeeded)
+                return new(new(GuaArtifactState.SaveFailed), recordingBundle);
+            if (!File.ReadAllBytes(reportPath).AsSpan().SequenceEqual(admission.Bytes.Span))
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
             return new(Inventory(Trace.ArtifactPath, reportPath), recordingBundle);
         }
         catch { return new(new(GuaArtifactState.SaveFailed), recordingBundle); }
+    }
+
+    private BoundedEncoding ReportAdmission(GuaTraceReadResult read, string script)
+    {
+        var output = new BoundedEncoding(maxFileBytes);
+        try
+        {
+            var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(script)));
+            Text("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+            Text("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'sha256-" + hash + "'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'\">");
+            Text("<title>Gua Trace Viewer v1</title></head><body style=\"background:#121926;color:#e7eaf1;font-family:system-ui\"><div id=\"root\"></div>");
+            Text("<script type=\"application/json\" id=\"gua-trace-data\">");
+            JsonSerializer.Serialize(output, read, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            Text("</script><script>"); Text(script); Text("</script></body></html>");
+            return output;
+        }
+        catch { output.Dispose(); throw; }
+        void Text(string text) => output.Write(Encoding.UTF8.GetBytes(text));
     }
 
     private GuaArtifactBundle SaveRecording(GuaRecording? recording, bool captureFailed)

@@ -168,7 +168,10 @@ public sealed class PersistenceRedactor
             throw new ArtifactLimitException();
         var count = 0;
         var safe = Visit(document, 0);
-        var result = JsonSerializer.SerializeToElement(safe);
+        using var encoding = new BoundedProjection(limits.MaxFileBytes);
+        JsonSerializer.Serialize(encoding, safe);
+        using var encoded = JsonDocument.Parse(encoding.Bytes);
+        var result = encoded.RootElement.Clone();
         if (!IsSafeUtf8(System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(result)))
             throw new InvalidDataException("EncodedSecretCollision");
         return result;
@@ -180,7 +183,11 @@ public sealed class PersistenceRedactor
                 case JsonValueKind.Object:
                     if ((value.TryGetProperty("sensitive", out var marked) && marked.ValueKind == JsonValueKind.True) ||
                         (value.TryGetProperty("mask", out var mask) && mask.ValueKind == JsonValueKind.True))
+                    {
+                        if (depth == 32 || ++count > limits.MaxItems || "redacted".Length > limits.MaxStringChars)
+                            throw new ArtifactLimitException();
                         return new JsonObject { ["redacted"] = Sensitive("redacted") ? null : JsonValue.Create(true) };
+                    }
                     var output = new JsonObject();
                     foreach (var property in value.EnumerateObject())
                     {
@@ -209,6 +216,24 @@ public sealed class PersistenceRedactor
                 default: throw new InvalidDataException("TraceDocumentInvalid");
             }
         }
+    }
+    private sealed class BoundedProjection(int limit) : Stream
+    {
+        private readonly MemoryStream memory = new();
+        public ReadOnlyMemory<byte> Bytes => memory.GetBuffer().AsMemory(0, checked((int)memory.Length));
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => memory.Length;
+        public override long Position { get => memory.Length; set => throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        { if (buffer.Length > limit - memory.Length) throw new ArtifactLimitException(); memory.Write(buffer); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if (disposing) memory.Dispose(); base.Dispose(disposing); }
     }
     /// <summary>Recording identity must not be rewritten. Reject a populated sensitive field.</summary>
     public bool HasSensitiveFields(JsonElement document)

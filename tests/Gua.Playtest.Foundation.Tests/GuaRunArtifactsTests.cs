@@ -203,6 +203,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var trace = GuaTraceReader.Read(artifacts.Trace.ArtifactPath);
         var lifecycle = trace.Events.Where(x => x.Type == "runner.preparation").ToArray();
         Assert.Equal("Started", lifecycle[0].Data.GetProperty("stage").GetString());
+        Assert.Single(lifecycle, x => x.Data.GetProperty("stage").GetString() == "Started");
         Assert.Contains(lifecycle, x => x.Data.GetProperty("stage").GetString() == "Launch" && x.Data.GetProperty("code").GetString() == "LaunchFailed");
         Assert.DoesNotContain(lifecycle, x => x.Data.GetProperty("stage").GetString() == "Connect");
     }
@@ -235,7 +236,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var completed = await capture.CompleteAsync(outcome, DateTimeOffset.UtcNow);
         Assert.Equal(exit, completed.ExitCode(outcome)); Assert.Equal(ArtifactState.Saved, completed.Receipts[0].State);
         Assert.Equal(traceOutcome, GuaTraceReader.Read(capture.Trace.ArtifactPath).Manifest.PrimaryOutcome);
-        Assert.False(capture.Trace.SetPrimaryOutcome(GuaTraceOutcome.Passed));
+        Assert.Null(typeof(GuaRunTrace).GetMethod("SetPrimaryOutcome"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => capture.ConfirmPrimaryAsync(new(Primary(true), [], []), default).AsTask());
     }
 
@@ -501,6 +502,74 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var document = JsonSerializer.SerializeToElement(new { one = 1, two = 2, three = 3, four = 4 });
         Assert.Throws<ArtifactLimitException>(() => redactor.RedactDocument(document, limits));
         Assert.Equal(1, document.GetProperty("one").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void External_review_whole_mask_counts_generated_null_and_boolean_nodes(bool sensitiveMarker)
+    {
+        var redactor = new PersistenceRedactor([], sensitiveMarker ? ["redacted"] : []);
+        using var document = JsonDocument.Parse("[{\"sensitive\":true},{\"mask\":true}]");
+        Assert.Throws<ArtifactLimitException>(() => redactor.RedactDocument(document.RootElement,
+            new(65536, 1024 * 1024, 3, 20000)));
+        var permitted = redactor.RedactDocument(document.RootElement, new(65536, 1024 * 1024, 5, 20000));
+        Assert.Equal(2, permitted.GetArrayLength());
+    }
+
+    [Fact]
+    public void External_review_projection_bounds_escaped_encoding_before_returning_element()
+    {
+        using var document = JsonDocument.Parse("\"" + new string('é', 20000) + "\"");
+        Assert.Throws<ArtifactLimitException>(() => Redactor.RedactDocument(document.RootElement,
+            new(65536, 1024 * 1024, 3, 20000)));
+        Assert.Equal(20000, document.RootElement.GetString()!.Length);
+    }
+
+    [Fact]
+    public async Task External_review_capture_port_cannot_preempt_primary_confirmation()
+    {
+        var store = Store(); await using var capture = new GuaRunArtifacts(store, Metadata, Limits, Options(), Redactor);
+        var authority = typeof(GuaRunTrace).GetMethod("SetPrimaryOutcome");
+        if (authority is not null) authority.Invoke(capture.Trace, [GuaTraceOutcome.Passed]);
+        var primary = Primary(true); await Confirm(capture, primary);
+        var completed = await capture.CompleteAsync(Outcome(primary), DateTimeOffset.UtcNow);
+        Assert.Equal(ArtifactState.Saved, completed.Receipts[0].State);
+        Assert.Equal(0, completed.ExitCode(Outcome(primary)));
+        Assert.Null(authority);
+    }
+
+    [Theory]
+    [InlineData(GuaTraceCaptureMode.Recent, true)] [InlineData(GuaTraceCaptureMode.Recent, false)]
+    [InlineData(GuaTraceCaptureMode.Streaming, true)] [InlineData(GuaTraceCaptureMode.Streaming, false)]
+    public async Task External_review_generated_html_collision_is_refused_before_publication(GuaTraceCaptureMode mode, bool passed)
+    {
+        var redactor = new PersistenceRedactor(["Gua Trace Viewer v1"], []);
+        var store = RunArtifactStore.Create(root, Limits, redactor);
+        await using var capture = new GuaRunArtifacts(store, Metadata, Limits, Options(mode), redactor);
+        var primary = Primary(passed); var original = new RunOutcome(primary, [], [], []);
+        await ConfirmCore(capture, new(primary, [], []));
+        var completed = await capture.CompleteAsync(original, DateTimeOffset.UtcNow);
+        Assert.Equal(ArtifactState.CaptureFailed, completed.Receipts[0].State);
+        Assert.Equal(passed ? 11 : 1, completed.ExitCode(original));
+        Assert.Same(primary, original.Primary);
+        Assert.False(File.Exists(Path.Combine(capture.Trace.ArtifactPath, "report.html")));
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits)).State);
+    }
+
+    [Fact]
+    public async Task External_review_gua_report_static_Trace_collision_never_reaches_disk()
+    {
+        Directory.CreateDirectory(root);
+        var redactor = new PersistenceRedactor(["Trace"], []);
+        await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
+            Limits.MaxItems, text => redactor.Redact(text) == text, bytes => redactor.IsSafeUtf8(bytes.Span),
+            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact);
+        Assert.NotEmpty(writer.Trace.Mark("safe"));
+        Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
+        Assert.Equal(GuaArtifactState.CaptureFailed, (await writer.CompleteAsync()).Trace.State);
+        Assert.False(File.Exists(Path.Combine(writer.Trace.ArtifactPath, "report.html")));
+        foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            Assert.DoesNotContain("Trace", File.ReadAllText(file));
     }
 
     [Fact]
