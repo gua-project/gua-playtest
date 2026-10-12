@@ -7,6 +7,103 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Fact]
+    public async Task ValidatedDeadlineCannotLoseToGoalWhileTimeoutCandidatesAreMaterializing()
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock, Condition());
+        run.BeginPreparation(); var capture = run.ArmRunningBoundary();
+        var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
+            new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/deadline", true);
+        using var resumeProbe = new ManualResetEventSlim(); using var resumeCandidates = new ManualResetEventSlim();
+        var probeEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var candidatesEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = 1;
+        boundary.InitialLifecycleFailure = () =>
+        { if (Interlocked.Exchange(ref armed, 0) == 1) { probeEntered.TrySetResult(); resumeProbe.Wait(); } return null; };
+        run.BeginRunning(boundary);
+        IEnumerable<RunEvent> DeadlineCandidates()
+        {
+            candidatesEntered.TrySetResult(); resumeCandidates.Wait();
+            yield return new(RunReason.MaxDuration, RunPhase.Execution, RunOrigin.Clock);
+        }
+        var goal = Task.Run(() => run.Evaluate(Unit(), TimeSpan.Zero)); Task<PrimaryResult?>? timeout = null;
+        try
+        {
+            await probeEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)); clock.At(5000);
+            // FiniteOperation's actual executor timer reads this same validated port
+            // before it delivers its timeout candidates to Evaluate.
+            Assert.Equal(Limits().MaxDuration, run.ReadAuthoritativeReal());
+            timeout = Task.Run(() => run.Evaluate(candidates: DeadlineCandidates()));
+            await candidatesEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)); resumeProbe.Set();
+            var primary = await goal.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(ResultStatus.TimedOut, primary!.Status); Assert.Equal(RunReason.MaxDuration, primary.Cause.Reason);
+            Assert.False(timeout.IsCompleted); var before = run.Events.ToArray();
+            resumeCandidates.Set(); Assert.Same(primary, await timeout.WaitAsync(TimeSpan.FromSeconds(1)));
+            Assert.Equal(before, run.Events);
+        }
+        finally
+        {
+            resumeProbe.Set(); resumeCandidates.Set(); await goal.WaitAsync(TimeSpan.FromSeconds(1));
+            if (timeout is not null) await timeout.WaitAsync(TimeSpan.FromSeconds(1));
+        }
+    }
+
+    [Theory]
+    [InlineData(RunReason.ExecutionError)] [InlineData(RunReason.ActionsExhausted)]
+    [InlineData(RunReason.DecisionsExhausted)] [InlineData(RunReason.RecoveryExhausted)]
+    [InlineData(RunReason.GoalSatisfied)] [InlineData(RunReason.ExplorationFinished)]
+    public async Task LateTokenConfirmationRetainsClosingLifecycleAndCompletionEvidence(RunReason expected)
+    {
+        var clock = new CancellationArbitrationClock();
+        var limits = Limits(actions: expected == RunReason.ActionsExhausted ? 1 : 3,
+            decisions: expected == RunReason.DecisionsExhausted ? 1 : 3,
+            recovery: expected == RunReason.RecoveryExhausted ? 1 : 2);
+        var run = new RunSession(limits, clock, new Clock(), expected == RunReason.GoalSatisfied ? Condition() : null);
+        using var caller = new CancellationTokenSource(); using var resumeCallbacks = new ManualResetEventSlim();
+        CancellationTokenRegistration blocker = default;
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbacksBlocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var evaluate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = false; var polls = 0;
+        var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
+                new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/late-token", true);
+            boundary.InitialLifecycleFailure = () =>
+                armed && ++polls > 1 && expected == RunReason.ExecutionError
+                    ? new(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host)) : null;
+            return ValueTask.FromResult(boundary);
+        }, async (owner, _) =>
+        {
+            if (expected is RunReason.ActionsExhausted or RunReason.GoalSatisfied)
+            {
+                var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!; operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0);
+            }
+            else if (expected is RunReason.DecisionsExhausted or RunReason.RecoveryExhausted)
+                Assert.NotNull(owner.RequestPlanner(recovering: expected == RunReason.RecoveryExhausted));
+            else if (expected == RunReason.ExplorationFinished) Assert.NotNull(owner.ApproveObservation(TimeSpan.FromSeconds(1)));
+            blocker = caller.Token.Register(() => { callbacksBlocked.TrySetResult(); resumeCallbacks.Wait(); });
+            ready.TrySetResult(); await evaluate.Task; armed = true;
+            owner.Evaluate(expected == RunReason.GoalSatisfied ? Unit() : null, expected == RunReason.GoalSatisfied ? TimeSpan.Zero : null,
+                cancelled: false, executionComplete: expected == RunReason.ExplorationFinished); return true;
+        }, caller.Token).AsTask();
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); var cancelling = Task.Run(caller.Cancel);
+        try
+        {
+            await callbacksBlocked.Task.WaitAsync(TimeSpan.FromSeconds(1)); evaluate.TrySetResult();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Contains(outcome.Events, item => item.Reason == RunReason.Cancelled);
+            Assert.Contains(outcome.Events, item => item.Reason == expected);
+            Assert.Equal(expected == RunReason.ExecutionError ? RunReason.ExecutionError :
+                expected is RunReason.ActionsExhausted or RunReason.GoalSatisfied ? RunReason.ActionUnconfirmed : RunReason.Cancelled,
+                outcome.Primary.Cause.Reason);
+            if (expected == RunReason.ExecutionError) Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
+            Assert.Equal(2, polls); Assert.False(cancelling.IsCompleted);
+        }
+        finally { resumeCallbacks.Set(); await cancelling.WaitAsync(TimeSpan.FromSeconds(1)); blocker.Dispose(); }
+    }
+
     [Theory]
     [InlineData(RunReason.ActionsExhausted, false)] [InlineData(RunReason.DecisionsExhausted, false)]
     [InlineData(RunReason.RecoveryExhausted, false)] [InlineData(RunReason.GoalSatisfied, false)]

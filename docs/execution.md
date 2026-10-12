@@ -39,6 +39,12 @@ and global-deadline priorities still choose primary; unfinished work cannot supp
 a new completion declaration. The executor binds its caller token to the session;
 primary publication samples IsCancellationRequested
 directly, so delayed cancellation callbacks cannot permit an in-flight Goal to pass.
+The same gate samples the nondecreasing validated real-time watermark: the executor
+timer's already-observed absolute deadline cannot be hidden by delayed timeout
+candidate materialization. This needs no additional provider-clock read. Late token
+or deadline evidence follows the ordinary terminal closure, completion recollection
+and closing lifecycle sample before primary publication; probes remain outside the
+short gate and interruption can still revoke a stalled sample.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.

@@ -526,6 +526,7 @@ public sealed class RunSession
         active.Abandoned = true;
         var cycle = active.Evidence.Concat(pendingEvents).Concat(incoming).ToList();
         if (cancelled || callerCancellation.IsCancellationRequested) cycle.Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
+        CollectLatchedInterruptions(cycle);
         foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(lastReal);
         cycle.AddRange(pendingEvents); pendingEvents.Clear();
         postedExceptionsClosed = true;
@@ -654,38 +655,43 @@ public sealed class RunSession
         SampleLifecycle();
         if (!DrainPending(cycle)) return Primary;
         if (!PublishActiveEvidence(cycle)) return Primary;
-        if (cycle.Count != 0 && State == ExecutionState.Running)
+        var closingSampleComplete = false;
+        while (true)
         {
-            // A terminal unit abandons outstanding results. Include that uncertainty before choosing/fixing primary.
-            foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
-            if (!DrainPending(cycle)) return Primary;
-            CollectCompletionEvidence();
-        }
-        if (cycle.Count != 0)
-        {
+            lock (arbitrationGate)
+            {
+                if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+                // The executor timer uses the validated real-clock port. Its
+                // nondecreasing watermark latches an observed absolute deadline
+                // before timeout candidates can stall during materialization.
+                CollectLatchedInterruptions(cycle);
+                cycle.AddRange(pendingEvents); pendingEvents.Clear();
+                if (cycle.Count != 0 && State == ExecutionState.Running)
+                {
+                    foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(lastReal);
+                    cycle.AddRange(pendingEvents); pendingEvents.Clear();
+                    CollectCompletionEvidence();
+                }
+                if (cycle.Count == 0 || closingSampleComplete) return PublishPrimary(cycle, lastReal);
+                if (currentEvaluation.Value is { } frame) frame.Evidence = cycle.ToArray();
+            }
+            // Late token/deadline evidence takes the same closing sample as an
+            // ordinary terminal cycle, outside the short data gate. Interruption
+            // can revoke a stalled probe; only one closing sample is attempted.
             DrainPostedExceptions(close: true);
             if (!DrainPending(cycle)) return Primary;
+            closingSampleComplete = true;
         }
-        lock (arbitrationGate)
-        {
-            if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
-            if (callerCancellation.IsCancellationRequested && !cycle.Any(x => x.Reason == RunReason.Cancelled && x.Origin == RunOrigin.User))
-            {
-                cycle.Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
-                foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(now);
-                cycle.AddRange(pendingEvents); pendingEvents.Clear();
-                // Callback order cannot hide already posted higher-priority causes.
-                foreach (var item in postedExceptions)
-                {
-                    if (item.Cause is { } cause) cycle.Add(cause);
-                    RecordEmergencyException(item.Exception);
-                }
-                postedExceptions.Clear(); postedExceptionsClosed = true; postedCausalEvidence = false;
-                if (postedExceptionsOverflow) cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
-                postedExceptionsOverflow = false;
-            }
-            return PublishPrimary(cycle, now);
-        }
+    }
+    // Caller holds the publication gate. No provider read or callback delivery.
+    private void CollectLatchedInterruptions(List<RunEvent> cycle)
+    {
+        void Add(RunEvent cause) { if (!cycle.Contains(cause)) cycle.Add(cause); }
+        if (callerCancellation.IsCancellationRequested) Add(new(RunReason.Cancelled, Phase, RunOrigin.User));
+        if (State == ExecutionState.Running && lastReal >= RunningOrigin!.Value + Limits.MaxDuration)
+            Add(new(RunReason.MaxDuration, RunPhase.Execution, RunOrigin.Clock));
+        else if (State == ExecutionState.Preparing && lastReal >= preparationOrigin + Limits.PreparationTimeout)
+            Add(new(RunReason.PreparationTimeout, RunPhase.Preparation, RunOrigin.Clock));
     }
     private PrimaryResult? PublishPrimary(List<RunEvent> cycle, TimeSpan now)
     {
