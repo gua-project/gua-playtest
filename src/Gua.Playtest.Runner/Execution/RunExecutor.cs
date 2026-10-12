@@ -109,7 +109,7 @@ public static class RunExecutor
                     var cancelledAtCompletion = cancellationToken.IsCancellationRequested;
                     // A known false driver result belongs to this same unit. Sampling
                     // later cancellation must not publish before that failure is included.
-                    run.Evaluate(candidates: !complete && !cancelledAtCompletion
+                    run.Evaluate(candidates: !complete
                         ? [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)] : [],
                         cancelled: cancelledAtCompletion, executionComplete: complete);
                     if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],

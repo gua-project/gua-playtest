@@ -14,6 +14,7 @@ public sealed class RunSession
     private sealed class EvaluationFrame
     {
         public RunEvent[] Evidence = [];
+        public Exception[] Diagnostics = [];
         public volatile bool Abandoned;
     }
     private EvaluationFrame? activeEvaluation;
@@ -48,6 +49,7 @@ public sealed class RunSession
     private bool postedExceptionsOverflow;
     private bool postedCausalEvidence;
     private Func<RunFailureException?>? initialLifecycleFailure;
+    private bool lifecycleSampling;
     private readonly List<ApprovedOperation> operations = [];
     private TimeSpan lastReal, lastCondition, lastCapture, preparationOrigin;
     private bool goalVerified;
@@ -80,19 +82,37 @@ public sealed class RunSession
     {
         get
         {
+            SampleLifecycle();
+            return HasQueuedTerminalEvidence;
+        }
+    }
+    private bool HasQueuedTerminalEvidence
+    { get { lock (postedExceptionGate) return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow; } }
+    private bool ActionsClosingWithoutProbe => State != ExecutionState.Running || IsConfirmingWork ||
+        HasQueuedTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
+    private void SampleLifecycle(bool closing = false)
+    {
+        Func<RunFailureException?>? probe;
+        lock (postedExceptionGate)
+        {
+            probe = State == ExecutionState.Running && !lifecycleSampling ? initialLifecycleFailure : null;
+            if (probe is not null) lifecycleSampling = true;
+        }
+        if (probe is null) return;
+        // Provider clocks and diagnostic transport can be synchronous dependencies.
+        // They must not hold authority's data gate while the executor finalizes.
+        // An interruption does not launch a second call behind a stalled probe.
+        try
+        {
+            if (probe() is not { } failure) return;
             lock (postedExceptionGate)
             {
-                // This getter is an owner authority boundary, never a provider
-                // callback. Sample exact lifecycle readiness even when no async
-                // causal post exists; final reservation checks hold this lock too.
-                if (State == ExecutionState.Running && initialLifecycleFailure is { } lifecycle && lifecycle() is { } failure)
-                {
-                    initialLifecycleFailure = null; RecordException(failure);
-                    if (!pendingEvents.Contains(failure.Cause)) pendingEvents.Add(failure.Cause);
-                }
-                return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow;
+                if (State != ExecutionState.Running || postedExceptionsClosed && !closing || !ReferenceEquals(initialLifecycleFailure, probe)) return;
+                initialLifecycleFailure = null; QueuePending(failure.Cause);
+                RecordEmergencyException(failure);
             }
         }
+        finally { lock (postedExceptionGate) lifecycleSampling = false; }
     }
     public bool ActionsClosing => State != ExecutionState.Running || IsConfirmingWork || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     public RunSession(RunLimits limits, IClock realClock, IClock conditionClock,
@@ -110,13 +130,22 @@ public sealed class RunSession
     }
     private TimeSpan ReadCondition()
     {
+        TimeSpan baseline;
+        lock (arbitrationGate) baseline = lastCondition;
         try
         {
             var now = conditionClock.Elapsed;
-            if (AbandonedEvaluation) return lastCondition;
-            if (now < lastCondition || now < TimeSpan.Zero || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
-                throw new InvalidOperationException("ConditionClockInvalid");
-            return lastCondition = now;
+            lock (arbitrationGate)
+            {
+                if (AbandonedEvaluation) return lastCondition;
+                // A concurrent later sample can publish before this read returns.
+                // Compare with the epoch known before this invocation, not that
+                // later sample, and never move the authoritative watermark back.
+                if (now < baseline || now < TimeSpan.Zero || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+                    throw new InvalidOperationException("ConditionClockInvalid");
+                if (now > lastCondition) lastCondition = now;
+                return lastCondition;
+            }
         }
         catch (Exception) { QueueClockRejection(); throw; }
     }
@@ -165,13 +194,19 @@ public sealed class RunSession
     }
     private TimeSpan ReadReal()
     {
+        TimeSpan baseline;
+        lock (arbitrationGate) baseline = lastReal;
         try
         {
             var now = realClock.Elapsed;
-            if (AbandonedEvaluation) return lastReal;
-            if (now < TimeSpan.Zero || now < lastReal || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
-                throw new InvalidOperationException("RunClockInvalid");
-            return lastReal = now;
+            lock (arbitrationGate)
+            {
+                if (AbandonedEvaluation) return lastReal;
+                if (now < TimeSpan.Zero || now < baseline || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
+                    throw new InvalidOperationException("RunClockInvalid");
+                if (now > lastReal) lastReal = now;
+                return lastReal;
+            }
         }
         catch (Exception) { QueueClockRejection(); throw; }
     }
@@ -237,9 +272,10 @@ public sealed class RunSession
         operations.RemoveAll(x => !x.IsOpen);
         if (operations.Count != 0) return null;
         var now = ReadReal();
+        if (ActionsClosing) return null;
         lock (postedExceptionGate)
         {
-            if (ActionsClosing || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
+            if (ActionsClosingWithoutProbe || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
             var operation = new ApprovedOperation(this, Min(now + Limits.PlannerTimeout, RunningOrigin.Value + Limits.MaxDuration), null, planner: true);
             operations.Add(operation);
             if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
@@ -312,10 +348,11 @@ public sealed class RunSession
             if (expiryCause is not null) pendingEvents.Add(expiryCause);
             return null;
         }
+        if (HasPendingTerminalEvidence) return null;
         lock (postedExceptionGate)
         {
-            if (IsConfirmingWork || HasPendingTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
-                (!finalPlannerPermit && ActionsClosing)) return null;
+            if (IsConfirmingWork || HasQueuedTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
+                (!finalPlannerPermit && ActionsClosingWithoutProbe)) return null;
             var reservation = count == 0 ? null : Budget.Reserve(count);
             if (count > 0 && reservation is null) return null;
             var operation = new ApprovedOperation(this, Min(now + window + (elapsedWait ?? TimeSpan.Zero), RunningOrigin.Value + Limits.MaxDuration), reservation,
@@ -422,9 +459,10 @@ public sealed class RunSession
             if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running)
                 throw new InvalidOperationException("OperationClosed");
             var now = owner.ReadReal();
+            if (owner.HasPendingTerminalEvidence) throw new InvalidOperationException("OperationClosed");
             lock (owner.postedExceptionGate)
             {
-                if (owner.IsConfirmingWork || owner.HasPendingTerminalEvidence || !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running || now >= ResultDeadline)
+                if (owner.IsConfirmingWork || owner.HasQueuedTerminalEvidence || !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running || now >= ResultDeadline)
                     throw new InvalidOperationException("OperationClosed");
                 Actions!.BeginDispatch(index);
             }
@@ -490,6 +528,7 @@ public sealed class RunSession
         foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(lastReal);
         cycle.AddRange(pendingEvents); pendingEvents.Clear();
         postedExceptionsClosed = true;
+        foreach (var diagnostic in active.Diagnostics) RecordEmergencyException(diagnostic);
         foreach (var item in postedExceptions)
         {
             if (item.Cause is { } cause) cycle.Add(cause);
@@ -509,8 +548,8 @@ public sealed class RunSession
         {
             if (!seen.Add(item)) continue;
             // Do not invoke user-overridden diagnostic getters during emergency closure.
-            var trace = new System.Diagnostics.StackTrace(item, false);
-            var stack = trace.FrameCount == 0 ? null : trace.ToString();
+            var trace = new System.Diagnostics.StackTrace(item, true);
+            var stack = trace.FrameCount == 0 ? null : trace.ToString().TrimEnd('\r', '\n');
             exceptions.Add(new(item.GetType().FullName ?? item.GetType().Name, stack));
             if (item is AggregateException aggregate)
                 foreach (var child in aggregate.InnerExceptions.Take(Limits.MaxEvidenceItems)) pending.Enqueue(child);
@@ -607,11 +646,8 @@ public sealed class RunSession
         if (!PublishActiveEvidence(cycle)) return Primary;
         // Sample the exact lifecycle watch after observation/clock processing,
         // before terminal operation closure collects abandoned delivery evidence.
-        if (initialLifecycleFailure is { } lifecycle)
-        {
-            if (lifecycle() is { } failure)
-            { initialLifecycleFailure = null; RecordException(failure); cycle.Add(failure.Cause); }
-        }
+        SampleLifecycle();
+        if (!DrainPending(cycle)) return Primary;
         if (!PublishActiveEvidence(cycle)) return Primary;
         if (cycle.Count != 0 && State == ExecutionState.Running)
         {
@@ -720,16 +756,16 @@ public sealed class RunSession
     private void DrainPostedExceptions(bool close)
     {
         (Exception Exception, RunEvent? Cause)[] ready;
-        Func<RunFailureException?>? closingLifecycle = null;
         lock (postedExceptionGate)
         {
             if (AbandonedEvaluation) return;
             if (close)
             {
                 postedExceptionsClosed = true;
-                closingLifecycle = initialLifecycleFailure;
             }
             ready = postedExceptions.ToArray();
+            if (currentEvaluation.Value is { } frame)
+                frame.Diagnostics = frame.Diagnostics.Concat(ready.Select(item => item.Exception)).Take(Limits.MaxEvidenceItems).ToArray();
             // Publish causes before removing their queue ownership or reading diagnostics.
             foreach (var item in ready) if (item.Cause is { } cause) QueuePending(cause);
             if (postedExceptionsOverflow) QueuePending(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
@@ -738,10 +774,14 @@ public sealed class RunSession
         }
         // A synchronous watch may stall. It cannot hold the publication gate or
         // prevent executor interruption from revoking this evaluation's authority.
-        if (closingLifecycle?.Invoke() is { } lifecycleFailure && !AbandonedEvaluation)
-        { initialLifecycleFailure = null; QueuePending(lifecycleFailure.Cause); RecordException(lifecycleFailure); }
+        if (close) SampleLifecycle(closing: true);
         foreach (var item in ready)
+        {
             RecordException(item.Exception);
+            lock (arbitrationGate)
+                if (currentEvaluation.Value is { } frame && !frame.Abandoned)
+                    frame.Diagnostics = frame.Diagnostics.Where(itemException => !ReferenceEquals(itemException, item.Exception)).ToArray();
+        }
     }
     public void RecordException(Exception exception)
     {

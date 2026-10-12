@@ -7,6 +7,148 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    private sealed class OverlappingReadClock : IClock
+    {
+        public long Ticks;
+        public Action? BeforeReturn;
+        public TimeSpan Elapsed
+        {
+            get
+            {
+                var sampled = TimeSpan.FromTicks(Interlocked.Read(ref Ticks));
+                Interlocked.Exchange(ref BeforeReturn, null)?.Invoke();
+                return sampled;
+            }
+        }
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => new(Task.Delay(duration, token));
+    }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task OverlappingMonotonicClockReadsCannotReplaceWaitExpiryWithInvalid(bool condition)
+    {
+        var clock = new OverlappingReadClock();
+        var run = new RunSession(Limits(), condition ? new Clock() : clock, condition ? clock : new Clock());
+        run.BeginPreparation(); run.BeginRunning();
+        using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        clock.BeforeReturn = () => { entered.TrySetResult(); resume.Wait(); };
+        var older = Task.Run(() =>
+        {
+            try { return condition ? run.ReadAuthoritativeCondition() : run.ReadAuthoritativeReal(); }
+            catch (Exception exception) { run.RecordException(exception); return TimeSpan.Zero; }
+        });
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            clock.Ticks = TimeSpan.FromMilliseconds(1).Ticks;
+            Assert.Equal(TimeSpan.FromMilliseconds(1), condition ? run.ReadAuthoritativeCondition() : run.ReadAuthoritativeReal());
+            resume.Set(); var olderValue = await older.WaitAsync(TimeSpan.FromSeconds(1));
+            run.Evaluate(candidates: [new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Condition)]);
+            Assert.Equal(ResultStatus.Failed, run.Primary!.Status);
+            Assert.Equal(RunReason.WaitExpired, run.Primary.Cause.Reason);
+            Assert.DoesNotContain(run.Events, item => item.Origin == RunOrigin.Clock && item.Reason == RunReason.InvalidContract);
+            Assert.Equal(TimeSpan.FromMilliseconds(1), olderValue);
+        }
+        finally { resume.Set(); await older.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
+    public async Task CompletedFalseDriverRetainsFailureWhenItCancelsCaller()
+    {
+        var clock = new Clock(); var run = new RunSession(Limits(), clock, clock);
+        using var caller = new CancellationTokenSource();
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true),
+            (_, _) => { caller.Cancel(); return ValueTask.FromResult(false); }, caller.Token);
+        Assert.Equal(ResultStatus.Failed, outcome.Primary.Status);
+        Assert.Equal(RunReason.ExecutionError, outcome.Primary.Cause.Reason);
+        Assert.Contains(outcome.Events, item => item.Reason == RunReason.Cancelled);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task StalledAuthorityProbeCannotPreventResourceRelease(bool dispatch, bool deadline)
+    {
+        var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, new Clock());
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = 0; var releases = 0; var cleanup = new OwnedCleanup();
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, clock, cleanup, (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            var boundary = capture.Certify(capture.RequestId, clock.Elapsed,
+                new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/authority", true);
+            boundary.InitialLifecycleFailure = () =>
+            { if (Volatile.Read(ref armed) == 1) { entered.TrySetResult(); resume.Wait(); } return null; };
+            return ValueTask.FromResult(boundary);
+        }, async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield();
+                var operation = dispatch ? owner.ApproveOperation(1, TimeSpan.FromSeconds(1)) : null;
+                armed = 1;
+                if (dispatch) operation!.BeginDispatch(0); else owner.ApproveOperation(1, TimeSpan.FromSeconds(1));
+                return false;
+            }
+            catch (InvalidOperationException) when (owner.Primary is not null) { return false; }
+            finally { ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) clock.At(Limits().MaxDuration); else caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(1, releases); Assert.False(ended.Task.IsCompleted);
+            Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
+            Assert.Equal(0, run.Budget.Snapshot.Actions);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
+    public async Task InterruptedCloseProbeRetainsDrainedProviderDiagnostics()
+    {
+        var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, new Clock());
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Exception source; try { throw new InvalidDataException("original provider"); } catch (Exception exception) { source = exception; }
+        var failure = new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), source);
+        var polls = 0; var armed = false;
+        var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            var boundary = capture.Certify(capture.RequestId, clock.Elapsed,
+                new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/diagnostics", true);
+            boundary.InitialLifecycleFailure = () =>
+            {
+                if (armed && ++polls == 1) owner.PostProviderException(failure);
+                else if (armed && polls == 2) { entered.TrySetResult(); resume.Wait(); }
+                return null;
+            };
+            return ValueTask.FromResult(boundary);
+        }, async (owner, _) =>
+        {
+            try { await Task.Yield(); armed = true; owner.Evaluate(candidates: [new(RunReason.WaitExpired, RunPhase.Execution, RunOrigin.Condition)]); return false; }
+            finally { ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(failure.Cause, outcome.Primary.Cause);
+            Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName && !string.IsNullOrEmpty(item.StackTrace));
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(outcome.Exceptions, run.Exceptions);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
     private sealed class CancellationArbitrationClock : IClock
     {
         public AsyncLocal<bool> Driver { get; } = new();
