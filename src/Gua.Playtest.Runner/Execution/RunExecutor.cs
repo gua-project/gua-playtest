@@ -48,6 +48,9 @@ public static class RunExecutor
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(cleanup); ArgumentNullException.ThrowIfNull(prepare); ArgumentNullException.ThrowIfNull(execute);
         realClock = run.AuthoritativeRealClock;
+        using var cancellationEvidence = cancellationToken.Register(() =>
+            run.PostProviderException(new RunFailureException(new(RunReason.Cancelled,
+                run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation, RunOrigin.User))));
         RunStartBoundary? completedBoundary = null;
         IReadOnlyList<RunEvent> completedPreparationEvents = [];
         Task<bool>? executionTask = null;

@@ -24,6 +24,17 @@ Other transition requests fail with fixed codes. `BeginRunning` uses one real Ru
 
 One `Evaluate` call reads real time once and handles a complete evaluation unit, including current cancellation/global deadline. The owner must not call Evaluate separately for callbacks that belong to one unit. Both condition trees are evaluated even after Goal success, and errors remain candidates. The earliest enum in a class wins, then phase enum, then origin enum; event arrival order cannot choose the result.
 
+Evaluation and executor safety finalization serialize the entire synchronous unit,
+from pending-evidence drain through primary publication. Cancellation or the original
+global deadline cannot publish a second result while the driver holds a higher-priority
+cause in that unit. The competing finalizer observes the already-frozen primary.
+The executor's cancellation callback posts through the existing bounded causal
+queue at receipt, independent of finalizer continuation scheduling. A competing
+cancellation evaluation also posts before waiting, so an in-flight Goal unit retains cancellation received before
+its existing confirmation boundary. Posts after that boundary cannot rewrite primary.
+This does not grant provider callbacks Run mutation authority or join uncooperative
+driver tasks; their existing cancellation and absolute-deadline bounds remain unchanged.
+
 | Priority | Reasons in tie-break order | Status |
 | --- | --- | --- |
 | 0 | InvalidContract, ObservationContractViolation | Invalid |

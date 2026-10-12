@@ -9,6 +9,10 @@ namespace Gua.Playtest.Runner.Execution;
 /// Evaluate receives a complete same-cycle event set and reads real time once.</summary>
 public sealed class RunSession
 {
+    // Executor safety finalization can arrive while the trusted driver is evaluating.
+    // A whole evidence unit, including its drained pending causes, owns publication
+    // until primary is frozen; a competing evaluation must observe that result.
+    private readonly object arbitrationGate = new();
     private sealed class ValidatedClock(RunSession owner, bool condition) : IClock
     {
         public TimeSpan Elapsed => condition ? owner.ReadCondition() : owner.ReadReal();
@@ -411,6 +415,19 @@ public sealed class RunSession
         return EvaluateCore(units, candidates.Concat(invalid), cancelled, false);
     }
     private PrimaryResult? EvaluateCore(IReadOnlyList<CapturedUnit> units, IEnumerable<RunEvent>? candidates,
+        bool cancelled, bool executionComplete)
+    {
+        if (!Monitor.TryEnter(arbitrationGate))
+        {
+            // Waiting must not conceal cancellation that arrived before the active
+            // unit's confirmation boundary. Posting is bounded and cannot publish primary.
+            if (cancelled) PostProviderException(new RunFailureException(new(RunReason.Cancelled, Phase, RunOrigin.User)));
+            Monitor.Enter(arbitrationGate);
+        }
+        try { return EvaluateUnit(units, candidates, cancelled, executionComplete); }
+        finally { Monitor.Exit(arbitrationGate); }
+    }
+    private PrimaryResult? EvaluateUnit(IReadOnlyList<CapturedUnit> units, IEnumerable<RunEvent>? candidates,
         bool cancelled, bool executionComplete)
     {
         if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
