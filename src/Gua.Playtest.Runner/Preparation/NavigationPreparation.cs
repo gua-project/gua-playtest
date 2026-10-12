@@ -119,10 +119,12 @@ public static class NavigationPreparationCheck
             !Scalar(p.Motion.Grounded)!.Value["value"]!.GetValue<bool>()) return "NavigationMotionUnavailable";
         if (p.Movement.Basis is { } relative && !NavigationProfileValidation.ValidPlane(new(p.Plane.Up,
                 ReadVector(relative.AxisX), ReadVector(relative.AxisY)))) return "NavigationBasisInvalid";
+        var runtimeIds = new HashSet<string>(StringComparer.Ordinal) { e.Actor.RuntimeId };
         foreach (var t in p.Targets)
         {
             var targets = e.Targets.Where(o => JsonNode.DeepEquals(o.Selector, t.Selector)).ToArray();
             if (targets.Length != 1 || !ObjectMatches(targets[0], t.Selector, t.DomainId) ||
+                !runtimeIds.Add(targets[0].RuntimeId) ||
                 !Scalar(t.Uncollected)!.Value["value"]!.GetValue<bool>()) return "NavigationTargetUnavailable";
         }
         return "Valid";

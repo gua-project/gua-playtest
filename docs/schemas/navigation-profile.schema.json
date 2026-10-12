@@ -403,7 +403,7 @@
     "targets": {
       "type": "array",
       "minItems": 0,
-      "maxItems": 1000,
+      "maxItems": 990,
       "items": {
         "type": "object",
         "additionalProperties": false,

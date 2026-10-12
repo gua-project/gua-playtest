@@ -103,18 +103,27 @@ public static class NavigationProfileValidation
         var s = p.Survey;
         if (s.Min.X >= s.Max.X || s.Min.Y >= s.Max.Y || s.Min.Z >= s.Max.Z || s.MinHeight >= s.MaxHeight)
             Reject("NavigationRegionInvalid");
+        var up = p.Plane.Up;
+        double Project(bool maximum) => ((up.X >= 0) == maximum ? s.Max.X : s.Min.X) * up.X +
+            ((up.Y >= 0) == maximum ? s.Max.Y : s.Min.Y) * up.Y + ((up.Z >= 0) == maximum ? s.Max.Z : s.Min.Z) * up.Z;
+        var projectedMin = Project(false); var projectedMax = Project(true);
+        if (!double.IsFinite(projectedMin) || !double.IsFinite(projectedMax) || projectedMax < s.MinHeight || projectedMin > s.MaxHeight)
+            Reject("NavigationRegionInvalid");
         // Bound arithmetic as well as declared budgets. Overflow/degenerate scales cannot create an unbounded grid.
         double cells = Math.Ceiling((s.Max.X - s.Min.X) / s.CellSize) * Math.Ceiling((s.Max.Y - s.Min.Y) / s.CellSize)
             * Math.Ceiling((s.Max.Z - s.Min.Z) / s.CellSize);
         if (!double.IsFinite(cells) || !double.IsFinite((s.Max.X - s.Min.X + s.Max.Y - s.Min.Y + s.Max.Z - s.Min.Z) / s.SupportSpacing))
             Reject("NavigationLimitInvalid");
         NumberVector(p.Motion.Velocity);
+        if (Components(p.Motion.Velocity).Any(r => !SameActor(r, p.ActorSelector))) Reject("NavigationIdentityInvalid");
         Scalar(p.Motion.Grounded, "bool");
         if (p.Movement.Basis is { } basis) { NumberVector(basis.AxisX); NumberVector(basis.AxisY); }
-        var domains = new HashSet<string>(StringComparer.Ordinal);
+        var domains = new HashSet<string>(StringComparer.Ordinal) { p.ActorDomainId };
+        var selectors = new List<JsonObject> { p.ActorSelector };
         foreach (var t in p.Targets)
         {
-            if (!domains.Add(t.DomainId)) Reject("NavigationIdentityInvalid");
+            if (!domains.Add(t.DomainId) || selectors.Any(s => JsonNode.DeepEquals(s, t.Selector))) Reject("NavigationIdentityInvalid");
+            selectors.Add(t.Selector);
             Scalar(t.Uncollected, "bool");
             if (!SameActor(t.Uncollected, t.Selector)) Reject("NavigationIdentityInvalid");
             if (t.ApproachPoints.LongLength > p.Budgets.MaxApproachCandidates) Reject("NavigationLimitInvalid");

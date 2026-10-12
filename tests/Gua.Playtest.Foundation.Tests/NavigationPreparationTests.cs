@@ -80,6 +80,7 @@ public sealed class NavigationPreparationTests
     [InlineData("missingScalar", "NavigationObservationUnavailable")]
     [InlineData("mixedSample", "NavigationObservationUnavailable")]
     [InlineData("collected", "NavigationTargetUnavailable")]
+    [InlineData("actorAlias", "NavigationTargetUnavailable")]
     public async Task RejectsIncompleteOrIncompatibleHostEvidence(string mutation, string code)
     {
         var p = await Policy(); var e = Evidence(p.Profile);
@@ -112,6 +113,7 @@ public sealed class NavigationPreparationTests
             case "missingScalar": e = e with { Scalars = e.Scalars[1..] }; break;
             case "mixedSample": e.Scalars[0] = e.Scalars[0] with { Sample = Sample with { SampleId = "old" } }; break;
             case "collected": e.Scalars[^1].Value["value"] = false; break;
+            case "actorAlias": e = e with { Targets = [e.Targets[0] with { RuntimeId = e.Actor.RuntimeId }] }; break;
         }
         Assert.Equal(code, Check(p,e));
         NavigationSample sampleForAction() => Sample with { SampleId = "old-action-sample" };
@@ -178,5 +180,36 @@ public sealed class NavigationPreparationTests
         Assert.Equal("NavigationPermissionDenied", Check(p with { AllowedActionIds = new HashSet<string>() }, Evidence(p.Profile)));
         Assert.Equal("NavigationPermissionDenied", Check(p with { AllowedReads = [] }, Evidence(p.Profile)));
         Assert.Equal("NavigationPermissionDenied", Check(p with { MaxSegmentMilliseconds = 49 }, Evidence(p.Profile)));
+    }
+    [Fact]
+    public async Task DistinctTargetDomainsCannotAliasOneRuntimeObject()
+    {
+        var p = await Policy(); var t = p.Profile.Targets[0];
+        var selector = JsonNode.Parse("""{"label":{"value":"second-coin"}}""")!.AsObject();
+        var read = (JsonObject)t.Uncollected.DeepClone(); read["target"]!["selector"] = selector.DeepClone();
+        p = p with { Profile = p.Profile with { Targets = [t, t with { Selector = selector, DomainId = "second-domain", Uncollected = read }] } };
+        p = p with { AllowedReads = NavigationProfileValidation.Reads(p.Profile).ToArray() };
+        var e = Evidence(p.Profile);
+        e.Targets[1] = e.Targets[1] with { RuntimeId = "second-runtime" };
+        Assert.Equal("Valid", Check(p,e));
+        e.Targets[1] = e.Targets[1] with { RuntimeId = e.Targets[0].RuntimeId };
+        Assert.Equal("NavigationTargetUnavailable", Check(p,e));
+    }
+    [Fact]
+    public async Task MaximumTargetsFitTheExistingReadCeilingWithRelativeBasis()
+    {
+        var p = await Policy(); var template = p.Profile.Targets[0];
+        var targets = Enumerable.Range(0,990).Select(i =>
+        {
+            var selector = new JsonObject { ["label"] = new JsonObject { ["value"] = "coin-"+i } };
+            var read = (JsonObject)template.Uncollected.DeepClone(); read["target"]!["selector"] = selector.DeepClone();
+            return template with { Selector = selector, DomainId = "domain-"+i, Uncollected = read };
+        }).ToArray();
+        JsonObject Read(string name) => new() { ["target"] = new JsonObject { ["source"]="world" }, ["region"]="property", ["name"]=name, ["valueType"]=new JsonObject { ["type"]="number" } };
+        NavigationVectorReads Vector(string name) => new(Read(name+"X"),Read(name+"Y"),Read(name+"Z"));
+        var profile = p.Profile with { Targets = targets, Movement = p.Profile.Movement with { RelativeTo = "camera", Basis = new(Vector("right"),Vector("forward")) } };
+        p = p with { Profile = profile, AllowedReads = NavigationProfileValidation.Reads(profile).ToArray() };
+        Assert.Equal(1000,p.AllowedReads.Count);
+        Assert.Equal("Valid",NavigationPreparationCheck.ValidatePolicy(p));
     }
 }

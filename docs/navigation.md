@@ -23,7 +23,10 @@ finite range spanning zero, polarity ±1, world/camera/body basis, and neutral
 release at the Timed Segment boundary. Camera/body require `basis` containing
 two vectors of three existing numeric Observe/Property/standard scalar reads.
 World-relative profiles omit that dynamic basis. `motion.velocity` also groups
-three numeric reads; `motion.grounded` is an actor boolean read. No object-valued
+three numeric actor-scoped reads; `motion.grounded` is an actor boolean read.
+Velocity reads must resolve the selected actor; an unrelated object or global
+property without actor binding cannot establish its velocity. Camera/body basis
+reads may use the existing world Property scalars. No object-valued
 Observe, source inspection, test movement or automatic calibration is implied.
 
 `motion` bounds speed, stopping distance and stopping time. `arrival` declares
@@ -33,7 +36,8 @@ distance, height, grounded and velocity facts; pickup and Goal success still use
 the existing Assertion/Scenario checks.
 
 `survey` declares a finite world-coordinate box, signed height band along up,
-positive cell size and support spacing. Only singleGroundedSurface topology is
+positive cell size and support spacing. The box's projection onto up must
+intersect the height band, including profiles with no targets. Only singleGroundedSurface topology is
 supported. Jumping, steps, moving platforms, falling shortcuts, flight, swimming,
 tank/vehicle controls, multiple actors, automatic multilayer connections and
 loading unknown regions are outside this profile. An unsupported declaration is
@@ -45,6 +49,10 @@ those points, and a boolean `uncollected` read on that target. Points must lie i
 the declared box and height band. Object pivots do not generate approaches;
 candidate generation and current spatial clearance belong to the map/follower.
 Runtime ID replacement does not create a new domain target or pickup fact.
+Actor and target domains/selectors are disjoint; repeated target selectors are
+rejected statically. The synchronized boundary also rejects actor/target and
+target/target runtime aliases. At most 990 targets leave room in the existing
+1000-read ceiling for velocity, grounded and all six relative-basis components.
 
 All observation age, input interval, query/deadline, node/edge, replan, LLM and
 approach-candidate ceilings are explicit. Zero LLM calls is allowed. Input
