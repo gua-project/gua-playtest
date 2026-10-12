@@ -10,12 +10,20 @@ merge, arbitrary `--set`, Goal override or Replay-to-Explore fallback exists.
 validate --allow-root <existing-directory> <json-or-yaml-file>
 validate --gua-schema <packaged-schema-name> <json-file>
 doctor --native
+dashboard --registry <file> --artifact-root <existing-directory> --allow-root <existing-directory> --port <1024..65535>
 plan create --managed-root <private-root> --allow-root <input-root> --scenario <file> --recording <file> --timing <recorded|conditionSynchronized>
 plan accept --managed-root <private-root> --plan <managed-plan.json> --trial <trial-id> --approve --approve-expectations
 report --allow-root <existing-directory> --trace <saved-trace-directory> [--output <new-html>]
 explore --allow-root <existing-directory> --scenario <file> --environment <file>
 replay --allow-root <existing-directory> --plan <file> --environment <file>
 ```
+
+`dashboard` serves the read-only saved index on the
+explicit loopback port; registry, artifact roots and allowed roots are required.
+Repeat either root flag for additional explicit roots. It does not discover
+artifact roots from registry configuration or start a game, Planner or Replay.
+The ready URL goes to stderr. On cancellation the server stops before the final
+exit-4 command document is emitted, keeping JSON stdout free of progress logs.
 
 `validate` and `report` perform no game launch, connection, operation, Planner or
 Goal scoring. Their exit 0 means command success. Report reads a finalized Gua

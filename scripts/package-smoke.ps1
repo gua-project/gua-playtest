@@ -26,6 +26,70 @@ Invoke-Dotnet @('build', $probe, '-c', 'Release', '--no-restore')
 $probeDll = Join-Path $root 'tests/Gua.Playtest.ProcessProbe/bin/Release/net10.0/Gua.Playtest.ProcessProbe.dll'
 $trace = (& dotnet $probeDll trace (Join-Path $stage 'saved-trace') | Select-Object -Last 1)
 if ($LASTEXITCODE -ne 0) { throw 'Saved Gua Trace fixture creation failed' }
+function Assert-PackagedDashboard([string]$Command, [string]$Label) {
+    $dashboardRoot = Join-Path $stage ('dashboard-' + $Label)
+    $runRoot = Join-Path $dashboardRoot 'explicit-runs'
+    New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+    foreach ($name in @('registry.json', 'scenario.json')) {
+        Copy-Item -LiteralPath (Join-Path $contractRoot $name) -Destination (Join-Path $dashboardRoot $name)
+    }
+    $before = @(Get-ChildItem -LiteralPath $dashboardRoot -Recurse -File | ForEach-Object {
+        [pscustomobject]@{ path = $_.FullName; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+    })
+    $reservation = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    try { $reservation.Start(); $port = $reservation.LocalEndpoint.Port }
+    finally { $reservation.Stop() }
+    $start = [Diagnostics.ProcessStartInfo]::new($Command)
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('--json', 'dashboard', '--registry', (Join-Path $dashboardRoot 'registry.json'),
+        '--artifact-root', $runRoot, '--allow-root', $dashboardRoot, '--port', $port.ToString([Globalization.CultureInfo]::InvariantCulture))) {
+        $start.ArgumentList.Add($argument)
+    }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    $client = [Net.Http.HttpClient]::new()
+    $client.Timeout = [TimeSpan]::FromSeconds(10)
+    $started = $false
+    try {
+        if (!$process.Start()) { throw 'Dashboard process did not start' }
+        $started = $true
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $readyTask = $process.StandardError.ReadLineAsync()
+        if (!$readyTask.Wait(15000)) { throw 'Packaged Dashboard did not become ready' }
+        $ready = $readyTask.GetAwaiter().GetResult()
+        if ($ready -ne "http://127.0.0.1:$port/") { throw 'Dashboard readiness did not use the explicit loopback port' }
+        $client.BaseAddress = [Uri]::new($ready)
+        foreach ($route in @('/', '/dashboard.js', '/dashboard.css')) {
+            $body = $client.GetStringAsync($route).GetAwaiter().GetResult()
+            if ([string]::IsNullOrEmpty($body)) { throw 'Packaged Dashboard asset missing' }
+        }
+        $snapshot = $client.GetStringAsync('/api/snapshot').GetAwaiter().GetResult() | ConvertFrom-Json
+        if ($snapshot.registryState -ne 'Ready' -or @($snapshot.scenarios).Count -ne 1 -or @($snapshot.runs).Count -ne 0) {
+            throw 'Packaged Dashboard did not preserve the explicit read-only index'
+        }
+        foreach ($file in $before) {
+            if ((Get-FileHash -LiteralPath $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Dashboard changed source bytes' }
+        }
+        if (@(Get-ChildItem -LiteralPath $dashboardRoot -Recurse -File).Count -ne $before.Count) { throw 'Dashboard wrote source artifacts' }
+    }
+    finally {
+        $client.Dispose()
+        if ($started -and !$process.HasExited) { $process.Kill($true) }
+        if ($started -and !$process.WaitForExit(10000)) { throw 'Dashboard smoke process cleanup timed out' }
+        if ($started) { $capturedStdout = $stdoutTask.GetAwaiter().GetResult() }
+        $process.Dispose()
+    }
+    if ($capturedStdout.Length -ne 0) { throw 'Dashboard startup polluted JSON stdout' }
+    $script:records += [pscustomobject]@{
+        command = [IO.Path]::GetFileName($Command); operation = 'dashboard-startup'; port = $port
+        registryState = 'Ready'; scenarios = 1; runs = 0; stdoutBytes = 0
+        shutdown = 'forced-process-cleanup'; scope = 'Read-only packaged HTTP startup, not graceful cancellation or game E2E'
+    }
+}
+
 function Assert-OfflineCommands([string]$Command, [string]$Label) {
     Assert-Cli $Command @('validate', '--allow-root', $contractRoot, (Join-Path $contractRoot 'scenario.json')) 0 'Valid'
     Assert-Cli $Command @('plan', 'create', '--managed-root', (Join-Path $stage ('reject-' + $Label)), '--allow-root', $contractRoot, '--scenario', (Join-Path $contractRoot 'multiple-goals.json'), '--recording', (Join-Path $contractRoot 'recording.json'), '--timing', 'recorded') 2 'ExecutionInputInvalid'
@@ -48,6 +112,7 @@ Assert-Cli $exe @('validate', '--gua-schema', 'selector.schema.json', $valid) 0 
 Assert-Cli $exe @('validate', '--gua-schema', 'selector.schema.json', $invalid) 2 'gua-schema-invalid'
 Assert-Cli $exe @('doctor', '--native') 0 'native-package-compatible'
 Assert-OfflineCommands $exe 'archive'
+Assert-PackagedDashboard $exe 'archive'
 # Remove just Gua native assets from this uniquely created extraction. Offline validation must still work.
 $nativeNames = @('gua.dll', 'gua_runtime.dll', 'libgua.so', 'libgua_runtime.so', 'libgua.dylib', 'libgua_runtime.dylib')
 $native = @(Get-ChildItem -LiteralPath $extracted -Recurse -File | Where-Object Name -In $nativeNames)
@@ -76,6 +141,7 @@ Assert-Cli $toolExe @('validate', '--gua-schema', 'selector.schema.json', $valid
 Assert-Cli $toolExe @('validate', '--gua-schema', 'selector.schema.json', $invalid) 2 'gua-schema-invalid'
 Assert-Cli $toolExe @('doctor', '--native') 0 'native-package-compatible'
 Assert-OfflineCommands $toolExe 'tool'
+Assert-PackagedDashboard $toolExe 'tool'
 [pscustomobject]@{
     rid = $Rid
     head = (& git rev-parse HEAD)
