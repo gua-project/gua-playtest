@@ -7,6 +7,113 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData("real", false)] [InlineData("condition", false)] [InlineData("lifecycle", false)]
+    [InlineData("real", true)] [InlineData("condition", true)] [InlineData("lifecycle", true)]
+    public async Task CertifiedInitialArbitrationIsBoundedBeforeDriverStarts(string dependency, bool deadline)
+    {
+        var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), real, condition, Condition()); var cleanup = new OwnedCleanup();
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executed = false; var releases = 0; var armed = 0;
+        void Stall() { entered.TrySetResult(); resume.Wait(); }
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
+                new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/initial-bound", true);
+            boundary.InitialLifecycleFailure = () =>
+            { if (Interlocked.Exchange(ref armed, 0) == 1) { try { Stall(); } finally { returned.TrySetResult(); } } return null; };
+            return ValueTask.FromResult(boundary);
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); }, caller.Token, null, _ =>
+        {
+            if (dependency == "lifecycle") armed = 1;
+            else
+            {
+                var clock = dependency == "real" ? real : condition; clock.Driver.Value = true;
+                clock.OnDriverRead = () => { try { Stall(); } finally { returned.TrySetResult(); } };
+            }
+        }).AsTask()).Unwrap();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) real.At(Limits().MaxDuration); else caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
+            Assert.Equal(1, releases); Assert.False(executed); Assert.False(returned.Task.IsCompleted);
+            resume.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
+        }
+        finally { resume.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
+    public async Task RevokedDriverCannotAppendDiagnosticsAfterPrimarySnapshot()
+    {
+        var real = new CancellationArbitrationClock(); var run = new RunSession(Limits(), real, new Clock());
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var snapshotReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); RunSnapshot? snapshot = null;
+        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield(); real.Driver.Value = true;
+                var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!; operation.BeginDispatch(0); operation.Complete();
+                real.OnDriverRead = () => { entered.TrySetResult(); resume.Wait(); };
+                owner.Evaluate(); owner.RecordException(new InvalidDataException("revoked driver")); return false;
+            }
+            finally { real.Driver.Value = false; ended.TrySetResult(); }
+        }, caller.Token, async (captured, token) =>
+        { snapshot = captured; snapshotReady.TrySetResult(); await finish.Task.WaitAsync(token); return true; }).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            await snapshotReady.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); finish.TrySetResult();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(RunReason.ActionUnconfirmed, outcome.Primary.Cause.Reason);
+            Assert.Equal(snapshot!.Exceptions, outcome.Exceptions);
+            Assert.DoesNotContain(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName);
+        }
+        finally { resume.Set(); finish.TrySetResult(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
+    public async Task GoalSuffixRefundAndInterruptionConsumeEachReservationOnce()
+    {
+        for (var attempt = 0; attempt < 32; attempt++)
+        {
+            var clock = new Clock(); var run = new RunSession(Limits(actions: 1000), clock, clock, Condition());
+            run.BeginPreparation(); run.BeginRunning(); var operation = run.ApproveOperation(1000, TimeSpan.FromSeconds(1))!;
+            operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0);
+            var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cancel = RunBlockingFixture(() =>
+            {
+                ready.TrySetResult();
+                Assert.True(SpinWait.SpinUntil(() => { Thread.MemoryBarrier(); return run.GoalVerified; }, TimeSpan.FromSeconds(1)));
+                Assert.True(SpinWait.SpinUntil(() => { Thread.MemoryBarrier(); return run.Budget.Snapshot.ReservedActions < 999; }, TimeSpan.FromSeconds(1)));
+                run.Evaluate(cancelled: true);
+            });
+            await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); var goal = RunBlockingFixture(() => run.Evaluate(Unit(), TimeSpan.Zero));
+            try { await Task.WhenAll(goal, cancel).WaitAsync(TimeSpan.FromSeconds(1)); } catch (InvalidOperationException) { }
+            Assert.Equal(0, run.Budget.Snapshot.ReservedActions); Assert.Equal(1, run.Budget.Snapshot.Actions);
+            Assert.Equal(999, operation.Actions.Deliveries.Count(item => item == DeliveryState.NotSent));
+            Assert.Equal(RunReason.ActionUnconfirmed, run.Primary!.Cause.Reason);
+        }
+    }
+
+    // These helpers intentionally remain blocked while the owner must progress.
+    // Do not consume the shared pool needed by provider/monitor continuations.
+    private static Task RunBlockingFixture(Action action)
+        => Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    private static Task<T> RunBlockingFixture<T>(Func<T> action)
+        => Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     [Theory] [InlineData(false, false)] [InlineData(true, false)]
     [InlineData(false, true)] [InlineData(true, true)]
     public async Task FirstCaptureSuccessErrorSurvivesStalledSecondCapture(bool deadline, bool invalidEnvelope)
@@ -111,14 +218,14 @@ public sealed partial class RunTests
             candidatesEntered.TrySetResult(); resumeCandidates.Wait();
             yield return new(RunReason.MaxDuration, RunPhase.Execution, RunOrigin.Clock);
         }
-        var goal = Task.Run(() => run.Evaluate(Unit(), TimeSpan.Zero)); Task<PrimaryResult?>? timeout = null;
+        var goal = RunBlockingFixture(() => run.Evaluate(Unit(), TimeSpan.Zero)); Task<PrimaryResult?>? timeout = null;
         try
         {
             await probeEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)); clock.At(5000);
             // FiniteOperation's actual executor timer reads this same validated port
             // before it delivers its timeout candidates to Evaluate.
             Assert.Equal(Limits().MaxDuration, run.ReadAuthoritativeReal());
-            timeout = Task.Run(() => run.Evaluate(candidates: DeadlineCandidates()));
+            timeout = RunBlockingFixture(() => run.Evaluate(candidates: DeadlineCandidates()));
             await candidatesEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)); resumeProbe.Set();
             var primary = await goal.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Equal(ResultStatus.TimedOut, primary!.Status); Assert.Equal(RunReason.MaxDuration, primary.Cause.Reason);
@@ -173,7 +280,7 @@ public sealed partial class RunTests
             owner.Evaluate(expected == RunReason.GoalSatisfied ? Unit() : null, expected == RunReason.GoalSatisfied ? TimeSpan.Zero : null,
                 cancelled: false, executionComplete: expected == RunReason.ExplorationFinished); return true;
         }, caller.Token).AsTask();
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); var cancelling = Task.Run(caller.Cancel);
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); var cancelling = RunBlockingFixture(caller.Cancel);
         try
         {
             await callbacksBlocked.Task.WaitAsync(TimeSpan.FromSeconds(1)); evaluate.TrySetResult();
@@ -266,7 +373,7 @@ public sealed partial class RunTests
         using var resume = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         clock.BeforeReturn = () => { entered.TrySetResult(); resume.Wait(); };
-        var older = Task.Run(() =>
+        var older = RunBlockingFixture(() =>
         {
             try { return condition ? run.ReadAuthoritativeCondition() : run.ReadAuthoritativeReal(); }
             catch (Exception exception) { run.RecordException(exception); return TimeSpan.Zero; }
@@ -568,7 +675,7 @@ public sealed partial class RunTests
             owner.Evaluate(Unit(), TimeSpan.Zero, cancelled: false); return true;
         }, caller.Token).AsTask();
         await driverReady.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        var cancelling = Task.Run(caller.Cancel);
+        var cancelling = RunBlockingFixture(caller.Cancel);
         try
         {
             await callbacksBlocked.Task.WaitAsync(TimeSpan.FromSeconds(1));

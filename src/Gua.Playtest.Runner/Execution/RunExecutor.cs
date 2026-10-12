@@ -85,19 +85,25 @@ public static class RunExecutor
                 {
                     run.BeginRunning(boundary);
                     var initial = boundary.InitialObservation;
-                    IReadOnlyList<RunEvent> registrationEvents = [];
-                    try { registerInitialObservation?.Invoke(run); }
-                    catch (Exception exception)
-                    {
-                        // Keep the certified failure/lifecycle unit even if registration fails.
-                        run.RecordException(exception);
-                        var reason = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
-                            interrupted.CancellationToken == cancellationToken ? RunReason.Cancelled :
-                            FiniteOperation.IsDeadline(exception) ? RunReason.MaxDuration : RunReason.ExecutionError;
-                        registrationEvents = [exception is RunFailureException failed ? failed.Cause : new(reason, RunPhase.Execution, RunOrigin.Runner)];
-                    }
-                    run.Evaluate(initial.Success, initial.CapturedAt, candidates: registrationEvents,
-                        cancelled: cancellationToken.IsCancellationRequested, failureUnit: initial.Failure);
+                    run.RetainCertifiedInitialFacts(initial);
+                    await FiniteOperation.RunUntilAsync(realClock, run.RunningOrigin!.Value + run.Limits.MaxDuration,
+                        _ => new ValueTask<bool>(Task.Factory.StartNew(() =>
+                        {
+                            IReadOnlyList<RunEvent> registrationEvents = [];
+                            try { registerInitialObservation?.Invoke(run); }
+                            catch (Exception exception)
+                            {
+                                // Keep the certified failure/lifecycle unit even if registration fails.
+                                run.RecordException(exception);
+                                var reason = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
+                                    interrupted.CancellationToken == cancellationToken ? RunReason.Cancelled :
+                                    FiniteOperation.IsDeadline(exception) ? RunReason.MaxDuration : RunReason.ExecutionError;
+                                registrationEvents = [exception is RunFailureException failed ? failed.Cause : new(reason, RunPhase.Execution, RunOrigin.Runner)];
+                            }
+                            run.ReadAuthoritativeCondition();
+                            run.Evaluate(candidates: registrationEvents, cancelled: cancellationToken.IsCancellationRequested);
+                            return true;
+                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)), cancellationToken, run.RecordException).ConfigureAwait(false);
                 }
                 else run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 if (run.Primary is null)

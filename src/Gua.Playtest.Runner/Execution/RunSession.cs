@@ -20,6 +20,7 @@ public sealed class RunSession
     }
     private EvaluationFrame? activeEvaluation;
     private readonly AsyncLocal<EvaluationFrame?> currentEvaluation = new();
+    private readonly AsyncLocal<TimeSpan?> certifiedConditionSnapshot = new();
     private CancellationToken callerCancellation;
     private bool frozenGoalVerified;
     internal void BindCancellation(CancellationToken token)
@@ -131,6 +132,7 @@ public sealed class RunSession
     }
     private TimeSpan ReadCondition()
     {
+        if (certifiedConditionSnapshot.Value is { } capturedClock) return capturedClock;
         TimeSpan baseline;
         lock (arbitrationGate) baseline = lastCondition;
         try
@@ -281,6 +283,32 @@ public sealed class RunSession
             operations.Add(operation);
             if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
             return new PlannerPermit(this, operation);
+        }
+    }
+    // BeginRunning has already validated this certificate's clocks and copied
+    // immutable observation maps. Classify those ready data before cancellation
+    // can win the bounded provider-validation/lifecycle stage. No provider calls.
+    internal void RetainCertifiedInitialFacts(RunObservation initial)
+    {
+        Require(ExecutionState.Running);
+        var previous = certifiedConditionSnapshot.Value; certifiedConditionSnapshot.Value = lastCondition;
+        ConditionEvaluation? failed = null, passed = null;
+        try
+        {
+            failed = failureSession?.EvaluateAt(initial.Failure ?? new ConditionObservationUnit([]), initial.CapturedAt);
+            passed = successSession?.EvaluateAt(initial.Success ?? new ConditionObservationUnit([]), initial.CapturedAt);
+        }
+        catch (Exception exception)
+        { QueuePending(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract)); RecordException(exception); }
+        finally { certifiedConditionSnapshot.Value = previous; }
+        lock (arbitrationGate)
+        {
+            var facts = new List<RunEvent>(); AddError(facts, failed); AddError(facts, passed);
+            if (IsTrue(failed)) facts.Add(new(RunReason.FailureCondition, RunPhase.Execution, RunOrigin.Condition));
+            foreach (var fact in facts) QueuePending(fact);
+            if (IsTrue(passed)) goalVerified = true;
+            var wakes = new[] { failed?.NextEvaluationAt, passed?.NextEvaluationAt }.Where(value => value.HasValue).ToArray();
+            nextConditionEvaluationAt = wakes.Length == 0 ? null : wakes.Min();
         }
     }
     internal IReadOnlyList<RunEvent> InterruptedBoundaryFailureEvents(RunStartBoundary boundary)
@@ -527,7 +555,9 @@ public sealed class RunSession
         try { return EvaluateUnit(units, incoming, cancelled, executionComplete); }
         finally
         {
-            currentEvaluation.Value = previous;
+            // The revoked execution context remains revoked after Evaluate returns;
+            // cleanup runs in the separate executor context and may retain its issues.
+            currentEvaluation.Value = frame.Abandoned ? frame : previous;
             lock (arbitrationGate) if (ReferenceEquals(activeEvaluation, frame)) activeEvaluation = null;
         }
     }
@@ -723,6 +753,9 @@ public sealed class RunSession
     }
     private void CollectCompletionEvidence(List<RunEvent> cycle, bool executionComplete)
     {
+        lock (arbitrationGate)
+        {
+            if (State != ExecutionState.Running) return;
             void Add(RunReason reason, RunOrigin origin)
             {
                 if (!cycle.Any(x => x.Reason == reason && x.Phase == Phase && x.Origin == origin))
@@ -742,6 +775,7 @@ public sealed class RunSession
                 Add(exhausted, RunOrigin.Budget);
             if (executionComplete && !goalVerified) Add(success is null ? RunReason.ExplorationFinished : RunReason.SuccessUnconfirmed, RunOrigin.Runner);
             if (goalVerified && (policy == CompletionPolicy.OnGoal || executionComplete)) Add(RunReason.GoalSatisfied, RunOrigin.Condition);
+        }
     }
     private void AddError(List<RunEvent> cycle, ConditionEvaluation? value)
         {

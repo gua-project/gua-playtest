@@ -53,6 +53,16 @@ the same gate as closure; a clock read that returns after closure cannot confirm
 a receipt or reopen its observation opportunity. Emergency diagnostics share the
 ordinary bounded traversal that prioritizes original leaves over deep wrappers,
 while using CLR stack capture without invoking overridden diagnostic getters.
+Certified initial data is classified once against the already-validated certificate
+timestamp, retaining its copied failure/Goal facts even if cancellation was already
+requested. Fresh provider clock validation, observation registration and lifecycle
+arbitration run in a finite initial owner stage under the original Running deadline,
+before driver work can start. Cancellation/deadline can finalize and release resources
+while that stage remains stalled; the same absolute deadline then bounds driver work.
+Goal-side reservation refunds and all completion collection share the closure gate.
+A revoked evaluation keeps its revocation in the returning driver's execution context,
+so post-return execution diagnostics cannot change a snapshot during cleanup; cleanup's
+separate executor context may still retain its own bounded diagnostics.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.
