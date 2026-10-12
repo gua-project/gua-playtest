@@ -7,6 +7,58 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData(RunReason.ActionsExhausted, false)] [InlineData(RunReason.DecisionsExhausted, false)]
+    [InlineData(RunReason.RecoveryExhausted, false)] [InlineData(RunReason.GoalSatisfied, false)]
+    [InlineData(RunReason.ExplorationFinished, false)]
+    [InlineData(RunReason.ActionsExhausted, true)] [InlineData(RunReason.DecisionsExhausted, true)]
+    [InlineData(RunReason.RecoveryExhausted, true)] [InlineData(RunReason.GoalSatisfied, true)]
+    [InlineData(RunReason.ExplorationFinished, true)]
+    public async Task InterruptedEvaluationRetainsNewlyEligibleCompletionEvidence(RunReason expected, bool deadline)
+    {
+        var clock = new CancellationArbitrationClock();
+        var limits = Limits(actions: expected == RunReason.ActionsExhausted ? 1 : 3,
+            decisions: expected == RunReason.DecisionsExhausted ? 1 : 3,
+            recovery: expected == RunReason.RecoveryExhausted ? 1 : 2);
+        var run = new RunSession(limits, clock, new Clock(), expected == RunReason.GoalSatisfied ? Condition() : null);
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield(); clock.Driver.Value = true;
+                if (expected is RunReason.ActionsExhausted or RunReason.GoalSatisfied)
+                {
+                    var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+                    operation.BeginDispatch(0);
+                    if (expected == RunReason.GoalSatisfied) { operation.Actions!.ConfirmSent(0); Assert.Null(owner.Evaluate(Unit(), TimeSpan.Zero)); }
+                    operation.Complete();
+                }
+                else if (expected is RunReason.DecisionsExhausted or RunReason.RecoveryExhausted)
+                    owner.RequestPlanner(recovering: expected == RunReason.RecoveryExhausted)!.CompleteWithoutOperation();
+                clock.OnDriverRead = () => { entered.TrySetResult(); resume.Wait(); };
+                owner.Evaluate(executionComplete: expected == RunReason.ExplorationFinished); return false;
+            }
+            finally { clock.Driver.Value = false; ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) clock.At(limits.MaxDuration); else caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Contains(outcome.Events, item => item.Reason == (deadline ? RunReason.MaxDuration : RunReason.Cancelled));
+            Assert.Contains(outcome.Events, item => item.Reason == expected);
+            Assert.Equal(expected is RunReason.ActionsExhausted or RunReason.GoalSatisfied ? RunReason.ActionUnconfirmed : deadline ? RunReason.MaxDuration : RunReason.Cancelled,
+                outcome.Primary.Cause.Reason);
+            Assert.False(ended.Task.IsCompleted);
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
     private sealed class OverlappingReadClock : IClock
     {
         public long Ticks;

@@ -31,8 +31,13 @@ executor interruption arrives while that unit is stalled, it revokes the unit's
 publication authority and finalizes from those known causes and the interruption
 without joining the dependency. Resource cleanup still runs, and the abandoned unit
 cannot rewrite primary, the event ledger or diagnostic snapshots when it returns.
-Unfinished observations never manufacture Goal confirmation. The executor binds its
-caller token to the session; primary publication samples IsCancellationRequested
+Unfinished observations never manufacture Goal confirmation.
+After interruption closes the final approved opportunity, the same completion
+collector retains newly eligible budget exhaustion, previously verified Goal and
+explicitly declared plan completion in the terminal ledger. Failure, cancellation
+and global-deadline priorities still choose primary; unfinished work cannot supply
+a new completion declaration. The executor binds its caller token to the session;
+primary publication samples IsCancellationRequested
 directly, so delayed cancellation callbacks cannot permit an in-flight Goal to pass.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver

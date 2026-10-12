@@ -15,6 +15,7 @@ public sealed class RunSession
     {
         public RunEvent[] Evidence = [];
         public Exception[] Diagnostics = [];
+        public bool ExecutionComplete;
         public volatile bool Abandoned;
     }
     private EvaluationFrame? activeEvaluation;
@@ -506,9 +507,9 @@ public sealed class RunSession
             {
                 if (!cancelled && !callerCancellation.IsCancellationRequested && incoming.Count == 0)
                     throw new InvalidOperationException("RunEvaluationAlreadyActive");
-                return InterruptEvaluation(active, incoming, cancelled);
+                return InterruptEvaluation(active, incoming, cancelled, executionComplete);
             }
-            frame = new() { Evidence = incoming.Concat(pendingEvents).ToArray() };
+            frame = new() { Evidence = incoming.Concat(pendingEvents).ToArray(), ExecutionComplete = executionComplete };
             activeEvaluation = frame;
         }
         var previous = currentEvaluation.Value; currentEvaluation.Value = frame;
@@ -520,7 +521,7 @@ public sealed class RunSession
         }
     }
     // Caller holds the short publication gate; never sample a provider or join a task.
-    private PrimaryResult? InterruptEvaluation(EvaluationFrame active, List<RunEvent> incoming, bool cancelled)
+    private PrimaryResult? InterruptEvaluation(EvaluationFrame active, List<RunEvent> incoming, bool cancelled, bool executionComplete)
     {
         active.Abandoned = true;
         var cycle = active.Evidence.Concat(pendingEvents).Concat(incoming).ToList();
@@ -537,6 +538,10 @@ public sealed class RunSession
         postedExceptions.Clear(); postedCausalEvidence = false;
         if (postedExceptionsOverflow) cycle.Add(new(RunReason.ExecutionError, Phase, RunOrigin.Runner));
         postedExceptionsOverflow = false;
+        // Closing the final opportunity makes budget/verified Goal/declared plan
+        // completion evidence eligible even though the provider unit was revoked.
+        // Collect only already-known completion; never infer it from a stalled task.
+        if (State == ExecutionState.Running) CollectCompletionEvidence(cycle, active.ExecutionComplete || executionComplete);
         return PublishPrimary(cycle.Distinct().ToList(), lastReal);
     }
     private void RecordEmergencyException(Exception exception)
