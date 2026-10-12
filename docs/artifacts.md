@@ -24,6 +24,45 @@ Final #11 merge main `18d50f9d62f73e59a9bc87c1131691ca5df60f6a` is incorporated.
 
 ## Gua-owned receipts and safety
 
+### Trusted Gua writer composition
+
+The CLI assembly's `GuaRunArtifacts` composes Runner persistence and the
+GuaIntegration `GuaRunArtifactWriter` without a Runner-to-Gua dependency.
+Construct it at Preparing entry, before calling the host's launch/connect port,
+with the existing store, fixed metadata, effective artifact ceilings, explicit
+Gua options and host-only Recording redaction policy. Pass it as
+`IPreparationTrace` to `HostPreparation`, and pass `ConfirmPrimaryAsync` directly
+to `RunExecutor`'s pre-cleanup confirmation hook. The hook freezes Gua's primary
+outcome and the existing create-only primary summary separately from cleanup.
+
+The trusted owner uses the Gua session's public `BeginStep`, `RecordRequest`,
+`Evaluate`, `Change` and `Attach` APIs for already-authorized evidence.
+`Observe` associates a Gua-generated observation ID with an owner observation
+identity and its Before/After/PrimaryDecision/AfterCleanup boundary.
+`RecordPlannerDecision` accepts only the same Run ID, a previously associated
+observation and the structured Planner reference; it never collects rationale.
+The owner must finish/join capture and serialize these calls before finalizing.
+
+After cleanup, call `CompleteAsync` with the unchanged `RunOutcome` and a genuine
+Gua Recording from authorized capture, or explicit capture failure/null for
+CaptureFailed/NotExecuted. Gua writes and reads its Recording format; unsafe
+Recording text is rejected before serialization rather than rewriting replay
+identity. The actual completed Trace is read by Gua, and Gua's self-contained
+HTML report is the saved Dashboard entry. Its receipt inventories the manifest,
+events, snapshots, attachments and report, with exact byte lengths and SHA-256.
+`RunArtifactStore` independently admits every associated file before publishing
+the existing final Result. Success omission requires actual successful Gua
+completion/omission. Capture or save failure contributes only postprocessing;
+the returned completion applies the existing exit-11 projection.
+
+Gua 1.1.1 queue admission, writer scheduling, lifecycle stopping and synchronous
+filesystem operations do not provide a hard absolute deadline or a proof that
+the writer terminated when a flush/dispose timeout was reported. This adapter
+awaits the actual public completion operation and does not wrap it with a timeout
+that claims to stop background work. The owner must isolate unresolved providers
+before reuse; this composition grants no gameplay guard, lifecycle lease,
+independent observation feed or production host capability.
+
 `ArtifactReceipt` separates `NotExecuted`, `OmittedOnSuccess`, `CaptureFailed`, `SaveFailed` and `Saved`. Only Passed permits success omission. Non-saved states contain no file/byte/hash fields and create no empty artifact. Capture/flush failures add ArtifactFailed to postprocessing; Passed plus incomplete postprocessing exits 11, while non-Passed primary exits are preserved.
 
 A Saved receipt names a nonempty, bounded, local entry file with byte length and lowercase SHA-256. `AdditionalFiles` enumerates every associated file in a Gua-owned bundle (for example a manifest plus events/attachments), without assuming its format or renaming its contents. Relative names have up to eight safe segments, no URL/drive/traversal components or trailing dots. Trace and Recording cannot alias any associated file. Readback rejects summary replacement, linked paths, length/hash mismatch and Run capacity overflow. Bytes are opaque: tests use opaque fixture bytes and do not claim a Gua format reader or actual Gua integration. The concrete Gua writer must redact before its own queues/buffers/hashes, enforce its total output budget and supply genuine capture/flush evidence including a complete bundle file inventory. A receipt is not proof that an unimplemented upstream writer satisfies this requirement.
