@@ -126,6 +126,19 @@ public sealed class NavigationPreparationTests
         Assert.Equal("NavigationObservationUnavailable", Check(p,e));
     }
     [Fact]
+    public async Task PivotOutsideSurveyDoesNotReplaceFootOrApprovedApproachBounds()
+    {
+        var p = await Policy();
+        p = p with { Profile = p.Profile with { Capsule = p.Profile.Capsule with {
+            FootOffset = new(0,-4,0), CenterOffset = new(0,-3.1,0) } } };
+        var e = Evidence(p.Profile);
+        e = e with { Actor = e.Actor with { Position = new(0,4,0) },
+            Targets = [e.Targets[0] with { Position = new(1,10,1) }] };
+        Assert.Equal("Valid", Check(p,e));
+        Assert.Equal("NavigationActorUnavailable", Check(p,e with { Actor = e.Actor with { Position = new(0,6,0) } }));
+        Assert.Equal("NavigationTargetUnavailable", Check(p,e with { Targets = [e.Targets[0] with { Position = new(double.NaN,0,0) }] }));
+    }
+    [Fact]
     public async Task EffectivePermissionsAndSegmentLimitsAreRequired()
     {
         var p = await Policy();

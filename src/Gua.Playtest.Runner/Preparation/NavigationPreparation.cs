@@ -90,7 +90,7 @@ public static class NavigationPreparationCheck
         bool ObjectMatches(NavigationObjectEvidence o, JsonObject selector, string domain) => o is not null &&
             JsonNode.DeepEquals(o.Selector, selector) && o.DomainId == domain && !string.IsNullOrWhiteSpace(o.RuntimeId) &&
             o.MatchCount == 1 && o.Space == "world3d" && Fresh(o.Sample) && o.Sample.SampleId == e.Sample.SampleId &&
-            o.Sample.CapturedAt == e.Sample.CapturedAt && NavigationProfileValidation.Contains(p.Survey, o.Position);
+            o.Sample.CapturedAt == e.Sample.CapturedAt && o.Position.IsFinite;
         if (!ObjectMatches(e.Actor, p.ActorSelector, p.ActorDomainId) || !e.Actor.Controllable) return "NavigationActorUnavailable";
         var foot = e.Actor.Position.Add(p.Capsule.FootOffset);
         if (!NavigationProfileValidation.Contains(p.Survey, foot) || foot.Dot(p.Plane.Up) < p.Survey.MinHeight ||
