@@ -103,6 +103,7 @@ public sealed class PreparationTests
         public TaskCompletionSource SynchronizationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Exception? SynchronizeFailure { get; set; }
         public RunObservation? InitialObservation { get; set; }
+        public Func<string, TimeSpan, NavigationStartEvidence>? NavigationCapture { get; set; }
         public RunObservation? CurrentObservation { get; set; }
         public TaskCompletionSource<RunObservation>? BlockedCapture { get; set; }
         public int Captures { get; private set; }
@@ -119,7 +120,8 @@ public sealed class PreparationTests
         { if (SynchronizeFailure is not null) throw SynchronizeFailure; Synchronizations++; SynchronizationStarted.TrySetResult(); if (PendingBoundary is not null) return new(PendingBoundary.Task); if (MissingBoundary) return ValueTask.FromResult<InitialBoundary>(null!);
             return ValueTask.FromResult(new InitialBoundary(Identity with { Epoch = Stale ? "old" : Identity.Epoch,
             Capabilities = MissingCapturedCapabilities ? null! : CapturedCapabilities ?? Identity.Capabilities }, true, Preconditions,
-            WrongRequest ? "previous-request" : captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero, "subscription-cursor-1", InitialObservation ?? Observation(), MissingFeed ? null! : this, false)); }
+            WrongRequest ? "previous-request" : captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero, "subscription-cursor-1", InitialObservation ?? Observation(), MissingFeed ? null! : this, false,
+            NavigationCapture?.Invoke(captureRequestId, Clock?.Elapsed ?? TimeSpan.Zero))); }
         private RunObservation Observation() => CurrentObservation ?? new(Clock?.Elapsed ?? TimeSpan.Zero, new ConditionObservationUnit([]), new ConditionObservationUnit([]));
         public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
         { Captures++; OnCapture?.Invoke(token); return CaptureFailure is not null ? ValueTask.FromException<RunObservation>(CaptureFailure) : BlockedCapture is null ? ValueTask.FromResult(Observation()) : new(BlockedCapture.Task); }
@@ -160,6 +162,7 @@ public sealed class PreparationTests
     }
     private sealed class Setup : IApprovedSetup
     {
+        public string? FixtureId { get; set; }
         public Action? BeforeAuthorization { get; set; }
         public Func<IReadOnlySet<string>>? ReadAllowed { get; set; }
         public Func<int>? ReadMaximum { get; set; }
@@ -189,6 +192,47 @@ public sealed class PreparationTests
             TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(1), 3, TimeSpan.FromSeconds(1));
     private static RunSession Run(IClock clock) => new(new RunLimits(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(2),
         TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), 5, 5, 2, 100), clock, clock);
+    [Theory]
+    [InlineData(null, 0, PreparationCode.SetupForbidden)]
+    [InlineData("other-fixture", 0, PreparationCode.SetupForbidden)]
+    [InlineData("walk-room", 1, PreparationCode.NavigationUnavailable)]
+    public async Task NavigationCannotBypassApprovedFixtureOrStartWithoutActualEvidence(string? fixture, int calls, PreparationCode expected)
+    {
+        var navigation = await NavigationPreparationTests.Policy();
+        var clock = new Clock(); var connection = new Connection(); var trace = new Trace();
+        var setup = fixture is null ? null : new Setup { FixtureId = fixture };
+        var outcome = await Execute(new(Policy() with { Navigation = navigation }, clock, new Launcher(), new Connector(connection), trace), clock, setup);
+        Assert.Equal(ResultStatus.Failed, outcome.Primary.Status);
+        Assert.Equal(RunPhase.Preparation, outcome.Primary.Cause.Phase);
+        Assert.Equal(calls, setup?.Calls ?? 0);
+        Assert.Contains(trace.Events, e => e.Code == expected);
+        Assert.DoesNotContain(trace.Events, e => e.Stage == PreparationStage.Ready);
+        Assert.Equal(1, connection.Releases);
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task NavigationExpiryIsEnforcedAfterReadyTraceAndAtBoundaryHandoff(bool expireInTrace)
+    {
+        var navigation = await NavigationPreparationTests.Policy();
+        var clock = new Clock(); var trace = new Trace(); var run = Run(clock); var executionCalls = 0;
+        var connection = new Connection { Clock = clock };
+        connection.Identity = connection.Identity with { Epoch = "1" };
+        connection.NavigationCapture = (request, at) => NavigationPreparationTests.Evidence(navigation.Profile,
+            new("source", "1", request, "run-real", "physics-1", at, "room", 1));
+        if (expireInTrace) trace.OnRecord = e => { if (e.Stage == PreparationStage.Ready) clock.Advance(101); };
+        var preparation = new HostPreparation(Policy() with { Navigation = navigation }, clock, new Launcher(), new Connector(connection), trace);
+        var outcome = await RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), async (session, owned, token) =>
+        {
+            var host = await preparation.PrepareAsync(session, owned, new Setup { FixtureId = "walk-room" }, null, token);
+            if (!expireInTrace) clock.Advance(101);
+            return host.Boundary;
+        }, (_, _) => { executionCalls++; return ValueTask.FromResult(true); });
+        Assert.Null(run.RunningOrigin); Assert.Equal(0, executionCalls);
+        Assert.Equal(RunReason.ObservationContractViolation, outcome.Primary.Cause.Reason);
+        Assert.Equal(RunPhase.Preparation, outcome.Primary.Cause.Phase);
+        Assert.Contains(trace.Events, e => e.Stage == PreparationStage.Ready);
+        Assert.Equal(1, connection.Releases);
+    }
     private static async Task<RunOutcome> Execute(HostPreparation preparation, IClock clock, Setup? setup = null, Planner? planner = null)
     {
         var run = Run(clock); var cleanup = new OwnedCleanup();
