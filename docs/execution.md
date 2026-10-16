@@ -72,6 +72,16 @@ Initial registration failures transfer their typed cause and original exception 
 the session-owned queue before the next provider read. Interruption therefore keeps
 an already-known failure even while that read remains stalled; posts after terminal
 closure cannot change the confirmed snapshot.
+Driver-completion arbitration remains inside the original finite driver waiter.
+The executor's interrupted Running catch path settles only already-owned causes,
+diagnostics and the validated time watermark; it starts no new provider sample.
+This permits resource release even when both work and an unstarted lifecycle probe
+would block. Ordinary bounded evaluations retain their lifecycle samples.
+The interrupted Running finalizer uses emergency CLR stack capture for its own
+exception too, so an overridden diagnostic getter cannot become its next dependency.
+Capture failure additions, active evidence snapshots and original diagnostic
+ownership transfer share one publication critical section, before stack extraction
+or another condition read. Interruption cannot split those updates.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.

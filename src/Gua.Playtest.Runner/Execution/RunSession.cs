@@ -185,14 +185,26 @@ public sealed class RunSession
             pendingEvents.Clear(); return true;
         }
     }
-    private bool PublishActiveEvidence(List<RunEvent> cycle)
+    private bool PublishActiveEvidence(List<RunEvent> cycle, Action? update = null, Exception? diagnostic = null)
     {
         lock (arbitrationGate)
         {
             if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return false;
-            if (currentEvaluation.Value is { } frame) frame.Evidence = cycle.ToArray();
-            return true;
+            update?.Invoke();
+            if (currentEvaluation.Value is { } frame)
+            {
+                frame.Evidence = cycle.ToArray();
+                if (diagnostic is not null) frame.Diagnostics = frame.Diagnostics.Append(diagnostic).Take(Limits.MaxEvidenceItems).ToArray();
+            }
         }
+        if (diagnostic is not null)
+        {
+            RecordException(diagnostic);
+            lock (arbitrationGate)
+                if (currentEvaluation.Value is { Abandoned: false } frame)
+                    frame.Diagnostics = frame.Diagnostics.Where(item => !ReferenceEquals(item, diagnostic)).ToArray();
+        }
+        return !AbandonedEvaluation;
     }
     internal bool HasPendingClockRejection => pendingEvents.Any(item => item.Reason == RunReason.InvalidContract && item.Origin == RunOrigin.Clock);
     private ConditionSession? StartCondition(PreparedCondition? prepared, TimeSpan origin)
@@ -572,6 +584,18 @@ public sealed class RunSession
             lock (arbitrationGate) if (ReferenceEquals(activeEvaluation, frame)) activeEvaluation = null;
         }
     }
+    internal PrimaryResult? FinalizeInterruptedExecution(IEnumerable<RunEvent> candidates, bool cancelled, bool executionComplete, Exception exception)
+    {
+        var incoming = candidates.ToList();
+        lock (arbitrationGate)
+        {
+            if (State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
+            // No live provider is allowed to become the finalizer's dependency.
+            // Settle from the validated watermark, owned queues and active snapshot.
+            RecordEmergencyException(exception);
+            return InterruptEvaluation(activeEvaluation ?? new EvaluationFrame(), incoming, cancelled, executionComplete);
+        }
+    }
     // Caller holds the short publication gate; never sample a provider or join a task.
     private PrimaryResult? InterruptEvaluation(EvaluationFrame active, List<RunEvent> incoming, bool cancelled, bool executionComplete)
     {
@@ -617,7 +641,12 @@ public sealed class RunSession
         try { now = ReadReal(); }
         catch (Exception exception)
         {
-            RecordException(exception); now = lastReal;
+            if (!PublishActiveEvidence(cycle, () =>
+            {
+                if (!cycle.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
+                    cycle.Add(new(RunReason.InvalidContract, Phase, RunOrigin.Clock));
+            }, exception)) return Primary;
+            now = lastReal;
             // Keep any evidence queued during the read, including the rejecting clock itself.
             if (!DrainPending(cycle)) return Primary;
             if (!cycle.Any(x => x.Reason == RunReason.InvalidContract && x.Phase == Phase && x.Origin == RunOrigin.Clock))
@@ -647,9 +676,9 @@ public sealed class RunSession
                 }
                 catch (Exception exception)
                 {
-                    cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
-                    if (!PublishActiveEvidence(cycle)) return Primary;
-                    RecordException(exception); validCapture = false;
+                    if (!PublishActiveEvidence(cycle,
+                        () => cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract)), exception)) return Primary;
+                    validCapture = false;
                 }
                 if (!validCapture) continue;
                 if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
@@ -661,17 +690,18 @@ public sealed class RunSession
                     try { return session?.EvaluateAt(evidence ?? new ConditionObservationUnit([]), captured.At); }
                     catch (Exception exception)
                     {
-                        cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract));
-                        if (!PublishActiveEvidence(cycle)) return null;
-                        RecordException(exception);
+                        if (!PublishActiveEvidence(cycle,
+                            () => cycle.Add(new(RunReason.ObservationContractViolation, Phase, RunOrigin.Contract)), exception)) return null;
                         return null;
                     }
                 }
                 var failed = EvaluateCondition(failureSession, captured.Failure);
                 if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
-                AddError(failed);
-                if (IsTrue(failed)) cycle.Add(new(RunReason.FailureCondition, Phase, RunOrigin.Condition));
-                if (!PublishActiveEvidence(cycle)) return Primary;
+                if (!PublishActiveEvidence(cycle, () =>
+                {
+                    AddError(failed);
+                    if (IsTrue(failed)) cycle.Add(new(RunReason.FailureCondition, Phase, RunOrigin.Condition));
+                })) return Primary;
                 var passed = EvaluateCondition(successSession, captured.Success);
                 if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return Primary;
                 lock (arbitrationGate)
