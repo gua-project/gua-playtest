@@ -32,6 +32,68 @@ Other transition requests fail with fixed codes. `BeginRunning` uses one real Ru
 
 One `Evaluate` call reads real time once and handles a complete evaluation unit, including current cancellation/global deadline. The owner must not call Evaluate separately for callbacks that belong to one unit. Both condition trees are evaluated even after Goal success, and errors remain candidates. The earliest enum in a class wins, then phase enum, then origin enum; event arrival order cannot choose the result.
 
+Only short data publication holds the evaluation arbitration gate; its clocks, lifecycle watches
+and condition providers run outside it. An active unit retains a bounded immutable
+snapshot of already-authoritative causes before draining pending evidence. If an
+executor interruption arrives while that unit is stalled, it revokes the unit's
+publication authority and finalizes from those known causes and the interruption
+without joining the dependency. Resource cleanup still runs, and the abandoned unit
+cannot rewrite primary, the event ledger or diagnostic snapshots when it returns.
+Unfinished observations never manufacture Goal confirmation.
+After interruption closes the final approved opportunity, the same completion
+collector retains newly eligible budget exhaustion, previously verified Goal and
+explicitly declared plan completion in the terminal ledger. Failure, cancellation
+and global-deadline priorities still choose primary; unfinished work cannot supply
+a new completion declaration. The executor binds its caller token to the session;
+primary publication samples IsCancellationRequested
+directly, so delayed cancellation callbacks cannot permit an in-flight Goal to pass.
+The same gate samples the nondecreasing validated real-time watermark: the executor
+timer's already-observed absolute deadline cannot be hidden by delayed timeout
+candidate materialization. This needs no additional provider-clock read. Late token
+or deadline evidence follows the ordinary terminal closure, completion recollection
+and closing lifecycle sample before primary publication; probes remain outside the
+short gate and interruption can still revoke a stalled sample.
+Each processed capture publishes its success-side errors and verified Goal under
+that gate before validating the next capture. An interrupted later read cannot
+erase an earlier unit's contract failure. Result confirmation reads clocks outside
+the gate, then rechecks the operation's open state, Run state and deadline under
+the same gate as closure; a clock read that returns after closure cannot confirm
+a receipt or reopen its observation opportunity. Emergency diagnostics share the
+ordinary bounded traversal that prioritizes original leaves over deep wrappers,
+while using CLR stack capture without invoking overridden diagnostic getters.
+Certified initial data is classified once against the already-validated certificate
+timestamp, retaining its copied failure/Goal facts even if cancellation was already
+requested. Fresh provider clock validation, observation registration and lifecycle
+arbitration run in a finite initial owner stage under the original Running deadline,
+before driver work can start. Cancellation/deadline can finalize and release resources
+while that stage remains stalled; the same absolute deadline then bounds driver work.
+Goal-side reservation refunds and all completion collection share the closure gate.
+A revoked evaluation keeps its revocation in the returning driver's execution context,
+so post-return execution diagnostics cannot change a snapshot during cleanup; cleanup's
+separate executor context may still retain its own bounded diagnostics.
+Preparation, initial registration and driver callbacks also carry an internal
+execution-stage marker across asynchronous continuations. Once primary publication
+starts cleanup, diagnostics from these abandoned stages are rejected, including a
+late registration exception that never entered an evaluation. The finalizer and
+cleanup run outside that marker and retain their own diagnostic authority.
+Initial registration failures transfer their typed cause and original exception to
+the session-owned queue before the next provider read. Interruption therefore keeps
+an already-known failure even while that read remains stalled; posts after terminal
+closure cannot change the confirmed snapshot.
+Driver-completion arbitration remains inside the original finite driver waiter.
+The executor's interrupted Running catch path settles only already-owned causes,
+diagnostics and the validated time watermark; it starts no new provider sample.
+This permits resource release even when both work and an unstarted lifecycle probe
+would block. Ordinary bounded evaluations retain their lifecycle samples.
+The interrupted Running finalizer uses emergency CLR stack capture for its own
+exception too, so an overridden diagnostic getter cannot become its next dependency.
+Capture failure additions, active evidence snapshots and original diagnostic
+ownership transfer share one publication critical section, before stack extraction
+or another condition read. Interruption cannot split those updates.
+A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
+Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
+cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.
+
 | Priority | Reasons in tie-break order | Status |
 | --- | --- | --- |
 | 0 | InvalidContract, ObservationContractViolation | Invalid |
@@ -149,7 +211,7 @@ After monitored work is observed complete, CaptureAsync performs one new synchro
 
 Before false driver fallback confirms its primary, it samples current caller cancellation again in the same evaluation unit as ExecutionError. Clock validation during preparation records InvalidContract/Clock before propagating its unchanged exception, including a reset between the shared condition-origin read and either monitor's start. Owned finalization still runs and no driver or goal authority is established after rejected start clocks.
 
-A rejected real-clock read retains InvalidContract/Clock immediately, including reads outside Evaluate. A later recovered reading cannot erase this cause. The catch-path arbiter retains any other evidence queued during the read and records the contract violation once.
+A rejected real-clock read retains InvalidContract/Clock immediately, including reads outside Evaluate. A later recovered reading cannot erase this cause. The catch-path arbiter retains any other evidence queued during the read and records the contract violation once. Concurrent reads compare against the validated baseline captured before each provider invocation and publish a nondecreasing maximum under the short data gate. An older valid sample returning after a newer one cannot falsely reject a monotonic clock or move its authoritative watermark backward; a sequential reset still rejects.
 
 Monitored work launch and owner remaining-time checks use the session's validated real-clock read. Invalid clocks close authority before providers start. Every captured source timestamp is nonnegative, representable, monotonic since Running's source origin, and no later than the current condition clock, even without condition trees; rejection retains exception evidence. Evidence truncation applies the complete priority/reason/phase/origin tie-break. Undefined completion policies are rejected by the constructor before any Run authority.
 
@@ -169,11 +231,11 @@ Monitor real/condition timer targets are retained separately even when providers
 
 Superseding a finite capture wrapper does not prove the underlying feed call ended. Default feeds are joined within the existing owner deadline before any fresh post-work capture; requested source-token cancellation is an ended call, while other faults remain evidence. Only a trusted IIndependentRunObservationFeed may replace without joining: each invocation must own an independent request scope, synchronize fresh source state, and never queue behind the obsolete call or let its cancellation affect the replacement. This capability is not inferred for Gua1.1.1; source/guard acceptance remains open. Startup source timestamps below readiness floors or outside current validated clocks queue ObservationContractViolation/Preparation/Contract while retaining original InvalidOperationException type/stack. Missing initial observation or success/failure maps queues the same cause while retaining ArgumentNullException evidence; Runner API misuse remains separate.
 
-Trusted lifecycle integration retains an already-armed exact process watch on the opaque start boundary. The serialized owner samples it after initial observation/clock processing in the same first Running arbitration cycle, before choosing primary; initial goal success cannot skip known host failure. This is internal adapter evidence, not a new public readiness/permission capability. Late provider callbacks use a bounded exception posting queue. Only the owner drains posts and freezes registration before primary confirmation, preventing worker mutation of pending events or snapshot lists.
+Trusted lifecycle integration retains an already-armed exact process watch on the opaque start boundary. The serialized owner samples it after initial observation/clock processing in the same first Running arbitration cycle, before choosing primary; initial goal success cannot skip known host failure. This is internal adapter evidence, not a new public readiness/permission capability. Late provider callbacks use a bounded exception posting queue. Only the owner drains posts and freezes registration before primary confirmation, preventing worker mutation of pending events or snapshot lists. Drained original exceptions remain owned by the active evaluation until diagnostics are recorded; interruption retains their bounded original type/stack graph before abandoning a stalled lifecycle sample.
 The same internal queue distinguishes secondary callback diagnostics from actual provider failure evidence. A typed provider failure ready before closure carries its guarded cause into owner arbitration; callback faults cannot claim that cause. Queue overflow latches a constant-size fail-closed flag under the same lock: the owner emits Runner ExecutionError rather than allowing goal success after causal evidence was dropped. The queue and recorded evidence retain their existing limits. Both diagnostic and cause registration close atomically before the immutable primary. Later posts cannot change the primary, operation accounting or exception snapshots.
 
-Final primary confirmation closes the posted-evidence gate and samples the already-armed exact lifecycle watch inside that same lock. An earlier Running poll is not final readiness proof; the close sample retains known lifecycle failure before primary assignment. Later completion belongs after the confirmation boundary and cannot rewrite the primary.
-Queued causal evidence and queue overflow immediately close ActionsClosing, Planner requests, operation approval and dispatch through the shared terminal-evidence gate, before the next owner evaluation. That owner gate also samples the already-armed exact lifecycle watch under the posting lock: a completed exit/fault closes authority without depending on a feed call or async notification. Their final authority checks and reservation transitions share the posting lock; provider clock reads precede that lock, and the check repeats afterward. This linearizes internal reservation authority with causal posting; the external transport's check/enqueue guard remains separate. Diagnostic-only posts preserve those gates; workers never mutate Run state or budgets.
+Final primary confirmation closes the posted-evidence gate under its short publication lock, then samples the already-armed exact lifecycle watch outside that lock. An earlier Running poll is not final readiness proof; the close sample retains known lifecycle failure before primary assignment. Executor interruption may revoke a stalled close sample without joining the watch and confirms only already-known evidence. A late revoked sample cannot rewrite the primary.
+Queued causal evidence and queue overflow immediately close ActionsClosing, Planner requests, operation approval and dispatch through the shared terminal-evidence gate, before the next owner evaluation. The owner samples the already-armed exact lifecycle watch before taking the posting lock: a completed exit/fault closes authority without depending on a feed call or async notification. A stalled watch retains one in-flight invocation; interruption arbitrates known evidence without joining it or launching another call behind it. Final pure-data authority checks and reservation transitions share the posting lock; provider clock/watch reads precede that lock, and queued evidence is checked again afterward. This linearizes internal reservation authority with causal posting; the external transport's check/enqueue guard remains separate. Diagnostic-only posts preserve those gates; workers never mutate Run state or budgets.
 
 When OnGoal latches while a sent result is pending, the existing operation closes
 its Reserved suffix as NotSent immediately. `DispatchClosedByGoal` identifies

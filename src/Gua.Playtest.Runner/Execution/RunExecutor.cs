@@ -53,13 +53,14 @@ public static class RunExecutor
         Task<bool>? executionTask = null;
         try
         {
+            run.BindCancellation(cancellationToken);
             run.BeginPreparation();
             Task<T>? preparationTask = null;
             T preparation;
             try
             {
                 preparation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
-                    token => { preparationTask = prepare(token).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
+                    token => { preparationTask = run.RunExecutorStage(() => prepare(token)).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && preparationTask?.IsCompletedSuccessfully == true)
             {
@@ -84,36 +85,53 @@ public static class RunExecutor
                 {
                     run.BeginRunning(boundary);
                     var initial = boundary.InitialObservation;
-                    IReadOnlyList<RunEvent> registrationEvents = [];
-                    try { registerInitialObservation?.Invoke(run); }
-                    catch (Exception exception)
-                    {
-                        // Keep the certified failure/lifecycle unit even if registration fails.
-                        run.RecordException(exception);
-                        var reason = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
-                            interrupted.CancellationToken == cancellationToken ? RunReason.Cancelled :
-                            FiniteOperation.IsDeadline(exception) ? RunReason.MaxDuration : RunReason.ExecutionError;
-                        registrationEvents = [exception is RunFailureException failed ? failed.Cause : new(reason, RunPhase.Execution, RunOrigin.Runner)];
-                    }
-                    run.Evaluate(initial.Success, initial.CapturedAt, candidates: registrationEvents,
-                        cancelled: cancellationToken.IsCancellationRequested, failureUnit: initial.Failure);
+                    run.RetainCertifiedInitialFacts(initial);
+                    await FiniteOperation.RunUntilAsync(realClock, run.RunningOrigin!.Value + run.Limits.MaxDuration,
+                        _ => run.RunExecutorStage(() => new ValueTask<bool>(Task.Factory.StartNew(() =>
+                        {
+                            try { registerInitialObservation?.Invoke(run); }
+                            catch (Exception exception)
+                            {
+                                // Keep the certified failure/lifecycle unit even if registration fails.
+                                var reason = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
+                                    interrupted.CancellationToken == cancellationToken ? RunReason.Cancelled :
+                                    FiniteOperation.IsDeadline(exception) ? RunReason.MaxDuration : RunReason.ExecutionError;
+                                // Transfer both cause and original diagnostics before another
+                                // provider read can stall this owner stage. Terminal closure
+                                // rejects a late post from an already abandoned hook.
+                                run.PostProviderException(exception is RunFailureException ? exception :
+                                    new RunFailureException(new(reason, RunPhase.Execution, RunOrigin.Runner), exception));
+                            }
+                            run.ReadAuthoritativeCondition();
+                            run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
+                            return true;
+                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))), cancellationToken, run.RecordException).ConfigureAwait(false);
                 }
                 else run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 if (run.Primary is null)
                 {
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
                     var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
-                    var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
-                        token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
-                    run.Evaluate(cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
-                    if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
-                        cancelled: cancellationToken.IsCancellationRequested);
+                    await FiniteOperation.RunUntilAsync(realClock, deadline,
+                        token => run.RunExecutorStage(async () =>
+                        {
+                            executionTask = execute(run, token).AsTask();
+                            var complete = await executionTask.ConfigureAwait(false);
+                            // Completion arbitration can read providers too: keep it
+                            // inside the original deadline/cancellation waiter.
+                            run.Evaluate(candidates: !complete
+                                ? [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)] : [],
+                                cancelled: cancellationToken.IsCancellationRequested, executionComplete: complete);
+                            if (run.Primary is null) run.Evaluate(candidates: [new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)],
+                                cancelled: cancellationToken.IsCancellationRequested);
+                            return complete;
+                        }), cancellationToken, run.RecordException).ConfigureAwait(false);
                 }
             }
         }
         catch (Exception exception)
         {
-            run.RecordException(exception);
+            if (run.State != ExecutionState.Running) run.RecordException(exception);
             var phase = run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation;
             var reason = exception switch
             {
@@ -128,7 +146,10 @@ public static class RunExecutor
                 ? executionTask.GetAwaiter().GetResult() : null;
             if (completedExecution == false)
                 retained = retained.Append(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner)).ToArray();
-            run.Evaluate(candidates: retained.Append(exception is RunFailureException failure ? failure.Cause : new(reason, phase, RunOrigin.Runner)),
+            var candidates = retained.Append(exception is RunFailureException failure ? failure.Cause : new(reason, phase, RunOrigin.Runner));
+            if (run.State == ExecutionState.Running)
+                run.FinalizeInterruptedExecution(candidates, cancellationToken.IsCancellationRequested, completedExecution == true, exception);
+            else run.Evaluate(candidates: candidates,
                 cancelled: cancellationToken.IsCancellationRequested, executionComplete: completedExecution == true);
         }
         // Input/resource releases have fresh bounded tokens; main result is already immutable.

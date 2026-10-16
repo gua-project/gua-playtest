@@ -431,9 +431,9 @@ public sealed partial class RunTests
         {
             void Read()
             {
-                // Two finite-operation reads precede Evaluate's real-clock read. Its cancellation
-                // argument has already been sampled when this third read interrupts the caller.
-                if (++reads == 3) cancel.Cancel(); else real.OnRead = Read;
+                // Completion arbitration now runs inside the finite operation. Its first
+                // real-clock read follows Evaluate's already-sampled cancellation argument.
+                if (++reads == 1) cancel.Cancel(); else real.OnRead = Read;
             }
             real.OnRead = Read; return ValueTask.FromResult(false);
         }, cancel.Token);
