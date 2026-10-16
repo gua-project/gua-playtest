@@ -1,5 +1,13 @@
 # Launch, attach and trusted preparation (issue #8)
 
+## 操作を始める前に揃えるもの
+
+Preparing はゲームの接続先と版、承認された開始状態、観測の同期を揃える段階です。「指定portにつながった」だけでは目的のゲーム・buildであることを証明しません。購入テストなら、承認fixtureで開始状態を用意した後にidentityを再確認します。Setupでepochが変わる可能性があるためです。
+
+launch は明示した実行ファイル・作業ディレクトリ・引数で自分のプロセスを起動します。attach は既存ゲームへの接続で、終了やresetの同意を自動的には与えません。接続retryも「何も取得・送信していない」と確認できる場合に限り、元のPreparing期限内で行います。
+
+[HostPreparation.PrepareAsync](../src/Gua.Playtest.Runner/Preparation/HostPreparation.cs)を入口に、[PreparationContracts](../src/Gua.Playtest.Runner/Preparation/PreparationContracts.cs)の `PreparationPolicy`、`IPreparationConnector`、`IApprovedSetup` で呼出し側が用意する情報と証拠を確認します。[SystemProcessLauncher](../src/Gua.Playtest.Runner/Preparation/SystemProcessLauncher.cs)が明示起動、[ProcessObservationFeed](../src/Gua.Playtest.Runner/Preparation/ProcessObservationFeed.cs)がプロセス監視との接続、[PreparationTests](../tests/Gua.Playtest.Foundation.Tests/PreparationTests.cs)が失敗・遅延・所有権の再現例です。ライブラリAPIと公開ゲーム実行コマンドの違いは [開発者ガイド](developer-guide.ja.md)を参照してください。
+
 `Gua.Playtest.Runner.Preparation` is a native-free orchestration boundary, using
 the issue #6 execution owner, original preparation deadline and `OwnedCleanup`.
 No second Run state machine, budget, Trace wire format or Gua implementation is
