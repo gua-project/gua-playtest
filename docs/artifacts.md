@@ -32,6 +32,114 @@ Final #11 merge main `18d50f9d62f73e59a9bc87c1131691ca5df60f6a` is incorporated.
 
 ## Gua-owned receipts and safety
 
+### Trusted Gua writer composition
+
+The CLI assembly's `GuaRunArtifacts` composes Runner persistence and the
+GuaIntegration `GuaRunArtifactWriter` without a Runner-to-Gua dependency.
+Construct it at Preparing entry, before calling the host's launch/connect port,
+with the existing store, fixed metadata, effective artifact ceilings, explicit
+Gua options and host-only Recording redaction policy. Pass it as
+`IPreparationTrace` to `HostPreparation`, and pass `ConfirmPrimaryAsync` directly
+to `RunExecutor`'s pre-cleanup confirmation hook. The hook freezes Gua's primary
+outcome and the existing create-only primary summary separately from cleanup.
+The preparation owner emits the single `Started` transition; constructing the
+adapter only initializes persistence. Evidence producers cannot set the primary
+through the capture port.
+
+The trusted owner uses the `GuaRunTrace` policy port's `BeginStep`, `RecordRequest`,
+`Evaluate`, `Change` and `Attach` APIs for already-authorized evidence. Each
+delegates to the actual public Gua session; the raw session is not exposed.
+Configured sensitive JSON fields become null before Gua queues, attachments or
+hashes, including fields whose values are not literal secrets. Explicit marked
+objects retain their whole-object masking. Policies that require masking an
+unmodifiable Gua envelope/identity field are rejected before writer creation.
+Literal secrets colliding with fixed native envelope keys/schema tokens are also
+rejected before the session worker is constructed; late report rejection cannot
+undo native JSON writes.
+The projection counts every retained mask/null node and bounds the final escaped
+UTF-8 encoding before returning a document to Gua.
+The same explicit string ceiling applies to caller-supplied Trace labels, request
+and host fields, phases, schemas, observations and typed evidence text, and to
+Recording target/value fields before attachment or file creation. Sensitive-field
+null replacements obey the retained-document depth ceiling as ordinary children do.
+`Observe` associates a Gua-generated observation ID with an owner observation
+identity and its Before/After/PrimaryDecision/AfterCleanup boundary.
+`RecordPlannerDecision` accepts only the same Run ID, a previously associated
+observation and the structured Planner reference; it never collects rationale.
+The owner must finish/join capture and serialize these calls before finalizing.
+
+After cleanup, call `CompleteAsync` with the unchanged `RunOutcome` and a genuine
+Gua Recording from authorized capture, or explicit capture failure/null for
+CaptureFailed/NotExecuted. Gua writes and reads its Recording format; unsafe
+Recording text is rejected before serialization rather than rewriting replay
+identity. A bounded final encoding admission check additionally rejects secrets
+in generated enum/key/scalar values and JSON token boundaries, and populated
+sensitive Recording fields are rejected without rewriting replay identity, before Gua
+attachment queues, its file writer or output hashes. Unsafe Recording admission
+also prevents rendering an HTML report from that capture. The actual completed Trace is read by Gua, and Gua's self-contained
+HTML report is the saved Dashboard entry. Its receipt inventories the manifest,
+events, snapshots, attachments and report, with exact byte lengths and SHA-256.
+Before Gua writes HTML, the host admits the complete bounded encoding of the pinned
+1.1.1 report, including the bundled viewer, envelope and JSON boundaries. A literal
+secret collision prevents HTML creation. Gua remains the sole report writer, and
+its actual output must equal the admitted bytes before receipt publication.
+`RunArtifactStore` independently admits every associated file before publishing
+the existing final Result. Success omission requires actual successful Gua
+completion/omission. Capture or save failure contributes only postprocessing;
+the returned completion applies the existing exit-11 projection.
+
+Native Gua output is first written into an isolated `.gua-pending-*` directory
+under the trusted private artifact root. After genuine native completion, the
+summary owner admits the actual bundle bytes together with already charged
+run/primary bytes and the exact mandatory completion/result encodings. Only an
+admitted bundle is moved into its Run directory. Budget refusal produces failed
+artifact receipts while preserving space for the final summaries; independent
+receipt validation still reads every published file. Successfully published or
+omitted output releases its pending directory. Failed capture or an incomplete
+native checkpoint retains isolated diagnostic output and grants no saved receipt.
+This staging does not impose a hard deadline on native scheduling or flush.
+
+Every raw identity/enum/schema/reference string uses the authoritative host
+redaction policy before entering Gua, even when Gua's separately supplied secret
+list omits that secret. Structural Preparing, primary, Planner and postprocessing
+evidence must survive sanitization unchanged; a collision is a capture failure.
+Pinned native event/quality vocabulary and unavoidable JSON delimiters are
+admitted before session creation. Native construction failure releases its
+pending directory. Optional source-line numeric tokens and encoded strings use
+the same host literal policy before queue admission.
+Gua 1.1.1 generates sequence/timing values, GUIDs and blob hashes inside its
+session. Policies intersecting conservative bounded numeric/timestamp or
+lowercase-hex token languages (including collection-clock and native blob-reference
+prefixes/suffixes) are
+unsupported and rejected before native construction. Sampling a current clock
+or random ID does not certify future generated values. This gate exposes no
+resolved secrets and does not change Gua's generated encodings.
+Raw tree/value JSON is checked for UTF-8 bytes, decoded string lengths, depth and
+nodes before a DOM is allocated. Recording admission counts its complete native
+serialized document, including targets and scalar fields, before attachment/save.
+
+Gua 1.1.1 limits total event/blob bytes rather than the individual cumulative
+`events.jsonl`. Therefore explicit `MaxArtifactBytes` must fit `MaxFileBytes`,
+and `MaxFileBytes` must also fit Gua's separate 64 KiB manifest reserve. The
+adapter rejects unguaranteed settings before creating a writer. It does not
+save an oversized file and then treat later receipt rejection as enforcement
+of the effective file ceiling. The manifest, events and mandatory HTML entry
+require at least three file slots; the report slot is reserved during the
+pre-report inventory rather than added after exhausting the configured count.
+Trace and Recording share that file budget. A saved Recording additionally needs
+its two native Trace attachments and recording JSON, so at least six slots are required
+when both artifacts are saved. Recording slots remain reserved during final Trace
+inventory. Encoding admission uses actual bounded Recording/HTML bytes, including
+escape expansion, rather than a worst-case character multiplier or report estimate.
+
+Gua 1.1.1 queue admission, writer scheduling, lifecycle stopping and synchronous
+filesystem operations do not provide a hard absolute deadline or a proof that
+the writer terminated when a flush/dispose timeout was reported. This adapter
+awaits the actual public completion operation and does not wrap it with a timeout
+that claims to stop background work. The owner must isolate unresolved providers
+before reuse; this composition grants no gameplay guard, lifecycle lease,
+independent observation feed or production host capability.
+
 `ArtifactReceipt` separates `NotExecuted`, `OmittedOnSuccess`, `CaptureFailed`, `SaveFailed` and `Saved`. Only Passed permits success omission. Non-saved states contain no file/byte/hash fields and create no empty artifact. Capture/flush failures add ArtifactFailed to postprocessing; Passed plus incomplete postprocessing exits 11, while non-Passed primary exits are preserved.
 
 A Saved receipt names a nonempty, bounded, local entry file with byte length and lowercase SHA-256. `AdditionalFiles` enumerates every associated file in a Gua-owned bundle (for example a manifest plus events/attachments), without assuming its format or renaming its contents. Relative names have up to eight safe segments, no URL/drive/traversal components or trailing dots. Trace and Recording cannot alias any associated file. Readback rejects summary replacement, linked paths, length/hash mismatch and Run capacity overflow. Bytes are opaque: tests use opaque fixture bytes and do not claim a Gua format reader or actual Gua integration. The concrete Gua writer must redact before its own queues/buffers/hashes, enforce its total output budget and supply genuine capture/flush evidence including a complete bundle file inventory. A receipt is not proof that an unimplemented upstream writer satisfies this requirement.
