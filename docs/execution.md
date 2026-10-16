@@ -82,6 +82,9 @@ exception too, so an overridden diagnostic getter cannot become its next depende
 Capture failure additions, active evidence snapshots and original diagnostic
 ownership transfer share one publication critical section, before stack extraction
 or another condition read. Interruption cannot split those updates.
+Operation-list pruning and final admission checks share the same closure gate as
+interruption. Expired permits and rejected startup observations publish through the
+bounded pending-evidence queue; a late producer cannot append after terminal closure.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.

@@ -276,7 +276,7 @@ public sealed class RunSession
     internal void RejectStartObservation(string code, Exception? rejection = null)
     {
         var cause = new RunEvent(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract);
-        if (!pendingEvents.Contains(cause)) pendingEvents.Add(cause);
+        QueuePending(cause);
         throw rejection ?? new InvalidOperationException(code);
     }
     public void BeginRunning(RunStartBoundary boundary)
@@ -294,14 +294,18 @@ public sealed class RunSession
     }
     public PlannerPermit? RequestPlanner(bool recovering = false)
     {
-        Require(ExecutionState.Running);
-        operations.RemoveAll(x => !x.IsOpen);
-        if (operations.Count != 0) return null;
+        lock (arbitrationGate)
+        {
+            Require(ExecutionState.Running);
+            operations.RemoveAll(x => !x.IsOpen);
+            if (operations.Count != 0) return null;
+        }
         var now = ReadReal();
         if (ActionsClosing) return null;
         lock (postedExceptionGate)
         {
-            if (ActionsClosingWithoutProbe || now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
+            if (AbandonedEvaluation || operations.Any(x => x.IsOpen) || ActionsClosingWithoutProbe ||
+                now >= RunningOrigin!.Value + Limits.MaxDuration || !Budget.RequestDecision(recovering)) return null;
             var operation = new ApprovedOperation(this, Min(now + Limits.PlannerTimeout, RunningOrigin.Value + Limits.MaxDuration), null, planner: true);
             operations.Add(operation);
             if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
@@ -387,9 +391,12 @@ public sealed class RunSession
     private ApprovedOperation? Approve(int count, TimeSpan window, bool finalPlannerPermit, TimeSpan? authorityDeadline = null, RunEvent? expiryCause = null,
         TimeSpan? elapsedWait = null, bool requiresSettlement = false)
     {
-        Require(ExecutionState.Running);
-        operations.RemoveAll(x => !x.IsOpen);
-        if (operations.Count != 0) return null;
+        lock (arbitrationGate)
+        {
+            Require(ExecutionState.Running);
+            operations.RemoveAll(x => !x.IsOpen);
+            if (operations.Count != 0) return null;
+        }
         if (window <= TimeSpan.Zero || window > Limits.WaitTimeout || count < 0) throw new ArgumentOutOfRangeException(nameof(window));
         if (elapsedWait is { } wait && (count != 0 || wait <= TimeSpan.Zero || wait > Limits.WaitTimeout))
             throw new ArgumentOutOfRangeException(nameof(elapsedWait));
@@ -397,13 +404,14 @@ public sealed class RunSession
         var now = ReadReal();
         if (authorityDeadline is { } boundary && now >= boundary)
         {
-            if (expiryCause is not null) pendingEvents.Add(expiryCause);
+            if (expiryCause is not null) QueuePending(expiryCause);
             return null;
         }
         if (HasPendingTerminalEvidence) return null;
         lock (postedExceptionGate)
         {
-            if (IsConfirmingWork || HasQueuedTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
+            if (State != ExecutionState.Running || AbandonedEvaluation || operations.Any(x => x.IsOpen) ||
+                IsConfirmingWork || HasQueuedTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
                 (!finalPlannerPermit && ActionsClosingWithoutProbe)) return null;
             var reservation = count == 0 ? null : Budget.Reserve(count);
             if (count > 0 && reservation is null) return null;

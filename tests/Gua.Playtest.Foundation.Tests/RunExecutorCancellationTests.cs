@@ -7,6 +7,73 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Fact]
+    public async Task InterruptionKeepsClosedOperationPruningAndCleanupSerialized()
+    {
+        var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, clock);
+        using var caller = new CancellationTokenSource(); var releases = 0;
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield(); var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
+                operation.Actions!.ConfirmNotSent(0); operation.Complete(); ready.TrySetResult();
+                await finish.Task; return true;
+            }
+            finally { ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(RunReason.Cancelled, outcome.Primary.Cause.Reason); Assert.Equal(1, releases);
+            Assert.Equal(0, run.Budget.Snapshot.Actions); Assert.Equal(0, run.Budget.Snapshot.ReservedActions);
+        }
+        finally { finish.TrySetResult(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
+    public async Task ExpiredPermitCannotQueueEvidenceAfterInterruptionPublication()
+    {
+        var real = new CancellationArbitrationClock(); var run = new RunSession(Limits(), real, new Clock());
+        using var caller = new CancellationTokenSource(); var releases = 0;
+        var expiryRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var approvalEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        {
+            try
+            {
+                await Task.Yield(); var permit = owner.RequestPlanner()!; real.Driver.Value = true; var reads = 0;
+                void Read()
+                {
+                    if (++reads == 3) { real.At(Limits().PlannerTimeout); expiryRead.TrySetResult(); }
+                    else real.OnDriverRead = Read;
+                }
+                real.OnDriverRead = Read;
+                try { Assert.Null(permit.Approve(0, TimeSpan.FromMilliseconds(100))); }
+                finally { approvalEnded.TrySetResult(); }
+                await finish.Task; return true;
+            }
+            finally { ended.TrySetResult(); }
+        }, caller.Token).AsTask();
+        try
+        {
+            await expiryRead.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            await approvalEnded.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(1, releases); Assert.False(run.HasPendingTerminalEvidence);
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
+        }
+        finally { finish.TrySetResult(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
     private sealed class BlockingFinalizerDiagnostic(Action read) : Exception
     {
         public override string? StackTrace { get { read(); return base.StackTrace; } }
@@ -18,11 +85,11 @@ public sealed partial class RunTests
         using var resume = new ManualResetEventSlim(); var reads = 0; var releases = 0;
         var cleanup = new OwnedCleanup();
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
-        var executing = RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => ValueTask.FromResult(true), async (_, _) =>
+        var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => ValueTask.FromResult(true), async (_, _) =>
         {
             await Task.Yield();
             throw new BlockingFinalizerDiagnostic(() => { Interlocked.Increment(ref reads); resume.Wait(); });
-        }).AsTask();
+        }).AsTask()).Unwrap();
         try
         {
             var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
@@ -68,7 +135,7 @@ public sealed partial class RunTests
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var armed = false; var releases = 0;
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
-        var executing = RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
+        var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
         {
             var capture = owner.ArmRunningBoundary();
             var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
@@ -87,7 +154,7 @@ public sealed partial class RunTests
             armed = true; condition.Driver.Value = true;
             condition.OnDriverRead = () =>
             { entered.TrySetResult(); try { resume.Wait(); } finally { returned.TrySetResult(); } };
-        }).AsTask();
+        }).AsTask()).Unwrap();
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
