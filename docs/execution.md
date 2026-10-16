@@ -63,6 +63,11 @@ Goal-side reservation refunds and all completion collection share the closure ga
 A revoked evaluation keeps its revocation in the returning driver's execution context,
 so post-return execution diagnostics cannot change a snapshot during cleanup; cleanup's
 separate executor context may still retain its own bounded diagnostics.
+Preparation, initial registration and driver callbacks also carry an internal
+execution-stage marker across asynchronous continuations. Once primary publication
+starts cleanup, diagnostics from these abandoned stages are rejected, including a
+late registration exception that never entered an evaluation. The finalizer and
+cleanup run outside that marker and retain their own diagnostic authority.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.

@@ -8,6 +8,62 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory]
+    [InlineData("initial", false)] [InlineData("initial", true)]
+    [InlineData("driver", false)] [InlineData("driver", true)]
+    [InlineData("preparation", false)] [InlineData("preparation", true)]
+    public async Task AbandonedExecutorStageCannotAppendDiagnosticsAfterSnapshot(string stage, bool deadline)
+    {
+        var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), real, condition);
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var snapshotReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        RunSnapshot? snapshot = null;
+        async ValueTask<bool> LateWork()
+        {
+            await Task.Yield(); entered.TrySetResult();
+            await RunBlockingFixture(() => resume.Wait());
+            run.RecordException(new InvalidDataException("abandoned stage"));
+            ended.TrySetResult(); return true;
+        }
+        async ValueTask<bool> Confirm(RunSnapshot captured, CancellationToken token)
+        { snapshot = captured; snapshotReady.TrySetResult(); await finish.Task.WaitAsync(token); return true; }
+        var executing = stage == "initial"
+            ? RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (owner, _, _) =>
+            {
+                var capture = owner.ArmRunningBoundary();
+                return ValueTask.FromResult(capture.Certify(capture.RequestId, TimeSpan.Zero,
+                    new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/abandoned-hook", true));
+            }, (_, _) => ValueTask.FromResult(true), caller.Token, Confirm, _ =>
+            {
+                condition.Driver.Value = true;
+                condition.OnDriverRead = () => ended.TrySetResult();
+                entered.TrySetResult(); resume.Wait();
+                throw new InvalidDataException("abandoned registration");
+            }).AsTask()
+            : RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(),
+                (_, _) => stage == "preparation" ? LateWork() : ValueTask.FromResult(true),
+                (_, _) => LateWork(), caller.Token, Confirm).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) real.At(stage == "preparation" ? Limits().PreparationTimeout : Limits().MaxDuration);
+            else caller.Cancel();
+            await snapshotReady.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.False(ended.Task.IsCompleted);
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); finish.TrySetResult();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(deadline ? stage == "preparation" ? RunReason.PreparationTimeout : RunReason.MaxDuration : RunReason.Cancelled,
+                outcome.Primary.Cause.Reason);
+            Assert.Equal(snapshot!.Exceptions, outcome.Exceptions);
+            Assert.DoesNotContain(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName);
+        }
+        finally { resume.Set(); finish.TrySetResult(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Theory]
     [InlineData("real", false)] [InlineData("condition", false)] [InlineData("lifecycle", false)]
     [InlineData("real", true)] [InlineData("condition", true)] [InlineData("lifecycle", true)]
     public async Task CertifiedInitialArbitrationIsBoundedBeforeDriverStarts(string dependency, bool deadline)

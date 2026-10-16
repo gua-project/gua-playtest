@@ -20,12 +20,23 @@ public sealed class RunSession
     }
     private EvaluationFrame? activeEvaluation;
     private readonly AsyncLocal<EvaluationFrame?> currentEvaluation = new();
+    private readonly AsyncLocal<bool> executorStage = new();
     private readonly AsyncLocal<TimeSpan?> certifiedConditionSnapshot = new();
     private CancellationToken callerCancellation;
     private bool frozenGoalVerified;
     internal void BindCancellation(CancellationToken token)
     { Require(ExecutionState.Created); callerCancellation = token; }
     private bool AbandonedEvaluation => currentEvaluation.Value?.Abandoned == true;
+    private bool ExecutionDiagnosticsRevoked => AbandonedEvaluation ||
+        executorStage.Value && State is ExecutionState.Completing or ExecutionState.Finished;
+    internal ValueTask<T> RunExecutorStage<T>(Func<ValueTask<T>> action)
+    {
+        // Flow the marker into hooks and provider continuations, then restore the
+        // finalizer context without wrapping or delaying the provider's task.
+        var previous = executorStage.Value; executorStage.Value = true;
+        try { return action(); }
+        finally { executorStage.Value = previous; }
+    }
     private sealed class ValidatedClock(RunSession owner, bool condition) : IClock
     {
         public TimeSpan Elapsed => condition ? owner.ReadCondition() : owner.ReadReal();
@@ -837,7 +848,7 @@ public sealed class RunSession
     private void RecordExceptionCore(Exception exception, bool emergency)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        if (!emergency && (AbandonedEvaluation || State == ExecutionState.Finished)) return;
+        if (!emergency && (ExecutionDiagnosticsRevoked || State == ExecutionState.Finished)) return;
         if (exception is ClockProviderException) QueueClockRejection();
         var remaining = Limits.MaxEvidenceItems - exceptions.Count;
         if (remaining <= 0) return;
@@ -883,7 +894,7 @@ public sealed class RunSession
             var stack = emergency ? trace!.FrameCount == 0 ? null : trace.ToString().TrimEnd('\r', '\n') : current.StackTrace;
             var evidence = new ExceptionEvidence(current.GetType().FullName ?? current.GetType().Name, stack);
             lock (arbitrationGate)
-                if ((emergency || !AbandonedEvaluation && State != ExecutionState.Finished) && exceptions.Count < Limits.MaxEvidenceItems)
+                if ((emergency || !ExecutionDiagnosticsRevoked && State != ExecutionState.Finished) && exceptions.Count < Limits.MaxEvidenceItems)
                     exceptions.Add(evidence);
         }
     }

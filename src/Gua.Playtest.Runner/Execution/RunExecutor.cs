@@ -60,7 +60,7 @@ public static class RunExecutor
             try
             {
                 preparation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
-                    token => { preparationTask = prepare(token).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
+                    token => { preparationTask = run.RunExecutorStage(() => prepare(token)).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && preparationTask?.IsCompletedSuccessfully == true)
             {
@@ -87,7 +87,7 @@ public static class RunExecutor
                     var initial = boundary.InitialObservation;
                     run.RetainCertifiedInitialFacts(initial);
                     await FiniteOperation.RunUntilAsync(realClock, run.RunningOrigin!.Value + run.Limits.MaxDuration,
-                        _ => new ValueTask<bool>(Task.Factory.StartNew(() =>
+                        _ => run.RunExecutorStage(() => new ValueTask<bool>(Task.Factory.StartNew(() =>
                         {
                             IReadOnlyList<RunEvent> registrationEvents = [];
                             try { registerInitialObservation?.Invoke(run); }
@@ -103,7 +103,7 @@ public static class RunExecutor
                             run.ReadAuthoritativeCondition();
                             run.Evaluate(candidates: registrationEvents, cancelled: cancellationToken.IsCancellationRequested);
                             return true;
-                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)), cancellationToken, run.RecordException).ConfigureAwait(false);
+                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))), cancellationToken, run.RecordException).ConfigureAwait(false);
                 }
                 else run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 if (run.Primary is null)
@@ -111,7 +111,7 @@ public static class RunExecutor
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
                     var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
                     var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
-                        token => { executionTask = execute(run, token).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
+                        token => { executionTask = run.RunExecutorStage(() => execute(run, token)).AsTask(); return new ValueTask<bool>(executionTask); }, cancellationToken, run.RecordException).ConfigureAwait(false);
                     var cancelledAtCompletion = cancellationToken.IsCancellationRequested;
                     // A known false driver result belongs to this same unit. Sampling
                     // later cancellation must not publish before that failure is included.
