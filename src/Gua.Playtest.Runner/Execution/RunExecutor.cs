@@ -89,19 +89,21 @@ public static class RunExecutor
                     await FiniteOperation.RunUntilAsync(realClock, run.RunningOrigin!.Value + run.Limits.MaxDuration,
                         _ => run.RunExecutorStage(() => new ValueTask<bool>(Task.Factory.StartNew(() =>
                         {
-                            IReadOnlyList<RunEvent> registrationEvents = [];
                             try { registerInitialObservation?.Invoke(run); }
                             catch (Exception exception)
                             {
                                 // Keep the certified failure/lifecycle unit even if registration fails.
-                                run.RecordException(exception);
                                 var reason = exception is OperationCanceledException interrupted && cancellationToken.IsCancellationRequested &&
                                     interrupted.CancellationToken == cancellationToken ? RunReason.Cancelled :
                                     FiniteOperation.IsDeadline(exception) ? RunReason.MaxDuration : RunReason.ExecutionError;
-                                registrationEvents = [exception is RunFailureException failed ? failed.Cause : new(reason, RunPhase.Execution, RunOrigin.Runner)];
+                                // Transfer both cause and original diagnostics before another
+                                // provider read can stall this owner stage. Terminal closure
+                                // rejects a late post from an already abandoned hook.
+                                run.PostProviderException(exception is RunFailureException ? exception :
+                                    new RunFailureException(new(reason, RunPhase.Execution, RunOrigin.Runner), exception));
                             }
                             run.ReadAuthoritativeCondition();
-                            run.Evaluate(candidates: registrationEvents, cancelled: cancellationToken.IsCancellationRequested);
+                            run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                             return true;
                         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))), cancellationToken, run.RecordException).ConfigureAwait(false);
                 }

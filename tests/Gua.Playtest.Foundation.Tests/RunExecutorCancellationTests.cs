@@ -8,6 +8,48 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory]
+    [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task RegistrationFailureSurvivesStalledFollowingClock(bool deadline, bool typed)
+    {
+        var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), real, condition); var cleanup = new OwnedCleanup();
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executed = false; var releases = 0;
+        var cause = new RunEvent(typed ? RunReason.ActionFailed : RunReason.ExecutionError,
+            RunPhase.Execution, typed ? RunOrigin.Host : RunOrigin.Runner);
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            return ValueTask.FromResult(capture.Certify(capture.RequestId, TimeSpan.Zero,
+                new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/registration-failure", true));
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); }, caller.Token, null, _ =>
+        {
+            condition.Driver.Value = true;
+            condition.OnDriverRead = () =>
+            { entered.TrySetResult(); try { resume.Wait(); } finally { returned.TrySetResult(); } };
+            try { throw new InvalidDataException("known registration failure"); }
+            catch (Exception exception) { if (typed) throw new RunFailureException(cause, exception); throw; }
+        }).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) real.At(Limits().MaxDuration); else caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(ResultStatus.Failed, outcome.Primary.Status); Assert.Equal(cause, outcome.Primary.Cause);
+            Assert.Contains(outcome.Events, item => item.Reason == (deadline ? RunReason.MaxDuration : RunReason.Cancelled));
+            Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName && !string.IsNullOrEmpty(item.StackTrace));
+            Assert.Equal(1, releases); Assert.False(executed); Assert.False(returned.Task.IsCompleted);
+            resume.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events); Assert.Equal(outcome.Exceptions, run.Exceptions);
+        }
+        finally { resume.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Theory]
     [InlineData("initial", false)] [InlineData("initial", true)]
     [InlineData("driver", false)] [InlineData("driver", true)]
     [InlineData("preparation", false)] [InlineData("preparation", true)]

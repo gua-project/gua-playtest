@@ -68,6 +68,10 @@ execution-stage marker across asynchronous continuations. Once primary publicati
 starts cleanup, diagnostics from these abandoned stages are rejected, including a
 late registration exception that never entered an evaluation. The finalizer and
 cleanup run outside that marker and retain their own diagnostic authority.
+Initial registration failures transfer their typed cause and original exception to
+the session-owned queue before the next provider read. Interruption therefore keeps
+an already-known failure even while that read remains stalled; posts after terminal
+closure cannot change the confirmed snapshot.
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.
