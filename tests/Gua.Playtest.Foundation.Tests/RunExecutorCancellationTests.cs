@@ -8,6 +8,63 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Fact]
+    public async Task SettlementBudgetDoesNotRestartOrPauseAfterRealClockProgress()
+    {
+        var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, clock);
+        run.BeginPreparation(); run.BeginRunning();
+        var settlement = new ExecutionSettlement(run, new OwnedCleanup()); settlement.Begin();
+        clock.At(TimeSpan.FromMilliseconds(200)); run.ReadAuthoritativeReal();
+        var before = settlement.Elapsed;
+        await FiniteOperation.DelayIndependentAsync(TimeSpan.FromMilliseconds(20), CancellationToken.None);
+        var after = settlement.Elapsed;
+        Assert.True(after - before >= TimeSpan.FromMilliseconds(20));
+        var remaining = settlement.CleanupRemaining; settlement.Begin();
+        Assert.True(settlement.CleanupRemaining <= remaining);
+        Assert.True(settlement.EvidenceRemaining < Limits().CleanupTimeout / 2 - after);
+        Assert.Null(run.RequestPlanner()); Assert.Null(run.ApproveOperation(1, TimeSpan.FromMilliseconds(100)));
+        Assert.Null(run.ApproveObservation(TimeSpan.FromMilliseconds(100)));
+        Assert.Equal(0, run.Budget.Snapshot.Actions); Assert.Equal(0, run.Budget.Snapshot.Decisions);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)] [InlineData(true, false, false)]
+    [InlineData(false, true, false)] [InlineData(true, true, false)]
+    [InlineData(false, true, true)] [InlineData(true, true, true)]
+    public async Task CertifiedBoundaryValidationCannotBlockCleanup(bool deadline, bool repeatedGetter, bool knownFailure)
+    {
+        var real = new CancellationArbitrationClock(); var condition = new LaunchReadClock();
+        var run = new RunSession(Limits(), real, condition, failure: knownFailure ? Condition() : null);
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanup = new OwnedCleanup(); var releases = 0; var executed = false;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
+        {
+            var capture = owner.ArmRunningBoundary();
+            var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
+                new(TimeSpan.Zero, Unit("false"), Unit(knownFailure ? "true" : "false")), "source/boundary-validation", true);
+            void Read()
+            {
+                if (repeatedGetter) condition.OnRead = Read;
+                entered.TrySetResult(); try { resume.Wait(); } finally { returned.TrySetResult(); }
+            }
+            condition.OnRead = Read; return ValueTask.FromResult(boundary);
+        }, (_, _) => { executed = true; return ValueTask.FromResult(true); }, caller.Token).AsTask()).Unwrap();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (deadline) real.At(Limits().PreparationTimeout); else caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(knownFailure ? RunReason.FailureCondition : deadline ? RunReason.PreparationTimeout : RunReason.Cancelled, outcome.Primary.Cause.Reason);
+            Assert.Equal(1, releases); Assert.False(executed); Assert.False(returned.Task.IsCompleted);
+            resume.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(ExecutionState.Finished, run.State);
+        }
+        finally { resume.Set(); await executing.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
     public async Task InterruptionKeepsClosedOperationPruningAndCleanupSerialized()
     {
         var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, clock);
@@ -125,6 +182,8 @@ public sealed partial class RunTests
     [Theory]
     [InlineData("initial", false)] [InlineData("driver", false)] [InlineData("completion", false)]
     [InlineData("initial", true)] [InlineData("driver", true)] [InlineData("completion", true)]
+    [InlineData("synchronous-completion", false)] [InlineData("synchronous-completion", true)]
+    [InlineData("synchronous-driver", false)] [InlineData("synchronous-driver", true)]
     public async Task ExecutorFinalizationDoesNotStartAnotherBlockingProvider(string stage, bool deadline)
     {
         var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
@@ -134,6 +193,20 @@ public sealed partial class RunTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var armed = false; var releases = 0;
+        ValueTask<bool> Execute()
+        {
+            if (stage == "synchronous-completion") { armed = true; returned.TrySetResult(); return ValueTask.FromResult(true); }
+            if (stage == "synchronous-driver")
+            { armed = true; entered.TrySetResult(); resume.Wait(); returned.TrySetResult(); return ValueTask.FromResult(true); }
+            return ExecuteAsync();
+        }
+        async ValueTask<bool> ExecuteAsync()
+        {
+            await Task.Yield(); armed = true;
+            if (stage == "completion") { returned.TrySetResult(); return true; }
+            entered.TrySetResult();
+            await RunBlockingFixture(() => resume.Wait()); returned.TrySetResult(); return true;
+        }
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
         var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
         {
@@ -142,13 +215,7 @@ public sealed partial class RunTests
                 new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/finalizer-probe", true);
             boundary.InitialLifecycleFailure = () => { if (armed) { entered.TrySetResult(); resumeProbe.Wait(); } return null; };
             return ValueTask.FromResult(boundary);
-        }, async (_, _) =>
-        {
-            await Task.Yield(); armed = true;
-            if (stage == "completion") { returned.TrySetResult(); return true; }
-            entered.TrySetResult();
-            await RunBlockingFixture(() => resume.Wait()); returned.TrySetResult(); return true;
-        }, caller.Token, null, _ =>
+        }, (_, _) => Execute(), caller.Token, null, _ =>
         {
             if (stage != "initial") return;
             armed = true; condition.Driver.Value = true;
@@ -161,7 +228,7 @@ public sealed partial class RunTests
             if (deadline) real.At(Limits().MaxDuration); else caller.Cancel();
             var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
-            Assert.Equal(1, releases); Assert.Equal(stage == "completion", returned.Task.IsCompleted);
+            Assert.Equal(1, releases); Assert.Equal(stage is "completion" or "synchronous-completion", returned.Task.IsCompleted);
             resume.Set(); resumeProbe.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
         }
@@ -714,8 +781,10 @@ public sealed partial class RunTests
     public async Task InterruptedCloseProbeRetainsDrainedProviderDiagnostics(int depth, int evidenceLimit)
     {
         var clock = new CancellationArbitrationClock(); var limits = Limits();
-        limits = new(limits.MaxDuration, limits.ActionTimeout, limits.WaitTimeout, limits.PlannerTimeout, limits.PreparationTimeout,
-            limits.CleanupTimeout, limits.MaxActions, limits.MaxDecisions, limits.RecoveryDecisions, evidenceLimit);
+        limits = new(maxDuration: limits.MaxDuration, preparationTimeout: limits.PreparationTimeout,
+            cleanupTimeout: limits.CleanupTimeout, plannerTimeout: limits.PlannerTimeout, waitTimeout: limits.WaitTimeout,
+            actionTimeout: limits.ActionTimeout, maxActions: limits.MaxActions, maxDecisions: limits.MaxDecisions,
+            recoveryDecisions: limits.RecoveryDecisions, maxEvidenceItems: evidenceLimit);
         var run = new RunSession(limits, clock, new Clock());
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -743,7 +812,12 @@ public sealed partial class RunTests
         })), caller.Token).AsTask();
         try
         {
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            try { await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+            catch (TimeoutException)
+            {
+                throw new Xunit.Sdk.XunitException($"Closing probe not reached: polls={Volatile.Read(ref polls)}, state={run.State}, primary={run.Primary?.Cause}, executor={executing.Status}, driverEnded={ended.Task.IsCompleted}");
+            }
+            caller.Cancel();
             var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Equal(failure.Cause, outcome.Primary.Cause);
             Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName && !string.IsNullOrEmpty(item.StackTrace));

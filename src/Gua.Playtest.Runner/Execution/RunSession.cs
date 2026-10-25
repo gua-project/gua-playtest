@@ -23,6 +23,14 @@ public sealed class RunSession
     private readonly AsyncLocal<bool> executorStage = new();
     private readonly AsyncLocal<TimeSpan?> certifiedConditionSnapshot = new();
     private CancellationToken callerCancellation;
+    private volatile bool executorClosing;
+    internal void CloseExecutorAdmission() => executorClosing = true;
+    internal (TimeSpan Deadline, RunReason Reason, RunPhase Phase) ExecutorDeadline
+    {
+        get { lock (arbitrationGate) return State == ExecutionState.Running
+            ? (RunningOrigin!.Value + Limits.MaxDuration, RunReason.MaxDuration, RunPhase.Execution)
+            : (preparationOrigin + Limits.PreparationTimeout, RunReason.PreparationTimeout, RunPhase.Preparation); }
+    }
     private bool frozenGoalVerified;
     internal void BindCancellation(CancellationToken token)
     { Require(ExecutionState.Created); callerCancellation = token; }
@@ -65,6 +73,7 @@ public sealed class RunSession
     private bool lifecycleSampling;
     private readonly List<ApprovedOperation> operations = [];
     private TimeSpan lastReal, lastCondition, lastCapture, preparationOrigin;
+    private long lastRealTicks;
     private bool goalVerified;
     private bool approvalsClosing;
     private readonly HashSet<RunReason> closingExhaustions = [];
@@ -81,7 +90,7 @@ public sealed class RunSession
     internal IClock AuthoritativeConditionClock => validatedConditionClock;
     internal TimeSpan ReadAuthoritativeReal() => ReadReal();
     internal TimeSpan ReadAuthoritativeCondition() => ReadCondition();
-    internal TimeSpan LastValidatedReal => lastReal;
+    internal TimeSpan LastValidatedReal => TimeSpan.FromTicks(Volatile.Read(ref lastRealTicks));
     public RunBudget Budget { get; }
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
@@ -95,13 +104,15 @@ public sealed class RunSession
     {
         get
         {
+            if (State is ExecutionState.Completing or ExecutionState.Finished) return HasQueuedTerminalEvidence;
+            if (executorClosing || callerCancellation.IsCancellationRequested) return true;
             SampleLifecycle();
             return HasQueuedTerminalEvidence;
         }
     }
     private bool HasQueuedTerminalEvidence
     { get { lock (postedExceptionGate) return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow; } }
-    private bool ActionsClosingWithoutProbe => State != ExecutionState.Running || IsConfirmingWork ||
+    private bool ActionsClosingWithoutProbe => State != ExecutionState.Running || executorClosing || callerCancellation.IsCancellationRequested || IsConfirmingWork ||
         HasQueuedTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     private void SampleLifecycle(bool closing = false)
     {
@@ -127,7 +138,7 @@ public sealed class RunSession
         }
         finally { lock (postedExceptionGate) lifecycleSampling = false; }
     }
-    public bool ActionsClosing => State != ExecutionState.Running || IsConfirmingWork || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
+    public bool ActionsClosing => State != ExecutionState.Running || executorClosing || callerCancellation.IsCancellationRequested || IsConfirmingWork || HasPendingTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     public RunSession(RunLimits limits, IClock realClock, IClock conditionClock,
         PreparedCondition? success = null, PreparedCondition? failure = null,
         CompletionPolicy policy = CompletionPolicy.OnGoal)
@@ -230,7 +241,7 @@ public sealed class RunSession
                 if (AbandonedEvaluation) return lastReal;
                 if (now < TimeSpan.Zero || now < baseline || now > TimeSpan.MaxValue - TimeSpan.FromDays(2))
                     throw new InvalidOperationException("RunClockInvalid");
-                if (now > lastReal) lastReal = now;
+                if (now > lastReal) { lastReal = now; Volatile.Write(ref lastRealTicks, now.Ticks); }
                 return lastReal;
             }
         }
@@ -238,7 +249,8 @@ public sealed class RunSession
     }
     public void BeginPreparation()
     {
-        Require(ExecutionState.Created); preparationOrigin = ReadReal(); State = ExecutionState.Preparing;
+        Require(ExecutionState.Created); var origin = ReadReal();
+        lock (arbitrationGate) { Require(ExecutionState.Created); preparationOrigin = origin; State = ExecutionState.Preparing; }
     }
     public void BeginRunning()
     {
@@ -248,10 +260,15 @@ public sealed class RunSession
         if (ReadReal() - preparationOrigin >= Limits.PreparationTimeout)
             throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
         var sharedConditionOrigin = ReadCondition();
-        lastCapture = sharedConditionOrigin;
-        successSession = StartCondition(success, sharedConditionOrigin);
-        failureSession = StartCondition(failure, sharedConditionOrigin);
-        RunningOrigin = lastReal; State = ExecutionState.Running;
+        var preparedSuccess = StartCondition(success, sharedConditionOrigin);
+        var preparedFailure = StartCondition(failure, sharedConditionOrigin);
+        lock (arbitrationGate)
+        {
+            Require(ExecutionState.Preparing);
+            if (lastReal - preparationOrigin >= Limits.PreparationTimeout) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
+            lastCapture = sharedConditionOrigin; successSession = preparedSuccess; failureSession = preparedFailure;
+            RunningOrigin = lastReal; State = ExecutionState.Running;
+        }
     }
     public RunStartCapture ArmRunningBoundary()
     {
@@ -284,13 +301,18 @@ public sealed class RunSession
         ArgumentNullException.ThrowIfNull(boundary); Require(ExecutionState.Preparing);
         if (boundary.Owner != this || boundary.Used) throw new InvalidOperationException("RunningBoundaryOwnerInvalid");
         ValidateStartTimes(boundary.RealCapturedAt, boundary.InitialObservation.CapturedAt);
-        lastCapture = boundary.InitialObservation.CapturedAt;
-        successSession = StartCondition(success, boundary.InitialObservation.CapturedAt);
-        failureSession = StartCondition(failure, boundary.InitialObservation.CapturedAt);
+        var preparedSuccess = StartCondition(success, boundary.InitialObservation.CapturedAt);
+        var preparedFailure = StartCondition(failure, boundary.InitialObservation.CapturedAt);
         DrainPostedExceptions(close: false);
-        initialLifecycleFailure = boundary.InitialLifecycleFailure;
-        boundary.Used = true;
-        RunningOrigin = boundary.RealCapturedAt; State = ExecutionState.Running;
+        lock (arbitrationGate)
+        {
+            Require(ExecutionState.Preparing);
+            if (lastReal - preparationOrigin >= Limits.PreparationTimeout) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
+            lastCapture = boundary.InitialObservation.CapturedAt;
+            successSession = preparedSuccess; failureSession = preparedFailure;
+            initialLifecycleFailure = boundary.InitialLifecycleFailure; boundary.Used = true;
+            RunningOrigin = boundary.RealCapturedAt; State = ExecutionState.Running;
+        }
     }
     public PlannerPermit? RequestPlanner(bool recovering = false)
     {
@@ -330,12 +352,43 @@ public sealed class RunSession
         finally { certifiedConditionSnapshot.Value = previous; }
         lock (arbitrationGate)
         {
+            if (State != ExecutionState.Running) return;
             var facts = new List<RunEvent>(); AddError(facts, failed); AddError(facts, passed);
             if (IsTrue(failed)) facts.Add(new(RunReason.FailureCondition, RunPhase.Execution, RunOrigin.Condition));
             foreach (var fact in facts) QueuePending(fact);
             if (IsTrue(passed)) goalVerified = true;
             var wakes = new[] { failed?.NextEvaluationAt, passed?.NextEvaluationAt }.Where(value => value.HasValue).ToArray();
             nextConditionEvaluationAt = wakes.Length == 0 ? null : wakes.Min();
+        }
+    }
+    internal IReadOnlyList<RunEvent> KnownInterruptedBoundaryEvents(RunStartBoundary boundary)
+    {
+        lock (arbitrationGate)
+        {
+            if (State != ExecutionState.Preparing || boundary.Owner != this ||
+                boundary.RealCapturedAt < preparationOrigin || boundary.RealCapturedAt >= preparationOrigin + Limits.PreparationTimeout)
+                return [];
+            var retained = new List<RunEvent>();
+            var previous = certifiedConditionSnapshot.Value; certifiedConditionSnapshot.Value = lastCondition;
+            try
+            {
+                // Only the already-certified copied maps are inspected. No fresh
+                // clock, source capture, lifecycle probe or Goal confirmation.
+                foreach (var pair in new[] { (failure, boundary.InitialObservation.Failure, true), (success, boundary.InitialObservation.Success, false) })
+                {
+                    var value = StartCondition(pair.Item1, boundary.InitialObservation.CapturedAt)
+                        ?.EvaluateAt(pair.Item2, boundary.InitialObservation.CapturedAt);
+                    AddError(retained, value);
+                    if (pair.Item3 && IsTrue(value)) retained.Add(new(RunReason.FailureCondition, RunPhase.Preparation, RunOrigin.Condition));
+                }
+            }
+            catch (Exception exception)
+            {
+                retained.Add(new(RunReason.ObservationContractViolation, RunPhase.Preparation, RunOrigin.Contract));
+                RecordEmergencyException(exception);
+            }
+            finally { certifiedConditionSnapshot.Value = previous; }
+            return retained;
         }
     }
     internal IReadOnlyList<RunEvent> InterruptedBoundaryFailureEvents(RunStartBoundary boundary)
@@ -410,7 +463,7 @@ public sealed class RunSession
         if (HasPendingTerminalEvidence) return null;
         lock (postedExceptionGate)
         {
-            if (State != ExecutionState.Running || AbandonedEvaluation || operations.Any(x => x.IsOpen) ||
+            if (State != ExecutionState.Running || executorClosing || callerCancellation.IsCancellationRequested || AbandonedEvaluation || operations.Any(x => x.IsOpen) ||
                 IsConfirmingWork || HasQueuedTerminalEvidence || now >= RunningOrigin!.Value + Limits.MaxDuration || Budget.Closed ||
                 (!finalPlannerPermit && ActionsClosingWithoutProbe)) return null;
             var reservation = count == 0 ? null : Budget.Reserve(count);
