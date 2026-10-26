@@ -121,6 +121,10 @@ public sealed class OwnedCleanup
     private readonly List<Step> steps = [];
     private readonly object registrationGate = new();
     private bool closed;
+    internal int SettlementResourceCount()
+    {
+        lock (registrationGate) return steps.Count;
+    }
     public void Register(CleanupStage stage, Func<CancellationToken, ValueTask<bool>> action, Action? closeOwnership = null)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -133,6 +137,12 @@ public sealed class OwnedCleanup
     }
     public async ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken = default,
         Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary = null)
+        => await CompleteCoreAsync(run, realClock, cancellationToken, confirmPrimary, null).ConfigureAwait(false);
+    internal ValueTask<RunOutcome> CompleteAsync(RunSession run, IClock realClock, CancellationToken cancellationToken,
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary, ExecutionSettlement settlement)
+        => CompleteCoreAsync(run, realClock, cancellationToken, confirmPrimary, settlement);
+    private async ValueTask<RunOutcome> CompleteCoreAsync(RunSession run, IClock realClock, CancellationToken cancellationToken,
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary, ExecutionSettlement? settlement)
     {
         realClock = run.AuthoritativeRealClock;
         Step[] ordered;
@@ -176,11 +186,33 @@ public sealed class OwnedCleanup
         foreach (var step in ordered)
             if (step.CloseOwnership is { } close)
                 try { close(); } catch (Exception exception) { RecordStageFault(step.Stage, exception); }
-        var cleanupClock = new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
+        var interrupted = settlement?.Started == true;
+        if (interrupted && settlement!.CleanupRemaining > TimeSpan.Zero)
+        {
+            // Retain the existing cleanup clock diagnostic without joining a stuck
+            // clock getter or giving this check a second cleanup epoch.
+            var probe = Task.Factory.StartNew(run.ReadAuthoritativeReal, CancellationToken.None,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            var allowance = TimeSpan.FromTicks(Math.Max(1, settlement.CleanupRemaining.Ticks / (ordered.Length + 1)));
+            var winner = await Task.WhenAny(probe, FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
+            if (probe.IsFaulted)
+            {
+                var exception = probe.Exception!.InnerException!;
+                var original = exception is ClockProviderException { InnerException: { } inner } ? inner : exception;
+                AddIssue(new(PostProcessingReason.CleanupClockInvalid,
+                    new(original.GetType().FullName ?? original.GetType().Name,
+                        new StackTrace(original, true).ToString().TrimEnd('\r', '\n'))));
+            }
+            else if (winner != probe || !probe.IsCompletedSuccessfully)
+                AddIssue(new(PostProcessingReason.CleanupClockInvalid));
+            _ = probe.ContinueWith(task => _ = task.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        }
+        var cleanupClock = interrupted ? null : new CleanupClock(run, exception => AddIssue(new(PostProcessingReason.CleanupClockInvalid,
             new(exception.GetType().FullName ?? exception.GetType().Name, exception.StackTrace))));
-        realClock = cleanupClock;
-        var origin = cleanupClock.Origin;
-        var deadline = origin + run.Limits.CleanupTimeout;
+        realClock = interrupted ? new SettlementClock(settlement!) : cleanupClock!;
+        var origin = interrupted ? TimeSpan.Zero : cleanupClock!.Origin;
+        var deadline = interrupted ? run.Limits.CleanupTimeout : origin + run.Limits.CleanupTimeout;
         if (cancellationToken.IsCancellationRequested) AddIssue(new(PostProcessingReason.Cancelled));
         for (var i = 0; i < ordered.Length; i++)
         {
@@ -240,9 +272,15 @@ public sealed class OwnedCleanup
         }
         if (cancellationToken.IsCancellationRequested && !issues.Any(x => x.Reason == PostProcessingReason.Cancelled))
             AddIssue(new(PostProcessingReason.Cancelled));
-        await cleanupClock.JoinTimersAsync().ConfigureAwait(false);
+        if (cleanupClock is not null) await cleanupClock.JoinTimersAsync().ConfigureAwait(false);
         _ = realClock.Elapsed; // drain any final safety-wake hint on the owner before freezing issues
         return run.Finish(issues.AsReadOnly());
+    }
+    private sealed class SettlementClock(ExecutionSettlement settlement) : IClock
+    {
+        public TimeSpan Elapsed => settlement.Elapsed;
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+            => new(FiniteOperation.DelayIndependentAsync(duration, token));
     }
     private static PostProcessingReason Failure(CleanupStage stage) => stage switch
     {
@@ -264,14 +302,14 @@ internal sealed class ClockProviderException(Exception? original = null) : Excep
 
 public static class FiniteOperation
 {
-    private static readonly object deadlineProvenance = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TimeoutException, object> deadlineProvenance = new();
     internal static TimeoutException DeadlineReached(string code)
     {
         var exception = new TimeoutException(code);
-        exception.Data[deadlineProvenance] = true;
+        deadlineProvenance.Add(exception, new());
         return exception;
     }
-    internal static bool IsDeadline(Exception exception) => exception is TimeoutException && exception.Data.Contains(deadlineProvenance);
+    internal static bool IsDeadline(Exception exception) => exception is TimeoutException timeout && deadlineProvenance.TryGetValue(timeout, out _);
     public static ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default, Action<Exception>? recordException = null)
     {
@@ -279,8 +317,16 @@ public static class FiniteOperation
         return RunUntilAsync(realClock, realClock.Elapsed + timeout, action, cancellationToken, recordException);
     }
     /// <summary>Uses the owner's absolute deadline without rebasing a previously computed remainder.</summary>
-    public static async ValueTask<T> RunUntilAsync<T>(IClock realClock, TimeSpan deadline,
+    public static ValueTask<T> RunUntilAsync<T>(IClock realClock, TimeSpan deadline,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default, Action<Exception>? recordException = null)
+        => RunUntilCoreAsync(realClock, deadline, action, cancellationToken, recordException, null);
+    internal static ValueTask<T> RunUntilAsync<T>(IClock realClock, TimeSpan deadline,
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken, Action<Exception>? recordException,
+        ExecutionSettlement settlement)
+        => RunUntilCoreAsync(realClock, deadline, action, cancellationToken, recordException, settlement);
+    private static async ValueTask<T> RunUntilCoreAsync<T>(IClock realClock, TimeSpan deadline,
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken, Action<Exception>? recordException,
+        ExecutionSettlement? settlement)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var startDeadline = deadline;
@@ -291,41 +337,66 @@ public static class FiniteOperation
         Task? timer = null;
         var cancelled = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         var callbackFaults = new ConcurrentQueue<Exception>();
+        void RecordCallbackFault(Exception exception)
+        {
+            if (settlement is null) callbackFaults.Enqueue(exception);
+            else settlement.PostDiagnostic(exception);
+        }
         using var registration = cancellationToken.Register(() =>
-        { CancelSafely(operationCancellation, callbackFaults.Enqueue); cancelled.TrySetCanceled(cancellationToken); });
+        { CancelSafely(operationCancellation, RecordCallbackFault); cancelled.TrySetCanceled(cancellationToken); });
+        using var ownerCancellation = settlement?.RegisterCancellation(operationCancellation, RecordCallbackFault);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (settlement is not null) await settlement.RejectNewWorkAsync(cancellationToken).ConfigureAwait(false);
             try { operation = action(operationCancellation.Token).AsTask(); }
             catch (OperationCanceledException exception) { throw NormalizeCancellation(exception, operationCancellation.Token, cancellationToken); }
-            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             var remaining = startDeadline - realClock.Elapsed;
-            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (remaining <= TimeSpan.Zero) throw DeadlineReached("OperationDeadlineReached");
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
             var independentWake = false;
             Task winner;
             while (true)
             {
-                winner = await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false);
+                winner = settlement is null
+                    ? await Task.WhenAny(operation, timer, cancelled.Task).ConfigureAwait(false)
+                    : await Task.WhenAny(operation, timer, cancelled.Task, settlement.Stop).ConfigureAwait(false);
+                if (settlement is not null && (winner == settlement.Stop || cancellationToken.IsCancellationRequested))
+                    await SettleExistingAsync(operation, settlement).ConfigureAwait(false);
                 if (operation.IsFaulted || operation.IsCanceled)
                 {
                     if (timer.IsFaulted && recordException is not null)
                         foreach (var fault in timer.Exception!.InnerExceptions) recordException(fault);
-                    return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+                    return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
                 }
                 if (timer.IsFaulted) await timer.ConfigureAwait(false);
+                if (settlement is not null && winner == settlement.Stop)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (settlement.Failure is { } failure) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+                    throw new OperationCanceledException("ExecutorOwnerClosed");
+                }
                 if (winner != timer) break;
                 await timer.ConfigureAwait(false);
                 var remainder = startDeadline - realClock.Elapsed;
-                if (remainder <= TimeSpan.Zero) break;
+                if (remainder <= TimeSpan.Zero)
+                {
+                    if (settlement is not null)
+                    {
+                        settlement.Interrupt(DeadlineReached("OperationDeadlineReached"));
+                        await SettleExistingAsync(operation, settlement).ConfigureAwait(false);
+                    }
+                    break;
+                }
                 // Ordinary native timers can wake early. Reschedule without reading session
                 // clocks on helper continuations, and keep work/caller cancellation in the race.
                 if (independentWake) throw new ClockProviderException();
                 independentWake = true;
                 timer = DelayIndependentAsync(remainder, timerCancellation.Token);
             }
-            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (winner == cancelled.Task)
             {
                 // Cancellation cannot erase a completed successful stage, but cannot extend its deadline.
@@ -339,19 +410,32 @@ public static class FiniteOperation
             if (winner == timer) await timer.ConfigureAwait(false);
             var expired = realClock.Elapsed >= startDeadline;
             if (winner == timer && !expired) throw new ClockProviderException();
-            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+            if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (expired) throw DeadlineReached("OperationDeadlineReached");
-            return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken).ConfigureAwait(false);
+            return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Retain normalized provider evidence before cancellation can block finally.
+            settlement?.RecordFailure(exception, cancellationToken);
+            throw;
         }
         finally
         {
             registration.Dispose(); // join caller callbacks before draining on the owner continuation
-            CancelSafely(operationCancellation, callbackFaults.Enqueue); CancelSafely(timerCancellation, callbackFaults.Enqueue);
+            CancelSafely(operationCancellation, RecordCallbackFault); CancelSafely(timerCancellation, RecordCallbackFault);
             if (operation is not null) _ = operation.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (timer is not null) _ = timer.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             if (recordException is not null)
                 while (callbackFaults.TryDequeue(out var fault)) recordException(fault);
         }
+    }
+    private static async ValueTask SettleExistingAsync(Task operation, ExecutionSettlement settlement)
+    {
+        settlement.Begin();
+        var remaining = settlement.EvidenceRemaining;
+        if (!operation.IsCompleted && remaining > TimeSpan.Zero)
+            await Task.WhenAny(operation, DelayIndependentAsync(remaining, CancellationToken.None)).ConfigureAwait(false);
     }
     internal static async Task DelayIndependentAsync(TimeSpan duration, CancellationToken token)
     {
@@ -366,9 +450,17 @@ public static class FiniteOperation
             ? new OperationCanceledException("CallerInterruptedOperation", exception, callerToken)
             : new ProviderCancellationException(exception);
     internal static async ValueTask<T> AwaitProviderAsync<T>(Task<T> task, CancellationToken providerToken, CancellationToken callerToken)
+        => await AwaitProviderAsync(task, providerToken, callerToken, null).ConfigureAwait(false);
+    internal static async ValueTask<T> AwaitProviderAsync<T>(Task<T> task, CancellationToken providerToken, CancellationToken callerToken,
+        ExecutionSettlement? settlement)
     {
         try { return await task.ConfigureAwait(false); }
-        catch (OperationCanceledException exception) { throw NormalizeCancellation(exception, providerToken, callerToken); }
+        catch (OperationCanceledException exception)
+        {
+            if (!callerToken.IsCancellationRequested && providerToken.IsCancellationRequested && exception.CancellationToken == providerToken &&
+                settlement?.Failure is { } deadline && IsDeadline(deadline)) throw deadline;
+            throw NormalizeCancellation(exception, providerToken, callerToken);
+        }
     }
     internal static void CancelSafely(CancellationTokenSource source, Action<Exception>? record = null)
     {

@@ -2080,7 +2080,7 @@ public sealed class PreparationTests
     public async Task EntryStatusCannotHideExactExitWithStaleBlockingOrThrowingGetter(bool waiting, int mode)
     {
         using var release = new ManualResetEventSlim(); using var cancellation = new CancellationTokenSource();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var entered = new ManualResetEventSlim();
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var clock = new Clock(); var launcher = new Launcher(); launcher.Process.DirectExitWatch = true;
         var run = Run(clock); run.BeginPreparation(); var cleanup = new OwnedCleanup(); var connection = new Connection();
@@ -2091,22 +2091,31 @@ public sealed class PreparationTests
         connection.OnWait = _ => Interlocked.Increment(ref sourceStarts);
         launcher.Process.OnStatus = () =>
         {
-            Interlocked.Increment(ref reads); entered.TrySetResult();
+            Interlocked.Increment(ref reads); entered.Set();
             if (mode == 0) throw new IOException("must-not-read-after-known-exit");
             if (mode == 2) { try { release.Wait(); } finally { returned.TrySetResult(); } }
             else launcher.Process.ConfirmExitWithStaleStatus();
             if (mode == 3) throw new IOException("status-failed-during-exit");
         };
         if (mode == 0) launcher.Process.ConfirmExitWithStaleStatus();
+        Task? confirmation = null;
         try
         {
+            // The intentionally blocked status getter occupies a shared-pool worker.
+            // Confirm exit independently; a delayed test continuation must not let
+            // the one-second status timeout precede this fixture's promised exit.
+            if (mode == 2) confirmation = Task.Factory.StartNew(() =>
+            {
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+                launcher.Process.ConfirmExitWithStaleStatus(); cancellation.Cancel();
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             var pending = waiting ? host.Feed.WaitForChangeAsync(cancellation.Token).AsTask() : (Task)host.Feed.CaptureAsync(cancellation.Token).AsTask();
-            if (mode == 2)
-            { await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); launcher.Process.ConfirmExitWithStaleStatus(); cancellation.Cancel(); }
+            if (confirmation is not null) await confirmation.WaitAsync(TimeSpan.FromSeconds(5));
             var failure = await Assert.ThrowsAsync<PreparationException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Equal(PreparationCode.ProcessExited, failure.Code); Assert.Equal(0, connection.Captures);
             Assert.Equal(0, sourceStarts);
             Assert.Equal(mode == 0 ? 0 : 1, reads);
+            if (mode == 2) Assert.False(returned.Task.IsCompleted);
             launcher.Process.OnStatus = null;
             run.RecordException(failure); run.Evaluate(candidates: [failure.Cause], cancelled: cancellation.IsCancellationRequested);
             var outcome = await cleanup.CompleteAsync(run, clock);

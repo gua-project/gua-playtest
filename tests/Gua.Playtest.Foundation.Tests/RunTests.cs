@@ -267,7 +267,10 @@ public sealed partial class RunTests
     {
         var clock = new Clock(); var simulation = new Clock(); var run = new RunSession(Limits(), clock, simulation);
         var never = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var result = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => new(never.Task), (_, _) => ValueTask.FromResult(true)).AsTask();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) =>
+        { entered.TrySetResult(); return new(never.Task); }, (_, _) => ValueTask.FromResult(true)).AsTask();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
         clock.At(1000); var outcome = await result;
         Assert.Equal(RunReason.PreparationTimeout, outcome.Primary.Cause.Reason);
         Assert.Equal(ResultStatus.Failed, outcome.Primary.Status); Assert.Equal(TimeSpan.Zero, simulation.Elapsed);
