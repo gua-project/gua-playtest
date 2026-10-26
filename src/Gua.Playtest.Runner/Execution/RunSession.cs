@@ -893,6 +893,9 @@ public sealed class RunSession
         => PostEvidence(exception, null);
     internal void PostProviderException(Exception exception)
         => PostEvidence(exception, (exception as RunFailureException)?.Cause);
+    // The executor retains original diagnostics separately, recording them once
+    // after its waiter settles or the controller revokes that waiter.
+    internal void RetainExecutorFailure(RunEvent cause) => QueuePending(cause);
     private void PostEvidence(Exception exception, RunEvent? cause)
     {
         ArgumentNullException.ThrowIfNull(exception);

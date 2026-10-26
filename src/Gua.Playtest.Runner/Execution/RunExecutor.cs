@@ -110,10 +110,30 @@ public static class RunExecutor
             if (physical.Elapsed >= physicalLimit)
             {
                 var bound = run.ExecutorDeadline;
-                var reached = run.State != ExecutionState.Created && run.LastValidatedReal >= bound.Deadline;
-                interruption = reached ? FiniteOperation.DeadlineReached("ExecutorDeadlineReached") : new ClockProviderException();
-                interruptionCause = reached ? new(bound.Reason, bound.Phase, RunOrigin.Clock) : new(RunReason.InvalidContract,
-                    run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation, RunOrigin.Clock);
+                // A stale watermark cannot prove that a healthy clock stopped.
+                // Close new authority, then validate the outstanding/current sample
+                // using a share of the same cleanup epoch, without joining its thread.
+                settlement.ReserveClockValidation();
+                clockRead ??= Task.Factory.StartNew(run.ReadAuthoritativeReal, CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                var allowance = settlement.EvidenceRemaining;
+                if (!clockRead.IsCompleted && allowance > TimeSpan.Zero)
+                    await Task.WhenAny(clockRead, owner, FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
+                if (owner.IsCompleted || run.Primary is not null) { settlement.Begin(); break; }
+                try
+                {
+                    if (!clockRead.IsCompleted) throw new ClockProviderException();
+                    var now = await clockRead.ConfigureAwait(false);
+                    if (run.State == ExecutionState.Created || now < bound.Deadline) throw new ClockProviderException();
+                    interruption = FiniteOperation.DeadlineReached("ExecutorDeadlineReached");
+                    interruptionCause = new(bound.Reason, bound.Phase, RunOrigin.Clock);
+                }
+                catch (Exception exception)
+                {
+                    interruption = exception;
+                    interruptionCause = new(RunReason.InvalidContract,
+                        run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation, RunOrigin.Clock);
+                }
                 run.PostProviderException(new RunFailureException(interruptionCause, interruption));
                 settlement.Interrupt(interruption); break;
             }
@@ -133,11 +153,11 @@ public static class RunExecutor
         {
             settlement.Begin();
             var phase = run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation;
-            var failure = evidence.Failure ?? settlement.Failure ?? interruption ?? (cancellationToken.IsCancellationRequested
+            var failure = evidence.Failure ?? settlement.ProviderFailure ?? settlement.Failure ?? interruption ?? (cancellationToken.IsCancellationRequested
                 ? new OperationCanceledException(cancellationToken) : new InvalidOperationException("ExecutorOwnerIncomplete"));
             var candidates = evidence.PreparationEvents.ToList();
             if (evidence.Boundary is { } boundary) candidates.AddRange(run.KnownInterruptedBoundaryEvents(boundary));
-            var knownFailure = evidence.Failure ?? settlement.Failure;
+            var knownFailure = evidence.Failure ?? settlement.ProviderFailure ?? settlement.Failure;
             if (knownFailure is RunFailureException typed) candidates.Add(typed.Cause);
             else if (knownFailure is not null)
             {
@@ -205,9 +225,9 @@ public static class RunExecutor
                     var initial = boundary.InitialObservation;
                     run.RetainCertifiedInitialFacts(initial);
                     await FiniteOperation.RunUntilAsync(realClock, run.RunningOrigin!.Value + run.Limits.MaxDuration,
-                        _ => run.RunExecutorStage(() => new ValueTask<bool>(Task.Factory.StartNew(() =>
+                        _ => run.RunExecutorStage(() => new ValueTask<bool>(Task.Factory.StartNew(async () =>
                         {
-                            settlement.RejectNewWork(cancellationToken);
+                            await settlement.RejectNewWorkAsync(cancellationToken).ConfigureAwait(false);
                             try { registerInitialObservation?.Invoke(run); }
                             catch (Exception exception)
                             {
@@ -224,7 +244,7 @@ public static class RunExecutor
                             run.ReadAuthoritativeCondition();
                             run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                             return true;
-                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))), cancellationToken, run.RecordException, settlement).ConfigureAwait(false);
+                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap())), cancellationToken, run.RecordException, settlement).ConfigureAwait(false);
                 }
                 else run.Evaluate(cancelled: cancellationToken.IsCancellationRequested);
                 if (run.Primary is null)

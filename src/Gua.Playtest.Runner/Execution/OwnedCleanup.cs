@@ -346,7 +346,7 @@ public static class FiniteOperation
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            settlement?.RejectNewWork(cancellationToken);
+            if (settlement is not null) await settlement.RejectNewWorkAsync(cancellationToken).ConfigureAwait(false);
             try { operation = action(operationCancellation.Token).AsTask(); }
             catch (OperationCanceledException exception) { throw NormalizeCancellation(exception, operationCancellation.Token, cancellationToken); }
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
@@ -411,6 +411,12 @@ public static class FiniteOperation
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (expired) throw DeadlineReached("OperationDeadlineReached");
             return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Retain normalized provider evidence before cancellation can block finally.
+            settlement?.RecordFailure(exception, cancellationToken);
+            throw;
         }
         finally
         {
