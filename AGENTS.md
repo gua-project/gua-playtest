@@ -3,7 +3,7 @@
 Gua Playtest is a C#/.NET 10 game-external Runner. Read `README.md`,
 `docs/README.md` and the affected normative contracts before changing behavior.
 Keep Core native-free, Gua dependencies in GuaIntegration, Fake providers in
-tests, and Gua Trace/Recording formats owned by Gua. Published Gua.Testing 1.1.1
+tests, and Gua Trace/Recording formats owned by Gua. Published Gua.Testing 1.1.2
 does not imply unpublished guarded APIs or real engine acceptance.
 
 ## Validation and evidence

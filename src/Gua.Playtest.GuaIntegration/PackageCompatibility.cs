@@ -7,7 +7,7 @@ namespace Gua.Playtest.GuaIntegration;
 
 public static class PackageCompatibility
 {
-    public const string SourceCommit = "88f5dca4aa97c5d5187ab66ea4416377f3affc96";
+    public const string SourceCommit = "b398e531558f38220baf0b606e7c3f33904a87a5";
 
     /// <summary>Checks packaged native core/runtime only. Does not attach, launch or operate a game.</summary>
     public static void CheckNative()

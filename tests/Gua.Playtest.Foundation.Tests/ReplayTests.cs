@@ -528,7 +528,7 @@ public sealed class ReplayTests
     [InlineData("buildId", "build")]
     [InlineData("scenarioSha256", "cccc")]
     [InlineData("environmentSha256", "aaaa")]
-    public void ReplayPreparationRejectsIdentitySecretCollisions(string field, string secret)
+    public void ReplayPreparationSeparatesInputIdentitySecretsFromGeneratedDigests(string field, string secret)
     {
         using var files = new Fixture();
         var sourceBytes = File.ReadAllBytes(Path.Combine(files.Root, "scenario.json"));
@@ -537,9 +537,20 @@ public sealed class ReplayTests
         if (field == "scenarioSha256") secret = sourceHash[..4];
         var store = RunArtifactStore.Create(Path.Combine(files.Root, "runs"), new(65536, 1048576, 1000, 8192), new([secret], []));
         var identity = new RunIdentity("purchase", "v1", sourceHash, "build", new string('a', 64));
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginReplayPreparation(new("public", [], new Dictionary<string, string>(),
-            [new("scenario", fixedScenario.RootElement, sourceBytes)]), identity).Failure);
-        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")), field);
+        var result = store.BeginReplayPreparation(new("public", [], new Dictionary<string, string>(),
+            [new("scenario", fixedScenario.RootElement, sourceBytes)]), identity);
+        if (field is "scenarioSha256" or "environmentSha256")
+        {
+            Assert.True(result.Saved);
+            using var saved = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+            Assert.Equal(field == "scenarioSha256" ? sourceHash : identity.EnvironmentSha256,
+                saved.RootElement.GetProperty("identity").GetProperty(field).GetString());
+        }
+        else
+        {
+            Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+            Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")), field);
+        }
     }
 
     [Fact]

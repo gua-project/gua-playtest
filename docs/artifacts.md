@@ -26,11 +26,99 @@ or verify the actual game build/effective Environment on the owner's behalf.
 
 Merged #6 final main `266892695c70d6d1da531733c4ebbc2dbcec3310` retains `RunExecutor.ExecuteAsync(..., cancellationToken, confirmPrimary)` and the equivalent `OwnedCleanup` hook. Supply `(snapshot, token) => ValueTask.FromResult(store.ConfirmPrimary(snapshot, observations, decisions, token).Saved)`. The frozen snapshot includes primary events and original exception evidence; this hook runs before diagnostics/releases with fresh bounded cancellation authority even when the caller cancelled. False maps to PrimarySnapshotFailed; the primary is unchanged. Registering an ordinary Diagnostics callback is insufficient because caller cancellation can skip that work. #15 owns production assembly. #8's `IPreparationTrace.Record(PreparationEvent(Stage, Code))` must connect to the common Gua adapter before launch, not to a new Playtest timeline. Artifact persistence itself does not produce lifecycle Trace events.
 
-Use the final [execution contract](execution.md) for validated clock authority, owner-thread evidence collection, certified paired Running startup, completed-work confirmation and capture cancellation/fault arbitration. Persistence consumes the immutable outcome and does not reinterpret any of those causes. It supplies no observation feed and does not claim `IIndependentRunObservationFeed`: ordinary sources must join the underlying capture before replacement, and Gua1.1.1 is not granted independence by assumption. The #15 owner must serialize storage calls and isolate/join a timed-out storage invocation before reusing its mutable store; a finite callback wrapper alone is not proof that underlying filesystem work ended. Live bounded-provider acceptance remains open.
+Use the final [execution contract](execution.md) for validated clock authority, owner-thread evidence collection, certified paired Running startup, completed-work confirmation and capture cancellation/fault arbitration. Persistence consumes the immutable outcome and does not reinterpret any of those causes. It supplies no observation feed and does not claim `IIndependentRunObservationFeed`: ordinary sources must join the underlying capture before replacement, and Gua is not granted independence by assumption. The #15 owner must serialize storage calls and isolate/join a timed-out storage invocation before reusing its mutable store; a finite callback wrapper alone is not proof that underlying filesystem work ended. Live bounded-provider acceptance remains open.
 
 Final #11 merge main `18d50f9d62f73e59a9bc87c1131691ca5df60f6a` is incorporated. Its host-owned `PlannerDecisionReference` maps `DecisionRequestId` to `DecisionReference.DecisionId`, `BasedOnObservationId` to `ObservationId`, and the defined `Code` enum name to `ReasonCode`. The #15 execution owner must require `Reference.RunId == store.RunId` and obtain any action identifier from approved Gua payloads; this storage record does not itself grant proposal or dispatch authority. Raw rationale, expected criteria and artifact metadata never enter Planner projections. The real provider/guard/Trace acceptance conditions below remain open.
 
 ## Gua-owned receipts and safety
+
+### Trusted Gua writer composition
+
+The CLI assembly's `GuaRunArtifacts` composes Runner persistence and the
+GuaIntegration `GuaRunArtifactWriter` without a Runner-to-Gua dependency.
+Construct it at Preparing entry, before calling the host's launch/connect port,
+with the existing store, fixed metadata, effective artifact ceilings, explicit
+Gua options and host-only Recording redaction policy. Pass it as
+`IPreparationTrace` to `HostPreparation`, and pass `ConfirmPrimaryAsync` directly
+to `RunExecutor`'s pre-cleanup confirmation hook. The hook freezes Gua's primary
+outcome and the existing create-only primary summary separately from cleanup.
+The preparation owner emits the single `Started` transition; constructing the
+adapter only initializes persistence. Evidence producers cannot set the primary
+through the capture port.
+
+The trusted owner uses the `GuaRunTrace` policy port's `BeginStep`, `RecordRequest`,
+`Evaluate`, `Change` and `Attach` APIs for already-authorized evidence. Each
+delegates to the actual public Gua session; the raw session is not exposed.
+Playtest redacts real host, game and input data before Gua queues, attachments and
+input-copy hashes. Configured sensitive JSON fields become null, including fields
+whose values are not literal secrets. Explicit marked objects retain whole-object
+masking. Actual string values containing a resolved secret are suppressed as a
+whole; source-line scalars containing a secret are omitted. Host/request identities
+and Recording text that cannot be changed without changing correlation or replay
+are refused when they contain a real secret or a named-sensitive field cannot be
+omitted without changing correlation/replay. Actual coordinates, scroll input and
+host timing/correlation fields receive the same policy before Recording encoding.
+A sensitive settings/input/exception container that cannot retain the required wire
+shape is refused before publication.
+
+Fixed format keys, schemas, typed results, enum values, timestamps, generated IDs
+and JSON punctuation are trusted structure. A secret that happens to equal public
+Viewer text such as Trace does not prohibit that public text. Playtest does not
+scan the entire generated HTML/JavaScript for literal absence or reconstruct Gua's
+HTML, CSP or escaping. Gua owns rendering and safe data embedding.
+
+The projection bounds JSON bytes, strings, nodes and depth before native admission.
+Recording admission checks actual text and populated sensitive fields, then bounds
+the native document before attachment/save. The completed Trace is read by Gua with
+explicit input limits. The same validated read result is passed to Gua's bounded
+RenderHtml API with the smaller of the per-file limit and remaining bundle budget.
+Gua returns complete UTF-8 bytes only within that cap; Playtest saves them create-only
+and inventories their actual length and SHA-256. Input limits and output limits are
+separate: the output cap does not represent a total heap bound.
+
+The receipt inventories manifest, events, snapshots, attachments and report.
+RunArtifactStore independently admits every associated file before publishing
+the final Result. Success omission requires actual successful Gua completion.
+Capture or save failure contributes only postprocessing; immutable primary status
+and the existing exit-11 projection are preserved.
+
+Native Gua output is first written into an isolated `.gua-pending-*` directory
+under the trusted private artifact root. After genuine native completion, the
+summary owner admits the actual bundle bytes together with already charged
+run/primary bytes and the exact mandatory completion/result encodings. Only an
+admitted bundle is moved into its Run directory. Budget refusal produces failed
+artifact receipts while preserving space for the final summaries; independent
+receipt validation still reads every published file. Successfully published or
+omitted output releases its pending directory. Failed capture or an incomplete
+native checkpoint retains isolated diagnostic output and grants no saved receipt.
+This staging does not impose a hard deadline on native scheduling or flush.
+
+Native construction failure releases its pending directory. Raw tree/value JSON
+is checked for UTF-8 bytes, decoded string lengths, depth and nodes before a DOM
+is allocated. Recording admission counts its complete native document, including
+targets and scalar fields, before attachment/save.
+
+Gua 1.1.2 limits total event/blob bytes rather than the individual cumulative
+`events.jsonl`. Therefore explicit `MaxArtifactBytes` must fit `MaxFileBytes`,
+and `MaxFileBytes` must also fit Gua's separate 64 KiB manifest reserve. The
+adapter rejects unguaranteed settings before creating a writer. It does not
+save an oversized file and then treat later receipt rejection as enforcement
+of the effective file ceiling. The manifest, events and mandatory HTML entry
+require at least three file slots; the report slot is reserved during the
+pre-report inventory rather than added after exhausting the configured count.
+Trace and Recording share that file budget. A saved Recording additionally needs
+its two native Trace attachments and recording JSON, so at least six slots are required
+when both artifacts are saved. Recording slots remain reserved during final Trace
+inventory. Encoding admission uses actual bounded Recording/HTML bytes, including
+escape expansion, rather than a worst-case character multiplier or report estimate.
+
+Gua 1.1.2 queue admission, writer scheduling, lifecycle stopping and synchronous
+filesystem operations do not provide a hard absolute deadline or a proof that
+the writer terminated when a flush/dispose timeout was reported. This adapter
+awaits the actual public completion operation and does not wrap it with a timeout
+that claims to stop background work. The owner must isolate unresolved providers
+before reuse; this composition grants no gameplay guard, lifecycle lease,
+independent observation feed or production host capability.
 
 `ArtifactReceipt` separates `NotExecuted`, `OmittedOnSuccess`, `CaptureFailed`, `SaveFailed` and `Saved`. Only Passed permits success omission. Non-saved states contain no file/byte/hash fields and create no empty artifact. Capture/flush failures add ArtifactFailed to postprocessing; Passed plus incomplete postprocessing exits 11, while non-Passed primary exits are preserved.
 
@@ -42,13 +130,13 @@ Explicit `ArtifactLimits` bound per-file bytes (256..16 MiB), total associated R
 
 ## Acceptance evidence and remaining integration
 
-`ArtifactTests` independently parses saved JSON, verifies fixed-copy hash, checks secret absence across every file, validates final result against the existing schema, injects wrong hash/disk target collision/cancellation/byte limit/truncated result, checks observation boundary and primary replacement rejection, and checks all non-saved artifact states and exit 11. The real #6 execution code is composed with local persistence to verify preconnection failure, snapshot-before-release ordering and fresh cancellation authority. A postconfirmation Cancelled marker alone does not manufacture incomplete mandatory work or exit 11. Bundle aliases and actual directory links/junctions are rejected; physical test output directories avoid macOS's `/var` alias without weakening the API. This is local contract evidence for AT-FILE-007, AT-FILE-006, AT-RUN-005/006 and part of AT-TRACE-006/007/009 and AT-PLANNER-009.
+`ArtifactTests` independently parses saved JSON, verifies fixed-copy hash, checks real-data secret suppression independently of trusted structure, validates final result against the existing schema, injects wrong hash/disk target collision/cancellation/byte limit/truncated result, checks observation boundary and primary replacement rejection, and checks all non-saved artifact states and exit 11. The real #6 execution code is composed with local persistence to verify preconnection failure, snapshot-before-release ordering and fresh cancellation authority. A postconfirmation Cancelled marker alone does not manufacture incomplete mandatory work or exit 11. Bundle aliases and actual directory links/junctions are rejected; physical test output directories avoid macOS's `/var` alias without weakening the API. This is local contract evidence for AT-FILE-007, AT-FILE-006, AT-RUN-005/006 and part of AT-TRACE-006/007/009 and AT-PLANNER-009.
 
-Still OPEN: Gua-owned common Trace registration from Preparing, real capture/flush/Recording association, recent/streaming × onFailure/always combinations, intermediate Change/gap rendering, actual Viewer readback, real host/Planner/CLI assembly and bounded provider cancellation. These require #7/#8/#11/#15/#16 and Gua T-04 (#126). Published Gua.Testing remains 1.1.1; unpublished guarded APIs are not used. Keep issue #9 open until those independent real acceptance tests pass. No Fake or local schema success closes that integration requirement.
+Production acceptance requires actual host/Planner/CLI assembly, game lifecycle isolation, bounded provider cancellation and real engine behavior. Native/transport/schema success does not establish those conditions. The report adapter uses the public bounded GuaTraceReport.RenderHtml API from pinned Gua.Testing 1.1.2. Package compatibility checks require the release source identity for both native payloads and the embedded Viewer. No guarded capability follows from the report API.
 
 ## Review regression and package failure evidence
 
-Resolved secrets/sensitive names colliding with generated structural keys, fixed identifiers or enum wire values fail as InvalidEvidence before publication; they cannot silently change Passed into a schema-invalid value. Aggregate sanitized input bytes/nodes are charged during list construction, not only at final serialization. Undefined JSON input is InvalidEvidence. Wrong receipt length is InvalidEvidence, separately from actual byte capacity LimitExceeded. Reader cancellation is Interrupted, not evidence of a corrupt result.
+Trusted summary keys, typed results, generated Run IDs, hashes and timestamps retain their wire values. Actual input strings and scalar secrets are suppressed before sanitized-copy hashing; secret-bearing owner/Planner correlation identifiers fail rather than change identity. Typed ObservationReference and DecisionReference.ObservationId retain actual writer-generated IDs; raw owner observation keys are not persisted. Real JSON fields with the same name remain subject to redaction. Aggregate input bytes/nodes remain bounded. Undefined JSON is InvalidEvidence; length mismatch is separate from LimitExceeded; reader cancellation is Interrupted.
 
 File aliases are checked by the identity of the open handle used for SHA-256, allowing independent files with identical bytes while rejecting hard links. The implementation uses installed OS APIs: [Windows FILE_ID_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info), [Linux statx UAPI](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/stat.h), and [Darwin 64-bit stat ABI](https://raw.githubusercontent.com/apple-oss-distributions/xnu/main/bsd/sys/stat.h). Unknown identity/unsupported platforms fail as IoFailure; no package/native engine installation or fallback by filename occurs. Four-RID CI provides execution evidence for those OS paths, not for additional platforms.
 
@@ -56,7 +144,7 @@ Known upstream/package acceptance recurrence: Windows CI on PR34 HEAD bbae56a, r
 
 The dedicated Windows execution/desktop transport disconnected after 22 artifact regression cases passed locally. This review fix was reconstructed from the published bbae56a source with checked exact replacements through GitHub Git data APIs; original local edits remain preserved for comparison once the host recovers. Actual final-head CI and GitHub Codex review remain required.
 
-The subsequent review fixes reject redaction collisions in observation/decision/action identifiers and structured reason codes, omit optional file fields for non-saved receipts, and reject non-regular files before reading. Unix opens use nonblocking/no-follow flags before checking the handle type, so a FIFO with no writer cannot block admission. Linux/macOS FIFO regression fixtures exercise this path in actual CI; Windows continues to require a disk handle.
+The subsequent review fixes reject redaction collisions in observation/decision/action identifiers while preserving typed reason codes, omit optional file fields for non-saved receipts, and reject non-regular files before reading. Unix opens use nonblocking/no-follow flags before checking the handle type, so a FIFO with no writer cannot block admission. Linux/macOS FIFO regression fixtures exercise this path in actual CI; Windows continues to require a disk handle.
 
 Isolated scheduler probe (Windows, 16 logical processors, unchanged Gua.Testing 1.1.1): a 500ms flush succeeded in 152ms with the normal process pool. In a separate probe process with a two-worker ceiling and both workers occupied, completion remained unfinished at the 2-second measurement and returned flush-timeout at 2003ms after release. These are observed timings, not product defaults. Source [88f5dca4 GuaTraceSession](https://github.com/gua-project/gua/blob/88f5dca4aa97c5d5187ab66ea4416377f3affc96/bindings/dotnet/src/Gua.Testing/Trace/GuaTraceSession.cs) awaits pool-dispatched queue admission before starting its completion timeout race; its writer also blocks a pool worker. This demonstrates the scheduling/deadline mechanism under starvation, not direct causality for CI. PR34 d9b2c8c Windows run 37446097573 job 112211181970 reproduced the existing flush failure; parent also observed it in PR36. No upstream source/package changes are made here.
 
@@ -70,11 +158,11 @@ Redaction policy has explicit hard ceilings: at most1024 secret entries with at 
 
 The final-main actual review found a newline-anchor bypass in the legacy regex allowlists. Identifiers, filename segments and hashes now use bounded ASCII character/length checks rather than regex anchors; newline/carriage-return suffixes cannot pass. Independent fixtures include actual newline-named files on Unix, malformed hashes and all reference identifier/code positions. No merged #6 execution code is changed by this correction.
 
-Further actual review fixes check non-string JSON scalar tokens with the same bounded secret matcher before sanitized input hashing or publication. Colliding booleans, numbers and nulls fail as InvalidEvidence rather than changing their raw values. Generated scalar/null values and structural timestamps receive the same collision checks. Safe numeric tokens retain their original spelling, including exponent notation. Primary status/reason/phase/origin must be defined enum values before the in-memory snapshot freezes; Preparing metadata cannot be published after primary confirmation or any completion attempt. Regression fixtures independently read source and saved bytes and verify rejected operations publish no input/hash and cannot alter completed files.
+Actual scalar input tokens use the bounded secret matcher before sanitized-copy hashing; a matching value becomes null. Safe numeric tokens retain their spelling. Typed structural values and timestamps remain unchanged. Primary enums must be defined before freezing; Preparing cannot publish after primary confirmation or completion.
 
 The reader also preserves ReferenceMissing/ReferenceUnreadable reports from the independent validator's second filesystem open/read, rather than conflating those with corruption. Deterministic internal-boundary fixtures admit a genuine saved regular file, then delete it or deny its read before invoking the unchanged production validator; they assert its genuine report code and the reader state. Public callers cannot substitute the validator. These races do not supply or infer any primary result.
 
-Additional actual review regressions reject secrets re-formed across final JSON token boundaries before exposing fixed bytes, hashing or publication. The final bounded UTF-8 encoding is scanned with the host secret automaton without a decoded buffer; unsafe encodings fail rather than alter raw values. Existing summary and owner file identities seed artifact admission, rejecting hard links from alternate receipt names to storage files. Primary status must agree with the normative RunSession reason mapping: budget-exhaustion reasons permit Failed or Unverified because the frozen primary omits private success-condition configuration; failure causes cannot be labelled Passed. Tests cover token/escaped syntax boundaries, Unicode bounded matching, genuine summary hardlinks, contradictory defined primary values and both legitimate budget modes.
+JSON punctuation and token boundaries are format structure, not real data values. Existing summary and owner identities still seed artifact admission, rejecting hardlinks to storage files. Primary status must agree with the RunSession reason mapping; budget reasons permit Failed or Unverified. UTF-8 matching, hardlink, contradictory-primary and budget-mode regressions remain independent of renderer trust.
 
 The final-main review identified case-insensitive macOS volumes. Case-equivalent Run directory spellings now require matching actual directory device/file IDs on every platform, without an OS-name case assumption or parent-directory enumeration. Distinct case-sensitive directories remain invalid even if their result files are hardlinked. The regression queries the real test volume: existing alternate-case lookup must verify, otherwise a separate alternate-case directory with a hardlinked result must be rejected. Windows metadata-only directory handles use documented [CreateFileW directory flags](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew) and [FileAttributeTagInfo](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ne-minwinbase-file_info_by_handle_class); no privilege or credential changes. Unix reuses existing nonblocking/no-follow opens and checks directory type on the handle.
 The Windows metadata open uses extended drive/UNC path names so long output roots retain the same behavior as managed file opens. A real output tree longer than260characters verifies alternate-case result readback without changing process or machine long-path settings.

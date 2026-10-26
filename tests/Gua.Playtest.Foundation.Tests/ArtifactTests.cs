@@ -28,6 +28,84 @@ public sealed class ArtifactTests : IDisposable
         [new(ObservationBoundary.PrimaryDecision, "at-result")], [new("decision-1", "observation-1", "action-1", "Approved")],
         [new("OriginalType", Secret)]).Saved);
 
+    [Theory]
+    [InlineData(PostProcessingReason.PrimarySnapshotFailed)] [InlineData(PostProcessingReason.DiagnosticsFailed)]
+    [InlineData(PostProcessingReason.ArtifactFailed)] [InlineData(PostProcessingReason.InputReleaseUnconfirmed)]
+    [InlineData(PostProcessingReason.ResourceReleaseUnconfirmed)] [InlineData(PostProcessingReason.Cancelled)]
+    [InlineData(PostProcessingReason.CleanupTimeout)] [InlineData(PostProcessingReason.CleanupClockInvalid)]
+    [InlineData(PostProcessingReason.EvidenceLimitExceeded)]
+    public async Task Typed_postprocessing_reasons_survive_literal_and_named_policy(PostProcessingReason reason)
+    {
+        var code = reason.ToString(); var store = RunArtifactStore.Create(root, Limits, new([code], ["reasons"]));
+        Assert.True(store.BeginPreparation(new("public", [], new Dictionary<string, string>(),
+            [new("input", JsonSerializer.SerializeToElement(new { reasons = new[] { code } }))])).Saved); Confirm(store);
+        using var input = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(JsonValueKind.Null, input.RootElement.GetProperty("inputs")[0].GetProperty("document").GetProperty("reasons").ValueKind);
+        var original = Outcome() with { PostProcessing = [new(reason, new(code, code))] };
+        var result = store.Complete(original, Omitted, [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(reason == PostProcessingReason.Cancelled ? 0 : 11, result.ExitCode(original));
+        var read = await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits);
+        Assert.Equal(ResultReadState.Verified, read.State);
+        Assert.Equal([code], read.Result!.PostProcessing.Reasons);
+        using var completion = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "completion.json")));
+        var issue = completion.RootElement.GetProperty("postProcessing")[0];
+        Assert.Equal(code, issue.GetProperty("reason").GetString());
+        Assert.Equal("", issue.GetProperty("exception").GetProperty("type").GetString());
+        Assert.Equal("", issue.GetProperty("exception").GetProperty("stackTrace").GetString());
+        Assert.Equal([reason], original.PostProcessing.Select(x => x.Reason));
+    }
+
+    [Theory]
+    [InlineData(ArtifactState.CaptureFailed)] [InlineData(ArtifactState.SaveFailed)]
+    public async Task Generated_artifact_failure_reason_remains_valid_evidence(ArtifactState state)
+    {
+        var store = RunArtifactStore.Create(root, Limits, new(["ArtifactFailed"], [])); Confirm(store);
+        var original = Outcome(); var result = store.Complete(original,
+            [new(ArtifactKind.Trace, state), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(11, result.ExitCode(original));
+        var read = await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits);
+        Assert.Equal(ResultReadState.Verified, read.State);
+        Assert.Equal(["ArtifactFailed"], read.Result!.PostProcessing.Reasons);
+    }
+
+    [Theory]
+    [InlineData("Approved", true)] [InlineData("PRIVATE_CODE", false)]
+    public void Only_defined_public_planner_codes_bypass_real_text_policy(string code, bool saved)
+    {
+        var store = RunArtifactStore.Create(root, Limits, new([code], ["reasonCode"]));
+        var result = store.ConfirmPrimary(Passed, [], [new("d", "o", null, code)], []);
+        Assert.Equal(saved, result.Saved);
+        if (!saved) Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+    }
+    [Theory]
+    [InlineData("settings")] [InlineData("versions")] [InlineData("inputs")] [InlineData("document")]
+    public void Named_sensitive_actual_metadata_containers_refuse_publication(string field)
+    {
+        var store = RunArtifactStore.Create(root, Limits, new([], [field]));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(Metadata).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "run.json")));
+    }
+    [Fact]
+    public void Named_sensitive_exception_container_refuses_publication()
+    {
+        var store = RunArtifactStore.Create(root, Limits, new([], ["exceptions"]));
+        Assert.Equal(PersistenceFailure.InvalidEvidence, store.ConfirmPrimary(Passed, [], [], [new("private-type", "private-stack")]).Failure);
+        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+    }
+    [Fact]
+    public void Sensitive_actual_setting_fields_are_masked_without_erasing_structural_results()
+    {
+        var store = RunArtifactStore.Create(root, Limits, new([], ["source", "value", "status"]));
+        Assert.True(store.BeginPreparation(new("player", [new("setting", "private-value", "private-source")],
+            new Dictionary<string, string>(), [])).Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        var setting = saved.RootElement.GetProperty("settings")[0];
+        Assert.Equal("", setting.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, setting.GetProperty("value").ValueKind);
+        Assert.True(store.ConfirmPrimary(Passed, [], [], []).Saved);
+        using var primary = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "primary.json")));
+        Assert.Equal("Passed", primary.RootElement.GetProperty("result").GetProperty("status").GetString());
+    }
     [Fact]
     public async Task Unique_create_only_result_and_independent_schema_readback()
     {
@@ -235,12 +313,13 @@ public sealed class ArtifactTests : IDisposable
     [InlineData("a")]
     [InlineData("Passed")]
     [InlineData("runId")]
-    public void Structural_secret_collisions_fail_without_publishing_corrupt_wire_fields(string secret)
+    public void Trusted_structural_collisions_preserve_wire_fields(string secret)
     {
         var store = RunArtifactStore.Create(root, Limits, new([secret], []));
         var result = store.ConfirmPrimary(Passed, [], [], []);
-        Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
-        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        Assert.True(result.Saved);
+        using var saved = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "primary.json")));
+        Assert.Equal("Passed", saved.RootElement.GetProperty("result").GetProperty("status").GetString());
         Assert.Empty(Directory.GetFiles(store.DirectoryPath, ".pending-*"));
     }
     [Fact]
@@ -289,10 +368,8 @@ public sealed class ArtifactTests : IDisposable
         using var process = System.Diagnostics.Process.Start(start)!; process.WaitForExit(); Assert.Equal(0, process.ExitCode);
     }
     [Theory]
-    [InlineData("observation-1")]
     [InlineData("decision-1")]
     [InlineData("action-1")]
-    [InlineData("Approved")]
     public void Reference_secret_collisions_fail_without_persisting_changed_identifiers(string secret)
     {
         var store = RunArtifactStore.Create(root, Limits, new([secret], []));
@@ -485,18 +562,19 @@ public sealed class ArtifactTests : IDisposable
     [InlineData("1234567890123456789", "1234567890123456789")]
     [InlineData("1.234567890123456789e-123", "e-123")]
     [InlineData("null", "null")]
-    public void Scalar_secret_collisions_fail_before_any_input_hash_or_publication(string token, string secret)
+    public void Actual_scalar_secrets_are_suppressed_before_input_hash_and_publication(string token, string secret)
     {
         using var source = JsonDocument.Parse("{\"credential\":[" + token + "]}");
         var original = source.RootElement.GetRawText();
         var store = RunArtifactStore.Create(root, Limits, new([secret], []));
         var metadata = new RunArtifactMetadata("public", [], new Dictionary<string, string>(), [new("scenario", source.RootElement)]);
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(metadata).Failure);
+        Assert.True(store.BeginPreparation(metadata).Saved);
         Assert.Equal(original, source.RootElement.GetRawText());
-        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(x => Path.GetFileName(x)!).ToArray());
+        using var saved = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(JsonValueKind.Null, saved.RootElement.GetProperty("inputs")[0].GetProperty("document").GetProperty("credential")[0].ValueKind);
     }
     [Fact]
-    public void Safe_scalar_raw_values_are_preserved_and_generated_timestamp_collisions_fail()
+    public void Safe_scalars_and_generated_timestamps_are_preserved()
     {
         using var source = JsonDocument.Parse("{\"number\":1e-3,\"boolean\":false,\"empty\":null}");
         var store = Store();
@@ -506,9 +584,8 @@ public sealed class ArtifactTests : IDisposable
         Assert.Equal("1e-3", copy.GetProperty("number").GetRawText());
         Assert.False(copy.GetProperty("boolean").GetBoolean()); Assert.Equal(JsonValueKind.Null, copy.GetProperty("empty").ValueKind);
         var timestamp = RunArtifactStore.Create(root, Limits, new(["2097-01"], [])); Confirm(timestamp);
-        Assert.Equal(PersistenceFailure.InvalidEvidence, timestamp.Complete(Outcome(), Omitted, [], new(2097, 1, 2, 3, 4, 5, TimeSpan.Zero)).Failure);
-        Assert.False(File.Exists(Path.Combine(timestamp.DirectoryPath, "result.json")));
-        foreach (var file in Directory.GetFiles(timestamp.DirectoryPath)) Assert.DoesNotContain("2097-01", File.ReadAllText(file));
+        Assert.True(timestamp.Complete(Outcome(), Omitted, [], new(2097, 1, 2, 3, 4, 5, TimeSpan.Zero)).Saved);
+        Assert.Contains("2097-01", File.ReadAllText(Path.Combine(timestamp.DirectoryPath, "result.json")));
     }
     [Theory]
     [InlineData("status")]
@@ -580,21 +657,18 @@ public sealed class ArtifactTests : IDisposable
     [InlineData("[true,false]", "true,false")]
     [InlineData("[\"a\",\"b\"]", "a\",\"b")]
     [InlineData("[\"é\",\"b\"]", "\\u00E9\",\"b")]
-    public void Encoded_token_boundary_secrets_are_rejected_before_fixed_copy_hash_or_publication(string input, string secret)
+    public void Serialization_boundaries_are_not_actual_secret_values(string input, string secret)
     {
         using var source = JsonDocument.Parse(input);
         var store = RunArtifactStore.Create(root, Limits, new([secret], []));
-        Assert.Equal(PersistenceFailure.InvalidEvidence,
-            store.BeginPreparation(new("public", [], new Dictionary<string, string>(), [new("scenario", source.RootElement)])).Failure);
+        Assert.True(store.BeginPreparation(new("public", [], new Dictionary<string, string>(), [new("scenario", source.RootElement)])).Saved);
         Assert.Equal(input, source.RootElement.GetRawText());
-        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(x => Path.GetFileName(x)!).ToArray());
     }
     [Fact]
-    public void Final_encoding_checks_generated_boundaries_and_utf8_matches_without_allocating_decoded_buffers()
+    public void Generated_boundaries_are_trusted_and_real_utf8_matches_remain_detectable()
     {
         var store = RunArtifactStore.Create(root, Limits, new(["GoalSatisfied\",\"phase"], []));
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.ConfirmPrimary(Passed, [], [], []).Failure);
-        Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "primary.json")));
+        Assert.True(store.ConfirmPrimary(Passed, [], [], []).Saved);
         var redactor = new PersistenceRedactor(["🔑secret"], []);
         var bytes = Encoding.UTF8.GetBytes(new string('x', 100000) + "🔑secret");
         var before = GC.GetAllocatedBytesForCurrentThread();

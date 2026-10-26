@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace Gua.Playtest.Runner.Artifacts;
 
 /// <summary>Host-only redaction policy. Apply before storage buffers, input-copy hashes or Trace queues.
@@ -156,6 +159,93 @@ public sealed class PersistenceRedactor
         return false;
     }
     internal bool Sensitive(string name) => fields.Contains(name);
+    public bool IsSensitiveField(string name) => Sensitive(name);
+    /// <summary>Host-only bounded JSON projection for a foreign writer. Sensitive fields
+    /// become null before its buffers/queues/hashes, without changing the original document.</summary>
+    public JsonElement RedactDocument(JsonElement document, ArtifactLimits limits)
+    {
+        if (System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(document).Length > limits.MaxFileBytes)
+            throw new ArtifactLimitException();
+        var count = 0;
+        var safe = Visit(document, 0);
+        using var encoding = new BoundedProjection(limits.MaxFileBytes);
+        JsonSerializer.Serialize(encoding, safe);
+        using var encoded = JsonDocument.Parse(encoding.Bytes);
+        var result = encoded.RootElement.Clone();
+        return result;
+        JsonNode? Visit(JsonElement value, int depth)
+        {
+            if (depth > 32 || ++count > limits.MaxItems) throw new ArtifactLimitException();
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    if ((value.TryGetProperty("sensitive", out var marked) && marked.ValueKind == JsonValueKind.True) ||
+                        (value.TryGetProperty("mask", out var mask) && mask.ValueKind == JsonValueKind.True))
+                    {
+                        if (depth == 32 || ++count > limits.MaxItems || "redacted".Length > limits.MaxStringChars)
+                            throw new ArtifactLimitException();
+                        return new JsonObject { ["redacted"] = Sensitive("redacted") ? null : JsonValue.Create(true) };
+                    }
+                    var output = new JsonObject();
+                    foreach (var property in value.EnumerateObject())
+                    {
+                        if (property.Name.Length > limits.MaxStringChars) throw new ArtifactLimitException();
+                        var name = Redact(property.Name);
+                        if (output.ContainsKey(name)) throw new InvalidDataException("RedactionNameCollision");
+                        if (Sensitive(property.Name))
+                        {
+                            if (depth == 32 || ++count > limits.MaxItems) throw new ArtifactLimitException();
+                            output[name] = null;
+                        }
+                        else output[name] = Visit(property.Value, depth + 1);
+                    }
+                    return output;
+                case JsonValueKind.Array:
+                    var array = new JsonArray();
+                    foreach (var item in value.EnumerateArray()) array.Add(Visit(item, depth + 1));
+                    return array;
+                case JsonValueKind.String:
+                    var text = value.GetString()!;
+                    if (text.Length > limits.MaxStringChars) throw new ArtifactLimitException();
+                    return JsonValue.Create(Redact(text));
+                case JsonValueKind.True: case JsonValueKind.False: case JsonValueKind.Number: case JsonValueKind.Null:
+                    var raw = System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(value);
+                    return IsSafeUtf8(raw) ? JsonNode.Parse(raw) : null;
+                default: throw new InvalidDataException("TraceDocumentInvalid");
+            }
+        }
+    }
+    private sealed class BoundedProjection(int limit) : Stream
+    {
+        private readonly MemoryStream memory = new();
+        public ReadOnlyMemory<byte> Bytes => memory.GetBuffer().AsMemory(0, checked((int)memory.Length));
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => memory.Length;
+        public override long Position { get => memory.Length; set => throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        { if (buffer.Length > limit - memory.Length) throw new ArtifactLimitException(); memory.Write(buffer); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if (disposing) memory.Dispose(); base.Dispose(disposing); }
+    }
+    /// <summary>Recording identity must not be rewritten. Reject a populated sensitive field.</summary>
+    public bool HasSensitiveFields(JsonElement document)
+    {
+        if (document.ValueKind == JsonValueKind.Object)
+            foreach (var property in document.EnumerateObject())
+                if (Sensitive(property.Name) && property.Value.ValueKind != JsonValueKind.Null || HasSensitiveFields(property.Value)) return true;
+        if (document.ValueKind == JsonValueKind.Array)
+            foreach (var item in document.EnumerateArray()) if (HasSensitiveFields(item)) return true;
+        return false;
+    }
+    /// <summary>Read-only admission check for an adapter's bounded final UTF-8 encoding.
+    /// Reuses the host policy matcher; does not expose secrets or change the supplied bytes.</summary>
+    public bool IsSafeUtf8(ReadOnlySpan<byte> bytes) => !ContainsUtf8Secret(bytes);
     internal bool ContainsUtf8Secret(ReadOnlySpan<byte> bytes)
     {
         var state = 0;

@@ -8,7 +8,9 @@ public enum ArtifactKind { Trace, Recording }
 public enum ArtifactState { NotExecuted, OmittedOnSuccess, CaptureFailed, SaveFailed, Saved }
 public enum PersistenceFailure { None, Cancelled, LimitExceeded, InvalidEvidence, IoFailure }
 public enum ObservationBoundary { Before, After, PrimaryDecision, AfterCleanup }
+/// <summary>Reference to the actual writer-generated observation identity, not a raw host/owner key.</summary>
 public sealed record ObservationReference(ObservationBoundary Boundary, string ObservationId);
+/// <summary>ObservationId references the writer identity above; decision/action IDs remain actual owner data.</summary>
 public sealed record DecisionReference(string DecisionId, string ObservationId, string? ActionId, string ReasonCode);
 public sealed record EffectiveSetting(string Name, string Value, string Source);
 /// <summary>Optional exact UTF-8 JSON/YAML source bytes include BOM, comments and whitespace and are never persisted.
