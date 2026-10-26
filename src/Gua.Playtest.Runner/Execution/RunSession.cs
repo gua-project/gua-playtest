@@ -107,7 +107,7 @@ public sealed class RunSession
             if (State is ExecutionState.Completing or ExecutionState.Finished) return HasQueuedTerminalEvidence;
             if (executorClosing || callerCancellation.IsCancellationRequested) return true;
             SampleLifecycle();
-            return HasQueuedTerminalEvidence;
+            return executorClosing || callerCancellation.IsCancellationRequested || HasQueuedTerminalEvidence;
         }
     }
     private bool HasQueuedTerminalEvidence
@@ -586,7 +586,8 @@ public sealed class RunSession
             if (owner.HasPendingTerminalEvidence) throw new InvalidOperationException("OperationClosed");
             lock (owner.postedExceptionGate)
             {
-                if (owner.IsConfirmingWork || owner.HasQueuedTerminalEvidence || !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running || now >= ResultDeadline)
+                if (owner.IsConfirmingWork || owner.executorClosing || owner.callerCancellation.IsCancellationRequested || owner.HasQueuedTerminalEvidence ||
+                    !IsOpen || ResultConfirmed || DispatchClosedByGoal || owner.State != ExecutionState.Running || now >= ResultDeadline || owner.lastReal >= ResultDeadline)
                     throw new InvalidOperationException("OperationClosed");
                 Actions!.BeginDispatch(index);
             }

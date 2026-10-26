@@ -14,6 +14,7 @@ public static class RunExecutor
     {
         public volatile RunStartBoundary? Boundary;
         public volatile IReadOnlyList<RunEvent> PreparationEvents = [];
+        public volatile Task? Preparation;
         public volatile Task<bool>? Execution;
         public volatile Exception? Failure;
     }
@@ -152,6 +153,18 @@ public static class RunExecutor
         if (run.Primary is null)
         {
             settlement.Begin();
+            // Only inspect an already-successful task. Mapping is the executor's
+            // own bool/certificate projection, never a new provider invocation.
+            if (evidence.Preparation is Task<T> { IsCompletedSuccessfully: true } completedPreparation)
+            {
+                try
+                {
+                    var prepared = mapPreparation(completedPreparation.Result);
+                    evidence.Boundary = prepared.Boundary;
+                    if (!prepared.Ready) evidence.PreparationEvents = [new(RunReason.ExecutionError, RunPhase.Preparation, RunOrigin.Host)];
+                }
+                catch (Exception exception) { evidence.Failure ??= exception; }
+            }
             var phase = run.State == ExecutionState.Running ? RunPhase.Execution : RunPhase.Preparation;
             var failure = evidence.Failure ?? settlement.ProviderFailure ?? settlement.Failure ?? interruption ?? (cancellationToken.IsCancellationRequested
                 ? new OperationCanceledException(cancellationToken) : new InvalidOperationException("ExecutorOwnerIncomplete"));
@@ -198,7 +211,12 @@ public static class RunExecutor
             try
             {
                 preparation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
-                    token => { preparationTask = run.RunExecutorStage(() => prepare(token)).AsTask(); return new ValueTask<T>(preparationTask); }, cancellationToken, run.RecordException, settlement).ConfigureAwait(false);
+                    token =>
+                    {
+                        preparationTask = run.RunExecutorStage(() => prepare(token)).AsTask();
+                        evidence.Preparation = preparationTask;
+                        return new ValueTask<T>(preparationTask);
+                    }, cancellationToken, run.RecordException, settlement).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && preparationTask?.IsCompletedSuccessfully == true)
             {

@@ -8,6 +8,71 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task CompletedPreparationSurvivesBlockedTokenCancellation(bool certified)
+    {
+        var clock = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), clock, clock, failure: certified ? Condition() : null);
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanup = new OwnedCleanup(); var releases = 0; var executed = false;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        void Register(CancellationToken token)
+            => token.Register(() => { entered.TrySetResult(); try { resume.Wait(); } finally { ended.TrySetResult(); } });
+        ValueTask<bool> Execute(RunSession _, CancellationToken token) { executed = true; return ValueTask.FromResult(true); }
+        var executing = certified
+            ? RunExecutor.ExecuteAsync(run, clock, cleanup, (owner, _, token) =>
+            {
+                var capture = owner.ArmRunningBoundary();
+                var boundary = capture.Certify(capture.RequestId, clock.Elapsed,
+                    new(TimeSpan.Zero, Unit("false"), Unit()), "source/completed-preparation", true);
+                Register(token); return ValueTask.FromResult(boundary);
+            }, Execute, caller.Token).AsTask()
+            : RunExecutor.ExecuteAsync(run, clock, cleanup, (_, token) =>
+                { Register(token); return ValueTask.FromResult(false); }, Execute, caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            var cancelling = RunBlockingFixture(caller.Cancel);
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(certified ? RunReason.FailureCondition : RunReason.ExecutionError, outcome.Primary.Cause.Reason);
+            Assert.Equal(RunPhase.Preparation, outcome.Primary.Cause.Phase);
+            Assert.Contains(outcome.Events, item => item.Reason == RunReason.Cancelled);
+            Assert.Equal(1, releases); Assert.False(executed); Assert.False(ended.Task.IsCompleted);
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); await cancelling.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public void FinalDispatchProbeCannotReopenClosedAdmission(int interruption)
+    {
+        var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, clock);
+        using var caller = new CancellationTokenSource(); run.BindCancellation(caller.Token); run.BeginPreparation();
+        var capture = run.ArmRunningBoundary();
+        var boundary = capture.Certify(capture.RequestId, clock.Elapsed,
+            new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/final-dispatch-probe", true);
+        var armed = false; var polls = 0;
+        boundary.InitialLifecycleFailure = () =>
+        {
+            if (armed && ++polls == 2)
+            {
+                if (interruption == 0) caller.Cancel();
+                else if (interruption == 1) run.CloseExecutorAdmission();
+                else { clock.At(TimeSpan.FromSeconds(1)); run.ReadAuthoritativeReal(); }
+            }
+            return null;
+        };
+        run.BeginRunning(boundary);
+        var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(1))!; armed = true;
+        try { operation.BeginDispatch(0); } catch (InvalidOperationException) { }
+        Assert.Equal(2, polls);
+        Assert.Equal(DeliveryState.Reserved, operation.Actions!.Deliveries[0]);
+        Assert.Equal(0, run.Budget.Snapshot.Actions); Assert.Equal(1, run.Budget.Snapshot.ReservedActions);
+    }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
     public async Task FaultedStageSurvivesBlockedTokenCancellation(bool preparation)
     {
         var clock = new CancellationArbitrationClock(); var run = new RunSession(Limits(), clock, clock);
