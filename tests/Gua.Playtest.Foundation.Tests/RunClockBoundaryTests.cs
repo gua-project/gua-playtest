@@ -404,6 +404,90 @@ public sealed partial class RunTests
         public TimeSpan Elapsed => elapsed.Elapsed;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) { Called.TrySetResult(); return ValueTask.CompletedTask; }
     }
+    [Theory]
+    [InlineData(CleanupStage.InputRelease, true)]
+    [InlineData(CleanupStage.ResourceRelease, true)]
+    [InlineData(CleanupStage.OwnershipRelease, true)]
+    [InlineData(CleanupStage.ResourceRelease, false)]
+    [InlineData(CleanupStage.Diagnostics, true)]
+    [InlineData(CleanupStage.Artifacts, true)]
+    public async Task CompletedOwnedReleaseSurvivesOwnerReadAfterCleanupExpiry(CleanupStage stage, bool confirmed)
+    {
+        var release = new TaskCompletionSource<bool>();
+        using var resumeRead = new ManualResetEventSlim();
+        var readEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = 0;
+        var clock = new EarlyWakeClock
+        {
+            Trace = name =>
+            {
+                if (name == "clock.elapsed=0" && release.Task.IsCompletedSuccessfully && Interlocked.Exchange(ref held, 1) == 0)
+                { readEntered.TrySetResult(); resumeRead.Wait(); }
+            }
+        };
+        var run = new RunSession(Limits(), clock, clock, Condition());
+        Assert.Equal(TimeSpan.FromSeconds(1), run.Limits.CleanupTimeout);
+        run.BeginPreparation(); run.BeginRunning(); var primary = run.Evaluate(Unit(), TimeSpan.Zero);
+        var cleanup = new OwnedCleanup(); var calls = 0; var cancelledEarly = false;
+        cleanup.Register(stage, token =>
+        {
+            calls++;
+            token.Register(() => { if (!release.Task.IsCompletedSuccessfully) cancelledEarly = true; });
+            return new(release.Task);
+        });
+        var finishing = cleanup.CompleteAsync(run, clock).AsTask();
+        Task? publishing = null;
+        try
+        {
+            await clock.Called.Task;
+            publishing = RunBlockingFixture(() => release.SetResult(confirmed));
+            await readEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            // Hold only the owner read, after producer completion, beyond the unchanged budget.
+            await Task.Delay(run.Limits.CleanupTimeout + TimeSpan.FromMilliseconds(100));
+            resumeRead.Set();
+            var outcome = await finishing.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal(1, calls); Assert.False(cancelledEarly); Assert.Same(primary, outcome.Primary);
+            Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+            Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid);
+            var failure = stage switch
+            {
+                CleanupStage.InputRelease => PostProcessingReason.InputReleaseUnconfirmed,
+                CleanupStage.Diagnostics => PostProcessingReason.DiagnosticsFailed,
+                CleanupStage.Artifacts => PostProcessingReason.ArtifactFailed,
+                _ => PostProcessingReason.ResourceReleaseUnconfirmed
+            };
+            var owned = stage is CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease;
+            if (owned && confirmed) Assert.DoesNotContain(outcome.PostProcessing, x => x.Reason == failure);
+            else Assert.Contains(outcome.PostProcessing, x => x.Reason == failure);
+            Assert.Equal(11, outcome.ExitCode);
+        }
+        finally
+        {
+            resumeRead.Set();
+            if (publishing is not null) await publishing.WaitAsync(TimeSpan.FromSeconds(2));
+            await finishing.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+    [Theory]
+    [InlineData(CleanupStage.InputRelease)]
+    [InlineData(CleanupStage.ResourceRelease)]
+    [InlineData(CleanupStage.OwnershipRelease)]
+    public async Task PendingOwnedReleaseCannotRepairFrozenCleanupTimeout(CleanupStage stage)
+    {
+        var clock = new EarlyWakeClock(); var run = new RunSession(Limits(), clock, clock, Condition());
+        run.BeginPreparation(); run.BeginRunning(); run.Evaluate(Unit(), TimeSpan.Zero);
+        var release = new TaskCompletionSource<bool>(); var cleanup = new OwnedCleanup(); var calls = 0;
+        cleanup.Register(stage, _ => { calls++; return new(release.Task); });
+        var outcome = await cleanup.CompleteAsync(run, clock).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        var failure = stage == CleanupStage.InputRelease
+            ? PostProcessingReason.InputReleaseUnconfirmed : PostProcessingReason.ResourceReleaseUnconfirmed;
+        Assert.Equal(1, calls); Assert.False(release.Task.IsCompleted);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == failure);
+        var snapshot = outcome.PostProcessing.ToArray();
+        release.SetResult(true);
+        Assert.Equal(snapshot, outcome.PostProcessing); Assert.Equal(11, outcome.ExitCode);
+    }
     [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
     public async Task ExpiredCleanupStillAttemptsOwnedReleaseWithoutNewWait(bool input, bool pending)
     {

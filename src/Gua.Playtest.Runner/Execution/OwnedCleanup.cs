@@ -250,9 +250,17 @@ public sealed class OwnedCleanup
             var share = TimeSpan.FromTicks(Math.Max(1, remaining.Ticks / (ordered.Length - i)));
             // Caller cancellation skips diagnostics/artifacts but never skips owned input/resource cleanup.
             var token = step.Stage is CleanupStage.Diagnostics or CleanupStage.Artifacts ? cancellationToken : CancellationToken.None;
+            var ownedReleaseStage = step.Stage is CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease;
+            Task<bool>? ownedRelease = null;
             try
             {
-                var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, step.Action, token,
+                var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, cancellation =>
+                {
+                    var work = step.Action(cancellation);
+                    if (!ownedReleaseStage) return work;
+                    ownedRelease = work.AsTask();
+                    return new(ownedRelease);
+                }, token,
                     exception => RecordStageFault(step.Stage, exception)).ConfigureAwait(false);
                 if (!result) AddIssue(new(Failure(step.Stage)));
             }
@@ -262,7 +270,12 @@ public sealed class OwnedCleanup
             }
             catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception))
             {
-                AddIssue(new(PostProcessingReason.CleanupTimeout)); AddIssue(new(Failure(step.Stage)));
+                AddIssue(new(PostProcessingReason.CleanupTimeout));
+                // Expired cleanup still owes an immediate owned release attempt. Reuse
+                // the existing invocation's already-completed confirmation, without
+                // invoking twice, waiting again, or claiming that it met its deadline.
+                if (ownedRelease?.IsCompletedSuccessfully != true || !ownedRelease.GetAwaiter().GetResult())
+                    AddIssue(new(Failure(step.Stage)));
             }
             catch (Exception exception)
             {
