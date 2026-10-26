@@ -7,6 +7,115 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Theory]
+    [InlineData(false, 0)] [InlineData(true, 0)] [InlineData(false, 1)] [InlineData(true, 1)]
+    [InlineData(false, 2)] [InlineData(true, 2)] [InlineData(false, 3)] [InlineData(true, 3)]
+    [InlineData(false, 4)] [InlineData(true, 4)]
+    public async Task ReadyProviderFaultSurvivesOwnerOnlyClockRead(bool preparation, int kind)
+    {
+        using var clock = new OwnerReadBarrierClock(); var run = new RunSession(Limits(), clock, new Clock());
+        using var caller = new CancellationTokenSource();
+        var pending = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken supplied = default;
+        ValueTask<bool> Provider(CancellationToken token)
+        { supplied = token; clock.ArmOwner(); return new(pending.Task); }
+        var cleanup = new OwnedCleanup(); var releases = 0;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, clock, cleanup,
+            (_, token) => preparation ? Provider(token) : ValueTask.FromResult(true), (_, token) => Provider(token), caller.Token).AsTask();
+        try
+        {
+            await clock.Entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Exception original;
+            try
+            {
+                if (kind == 0) throw new RunFailureException(new(preparation ? RunReason.ExecutionError : RunReason.ActionFailed,
+                    preparation ? RunPhase.Preparation : RunPhase.Execution, RunOrigin.Host), new IOException("provider fault"));
+                if (kind == 4) throw new ThrowingDeadlineData();
+                throw new OperationCanceledException(kind == 1 ? CancellationToken.None : supplied);
+            }
+            catch (Exception exception) { original = exception; }
+            if (kind == 3) pending.SetCanceled(supplied); else pending.SetException(original);
+            caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(kind is 2 or 3 ? RunReason.Cancelled : kind == 0 && !preparation ? RunReason.ActionFailed : RunReason.ExecutionError,
+                outcome.Primary.Cause.Reason);
+            Assert.Equal(preparation ? RunPhase.Preparation : RunPhase.Execution, outcome.Primary.Cause.Phase);
+            Assert.Equal(1, releases); Assert.False(clock.Returned.Task.IsCompleted);
+            Assert.Contains(outcome.Exceptions, item => item.Type == (kind == 3 ? typeof(TaskCanceledException) : original.GetType()).FullName && !string.IsNullOrEmpty(item.StackTrace));
+            clock.Resume.Set(); await clock.Returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Exceptions, run.Exceptions);
+        }
+        finally { clock.Resume.Set(); await clock.Returned.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+    private sealed class ThrowingDeadlineData : TimeoutException
+    {
+        public override System.Collections.IDictionary Data => throw new InvalidOperationException("ProviderMetadataMustNotBeRead");
+    }
+    private sealed class OwnerReadBarrierClock : IClock, IDisposable
+    {
+        private readonly AsyncLocal<bool> owner = new(); private int armed;
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Returned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim Resume { get; } = new();
+        public void ArmOwner() { owner.Value = true; Volatile.Write(ref armed, 1); }
+        public TimeSpan Elapsed
+        {
+            get
+            {
+                if (owner.Value && Interlocked.Exchange(ref armed, 0) == 1)
+                { Entered.TrySetResult(); try { Resume.Wait(); } finally { Returned.TrySetResult(); } }
+                return TimeSpan.Zero;
+            }
+        }
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => new(FiniteOperation.DelayIndependentAsync(duration, token));
+        public void Dispose() => Resume.Dispose();
+    }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task InterruptedCleanupClockValidationCannotReportFalseSuccess(bool held)
+    {
+        using var clock = new CleanupProbeBarrierClock(held); var run = new RunSession(Limits(), clock, new Clock(), Condition());
+        using var resumeDriver = new ManualResetEventSlim();
+        var published = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanup = new OwnedCleanup(); var releases = 0;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => ValueTask.FromResult(true),
+            (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
+            {
+                clock.Driver.Value = true; clock.Armed = true;
+                owner.Evaluate(Unit(), TimeSpan.Zero); published.TrySetResult();
+                try { resumeDriver.Wait(); return true; } finally { ended.TrySetResult(); }
+            }))).AsTask();
+        try
+        {
+            await published.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            if (held) await clock.Entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(ResultStatus.Passed, outcome.Primary.Status); Assert.Equal(held ? 11 : 0, outcome.ExitCode);
+            Assert.Equal(!held, outcome.PostProcessingComplete); Assert.Equal(1, releases); Assert.False(ended.Task.IsCompleted);
+            if (held) Assert.Contains(outcome.PostProcessing, item => item.Reason == PostProcessingReason.CleanupClockInvalid);
+            else Assert.DoesNotContain(outcome.PostProcessing, item => item.Reason == PostProcessingReason.CleanupClockInvalid);
+            clock.Resume.Set(); resumeDriver.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Same(outcome.Primary, run.Primary);
+        }
+        finally { clock.Resume.Set(); resumeDriver.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+    private sealed class CleanupProbeBarrierClock(bool held) : IClock, IDisposable
+    {
+        public AsyncLocal<bool> Driver { get; } = new();
+        public volatile bool Armed;
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim Resume { get; } = new();
+        public TimeSpan Elapsed
+        {
+            get { if (held && Armed && !Driver.Value) { Entered.TrySetResult(); Resume.Wait(); } return TimeSpan.Zero; }
+        }
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) => new(FiniteOperation.DelayIndependentAsync(duration, token));
+        public void Dispose() => Resume.Dispose();
+    }
+
     [Fact]
     public void RecordedWrappersCannotConsumePendingDiagnosticAllowance()
     {
@@ -439,13 +548,13 @@ public sealed partial class RunTests
             { armed = true; entered.TrySetResult(); resume.Wait(); returned.TrySetResult(); return ValueTask.FromResult(true); }
             return ExecuteAsync();
         }
-        async ValueTask<bool> ExecuteAsync()
+        ValueTask<bool> ExecuteAsync() => new(RunBlockingFixture(() =>
         {
-            await Task.Yield(); armed = true;
+            armed = true;
             if (stage == "completion") { returned.TrySetResult(); return true; }
             entered.TrySetResult();
-            await RunBlockingFixture(() => resume.Wait()); returned.TrySetResult(); return true;
-        }
+            resume.Wait(); returned.TrySetResult(); return true;
+        }));
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
         var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
         {
@@ -688,11 +797,11 @@ public sealed partial class RunTests
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
             try
             {
-                await Task.Yield(); condition.Driver.Value = true; var reads = 0;
+                condition.Driver.Value = true; var reads = 0;
                 void Read()
                 { if (++reads == (invalidEnvelope ? 1 : 3)) { entered.TrySetResult(); resume.Wait(); } else condition.OnDriverRead = Read; }
                 condition.OnDriverRead = Read;
@@ -700,7 +809,7 @@ public sealed partial class RunTests
                 return false;
             }
             finally { condition.Driver.Value = false; ended.TrySetResult(); }
-        }, caller.Token).AsTask();
+        })), caller.Token).AsTask();
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
@@ -725,11 +834,11 @@ public sealed partial class RunTests
         var confirmed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         RunSession.ApprovedOperation? operation = null;
-        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        var executing = RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
             try
             {
-                await Task.Yield(); real.Driver.Value = true;
+                real.Driver.Value = true;
                 if (kind == "planner")
                 {
                     var permit = owner.RequestPlanner()!;
@@ -749,7 +858,7 @@ public sealed partial class RunTests
                 return true;
             }
             finally { real.Driver.Value = false; ended.TrySetResult(); }
-        }, caller.Token).AsTask();
+        })), caller.Token).AsTask();
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
@@ -878,11 +987,11 @@ public sealed partial class RunTests
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
             try
             {
-                await Task.Yield(); clock.Driver.Value = true;
+                clock.Driver.Value = true;
                 if (expected is RunReason.ActionsExhausted or RunReason.GoalSatisfied)
                 {
                     var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
@@ -896,7 +1005,7 @@ public sealed partial class RunTests
                 owner.Evaluate(executionComplete: expected == RunReason.ExplorationFinished); return false;
             }
             finally { clock.Driver.Value = false; ended.TrySetResult(); }
-        }, caller.Token).AsTask();
+        })), caller.Token).AsTask();
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
@@ -989,11 +1098,10 @@ public sealed partial class RunTests
             boundary.InitialLifecycleFailure = () =>
             { if (Volatile.Read(ref armed) == 1) { entered.TrySetResult(); resume.Wait(); } return null; };
             return ValueTask.FromResult(boundary);
-        }, async (owner, _) =>
+        }, (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
             try
             {
-                await Task.Yield();
                 var operation = dispatch ? owner.ApproveOperation(1, TimeSpan.FromSeconds(1)) : null;
                 armed = 1;
                 if (dispatch) operation!.BeginDispatch(0); else owner.ApproveOperation(1, TimeSpan.FromSeconds(1));
@@ -1001,7 +1109,7 @@ public sealed partial class RunTests
             }
             catch (InvalidOperationException) when (owner.Primary is not null) { return false; }
             finally { ended.TrySetResult(); }
-        }, caller.Token).AsTask();
+        })), caller.Token).AsTask();
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
@@ -1114,9 +1222,9 @@ public sealed partial class RunTests
             cleanupPrimary = run.Primary;
             cleanupStarted.Set(); return ValueTask.FromResult(true);
         });
-        var outcome = await RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        var outcome = await RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
-            await Task.Yield(); real.Driver.Value = true;
+            real.Driver.Value = true;
             var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
             operation.BeginDispatch(0); if (confirmedSent) operation.Actions!.ConfirmSent(0);
             operation.Complete();
@@ -1131,7 +1239,7 @@ public sealed partial class RunTests
             owner.Evaluate(cancelled: !deadline);
             real.Driver.Value = false; driverEnded.TrySetResult();
             return false;
-        }, caller.Token);
+        })), caller.Token);
         Assert.NotNull(cleanupPrimary);
         Assert.Equal(ResultStatus.Failed, cleanupPrimary.Status);
         Assert.Equal(RunReason.ActionUnconfirmed, cleanupPrimary.Cause.Reason);
@@ -1153,15 +1261,15 @@ public sealed partial class RunTests
         var cleanup = new OwnedCleanup(); PrimaryResult? observed = null;
         cleanup.Register(CleanupStage.ResourceRelease, _ =>
         { observed = run.Primary; cleanupStarted.Set(); return ValueTask.FromResult(true); });
-        var outcome = await RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        var outcome = await RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
-            await Task.Yield(); real.Driver.Value = true;
+            real.Driver.Value = true;
             // The cancellation flag was sampled before this in-flight unit. A waiting
             // executor must post the new causal evidence before the unit freezes Goal.
             real.OnDriverRead = () => { caller.Cancel(); cleanupStarted.Wait(TimeSpan.FromMilliseconds(100)); };
             owner.Evaluate(Unit(), TimeSpan.Zero, cancelled: false);
             real.Driver.Value = false; return true;
-        }, caller.Token);
+        })), caller.Token);
         Assert.NotNull(observed); Assert.Equal(RunReason.Cancelled, observed.Cause.Reason);
         Assert.Equal(ResultStatus.Aborted, outcome.Primary.Status); Assert.Same(observed, outcome.Primary);
         // An interrupted, unfinished Goal unit must not manufacture success evidence.
@@ -1201,18 +1309,18 @@ public sealed partial class RunTests
         var driverEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releases = 0;
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
-        var executing = RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), async (owner, _) =>
+        var executing = RunExecutor.ExecuteAsync(run, real, cleanup, (_, _) => ValueTask.FromResult(true), (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
             try
             {
-                await Task.Yield(); real.Driver.Value = true;
+                real.Driver.Value = true;
                 var operation = owner.ApproveOperation(1, TimeSpan.FromSeconds(1))!;
                 operation.BeginDispatch(0); operation.Complete();
                 real.OnDriverRead = () => { entered.TrySetResult(); resume.Wait(); };
                 owner.Evaluate(); return false;
             }
             finally { real.Driver.Value = false; driverEnded.TrySetResult(); }
-        }, caller.Token).AsTask();
+        })), caller.Token).AsTask();
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));

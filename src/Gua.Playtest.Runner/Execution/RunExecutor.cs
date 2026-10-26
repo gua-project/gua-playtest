@@ -15,7 +15,9 @@ public static class RunExecutor
         public volatile RunStartBoundary? Boundary;
         public volatile IReadOnlyList<RunEvent> PreparationEvents = [];
         public volatile Task? Preparation;
+        public CancellationToken PreparationToken;
         public volatile Task<bool>? Execution;
+        public CancellationToken ExecutionToken;
         public volatile Exception? Failure;
     }
     public static async ValueTask<RunOutcome> ExecuteAsync(RunSession run, IClock realClock,
@@ -153,6 +155,8 @@ public static class RunExecutor
         if (run.Primary is null)
         {
             settlement.Begin();
+            await RetainCompletedFaultAsync(evidence.Preparation as Task<T>, evidence.PreparationToken, RunPhase.Preparation).ConfigureAwait(false);
+            await RetainCompletedFaultAsync(evidence.Execution, evidence.ExecutionToken, RunPhase.Execution).ConfigureAwait(false);
             // Only inspect an already-successful task. Mapping is the executor's
             // own bool/certificate projection, never a new provider invocation.
             if (evidence.Preparation is Task<T> { IsCompletedSuccessfully: true } completedPreparation)
@@ -192,6 +196,21 @@ public static class RunExecutor
         if (clockRead is not null) _ = clockRead.ContinueWith(task => _ = task.Exception, CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         return await cleanup.CompleteAsync(run, run.AuthoritativeRealClock, cancellationToken, confirmPrimary, settlement).ConfigureAwait(false);
+
+        async ValueTask RetainCompletedFaultAsync<TValue>(Task<TValue>? task, CancellationToken suppliedToken, RunPhase phase)
+        {
+            // Terminal Task states are stable. This await cannot invoke a provider,
+            // read a clock or wait for unfinished work; reuse the waiter's normalization.
+            if (task is null || !task.IsFaulted && !task.IsCanceled) return;
+            try { _ = await FiniteOperation.AwaitProviderAsync(task, suppliedToken, cancellationToken, settlement).ConfigureAwait(false); }
+            catch (Exception exception)
+            {
+                var reason = exception is OperationCanceledException canceled && cancellationToken.IsCancellationRequested && canceled.CancellationToken == cancellationToken
+                    ? RunReason.Cancelled : FiniteOperation.IsDeadline(exception)
+                        ? phase == RunPhase.Preparation ? RunReason.PreparationTimeout : RunReason.MaxDuration : RunReason.ExecutionError;
+                run.PostProviderFailure(exception, exception is RunFailureException typed ? typed.Cause : new(reason, phase, RunOrigin.Runner));
+            }
+        }
     }
 
     private static async ValueTask DriveCoreAsync<T>(RunSession run, IClock realClock,
@@ -213,6 +232,7 @@ public static class RunExecutor
                 preparation = await FiniteOperation.RunUntilAsync(realClock, run.NextRealEvaluationAt,
                     token =>
                     {
+                        evidence.PreparationToken = token;
                         preparationTask = run.RunExecutorStage(() => prepare(token)).AsTask();
                         evidence.Preparation = preparationTask;
                         return new ValueTask<T>(preparationTask);
@@ -270,7 +290,12 @@ public static class RunExecutor
                     if (run.State == ExecutionState.Preparing) run.BeginRunning();
                     var deadline = run.RunningOrigin!.Value + run.Limits.MaxDuration;
                     var complete = await FiniteOperation.RunUntilAsync(realClock, deadline,
-                        token => { evidence.Execution = run.RunExecutorStage(() => execute(run, token)).AsTask(); return new ValueTask<bool>(evidence.Execution); },
+                        token =>
+                        {
+                            evidence.ExecutionToken = token;
+                            evidence.Execution = run.RunExecutorStage(() => execute(run, token)).AsTask();
+                            return new ValueTask<bool>(evidence.Execution);
+                        },
                         cancellationToken, run.RecordException, settlement).ConfigureAwait(false);
                     // Provider cancellation callbacks settle before primary publication.
                     // The independent owner controller still bounds this synchronous arbitration.

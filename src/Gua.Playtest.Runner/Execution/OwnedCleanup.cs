@@ -194,7 +194,7 @@ public sealed class OwnedCleanup
             var probe = Task.Factory.StartNew(run.ReadAuthoritativeReal, CancellationToken.None,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
             var allowance = TimeSpan.FromTicks(Math.Max(1, settlement.CleanupRemaining.Ticks / (ordered.Length + 1)));
-            await Task.WhenAny(probe, FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
+            var winner = await Task.WhenAny(probe, FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
             if (probe.IsFaulted)
             {
                 var exception = probe.Exception!.InnerException!;
@@ -203,6 +203,8 @@ public sealed class OwnedCleanup
                     new(original.GetType().FullName ?? original.GetType().Name,
                         new StackTrace(original, true).ToString().TrimEnd('\r', '\n'))));
             }
+            else if (winner != probe || !probe.IsCompletedSuccessfully)
+                AddIssue(new(PostProcessingReason.CleanupClockInvalid));
             _ = probe.ContinueWith(task => _ = task.Exception, CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
@@ -300,14 +302,14 @@ internal sealed class ClockProviderException(Exception? original = null) : Excep
 
 public static class FiniteOperation
 {
-    private static readonly object deadlineProvenance = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TimeoutException, object> deadlineProvenance = new();
     internal static TimeoutException DeadlineReached(string code)
     {
         var exception = new TimeoutException(code);
-        exception.Data[deadlineProvenance] = true;
+        deadlineProvenance.Add(exception, new());
         return exception;
     }
-    internal static bool IsDeadline(Exception exception) => exception is TimeoutException && exception.Data.Contains(deadlineProvenance);
+    internal static bool IsDeadline(Exception exception) => exception is TimeoutException timeout && deadlineProvenance.TryGetValue(timeout, out _);
     public static ValueTask<T> RunAsync<T>(IClock realClock, TimeSpan timeout,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken = default, Action<Exception>? recordException = null)
     {
@@ -449,7 +451,7 @@ public static class FiniteOperation
             : new ProviderCancellationException(exception);
     internal static async ValueTask<T> AwaitProviderAsync<T>(Task<T> task, CancellationToken providerToken, CancellationToken callerToken)
         => await AwaitProviderAsync(task, providerToken, callerToken, null).ConfigureAwait(false);
-    private static async ValueTask<T> AwaitProviderAsync<T>(Task<T> task, CancellationToken providerToken, CancellationToken callerToken,
+    internal static async ValueTask<T> AwaitProviderAsync<T>(Task<T> task, CancellationToken providerToken, CancellationToken callerToken,
         ExecutionSettlement? settlement)
     {
         try { return await task.ConfigureAwait(false); }
