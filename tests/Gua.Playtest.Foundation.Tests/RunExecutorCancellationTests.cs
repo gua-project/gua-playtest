@@ -7,6 +7,84 @@ namespace Gua.Playtest.Foundation.Tests;
 
 public sealed partial class RunTests
 {
+    [Fact]
+    public void RecordedWrappersCannotConsumePendingDiagnosticAllowance()
+    {
+        var clock = new Clock(); var limits = Limits();
+        var run = new RunSession(new(limits.MaxDuration, limits.PreparationTimeout, limits.CleanupTimeout,
+            limits.PlannerTimeout, limits.WaitTimeout, limits.ActionTimeout, limits.MaxActions,
+            limits.MaxDecisions, limits.RecoveryDecisions, 32), clock, clock);
+        run.BeginPreparation(); run.BeginRunning();
+        Exception recorded = new IOException();
+        for (var index = 0; index < 4; index++) recorded = new AggregateException(recorded);
+        run.RecordException(recorded);
+        for (var index = 0; index < 24; index++) run.RecordException(new IOException());
+        Assert.Equal(29, run.Exceptions.Count);
+        run.RecordException(new AggregateException(recorded, new AggregateException(new IOException())));
+        Assert.Equal(32, run.Exceptions.Count);
+        Assert.Equal(6, run.Exceptions.Count(item => item.Type == typeof(AggregateException).FullName));
+        Assert.Equal(26, run.Exceptions.Count(item => item.Type == typeof(IOException).FullName));
+    }
+
+    [Fact]
+    public void RepeatedDiagnosticIdentityDoesNotMergeDistinctEqualEvidence()
+    {
+        var clock = new Clock(); var run = Running(clock);
+        var first = new IOException(); var second = new IOException();
+        run.RecordException(first); run.RecordException(first); run.RecordException(second);
+        Assert.Equal(2, run.Exceptions.Count);
+        Assert.Equal(run.Exceptions[0], run.Exceptions[1]);
+        try { throw first; } catch (IOException) { run.RecordException(first); }
+        Assert.Equal(2, run.Exceptions.Count);
+        Assert.Equal(first.StackTrace, run.Exceptions[0].StackTrace);
+    }
+
+    [Theory] [InlineData(32)] [InlineData(64)]
+    public async Task InterruptedDiagnosticTraversalRetainsEveryDistinctLeaf(int evidenceLimit)
+    {
+        var clock = new CancellationArbitrationClock(); var limits = Limits();
+        limits = new(limits.MaxDuration, limits.PreparationTimeout, limits.CleanupTimeout,
+            limits.PlannerTimeout, limits.WaitTimeout, limits.ActionTimeout, limits.MaxActions,
+            limits.MaxDecisions, limits.RecoveryDecisions, evidenceLimit);
+        var run = new RunSession(limits, clock, clock);
+        using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var leaf = new InterruptedDiagnosticLeaf(entered, resume);
+        try { throw leaf; } catch (InterruptedDiagnosticLeaf) { }
+        var leaves = Enumerable.Range(0, 28).Select(_ => (Exception)new IOException()).Append(leaf).ToArray();
+        var failure = new RunFailureException(new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host), new AggregateException(leaves));
+        var cleanup = new OwnedCleanup(); var releases = 0;
+        cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
+        var executing = RunExecutor.ExecuteAsync(run, clock, cleanup, (_, _) => ValueTask.FromResult(true),
+            (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
+            {
+                try { owner.PostProviderException(failure); owner.Evaluate(); return false; }
+                finally { ended.TrySetResult(); }
+            })), caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1)); caller.Cancel();
+            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InterruptedDiagnosticLeaf).FullName && !string.IsNullOrEmpty(item.StackTrace));
+            Assert.Equal(failure.Cause, outcome.Primary.Cause); Assert.Equal(1, releases); Assert.False(ended.Task.IsCompleted);
+            if (evidenceLimit == 32)
+            {
+                Assert.Equal(32, outcome.Exceptions.Count);
+                Assert.Equal(28, outcome.Exceptions.Count(item => item.Type == typeof(IOException).FullName));
+                Assert.Single(outcome.Exceptions, item => item.Type == typeof(RunFailureException).FullName);
+                Assert.Single(outcome.Exceptions, item => item.Type == typeof(AggregateException).FullName);
+            }
+            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(outcome.Exceptions, run.Exceptions); Assert.Same(outcome.Primary, run.Primary);
+        }
+        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+    private sealed class InterruptedDiagnosticLeaf(TaskCompletionSource entered, ManualResetEventSlim resume) : Exception
+    {
+        public override string? StackTrace { get { entered.TrySetResult(); resume.Wait(); return base.StackTrace; } }
+    }
+
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task CompletedPreparationSurvivesBlockedTokenCancellation(bool certified)
     {

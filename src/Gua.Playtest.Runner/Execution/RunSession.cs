@@ -64,6 +64,10 @@ public sealed class RunSession
     private readonly List<RunEvent> events = [];
     private readonly List<RunEvent> pendingEvents = [];
     private readonly List<ExceptionEvidence> exceptions = [];
+    // Weak identity keys avoid retaining raw provider graphs after traversal.
+    // Successful insertions are bounded by the evidence list's existing ceiling.
+    private sealed record RecordedException(int Index);
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, RecordedException> recordedExceptions = new();
     private readonly object postedExceptionGate = new();
     private readonly Queue<(Exception Exception, RunEvent? Cause)> postedExceptions = new();
     private bool postedExceptionsClosed;
@@ -971,6 +975,7 @@ public sealed class RunSession
                 else
                 {
                     if (ReferenceEquals(current, exception)) Record(current);
+                    else if (recordedExceptions.TryGetValue(current, out _)) Record(current);
                     else if (wrappers.Count < remaining) wrappers.Add(current);
                     frames.Push(children.GetEnumerator());
                 }
@@ -989,8 +994,16 @@ public sealed class RunSession
             var stack = emergency ? trace!.FrameCount == 0 ? null : trace.ToString().TrimEnd('\r', '\n') : current.StackTrace;
             var evidence = new ExceptionEvidence(current.GetType().FullName ?? current.GetType().Name, stack);
             lock (arbitrationGate)
-                if ((emergency || !ExecutionDiagnosticsRevoked && State != ExecutionState.Finished) && exceptions.Count < Limits.MaxEvidenceItems)
-                    exceptions.Add(evidence);
+                if (emergency || !ExecutionDiagnosticsRevoked && State != ExecutionState.Finished)
+                {
+                    if (recordedExceptions.TryGetValue(current, out var recorded))
+                        exceptions[recorded.Index] = evidence; // retain a rethrow's current stack without another slot
+                    else if (exceptions.Count < Limits.MaxEvidenceItems)
+                    {
+                        recordedExceptions.Add(current, new(exceptions.Count));
+                        exceptions.Add(evidence);
+                    }
+                }
         }
     }
 
