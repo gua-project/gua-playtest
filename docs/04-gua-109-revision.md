@@ -1,5 +1,11 @@
 > 履歴注記 2026-10-06: 以下は起票前改訂案。Gua #109および#123〜#128は1.1.1で実装済み。Playtestは現行GuaTraceSession/Reader/Reportとschemaを再利用し、この案を第二Trace実装の依頼にしない。
 
+## Trace の責務を理解するための履歴
+
+この文書は Gua の共通Traceを設計した起票前改訂案です。現行APIの使い方は公開Guaと [artifacts.md](artifacts.md)を参照し、この案のAPI新設をもう一度実装しないでください。
+
+購入テストでは、操作と応答、観測、判定を同じ時系列で関連付けると「操作が届かなかった」のか「取引後の応答が失われた」のかを調べられます。Trace自体が購入のGoalを採点するわけではありません。下記のsession／step／eventは調査の構成、PlaytestのScenario／Run／Resultは目的と判定の構成です。読む順番は [開発者ガイド](developer-guide.ja.md)から辿れます。
+
 # Gua #109 改訂本文案
 
 ## 概要
