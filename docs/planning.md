@@ -1,5 +1,13 @@
 # Planner exchange and adoption boundary (issue #11)
 
+## 提案を操作権限に変える境界
+
+Planner は「公開された店のボタンを押す」と提案できますが、合否、権限、現在の対象を決定しません。観測後にボタンが差し替わった場合、JSONの形が正しくても古い対象へ入力してはいけません。Runner は完了した一件の応答を照合し、許可・対象・定義・時計・予算を確認して採用し、送信直前にも再確認します。
+
+[PlannerGate.Begin / Adopt](../src/Gua.Playtest.Runner/Planning/PlannerGate.cs)から [PlannerContracts](../src/Gua.Playtest.Runner/Planning/PlannerContracts.cs)の `ProjectedPlannerState`、`PlannerRequest`、`IPlannerAuthority` を読んでください。公開投影には目的・承認された観測・残予算を渡し、採点の期待値やfixtureの秘密を渡しません。[PlannerTurn.AwaitAsync](../src/Gua.Playtest.Runner/Planning/PlannerTurn.cs)は応答待ちにも失敗条件・期限・取消を監視します。[PlannerGateTests](../tests/Gua.Playtest.Foundation.Tests/PlannerGateTests.cs)が古い応答、二重採用、部分実行、公開範囲の拒否例です。
+
+gate の確認だけでは、確認とホストenqueueの間の競合や実Plannerのファイルアクセスを隔離できません。具体的なguardと隔離の残条件は下記と [gua-bridge.md](gua-bridge.md)を参照してください。形式検査、採用、実Codex接続の役割は [開発者ガイド](developer-guide.ja.md)で説明します。
+
 `Gua.Playtest.Runner.Planning` is owned by the serialized Run driver. Core's
 `PlannerExchange.Validate` validates a **completed** UTF-8 JSON document with
 the existing bounded decoder, offline pinned schemas and semantic validator.

@@ -1,3 +1,39 @@
+# Gua Playtest 開発者向け文書
+
+初めて読む場合は [開発者ガイド](developer-guide.ja.md)から始めてください。購入テストの例で、目的・観測・提案・入力・判定・保存を追い、実在する型・関数とローカル確認手順へ進めます。
+
+## 現在の契約と実装を読む
+
+| 文書 | この文書で分かること |
+| --- | --- |
+| [contracts.md](contracts.md) | Scenario・Environment・Plan・交換文書・結果の形、固定参照、静的検証 |
+| [assertions.md](assertions.md) | 元のGua Valueの型を保った比較、三値と違反の区別 |
+| [conditions.md](conditions.md) | 複数対象、all／any、時間条件と連続観測の履歴 |
+| [preparation.md](preparation.md) | launch／attach、承認Setup、開始identity、所有権 |
+| [execution.md](execution.md) | Runの状態、合否の確定、期限・予算・監視・後処理 |
+| [gua-bridge.md](gua-bridge.md) | Guaへの観測と入力の接続、epoch・profile・完了確認・公開版の限界 |
+| [planning.md](planning.md) | 公開Planner入力、提案の採用、送信直前確認、実隔離との境界 |
+| [artifacts.md](artifacts.md) | 結果とGua成果物の参照保存、redaction、読戻し、後処理失敗 |
+| [fixture-evidence.md](fixture-evidence.md) | 事前固定caseと故障注入、独立oracle、実ゲームに必要な証拠 |
+| [schemas](schemas/) | 機械可読の文書・交換形式。schema適合と実行許可・Goal判定は別 |
+
+各契約の日本語導入から詳細本文へ進めます。導入は読み方の説明で、フィールドや終了規則の正本を置き換えません。実コードとテストの参照を合わせて、ライブラリAPI、公開CLI、実ゲーム接続の完成範囲を確認してください。
+
+## 設計と作業分割の経緯を読む
+
+| 資料 | 読み方 |
+| --- | --- |
+| [01-spec-ledger.md](01-spec-ledger.md) | 要件IDと受け入れ計画。当初の未実行表記を現在の全件実装状況と混同しない |
+| [02-issue-plan.md](02-issue-plan.md) | 起票前の担当・依存案。実Issue対応には下記の機械可読台帳を使う |
+| [03-open-decisions.md](03-open-decisions.md) | 境界・数値・方式の決定事項と解決先契約 |
+| [04-gua-109-revision.md](04-gua-109-revision.md) | Gua共通Traceの改訂案の履歴。現行Traceを重複実装する指示にはしない |
+| [traceability.json](traceability.json) | 要件、作業案、実Issue対応を結ぶデータ |
+| [checks.json](checks.json) | 起票準備資料のID・参照・依存整合性記録 |
+
+以下は起票準備パックの原文です。作成日時や当時の確認範囲を含めて履歴として読み、現在の機能の使い方には上の契約とコードを参照してください。
+
+---
+
 > 現在の契約: [contracts.md](contracts.md)、[schema](schemas/)。実Issue対応と追加DASH要件はtraceability.json。以下のreview-ledger-r1の起票前情報は履歴であり、2026-10-06の明示実装許可と区別する。現行Gua参照はgua-v1.1.1 / 88f5dca4aa97c5d5187ab66ea4416377f3affc96。
 
 # Gua Playtest 合意仕様・起票準備パック

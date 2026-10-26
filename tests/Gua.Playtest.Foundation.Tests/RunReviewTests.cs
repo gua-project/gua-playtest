@@ -270,9 +270,11 @@ public sealed partial class RunTests
         var clock = new Clock(); using var cancel = new CancellationTokenSource(); var pending = new TaskCompletionSource<bool>();
         var capturePending = new TaskCompletionSource<RunObservation>(); var workPending = new TaskCompletionSource<int>();
         var run = new RunSession(Limits(), clock, clock); RunOutcome outcome;
+        var providerEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         ValueTask<bool> Provider(CancellationToken token)
         {
             token.Register(() => throw new IOException("callback"));
+            providerEntered.TrySetResult();
             return ending == 2 ? ValueTask.FromResult(true) : new(pending.Task);
         }
         void Interrupt() { if (ending == 0) cancel.Cancel(); else if (ending == 1) clock.At(boundary == 0 || boundary == 3 ? 1000 : 5000); }
@@ -280,6 +282,7 @@ public sealed partial class RunTests
         {
             var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(),
                 (_, token) => boundary == 0 ? Provider(token) : ValueTask.FromResult(true), (_, token) => Provider(token), cancel.Token).AsTask();
+            await providerEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
             Interrupt(); outcome = await executing;
         }
         else if (boundary == 2)
@@ -425,17 +428,14 @@ public sealed partial class RunTests
     [Fact]
     public async Task FalseExecutionFallbackRetainsCancellationAfterFirstEvaluationSample()
     {
-        using var cancel = new CancellationTokenSource(); var real = new LaunchReadClock(); var condition = new Clock();
-        var run = new RunSession(Limits(), real, condition); int reads = 0;
+        using var cancel = new CancellationTokenSource(); var real = new CancellationArbitrationClock(); var condition = new Clock();
+        var run = new RunSession(Limits(), real, condition);
         var result = await RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(), (_, _) => ValueTask.FromResult(true), (_, _) =>
         {
-            void Read()
-            {
-                // Two finite-operation reads precede Evaluate's real-clock read. Its cancellation
-                // argument has already been sampled when this third read interrupts the caller.
-                if (++reads == 3) cancel.Cancel(); else real.OnRead = Read;
-            }
-            real.OnRead = Read; return ValueTask.FromResult(false);
+            // Tag the owner context so timer reads cannot trigger this fixture.
+            // Evaluate has sampled its cancellation argument before its first read.
+            real.Driver.Value = true; real.OnDriverRead = cancel.Cancel;
+            return ValueTask.FromResult(false);
         }, cancel.Token);
         Assert.Equal(10, result.ExitCode); Assert.Equal(RunReason.ExecutionError, result.Primary.Cause.Reason);
         Assert.Contains(result.Events, x => x.Reason == RunReason.Cancelled && x.Origin == RunOrigin.User);
@@ -596,8 +596,11 @@ public sealed partial class RunTests
         var owner = new Clock(); owner.At(10000); var foreign = new Clock();
         var run = new RunSession(Limits(), owner, owner); var pending = new TaskCompletionSource<bool>(); bool released = false;
         var cleanup = new OwnedCleanup(); cleanup.Register(CleanupStage.ResourceRelease, _ => { released = true; return ValueTask.FromResult(true); });
-        var executing = RunExecutor.ExecuteAsync(run, foreign, cleanup, (_, _) => execution ? ValueTask.FromResult(true) : new(pending.Task),
-            (_, _) => new(pending.Task)).AsTask();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executing = RunExecutor.ExecuteAsync(run, foreign, cleanup, (_, _) =>
+        { if (!execution) entered.TrySetResult(); return execution ? ValueTask.FromResult(true) : new(pending.Task); },
+            (_, _) => { entered.TrySetResult(); return new(pending.Task); }).AsTask();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
         owner.At(execution ? 15000 : 11000);
         var result = await executing; Assert.True(released);
         Assert.Equal(execution ? RunReason.MaxDuration : RunReason.PreparationTimeout, result.Primary.Cause.Reason);
