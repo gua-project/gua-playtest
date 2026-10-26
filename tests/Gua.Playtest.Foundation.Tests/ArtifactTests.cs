@@ -29,6 +29,46 @@ public sealed class ArtifactTests : IDisposable
         [new("OriginalType", Secret)]).Saved);
 
     [Theory]
+    [InlineData(PostProcessingReason.PrimarySnapshotFailed)] [InlineData(PostProcessingReason.DiagnosticsFailed)]
+    [InlineData(PostProcessingReason.ArtifactFailed)] [InlineData(PostProcessingReason.InputReleaseUnconfirmed)]
+    [InlineData(PostProcessingReason.ResourceReleaseUnconfirmed)] [InlineData(PostProcessingReason.Cancelled)]
+    [InlineData(PostProcessingReason.CleanupTimeout)] [InlineData(PostProcessingReason.CleanupClockInvalid)]
+    [InlineData(PostProcessingReason.EvidenceLimitExceeded)]
+    public async Task Typed_postprocessing_reasons_survive_literal_and_named_policy(PostProcessingReason reason)
+    {
+        var code = reason.ToString(); var store = RunArtifactStore.Create(root, Limits, new([code], ["reasons"]));
+        Assert.True(store.BeginPreparation(new("public", [], new Dictionary<string, string>(),
+            [new("input", JsonSerializer.SerializeToElement(new { reasons = new[] { code } }))])).Saved); Confirm(store);
+        using var input = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+        Assert.Equal(JsonValueKind.Null, input.RootElement.GetProperty("inputs")[0].GetProperty("document").GetProperty("reasons").ValueKind);
+        var original = Outcome() with { PostProcessing = [new(reason, new(code, code))] };
+        var result = store.Complete(original, Omitted, [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(reason == PostProcessingReason.Cancelled ? 0 : 11, result.ExitCode(original));
+        var read = await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits);
+        Assert.Equal(ResultReadState.Verified, read.State);
+        Assert.Equal([code], read.Result!.PostProcessing.Reasons);
+        using var completion = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "completion.json")));
+        var issue = completion.RootElement.GetProperty("postProcessing")[0];
+        Assert.Equal(code, issue.GetProperty("reason").GetString());
+        Assert.Equal("", issue.GetProperty("exception").GetProperty("type").GetString());
+        Assert.Equal("", issue.GetProperty("exception").GetProperty("stackTrace").GetString());
+        Assert.Equal([reason], original.PostProcessing.Select(x => x.Reason));
+    }
+
+    [Theory]
+    [InlineData(ArtifactState.CaptureFailed)] [InlineData(ArtifactState.SaveFailed)]
+    public async Task Generated_artifact_failure_reason_remains_valid_evidence(ArtifactState state)
+    {
+        var store = RunArtifactStore.Create(root, Limits, new(["ArtifactFailed"], [])); Confirm(store);
+        var original = Outcome(); var result = store.Complete(original,
+            [new(ArtifactKind.Trace, state), new(ArtifactKind.Recording, ArtifactState.NotExecuted)], [], DateTimeOffset.UtcNow);
+        Assert.True(result.Saved); Assert.Equal(11, result.ExitCode(original));
+        var read = await RunArtifactReader.ReadResultAsync(store.DirectoryPath, Limits);
+        Assert.Equal(ResultReadState.Verified, read.State);
+        Assert.Equal(["ArtifactFailed"], read.Result!.PostProcessing.Reasons);
+    }
+
+    [Theory]
     [InlineData("Approved", true)] [InlineData("PRIVATE_CODE", false)]
     public void Only_defined_public_planner_codes_bypass_real_text_policy(string code, bool saved)
     {

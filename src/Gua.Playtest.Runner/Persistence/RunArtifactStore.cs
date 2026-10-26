@@ -346,6 +346,22 @@ public sealed class RunArtifactStore
         {
             return null;
         }
+        if (value is PostProcessingResult postProcessing)
+        {
+            if (postProcessing.Reasons is null) throw new InvalidDataException("PostProcessingReasonsInvalid");
+            if (postProcessing.Reasons.Length > limits.MaxItems) throw new ArtifactLimitException();
+            // The public wire model uses strings; restore their owner-issued enum
+            // classification before final encoding, without trusting input JSON fields.
+            var reasons = new PostProcessingReason[postProcessing.Reasons.Length];
+            for (var i = 0; i < reasons.Length; i++)
+                if (!Enum.TryParse(postProcessing.Reasons[i], out reasons[i]) || !Enum.IsDefined(reasons[i]) ||
+                    reasons[i].ToString() != postProcessing.Reasons[i])
+                    throw new InvalidDataException("PostProcessingReasonInvalid");
+            var obj = new JsonObject();
+            Add(obj, "complete", postProcessing.Complete, ref count, depth, structural: true);
+            Add(obj, "reasons", reasons, ref count, depth, structural: true);
+            return obj;
+        }
         if (value is EffectiveSetting setting)
         {
             var obj = new JsonObject();
