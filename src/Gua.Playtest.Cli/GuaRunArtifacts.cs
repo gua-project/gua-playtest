@@ -44,16 +44,26 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
             limits.MaxItems, text => recordingRedactor.Redact(text) == text,
             bytes => SafeRecordingEncoding(recordingRedactor, bytes),
             document => recordingRedactor.RedactDocument(document, limits),
-            recordingRedactor.IsSensitiveField, recordingRedactor.Redact, limits.MaxStringChars, limits.MaxItems,
-            recordingRedactor.IsSafeGeneratedTokens, recordingRedactor.IsSafeCompositionBoundary);
+            recordingRedactor.IsSensitiveField, recordingRedactor.Redact, limits.MaxStringChars, limits.MaxItems);
         PreparationPersistence = store.BeginPreparation(metadata, token);
     }
     private static bool SafeRecordingEncoding(PersistenceRedactor redactor, ReadOnlyMemory<byte> bytes)
     {
-        if (!redactor.IsSafeUtf8(bytes.Span)) return false;
         using var document = JsonDocument.Parse(bytes);
-        return !redactor.HasSensitiveFields(document.RootElement) &&
-            !redactor.IsSensitiveField("recording") && !redactor.IsSensitiveField("index");
+        // The public Recording schema and enum/scalar identities are trusted format.
+        // Only populated input/target values are checked by the writer and here.
+        foreach (var step in document.RootElement.GetProperty("steps").EnumerateArray())
+            foreach (var property in step.EnumerateObject())
+            {
+                if (property.Name is "value" or "waitCondition" or "secretKey" &&
+                    property.Value.ValueKind != JsonValueKind.Null && redactor.IsSensitiveField(property.Name)) return false;
+                if (property.Name == "target" && property.Value.ValueKind == JsonValueKind.Object)
+                {
+                    if (redactor.IsSensitiveField("target")) return false;
+                    if (property.Value.EnumerateObject().Any(x => redactor.IsSensitiveField(x.Name) && x.Value.ValueKind != JsonValueKind.Null)) return false;
+                }
+            }
+        return true;
     }
 
     public void Record(PreparationEvent evidence)

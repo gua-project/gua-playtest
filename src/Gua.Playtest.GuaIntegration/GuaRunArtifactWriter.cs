@@ -24,7 +24,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     private readonly string profile;
     private readonly int maxFileBytes, maxFiles, maxStringChars, maxJsonNodes;
     private readonly long maxBundleBytes;
-    private readonly Func<string, bool> safeRecordingText;
+    private readonly Func<string, bool> safeRecordingText, sensitiveField;
     private readonly Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding;
     private GuaTraceOutcome? primary;
     private bool completed, unsafeRecording, flushedSuccessfully;
@@ -33,16 +33,13 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
     public GuaRunArtifactWriter(string runDirectory, GuaTraceOptions options,
         int maxFileBytes, long maxBundleBytes, int maxFiles, Func<string, bool> safeRecordingText,
         Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding, Func<JsonElement, JsonElement> redact,
-        Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars, int maxJsonNodes,
-        Func<string, int, string, string, bool> safeGeneratedTokens, Func<string, bool> safeCompositionBoundary)
+        Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars, int maxJsonNodes)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(safeRecordingText);
         ArgumentNullException.ThrowIfNull(safeRecordingEncoding);
         ArgumentNullException.ThrowIfNull(redact); ArgumentNullException.ThrowIfNull(sensitiveField);
-        ArgumentNullException.ThrowIfNull(redactText); ArgumentNullException.ThrowIfNull(safeGeneratedTokens);
-        ArgumentNullException.ThrowIfNull(safeCompositionBoundary);
-        GuaRunTrace.ValidatePolicy(sensitiveField, safeRecordingText, safeGeneratedTokens, safeCompositionBoundary);
+        ArgumentNullException.ThrowIfNull(redactText);
         // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
         // Its artifact budget must fit one file; its separate manifest reserve must too.
         if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 3 ||
@@ -56,6 +53,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         this.maxStringChars = maxStringChars;
         this.maxJsonNodes = maxJsonNodes;
         this.safeRecordingText = safeRecordingText;
+        this.sensitiveField = sensitiveField;
         this.safeRecordingEncoding = safeRecordingEncoding;
         policy = options.SavePolicy; profile = options.Profile;
         // The supplied parent is the trusted private artifact root. Gua writes its
@@ -174,48 +172,21 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             var recordingFiles = recordingBundle.State == GuaArtifactState.Saved
                 ? 1 + (recordingBundle.AdditionalFiles?.Count ?? 0) : 0;
             var manifestBundle = Inventory(Trace.ArtifactPath, Path.Combine(Trace.ArtifactPath, "manifest.json"), reserve: 1 + recordingFiles);
-            using var viewer = typeof(GuaTraceReport).Assembly.GetManifestResourceStream("Gua.Trace.Viewer.js")
-                ?? throw new IOException("ViewerUnavailable");
             var existingBytes = manifestBundle.Entry!.Bytes + manifestBundle.AdditionalFiles!.Sum(x => x.Bytes);
             var recordingBytes = (recordingBundle.Entry?.Bytes ?? 0) + (recordingBundle.AdditionalFiles?.Sum(x => x.Bytes) ?? 0);
-            // Admission only: reproduce the pinned 1.1.1 HTML encoding in a bounded
-            // buffer, including static viewer/envelope and token boundaries. Gua remains
-            // the only report writer; refuse collisions before it creates any HTML file.
-            using var scriptReader = new StreamReader(viewer, Encoding.UTF8);
-            if (viewer.Length > maxFileBytes) return new(new(GuaArtifactState.SaveFailed), recordingBundle);
-            var script = scriptReader.ReadToEnd();
-            using var admission = ReportAdmission(read, script);
-            if (admission.Length > maxBundleBytes - existingBytes - recordingBytes)
+            var remaining = maxBundleBytes - existingBytes - recordingBytes;
+            if (remaining <= 0) return new(new(GuaArtifactState.SaveFailed), recordingBundle);
+            // Gua owns HTML/CSP/escaping and bounds its output before returning bytes.
+            // The exact reader snapshot is rendered once; no second read or renderer.
+            var rendered = GuaTraceReport.RenderHtml(read, checked((int)Math.Min(maxFileBytes, remaining)));
+            if (!rendered.Succeeded || rendered.Utf8Html is null)
                 return new(new(GuaArtifactState.SaveFailed), recordingBundle);
-            if (!safeRecordingText(Encoding.UTF8.GetString(admission.Bytes.Span)))
-                return new(new(GuaArtifactState.CaptureFailed), recordingBundle);
             var reportPath = Path.Combine(Trace.ArtifactPath, "report.html");
-            if (!GuaTraceReport.WriteHtml(Trace.ArtifactPath, reportPath).Succeeded)
-                return new(new(GuaArtifactState.SaveFailed), recordingBundle);
-            if (!File.ReadAllBytes(reportPath).AsSpan().SequenceEqual(admission.Bytes.Span))
-                return new(new(GuaArtifactState.SaveFailed), recordingBundle);
+            using (var file = new FileStream(reportPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            { file.Write(rendered.Utf8Html); file.Flush(flushToDisk: true); }
             return new(Inventory(Trace.ArtifactPath, reportPath, reserve: recordingFiles), recordingBundle);
         }
         catch { return new(new(GuaArtifactState.SaveFailed), recordingBundle); }
-    }
-
-    private BoundedEncoding ReportAdmission(GuaTraceReadResult read, string script)
-    {
-        var output = new BoundedEncoding(maxFileBytes);
-        try
-        {
-            var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(script)));
-            Text("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-            Text("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'sha256-" + hash + "'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'\">");
-            Text("<title>Gua Trace Viewer v1</title></head><body style=\"background:#121926;color:#e7eaf1;font-family:system-ui\"><div id=\"root\"></div>");
-            Text("<script type=\"application/json\" id=\"gua-trace-data\">");
-            JsonSerializer.Serialize(output, read, new JsonSerializerOptions(JsonSerializerDefaults.Web)
-                { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
-            Text("</script><script>"); Text(script); Text("</script></body></html>");
-            return output;
-        }
-        catch { output.Dispose(); throw; }
-        void Text(string text) => output.Write(Encoding.UTF8.GetBytes(text));
     }
 
     private GuaArtifactBundle SaveRecording(GuaRecording? recording, bool captureFailed)
@@ -238,12 +209,29 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
                     step.Target?.Scope, step.WaitCondition, step.Value, step.SecretKey })
                     if (text is not null && (text.Length > maxStringChars || !safeRecordingText(text)))
                     { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
+            // Named-sensitive real inputs must be refused before admission encoding,
+            // native attachments or Recording buffers. Fixed schema/action spelling
+            // and Gua-generated encoding are outside this data policy.
+            foreach (var step in recording.Steps)
+            {
+                if (sensitiveField("steps") || step.Target is not null && sensitiveField("target") ||
+                    step.CoordinateFallback is not null && (sensitiveField("coordinateFallback") || sensitiveField("x") || sensitiveField("y")))
+                { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
+                foreach (var (name, value) in new (string, object?)[] {
+                    ("id", step.Target?.Id), ("role", step.Target?.Role), ("name", step.Target?.Name), ("scope", step.Target?.Scope),
+                    ("currentFocus", step.Target?.CurrentFocus == true ? true : null), ("value", step.Value), ("waitCondition", step.WaitCondition), ("secretKey", step.SecretKey),
+                    ("relativeMilliseconds", step.RelativeMilliseconds), ("preRevision", step.PreRevision), ("postRevision", step.PostRevision),
+                    ("requestId", step.RequestId), ("eventId", step.EventId), ("deltaX", step.DeltaX), ("deltaY", step.DeltaY),
+                    ("scrollUnit", step.ScrollUnit), ("modifiers", step.Modifiers), ("x", step.CoordinateFallback?.X), ("y", step.CoordinateFallback?.Y) })
+                    if (value is not null && (sensitiveField(name) || value is not string && !safeRecordingText(JsonSerializer.Serialize(value))))
+                    { unsafeRecording = true; return new(GuaArtifactState.CaptureFailed); }
+            }
             GuaRecordingFile.Validate(recording);
             // Count safe serialization before Gua's writer, including escape expansion.
             // Use Gua's public model/converters and pinned 1.1.1 file encoding options
             // only for admission. GuaRecordingFile remains the sole disk writer.
-            // Check keys, enums, scalars, escapes and JSON token boundaries before
-            // attaching to Gua queues, invoking its file writer or hashing output.
+            // This encoding admits resource usage only. Public schema/enum/scalar
+            // spelling is owned by Gua; actual text values were checked above.
             using var encoding = new BoundedEncoding(maxFileBytes);
             JsonSerializer.Serialize(encoding, recording, new JsonSerializerOptions(JsonSerializerDefaults.Web)
                 { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });

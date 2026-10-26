@@ -329,32 +329,45 @@ public sealed class RunArtifactStore
     private byte[] Encode<T>(T value) => Encode(value, out _);
     private byte[] Encode<T>(T value, out int nodeCount)
     {
-        // Construct a bounded sanitized tree, then reject secrets re-formed by JSON syntax
-        // before exposing fixed bytes, hashing or publication.
+        // Redact real data while building the bounded tree. Trusted storage keys,
+        // typed results and generated identities are not secret-bearing input.
         var count = 0;
         sanitizedChars = 0;
         var safe = SafeNode(value, ref count);
         nodeCount = count;
         using var output = new LimitedBuffer(limits.MaxFileBytes);
         using (var writer = new Utf8JsonWriter(output)) { if (safe is null) writer.WriteNullValue(); else safe.WriteTo(writer, Json); }
-        if (redactor.ContainsUtf8Secret(output.GetBuffer().AsSpan(0, checked((int)output.Length))))
-            throw new InvalidDataException("EncodedSecretCollision");
         return output.ToArray();
     }
-    private JsonNode? SafeNode(object? value, ref int count, int depth = 0)
+    private JsonNode? SafeNode(object? value, ref int count, int depth = 0, bool trustedValue = false)
     {
         if (++count > limits.MaxItems || depth > 32) throw new ArtifactLimitException();
         if (value is null)
         {
-            RejectScalarSecret("null"u8);
             return null;
         }
         if (value is EffectiveSetting setting)
         {
             var obj = new JsonObject();
             Add(obj, "name", setting.Name, ref count, depth, structural: true);
-            Add(obj, "value", redactor.Sensitive(setting.Name) ? null : setting.Value, ref count, depth, structural: true);
+            Add(obj, "value", redactor.Sensitive(setting.Name) || redactor.Sensitive("value") ? null : setting.Value, ref count, depth, structural: true);
             Add(obj, "source", setting.Source, ref count, depth, structural: true);
+            return obj;
+        }
+        if (value is ObservationReference observation)
+        {
+            var obj = new JsonObject();
+            Add(obj, "boundary", observation.Boundary, ref count, depth, structural: true);
+            Add(obj, "observationId", observation.ObservationId, ref count, depth, structural: true, trustedValue: true);
+            return obj;
+        }
+        if (value is DecisionReference decision)
+        {
+            var obj = new JsonObject();
+            Add(obj, "decisionId", decision.DecisionId, ref count, depth, structural: true);
+            Add(obj, "observationId", decision.ObservationId, ref count, depth, structural: true, trustedValue: true);
+            if (decision.ActionId is not null) Add(obj, "actionId", decision.ActionId, ref count, depth, structural: true);
+            Add(obj, "reasonCode", decision.ReasonCode, ref count, depth, structural: true);
             return obj;
         }
         if (value is JsonElement element)
@@ -387,14 +400,14 @@ public sealed class RunArtifactStore
                 return SafeNode(element.GetString(), ref count, depth + 1);
             }
             ChargeChars(raw.Length);
-            RejectScalarSecret(raw);
+            if (redactor.ContainsAsciiSecret(raw)) return null;
             return JsonNode.Parse(raw);
         }
         if (value is string text)
         {
             if (text.Length > limits.MaxStringChars) throw new ArtifactLimitException();
             ChargeChars(text.Length);
-            return JsonValue.Create(redactor.Redact(text));
+            return JsonValue.Create(trustedValue ? text : redactor.Redact(text));
         }
         if (value is IReadOnlyDictionary<string, string> versions)
         {
@@ -418,18 +431,11 @@ public sealed class RunArtifactStore
         if (value.GetType().IsEnum)
         {
             if (!Enum.IsDefined(value.GetType(), value)) throw new InvalidDataException("EnumValueInvalid");
-            if (redactor.Redact(value.ToString()!) != value.ToString()) throw new InvalidDataException("StructuralRedactionCollision");
-            return SafeNode(value.ToString(), ref count, depth + 1);
+            return SafeNode(value.ToString(), ref count, depth + 1, trustedValue: true);
         }
         if (value is DateTimeOffset || value.GetType().IsPrimitive || value is decimal)
         {
             var generated = JsonSerializer.SerializeToElement(value, value.GetType(), Json);
-            if (generated.ValueKind == JsonValueKind.String)
-            {
-                var generatedText = generated.GetString()!;
-                if (redactor.Redact(generatedText) != generatedText) throw new InvalidDataException("StructuralRedactionCollision");
-            }
-            else RejectScalarSecret(System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(generated));
             return JsonSerializer.SerializeToNode(generated, Json);
         }
         var result = new JsonObject();
@@ -441,25 +447,27 @@ public sealed class RunArtifactStore
         }
         return result;
     }
-    private void Add(JsonObject obj, string key, object? value, ref int count, int depth, bool structural = false)
+    private void Add(JsonObject obj, string key, object? value, ref int count, int depth, bool structural = false, bool trustedValue = false)
     {
         if (++count > limits.MaxItems || key.Length > limits.MaxStringChars) throw new ArtifactLimitException();
         ChargeChars(key.Length);
-        var safeKey = redactor.Redact(key);
-        if (structural && (safeKey != key || redactor.Sensitive(key))) throw new InvalidDataException("StructuralRedactionCollision");
-        if (structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason" or
-            "observationId" or "decisionId" or "actionId" or "reasonCode" or "scenarioId" or "definitionVersion" or
-            "buildId" or "scenarioSha256" or "environmentSha256") &&
-            value is string structuralText && redactor.Redact(structuralText) != structuralText)
-            throw new InvalidDataException("StructuralRedactionCollision");
+        var safeKey = structural ? key : redactor.Redact(key);
+        trustedValue |= structural && (key is "runId" or "kind" or "sha256" or "fileName" or "phase" or "origin" or "reason" or "scenarioSha256" or "environmentSha256" or "sourceSha256");
+        if (structural && key == "reasonCode" && value is string code)
+        {
+            trustedValue |= Enum.TryParse<Gua.Playtest.Runner.Planning.PlannerFeedbackCode>(code, out var defined) && Enum.IsDefined(defined) && defined.ToString() == code;
+            if (!trustedValue && (redactor.Sensitive(key) || redactor.Redact(code) != code))
+                throw new InvalidDataException("ReferenceSecretCollision");
+        }
+        if (structural && !trustedValue && value is string identity && (key is "observationId" or "decisionId" or "actionId" or "scenarioId" or "definitionVersion" or "buildId") && (redactor.Sensitive(key) || redactor.Redact(identity) != identity))
+            throw new InvalidDataException("ReferenceSecretCollision");
         if (obj.ContainsKey(safeKey)) throw new InvalidDataException("RedactedKeyCollision");
-        obj[safeKey] = SafeNode(redactor.Sensitive(key) ? null : value, ref count, depth + 1);
-    }
-    private void RejectScalarSecret(ReadOnlySpan<byte> token)
-    {
-        // Primitive JSON literals are ASCII. Preserve their exact bytes or fail before hash/publication;
-        // partial deletion would corrupt the scalar or silently change its numeric value.
-        if (redactor.ContainsAsciiSecret(token)) throw new InvalidDataException("ScalarRedactionCollision");
+        if (structural && value is not null && redactor.Sensitive(key) &&
+            (key is "settings" or "versions" or "inputs" or "exceptions" or "identity" or "document"))
+            throw new InvalidDataException("SensitiveStorageContainer");
+        var actualField = !structural || value is JsonElement || value is string && !trustedValue;
+        var masked = actualField && redactor.Sensitive(key);
+        obj[safeKey] = SafeNode(masked ? structural && value is string ? string.Empty : null : value, ref count, depth + 1, trustedValue);
     }
     private void ChargeChars(int count)
     {

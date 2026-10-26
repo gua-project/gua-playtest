@@ -156,15 +156,25 @@ public sealed class DashboardTests : IDisposable
     }
     [Theory]
     [InlineData("scenarioId")] [InlineData("definitionVersion")] [InlineData("scenarioSha256")] [InlineData("buildId")] [InlineData("environmentSha256")]
-    public void Identity_value_redaction_collisions_reject_without_publication(string field)
+    public void Input_identity_secrets_are_refused_but_generated_digests_are_trusted(string field)
     {
         var identity = Identity();
         var secret = field switch { "scenarioId" => identity.ScenarioId, "definitionVersion" => identity.DefinitionVersion,
             "scenarioSha256" => identity.ScenarioSha256, "buildId" => identity.BuildId, _ => identity.EnvironmentSha256 };
         var store = RunArtifactStore.Create(Artifacts, Limits, new([secret], []));
         using var scenario = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "s1.json")));
-        Assert.Equal(PersistenceFailure.InvalidEvidence, store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity)).Failure);
-        Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(path => Path.GetFileName(path)!).ToArray());
+        var result = store.BeginPreparation(new("player", [], new Dictionary<string, string>(), [new("scenario", scenario.RootElement)], identity));
+        if (field is "scenarioSha256" or "environmentSha256")
+        {
+            Assert.True(result.Saved);
+            using var saved = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(store.DirectoryPath, "run.json")));
+            Assert.Equal(secret, saved.RootElement.GetProperty("identity").GetProperty(field).GetString());
+        }
+        else
+        {
+            Assert.Equal(PersistenceFailure.InvalidEvidence, result.Failure);
+            Assert.Equal([".owner"], Directory.GetFiles(store.DirectoryPath).Select(path => Path.GetFileName(path)!).ToArray());
+        }
     }
     [Fact]
     public void Valid_identity_is_retained_exactly_in_storage()
