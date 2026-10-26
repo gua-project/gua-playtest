@@ -353,7 +353,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         var redactor = new PersistenceRedactor([secret], []);
         var store = RunArtifactStore.Create(root, Limits, redactor);
-        if (secret is "action" or "123456789")
+        if (secret is "action" or "123456789" or "\"action\": \"click\"")
         {
             // Immutable Step kinds and possible generated numeric encodings reject
             // before construction rather than waiting for Recording admission.
@@ -495,7 +495,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         Directory.CreateDirectory(root);
         await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
-            3, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems, (_, _, _, _) => true);
+            3, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems, (_, _, _, _) => true, _ => true);
         writer.Trace.Mark("safe"); Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
         var completed = await writer.CompleteAsync();
         Assert.Equal(GuaArtifactState.Saved, completed.Trace.State);
@@ -573,7 +573,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var redactor = new PersistenceRedactor(["Trace"], []);
         await using var writer = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
             Limits.MaxItems, text => redactor.Redact(text) == text, bytes => redactor.IsSafeUtf8(bytes.Span),
-            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact, Limits.MaxStringChars, Limits.MaxItems, redactor.IsSafeGeneratedTokens);
+            document => redactor.RedactDocument(document, Limits), redactor.IsSensitiveField, redactor.Redact, Limits.MaxStringChars, Limits.MaxItems, redactor.IsSafeGeneratedTokens, redactor.IsSafeCompositionBoundary);
         Assert.NotEmpty(writer.Trace.Mark("safe"));
         Assert.True(writer.ConfirmPrimary(GuaTraceOutcome.Passed));
         Assert.Equal(GuaArtifactState.CaptureFailed, (await writer.CompleteAsync()).Trace.State);
@@ -666,7 +666,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
     {
         Directory.CreateDirectory(root);
         await using var capture = new GuaRunArtifactWriter(root, Options(), Limits.MaxFileBytes, Limits.MaxRunBytes,
-            slots, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems, (_, _, _, _) => true);
+            slots, _ => true, _ => true, document => document, _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems, (_, _, _, _) => true, _ => true);
         var step = slots == 5 ? string.Empty : capture.Trace.Mark("safe");
         if (extraAttachment) Assert.True(capture.Trace.Attach(step, "extra", JsonSerializer.SerializeToElement(new { extra = 1 })));
         Assert.True(capture.ConfirmPrimary(GuaTraceOutcome.Passed));
@@ -686,7 +686,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
             Directory.CreateDirectory(Path.Combine(root, "six-slots"));
             await using var control = new GuaRunArtifactWriter(Path.Combine(root, "six-slots"), Options(),
                 Limits.MaxFileBytes, Limits.MaxRunBytes, 6, _ => true, _ => true, document => document,
-                _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems, (_, _, _, _) => true);
+                _ => false, text => text, Limits.MaxStringChars, Limits.MaxItems, (_, _, _, _) => true, _ => true);
             Assert.True(control.ConfirmPrimary(GuaTraceOutcome.Passed));
             var accepted = await control.CompleteAsync(Recording());
             Assert.True(accepted.Trace.State == GuaArtifactState.Saved, JsonSerializer.Serialize(new
@@ -724,7 +724,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         var baselineOptions = Options(eventBytes: 131072);
         await using var baseline = new GuaRunArtifactWriter(Path.Combine(root, "baseline"), baselineOptions,
             Limits.MaxFileBytes, Limits.MaxRunBytes, Limits.MaxItems, _ => true, _ => true, document => document,
-            _ => false, text => text, Limits.MaxFileBytes, Limits.MaxItems, (_, _, _, _) => true);
+            _ => false, text => text, Limits.MaxFileBytes, Limits.MaxItems, (_, _, _, _) => true, _ => true);
         var step = baseline.Trace.Mark("safe"); Assert.True(baseline.Trace.Record(step, "payload", payload));
         Assert.True(baseline.ConfirmPrimary(GuaTraceOutcome.Passed));
         var saved = await baseline.CompleteAsync(); Assert.Equal(GuaArtifactState.Saved, saved.Trace.State);
@@ -733,7 +733,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         await using var bounded = new GuaRunArtifactWriter(Path.Combine(root, "bounded"),
             Options(artifactBytes: ceiling, eventBytes: Math.Min(ceiling, 131072)),
             ceiling, Limits.MaxRunBytes, Limits.MaxItems, _ => true, _ => true, document => document,
-            _ => false, text => text, ceiling, Limits.MaxItems, (_, _, _, _) => true);
+            _ => false, text => text, ceiling, Limits.MaxItems, (_, _, _, _) => true, _ => true);
         var boundedStep = bounded.Trace.Mark("safe"); Assert.True(bounded.Trace.Record(boundedStep, "payload", payload));
         Assert.True(bounded.ConfirmPrimary(GuaTraceOutcome.Passed));
         var completed = await bounded.CompleteAsync(); Assert.Equal(GuaArtifactState.Saved, completed.Trace.State);
@@ -880,7 +880,7 @@ public sealed class GuaRunArtifactsTests : IDisposable
         Assert.ThrowsAny<ArgumentException>(() => new GuaRunArtifactWriter(Path.Combine(root, "native"), options,
             Limits.MaxFileBytes, Limits.MaxRunBytes, Limits.MaxItems, text => Redactor.Redact(text) == text,
             bytes => Redactor.IsSafeUtf8(bytes.Span), document => Redactor.RedactDocument(document, Limits),
-            Redactor.IsSensitiveField, Redactor.Redact, Limits.MaxStringChars, Limits.MaxItems, Redactor.IsSafeGeneratedTokens));
+            Redactor.IsSensitiveField, Redactor.Redact, Limits.MaxStringChars, Limits.MaxItems, Redactor.IsSafeGeneratedTokens, Redactor.IsSafeCompositionBoundary));
         Assert.Empty(Directory.GetDirectories(root, ".gua-pending-*"));
     }
 
@@ -927,6 +927,37 @@ public sealed class GuaRunArtifactsTests : IDisposable
             Options(GuaTraceCaptureMode.Streaming, GuaTraceSavePolicy.Always), redactor));
         Assert.Empty(Directory.GetDirectories(root, ".gua-pending-*"));
         Assert.False(Directory.Exists(Path.Combine(store.DirectoryPath, "trace")));
+    }
+
+    [Theory]
+    [InlineData("label\":\"safe-marker")]
+    [InlineData("label\": \"safe-marker")]
+    [InlineData("sourceId\":\"host-marker")]
+    [InlineData("schema\":\"custom-marker")]
+    [InlineData("reason\":\"before-marker")]
+    [InlineData("phase\":\"enqueue-marker")]
+    [InlineData("name\":\"annotation-marker")]
+    [InlineData("target\":\"target-marker")]
+    [InlineData("line\":42")]
+    [InlineData("safe-marker\",\"kind")]
+    public void Review8_native_binding_overlap_rejects_before_session(string secret)
+    {
+        var redactor = new PersistenceRedactor([secret], []);
+        var store = RunArtifactStore.Create(root, Limits, redactor);
+        Assert.Throws<ArgumentException>(() => new GuaRunArtifacts(store, Metadata, Limits,
+            Options(GuaTraceCaptureMode.Streaming), redactor));
+        Assert.Empty(Directory.GetDirectories(root, ".gua-pending-*"));
+        Assert.Equal(".owner", Path.GetFileName(Assert.Single(Directory.GetFiles(store.DirectoryPath))));
+    }
+
+    [Fact]
+    public void Review8_binding_overlap_checks_complete_bounded_secret_not_a_sample()
+    {
+        var secret = "label\":\"" + new string('x', 5000);
+        var redactor = new PersistenceRedactor([secret], []);
+        var store = RunArtifactStore.Create(root, Limits, redactor);
+        Assert.Throws<ArgumentException>(() => new GuaRunArtifacts(store, Metadata, Limits, Options(), redactor));
+        Assert.Empty(Directory.GetDirectories(root, ".gua-pending-*"));
     }
 
     [Fact]

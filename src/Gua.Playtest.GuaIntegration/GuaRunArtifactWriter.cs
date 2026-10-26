@@ -34,14 +34,15 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         int maxFileBytes, long maxBundleBytes, int maxFiles, Func<string, bool> safeRecordingText,
         Func<ReadOnlyMemory<byte>, bool> safeRecordingEncoding, Func<JsonElement, JsonElement> redact,
         Func<string, bool> sensitiveField, Func<string, string> redactText, int maxStringChars, int maxJsonNodes,
-        Func<string, int, string, string, bool> safeGeneratedTokens)
+        Func<string, int, string, string, bool> safeGeneratedTokens, Func<string, bool> safeCompositionBoundary)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(safeRecordingText);
         ArgumentNullException.ThrowIfNull(safeRecordingEncoding);
         ArgumentNullException.ThrowIfNull(redact); ArgumentNullException.ThrowIfNull(sensitiveField);
         ArgumentNullException.ThrowIfNull(redactText); ArgumentNullException.ThrowIfNull(safeGeneratedTokens);
-        GuaRunTrace.ValidatePolicy(sensitiveField, safeRecordingText, safeGeneratedTokens);
+        ArgumentNullException.ThrowIfNull(safeCompositionBoundary);
+        GuaRunTrace.ValidatePolicy(sensitiveField, safeRecordingText, safeGeneratedTokens, safeCompositionBoundary);
         // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
         // Its artifact budget must fit one file; its separate manifest reserve must too.
         if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 3 ||

@@ -43,7 +43,7 @@ public sealed class GuaRunTrace
     { this.session = session; this.redact = redact; this.sensitiveField = sensitiveField; this.redactText = redactText;
         this.maxStringChars = maxStringChars; this.maxFileBytes = maxFileBytes; this.maxNodes = maxNodes; }
     internal static void ValidatePolicy(Func<string, bool> sensitiveField, Func<string, bool> safeLiteral,
-        Func<string, int, string, string, bool> safeGeneratedTokens)
+        Func<string, int, string, string, bool> safeGeneratedTokens, Func<string, bool> safeCompositionBoundary)
     {
         // 1.1.1 creates these envelope values internally, beyond public payload gates.
         // Never sample random IDs/current clocks as proof for a future event. Refuse
@@ -70,12 +70,23 @@ public sealed class GuaRunTrace
         var nativePayloadNames = new[] { "label", "parentStepId", "source", "file", "line", "name", "value",
             "target", "operator", "expected", "actual", "truth", "role", "observations", "callerOutcome",
             "before", "after", "change", "reason", "phase", "result", "content", "references" };
+        // Inspect overlaps, not just each syntax token and caller value separately.
+        // Gua assembles these bindings after its public methods receive the values;
+        // there is no complete-event admission hook in the pinned public API.
+        foreach (var name in envelopeNames.Concat(nativePayloadNames).Distinct(StringComparer.Ordinal))
+        {
+            var key = JsonSerializer.Serialize(name);
+            if (new[] { key + ":", key + ": ", key + ":\"", key + ": \"" }.Any(boundary => !safeCompositionBoundary(boundary)))
+                throw new ArgumentException("GuaTraceCompositionBoundaryUnsupported");
+        }
         var fixedTokens = envelopeNames.Concat(nativePayloadNames).Concat(["recent", "streaming", "onFailure", "always", "debug", "player",
             "unknown", "passed", "failed", "interrupted", "collector-monotonic:", "true", "false", "0", "1",
             "index", "recording", "steps", "gua.trace.recording.v1", "gua.recording.references.v1"])
             .Concat(Enum.GetNames<GuaTraceStepKind>().Select(JsonNamingPolicy.CamelCase.ConvertName)).Concat(NativeVocabulary);
         // Native JSON syntax is unavoidable even when no caller payload is retained.
         var delimiters = new[] { "{", "}", "[", "]", ",", ":", "\"", "\r", "\n", "\t", " " };
+        if (delimiters.Any(boundary => !safeCompositionBoundary(boundary)))
+            throw new ArgumentException("GuaTraceCompositionBoundaryUnsupported");
         if (delimiters.Any(token => !safeLiteral(token)) ||
             fixedTokens.Any(token => !safeLiteral(token) || !safeLiteral(JsonSerializer.Serialize(token))) ||
             envelopeNames.Concat(nativePayloadNames).Any(name => !safeLiteral(JsonSerializer.Serialize(name) + ":\"")))

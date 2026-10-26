@@ -114,6 +114,11 @@ prefixes/suffixes) are
 unsupported and rejected before native construction. Sampling a current clock
 or random ID does not certify future generated values. This gate exposes no
 resolved secrets and does not change Gua's generated encodings.
+Policies that occupy or overlap fixed native JSON bindings/separators are also
+unsupported. The bounded host policy checks complete literal prefixes/suffixes
+against both sides of each boundary before session/staging creation, including
+compact and indented key/value separators. Inspecting a key and caller value
+independently cannot certify their later native composition.
 Raw tree/value JSON is checked for UTF-8 bytes, decoded string lengths, depth and
 nodes before a DOM is allocated. Recording admission counts its complete native
 serialized document, including targets and scalar fields, before attachment/save.

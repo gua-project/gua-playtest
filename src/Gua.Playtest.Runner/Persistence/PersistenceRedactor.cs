@@ -52,6 +52,22 @@ public sealed class PersistenceRedactor
             }
         fields = new(names, StringComparer.OrdinalIgnoreCase);
     }
+    /// <summary>Conservatively refuse a literal that occupies or straddles fixed
+    /// provider syntax. Neighbor values can change after admission; secrets stay private.</summary>
+    public bool IsSafeCompositionBoundary(string boundary)
+    {
+        ArgumentNullException.ThrowIfNull(boundary);
+        if (boundary.Length is < 1 or > 256) throw new ArgumentException("CompositionBoundaryInvalid");
+        foreach (var literal in literals)
+        {
+            if (boundary.Contains(literal, StringComparison.Ordinal)) return false;
+            for (var count = 1; count <= Math.Min(boundary.Length, literal.Length - 1); count++)
+                if (boundary.AsSpan().EndsWith(literal.AsSpan(0, count), StringComparison.Ordinal) ||
+                    boundary.AsSpan().StartsWith(literal.AsSpan(literal.Length - count), StringComparison.Ordinal))
+                    return false;
+        }
+        return true;
+    }
     /// <summary>Refuse literal policies intersecting a provider's conservative generated
     /// token language. Secrets stay private; this does not generate or inspect provider IDs.</summary>
     public bool IsSafeGeneratedTokens(string alphabet, int maxLength, string prefix, string suffix)
