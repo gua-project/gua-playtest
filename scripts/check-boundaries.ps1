@@ -33,7 +33,7 @@ foreach ($name in $expected.Keys) {
     if ($name -eq 'GuaIntegration') {
         if ($packages.Count -ne 3) { throw 'Unexpected Gua package graph' }
         foreach ($package in $packages) {
-            if ($package.Include -notin @('Gua.Testing', 'Gua.Runtime', 'Gua.Testing.Recording') -or $package.Version -ne '[1.1.1]') {
+            if ($package.Include -notin @('Gua.Testing', 'Gua.Runtime', 'Gua.Testing.Recording') -or $package.Version -ne '[1.1.2]') {
                 throw 'Gua package pin mismatch'
             }
         }

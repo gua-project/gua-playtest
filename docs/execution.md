@@ -177,6 +177,14 @@ Trusted adapters can throw `RunFailureException(RunEvent cause, Exception? inner
 
 `RunSnapshot` freezes Primary/Events/Exceptions immediately after confirmation. Both executor overloads and OwnedCleanup.CompleteAsync accept optional `confirmPrimary(snapshot, token)` as a final parameter after cancellationToken. This trusted callback runs before diagnostics/artifacts/release using a fresh finite token even after caller cancellation. It shares the overall cleanup deadline fairly; false/fault/timeout records PrimarySnapshotFailed without changing primary or starving later owned release. There are at most 1000 registered obligations plus this one hook.
 
+The expired-cleanup immediate-release rule also covers an already-invoked owned
+input/resource/ownership release. If its finite waiter expires, an already-completed
+true result confirms the release without another invocation or any additional wait.
+CleanupTimeout remains recorded: retaining this physical release fact does not assert
+on-time completion or successful postprocessing. Pending, false and faulty releases
+remain unconfirmed; diagnostics, artifacts and primary snapshots keep their strict
+finite-wait result rules. Completion after the frozen outcome cannot repair it.
+
 `RunOutcome` freezes primary, events, exceptions and postprocessing issues. Cancellation after confirmation and cleanup failures are postprocessing only. Passed plus incomplete mandatory postprocessing maps to exit 11. A cancellation marker alone does not fabricate unmet mandatory work; it is still recorded separately. Otherwise exit codes are 0 Passed, 1 Failed, 2 Invalid, 3 TimedOut, 4 Aborted, 5 Unverified; Runner-origin ExecutionError is 10. Failed and other primary codes are preserved when artifacts/cleanup fail. CLI execution wiring remains #15; a unit exit projection is not evidence of a released command.
 
 ## Acceptance boundaries: keep issue #6 open

@@ -92,7 +92,7 @@ node --test tools/fixture-oracle.test.mjs
 
 **自然言語の達成報告は合否を決めません。** 成功条件のない探索は、Planner が finish を返しても Passed にできません。判定用の期待値・失敗条件と公開Planner観測は別に保持し、Debug接続の結果を後から間引くだけで公開profileの境界を作ったことにしません。
 
-**公開packageの能力と接続経路の完成は別です。** Gua.Testing 1.1.1を使用します。送信直前チェックとホスト側enqueueを一体に守る guarded 経路や、実 Planner の隔離、実エンジンの受け入れ条件は [gua-bridge.md](gua-bridge.md)、[planning.md](planning.md)、[fixture-evidence.md](fixture-evidence.md)の制限を確認します。未公開APIを使える前提でfallbackを作らないでください。
+**公開packageの能力と接続経路の完成は別です。** Gua.Testing 1.1.2を使用します。送信直前チェックとホスト側enqueueを一体に守る guarded 経路や、実 Planner の隔離、実エンジンの受け入れ条件は [gua-bridge.md](gua-bridge.md)、[planning.md](planning.md)、[fixture-evidence.md](fixture-evidence.md)の制限を確認します。未公開APIを使える前提でfallbackを作らないでください。
 
 **保存時の検査と結果の読戻しにも境界があります。** `RunArtifactStore.Complete` は成果物の長さ・hash・参照を保存時に検査します。`RunArtifactReader.ReadResultAsync` の `Verified` は `result.json` の形式・サイズ・Run identityの確認で、Trace／Recording本体の事後改変がないことまで再検証した結果ではありません。
 

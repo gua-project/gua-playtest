@@ -148,8 +148,8 @@ Assert-PackagedDashboard $toolExe 'tool'
     rid = $Rid
     head = (& git rev-parse HEAD)
     sdk = (& dotnet --version)
-    guaVersion = '1.1.1'
-    guaCommit = '88f5dca4aa97c5d5187ab66ea4416377f3affc96'
+    guaVersion = '1.1.2'
+    guaCommit = 'b398e531558f38220baf0b606e7c3f33904a87a5'
     archiveSha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
     checks = $records
     scope = 'Actual archive/fresh Tool offline validate, Plan refusal, saved report and fail-closed Replay; no engine, bridge or Codex authentication/execution.'

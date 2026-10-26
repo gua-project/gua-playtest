@@ -273,9 +273,40 @@ public sealed partial class RunTests
     }
     private sealed class EarlyWakeClock : IClock
     {
+        public Action<string>? Trace { get; init; }
         public TaskCompletionSource Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TimeSpan Elapsed => TimeSpan.Zero;
-        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) { Called.TrySetResult(); return ValueTask.CompletedTask; }
+        public TimeSpan Elapsed { get { Trace?.Invoke("clock.elapsed=0"); return TimeSpan.Zero; } }
+        public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
+        {
+            Trace?.Invoke("clock.delay.before-called");
+            Called.TrySetResult();
+            Trace?.Invoke("clock.delay.after-called");
+            return ValueTask.CompletedTask;
+        }
+    }
+    private sealed class CleanupWakeTimeline
+    {
+        private sealed record Entry(long Timestamp, int Thread, bool Pool, string Event);
+        private readonly long origin = System.Diagnostics.Stopwatch.GetTimestamp();
+        private readonly Entry?[] entries = new Entry?[128];
+        private int count;
+        public void Record(string name)
+        {
+            var index = Interlocked.Increment(ref count) - 1;
+            if (index < entries.Length)
+                Volatile.Write(ref entries[index], new(System.Diagnostics.Stopwatch.GetTimestamp(),
+                    Environment.CurrentManagedThreadId, Thread.CurrentThread.IsThreadPoolThread, name));
+        }
+        public string Describe()
+        {
+            var lines = new List<string>();
+            var observed = Volatile.Read(ref count);
+            for (var i = 0; i < Math.Min(observed, entries.Length); i++)
+                if (Volatile.Read(ref entries[i]) is { } entry)
+                    lines.Add($"{i}: {System.Diagnostics.Stopwatch.GetElapsedTime(origin, entry.Timestamp).TotalMilliseconds:F3}ms thread={entry.Thread} pool={entry.Pool} {entry.Event}");
+            if (observed > entries.Length) lines.Add($"dropped={observed - entries.Length}");
+            return string.Join(Environment.NewLine, lines);
+        }
     }
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task PrematureTimerWakeIsClockFailureAndStillCleansUp(bool execution)
@@ -298,17 +329,46 @@ public sealed partial class RunTests
     [Fact]
     public async Task CleanupPrematureProviderWakeKeepsCooperativeReleaseShareAlive()
     {
-        var clock = new EarlyWakeClock(); var run = new RunSession(Limits(), clock, clock, Condition());
+        var timeline = new CleanupWakeTimeline();
+        var clock = new EarlyWakeClock { Trace = timeline.Record }; var run = new RunSession(Limits(), clock, clock, Condition());
         run.BeginPreparation(); run.BeginRunning(); run.Evaluate(Unit(), TimeSpan.Zero);
         var release = new TaskCompletionSource<bool>(); bool cancelledEarly = false; var cleanup = new OwnedCleanup();
         cleanup.Register(CleanupStage.ResourceRelease, token =>
         {
-            token.Register(() => { if (!release.Task.IsCompletedSuccessfully) cancelledEarly = true; });
+            timeline.Record("release.action");
+            token.Register(() =>
+            {
+                if (!release.Task.IsCompletedSuccessfully) cancelledEarly = true;
+                timeline.Record(cancelledEarly ? "release.cancel.pending" : "release.cancel.completed");
+            });
             return new(release.Task);
         });
-        var finishing = cleanup.CompleteAsync(run, clock).AsTask(); await clock.Called.Task;
-        Assert.False(finishing.IsCompleted); release.SetResult(true); var result = await finishing;
-        Assert.False(cancelledEarly); Assert.DoesNotContain(result.PostProcessing, x => x.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+        Task<RunOutcome>? finishing = null;
+        RunOutcome? observedOutcome = null;
+        try
+        {
+            timeline.Record("cleanup.call.before");
+            finishing = cleanup.CompleteAsync(run, clock).AsTask();
+            timeline.Record("cleanup.call.returned");
+            timeline.Record(clock.Called.Task.IsCompleted ? "called.await.already-completed" : "called.await.pending");
+            await clock.Called.Task;
+            timeline.Record("called.await.returned");
+            Assert.False(finishing.IsCompleted);
+            timeline.Record("release.set.before");
+            release.SetResult(true);
+            timeline.Record("release.set.after");
+            var result = await finishing;
+            observedOutcome = result;
+            timeline.Record("outcome.received");
+            Assert.False(cancelledEarly); Assert.DoesNotContain(result.PostProcessing, x => x.Reason == PostProcessingReason.ResourceReleaseUnconfirmed);
+        }
+        catch (Exception failure)
+        {
+            timeline.Record("test.failure");
+            var issues = observedOutcome is not null
+                ? string.Join(",", observedOutcome.PostProcessing.Select(x => x.Reason)) : "unavailable";
+            throw new Xunit.Sdk.XunitException($"{failure}{Environment.NewLine}Cleanup wake timeline: budget={run.Limits.CleanupTimeout}, release={release.Task.Status}, cleanup={finishing?.Status}, cancelledEarly={cancelledEarly}, issues={issues}{Environment.NewLine}{timeline.Describe()}");
+        }
     }
     [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
     public async Task AuthoritativeDelayFaultRetainsClockCauseAndOriginalException(bool execution, bool asynchronous)
@@ -343,6 +403,90 @@ public sealed partial class RunTests
         public TaskCompletionSource Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TimeSpan Elapsed => elapsed.Elapsed;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token) { Called.TrySetResult(); return ValueTask.CompletedTask; }
+    }
+    [Theory]
+    [InlineData(CleanupStage.InputRelease, true)]
+    [InlineData(CleanupStage.ResourceRelease, true)]
+    [InlineData(CleanupStage.OwnershipRelease, true)]
+    [InlineData(CleanupStage.ResourceRelease, false)]
+    [InlineData(CleanupStage.Diagnostics, true)]
+    [InlineData(CleanupStage.Artifacts, true)]
+    public async Task CompletedOwnedReleaseSurvivesOwnerReadAfterCleanupExpiry(CleanupStage stage, bool confirmed)
+    {
+        var release = new TaskCompletionSource<bool>();
+        using var resumeRead = new ManualResetEventSlim();
+        var readEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = 0;
+        var clock = new EarlyWakeClock
+        {
+            Trace = name =>
+            {
+                if (name == "clock.elapsed=0" && release.Task.IsCompletedSuccessfully && Interlocked.Exchange(ref held, 1) == 0)
+                { readEntered.TrySetResult(); resumeRead.Wait(); }
+            }
+        };
+        var run = new RunSession(Limits(), clock, clock, Condition());
+        Assert.Equal(TimeSpan.FromSeconds(1), run.Limits.CleanupTimeout);
+        run.BeginPreparation(); run.BeginRunning(); var primary = run.Evaluate(Unit(), TimeSpan.Zero);
+        var cleanup = new OwnedCleanup(); var calls = 0; var cancelledEarly = false;
+        cleanup.Register(stage, token =>
+        {
+            calls++;
+            token.Register(() => { if (!release.Task.IsCompletedSuccessfully) cancelledEarly = true; });
+            return new(release.Task);
+        });
+        var finishing = cleanup.CompleteAsync(run, clock).AsTask();
+        Task? publishing = null;
+        try
+        {
+            await clock.Called.Task;
+            publishing = RunBlockingFixture(() => release.SetResult(confirmed));
+            await readEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            // Hold only the owner read, after producer completion, beyond the unchanged budget.
+            await Task.Delay(run.Limits.CleanupTimeout + TimeSpan.FromMilliseconds(100));
+            resumeRead.Set();
+            var outcome = await finishing.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal(1, calls); Assert.False(cancelledEarly); Assert.Same(primary, outcome.Primary);
+            Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+            Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupClockInvalid);
+            var failure = stage switch
+            {
+                CleanupStage.InputRelease => PostProcessingReason.InputReleaseUnconfirmed,
+                CleanupStage.Diagnostics => PostProcessingReason.DiagnosticsFailed,
+                CleanupStage.Artifacts => PostProcessingReason.ArtifactFailed,
+                _ => PostProcessingReason.ResourceReleaseUnconfirmed
+            };
+            var owned = stage is CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease;
+            if (owned && confirmed) Assert.DoesNotContain(outcome.PostProcessing, x => x.Reason == failure);
+            else Assert.Contains(outcome.PostProcessing, x => x.Reason == failure);
+            Assert.Equal(11, outcome.ExitCode);
+        }
+        finally
+        {
+            resumeRead.Set();
+            if (publishing is not null) await publishing.WaitAsync(TimeSpan.FromSeconds(2));
+            await finishing.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+    [Theory]
+    [InlineData(CleanupStage.InputRelease)]
+    [InlineData(CleanupStage.ResourceRelease)]
+    [InlineData(CleanupStage.OwnershipRelease)]
+    public async Task PendingOwnedReleaseCannotRepairFrozenCleanupTimeout(CleanupStage stage)
+    {
+        var clock = new EarlyWakeClock(); var run = new RunSession(Limits(), clock, clock, Condition());
+        run.BeginPreparation(); run.BeginRunning(); run.Evaluate(Unit(), TimeSpan.Zero);
+        var release = new TaskCompletionSource<bool>(); var cleanup = new OwnedCleanup(); var calls = 0;
+        cleanup.Register(stage, _ => { calls++; return new(release.Task); });
+        var outcome = await cleanup.CompleteAsync(run, clock).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        var failure = stage == CleanupStage.InputRelease
+            ? PostProcessingReason.InputReleaseUnconfirmed : PostProcessingReason.ResourceReleaseUnconfirmed;
+        Assert.Equal(1, calls); Assert.False(release.Task.IsCompleted);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == PostProcessingReason.CleanupTimeout);
+        Assert.Contains(outcome.PostProcessing, x => x.Reason == failure);
+        var snapshot = outcome.PostProcessing.ToArray();
+        release.SetResult(true);
+        Assert.Equal(snapshot, outcome.PostProcessing); Assert.Equal(11, outcome.ExitCode);
     }
     [Theory] [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
     public async Task ExpiredCleanupStillAttemptsOwnedReleaseWithoutNewWait(bool input, bool pending)
