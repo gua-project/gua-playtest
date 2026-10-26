@@ -540,7 +540,7 @@ public sealed partial class RunTests
         using var resumeProbe = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var armed = false; var releases = 0;
+        var armed = false; var releases = 0; var probeOnPool = 0;
         ValueTask<bool> Execute()
         {
             if (stage == "synchronous-completion") { armed = true; returned.TrySetResult(); return ValueTask.FromResult(true); }
@@ -561,7 +561,12 @@ public sealed partial class RunTests
             var capture = owner.ArmRunningBoundary();
             var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
                 new(TimeSpan.Zero, Unit("false"), Unit("false")), "source/finalizer-probe", true);
-            boundary.InitialLifecycleFailure = () => { if (armed) { entered.TrySetResult(); resumeProbe.Wait(); } return null; };
+            boundary.InitialLifecycleFailure = () =>
+            {
+                if (armed)
+                { Volatile.Write(ref probeOnPool, Thread.CurrentThread.IsThreadPoolThread ? 1 : 0); entered.TrySetResult(); resumeProbe.Wait(); }
+                return null;
+            };
             return ValueTask.FromResult(boundary);
         }, (_, _) => Execute(), caller.Token, null, _ =>
         {
@@ -574,7 +579,13 @@ public sealed partial class RunTests
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
             if (deadline) real.At(Limits().MaxDuration); else caller.Cancel();
-            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            RunOutcome outcome;
+            try { outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1)); }
+            catch (TimeoutException)
+            {
+                ThreadPool.GetAvailableThreads(out var available, out _); ThreadPool.GetMinThreads(out var minimum, out _);
+                throw new Xunit.Sdk.XunitException($"Finalization did not finish: stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}");
+            }
             Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
             Assert.Equal(1, releases); Assert.Equal(stage is "completion" or "synchronous-completion", returned.Task.IsCompleted);
             resume.Set(); resumeProbe.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
