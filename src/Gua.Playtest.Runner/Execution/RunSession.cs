@@ -308,10 +308,15 @@ public sealed class RunSession
         var preparedSuccess = StartCondition(success, boundary.InitialObservation.CapturedAt);
         var preparedFailure = StartCondition(failure, boundary.InitialObservation.CapturedAt);
         DrainPostedExceptions(close: false);
+        // Sample the navigation clock before taking the publication gate.
+        // A blocked provider must not own PR49's interruption finalization.
+        if (boundary.ObservationExpiresRealAt.HasValue) _ = ReadReal();
         lock (arbitrationGate)
         {
             Require(ExecutionState.Preparing);
             if (lastReal - preparationOrigin >= Limits.PreparationTimeout) throw FiniteOperation.DeadlineReached("PreparationDeadlineReached");
+            if (boundary.ObservationExpiresRealAt is { } expires && lastReal > expires)
+                RejectStartObservation("RunningBoundaryObservationExpired");
             lastCapture = boundary.InitialObservation.CapturedAt;
             successSession = preparedSuccess; failureSession = preparedFailure;
             initialLifecycleFailure = boundary.InitialLifecycleFailure; boundary.Used = true;
