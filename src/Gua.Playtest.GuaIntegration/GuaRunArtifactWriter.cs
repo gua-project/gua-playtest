@@ -15,7 +15,7 @@ public sealed record GuaRunArtifactBundles(GuaArtifactBundle Trace, GuaArtifactB
 
 /// <summary>Gua owns every saved format. This adapter inventories completed output only;
 /// it does not acquire a context, dispatch actions, or certify production host isolation.
-/// CompleteAsync/DisposeAsync retain 1.1.1 scheduling and synchronous filesystem limitations.</summary>
+/// CompleteAsync/DisposeAsync retain 1.1.2 scheduling and synchronous filesystem limitations.</summary>
 public sealed class GuaRunArtifactWriter : IAsyncDisposable
 {
     private readonly string runDirectory;
@@ -40,7 +40,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(safeRecordingEncoding);
         ArgumentNullException.ThrowIfNull(redact); ArgumentNullException.ThrowIfNull(sensitiveField);
         ArgumentNullException.ThrowIfNull(redactText);
-        // 1.1.1 bounds aggregate events/blobs, not each events.jsonl independently.
+        // 1.1.2 bounds aggregate events/blobs, not each events.jsonl independently.
         // Its artifact budget must fit one file; its separate manifest reserve must too.
         if (maxFileBytes < 65536 || maxBundleBytes < maxFileBytes || maxFiles < 3 ||
             maxStringChars < 1 || maxStringChars > maxFileBytes || maxJsonNodes < 1 ||
@@ -228,7 +228,7 @@ public sealed class GuaRunArtifactWriter : IAsyncDisposable
             }
             GuaRecordingFile.Validate(recording);
             // Count safe serialization before Gua's writer, including escape expansion.
-            // Use Gua's public model/converters and pinned 1.1.1 file encoding options
+            // Use Gua's public model/converters and pinned 1.1.2 file encoding options
             // only for admission. GuaRecordingFile remains the sole disk writer.
             // This encoding admits resource usage only. Public schema/enum/scalar
             // spelling is owned by Gua; actual text values were checked above.

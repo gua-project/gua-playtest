@@ -4,37 +4,37 @@
     "net10.0": {
       "Gua.Runtime": {
         "type": "Direct",
-        "requested": "[1.1.1, 1.1.1]",
-        "resolved": "1.1.1",
-        "contentHash": "rq1ei+GaP6nwM141+Ulej026b8DILKv+I9P/8PwpQBNADl38zlAyd04p+1x3aeLPXt9X8F6y0gvuoBBJVBs1yQ==",
+        "requested": "[1.1.2, 1.1.2]",
+        "resolved": "1.1.2",
+        "contentHash": "L3TD6WwRNJXyw6CFm4ZzqQ7a8cWHa+PTovskz/SqktlkhPAEn9tmhFBXdwC2Fsctvtr9abuWJxS9o3ZQvWimdA==",
         "dependencies": {
-          "Gua.Core": "1.1.1"
+          "Gua.Core": "1.1.2"
         }
       },
       "Gua.Testing": {
         "type": "Direct",
-        "requested": "[1.1.1, 1.1.1]",
-        "resolved": "1.1.1",
-        "contentHash": "X/FdakJLCTke0vT3QVkRZb2JJSa0w+yFwWsNw+8uYmQPZPn5VYy94Y4oKpBbyleUTuVlkXYC5yX0o+TyXpCvQA==",
+        "requested": "[1.1.2, 1.1.2]",
+        "resolved": "1.1.2",
+        "contentHash": "HEx3jZDWPj5BTn3EtkEm/d1Y/KqvwQcf20qIBpqgczQYL8fhbpAssTTGK+48l2wrKzjPfw+M1IIRvwWxcdA/LA==",
         "dependencies": {
-          "Gua.Core": "1.1.1",
+          "Gua.Core": "1.1.2",
           "JsonSchema.Net": "7.3.4"
         }
       },
       "Gua.Testing.Recording": {
         "type": "Direct",
-        "requested": "[1.1.1, 1.1.1]",
-        "resolved": "1.1.1",
-        "contentHash": "iMKFDHIJek8xNEvj/grxDbCcn3oqTDySYCA8BBf9AIldZp5xBkuP+HKxuI16+7sReUoyjJMEAHxlz3aP5/aWOQ==",
+        "requested": "[1.1.2, 1.1.2]",
+        "resolved": "1.1.2",
+        "contentHash": "+HZ2MyJXPLZo6/ztq47t6EtR/+9MoJsNMwDONLejFJTG1kbVzqAtjDPxb2hjqIXYgUf2pl1Bb0lJegU78rs5ew==",
         "dependencies": {
-          "Gua.Runtime": "1.1.1",
-          "Gua.Testing": "1.1.1"
+          "Gua.Runtime": "1.1.2",
+          "Gua.Testing": "1.1.2"
         }
       },
       "Gua.Core": {
         "type": "Transitive",
-        "resolved": "1.1.1",
-        "contentHash": "0/Bh1HtwvAq13e6diY8u47yOwQj7OzYwCyQP6RjTgXZExp3UyGipv7mPOotNY0lE88AIubiQrFQEa7gImRjdvw=="
+        "resolved": "1.1.2",
+        "contentHash": "1AJwmQtEmfn7Fih+6q+q2LGVwEWDksWjczhZFemba7jzRW6RWn7YEJgsezmAy5sNS/2CpmtNWh76Uop7DFatjg=="
       },
       "Humanizer.Core": {
         "type": "Transitive",

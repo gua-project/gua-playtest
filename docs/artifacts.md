@@ -26,7 +26,7 @@ or verify the actual game build/effective Environment on the owner's behalf.
 
 Merged #6 final main `266892695c70d6d1da531733c4ebbc2dbcec3310` retains `RunExecutor.ExecuteAsync(..., cancellationToken, confirmPrimary)` and the equivalent `OwnedCleanup` hook. Supply `(snapshot, token) => ValueTask.FromResult(store.ConfirmPrimary(snapshot, observations, decisions, token).Saved)`. The frozen snapshot includes primary events and original exception evidence; this hook runs before diagnostics/releases with fresh bounded cancellation authority even when the caller cancelled. False maps to PrimarySnapshotFailed; the primary is unchanged. Registering an ordinary Diagnostics callback is insufficient because caller cancellation can skip that work. #15 owns production assembly. #8's `IPreparationTrace.Record(PreparationEvent(Stage, Code))` must connect to the common Gua adapter before launch, not to a new Playtest timeline. Artifact persistence itself does not produce lifecycle Trace events.
 
-Use the final [execution contract](execution.md) for validated clock authority, owner-thread evidence collection, certified paired Running startup, completed-work confirmation and capture cancellation/fault arbitration. Persistence consumes the immutable outcome and does not reinterpret any of those causes. It supplies no observation feed and does not claim `IIndependentRunObservationFeed`: ordinary sources must join the underlying capture before replacement, and Gua1.1.1 is not granted independence by assumption. The #15 owner must serialize storage calls and isolate/join a timed-out storage invocation before reusing its mutable store; a finite callback wrapper alone is not proof that underlying filesystem work ended. Live bounded-provider acceptance remains open.
+Use the final [execution contract](execution.md) for validated clock authority, owner-thread evidence collection, certified paired Running startup, completed-work confirmation and capture cancellation/fault arbitration. Persistence consumes the immutable outcome and does not reinterpret any of those causes. It supplies no observation feed and does not claim `IIndependentRunObservationFeed`: ordinary sources must join the underlying capture before replacement, and Gua is not granted independence by assumption. The #15 owner must serialize storage calls and isolate/join a timed-out storage invocation before reusing its mutable store; a finite callback wrapper alone is not proof that underlying filesystem work ended. Live bounded-provider acceptance remains open.
 
 Final #11 merge main `18d50f9d62f73e59a9bc87c1131691ca5df60f6a` is incorporated. Its host-owned `PlannerDecisionReference` maps `DecisionRequestId` to `DecisionReference.DecisionId`, `BasedOnObservationId` to `ObservationId`, and the defined `Code` enum name to `ReasonCode`. The #15 execution owner must require `Reference.RunId == store.RunId` and obtain any action identifier from approved Gua payloads; this storage record does not itself grant proposal or dispatch authority. Raw rationale, expected criteria and artifact metadata never enter Planner projections. The real provider/guard/Trace acceptance conditions below remain open.
 
@@ -98,7 +98,7 @@ is checked for UTF-8 bytes, decoded string lengths, depth and nodes before a DOM
 is allocated. Recording admission counts its complete native document, including
 targets and scalar fields, before attachment/save.
 
-Gua 1.1.1 limits total event/blob bytes rather than the individual cumulative
+Gua 1.1.2 limits total event/blob bytes rather than the individual cumulative
 `events.jsonl`. Therefore explicit `MaxArtifactBytes` must fit `MaxFileBytes`,
 and `MaxFileBytes` must also fit Gua's separate 64 KiB manifest reserve. The
 adapter rejects unguaranteed settings before creating a writer. It does not
@@ -112,7 +112,7 @@ when both artifacts are saved. Recording slots remain reserved during final Trac
 inventory. Encoding admission uses actual bounded Recording/HTML bytes, including
 escape expansion, rather than a worst-case character multiplier or report estimate.
 
-Gua 1.1.1 queue admission, writer scheduling, lifecycle stopping and synchronous
+Gua 1.1.2 queue admission, writer scheduling, lifecycle stopping and synchronous
 filesystem operations do not provide a hard absolute deadline or a proof that
 the writer terminated when a flush/dispose timeout was reported. This adapter
 awaits the actual public completion operation and does not wrap it with a timeout
@@ -132,7 +132,7 @@ Explicit `ArtifactLimits` bound per-file bytes (256..16 MiB), total associated R
 
 `ArtifactTests` independently parses saved JSON, verifies fixed-copy hash, checks real-data secret suppression independently of trusted structure, validates final result against the existing schema, injects wrong hash/disk target collision/cancellation/byte limit/truncated result, checks observation boundary and primary replacement rejection, and checks all non-saved artifact states and exit 11. The real #6 execution code is composed with local persistence to verify preconnection failure, snapshot-before-release ordering and fresh cancellation authority. A postconfirmation Cancelled marker alone does not manufacture incomplete mandatory work or exit 11. Bundle aliases and actual directory links/junctions are rejected; physical test output directories avoid macOS's `/var` alias without weakening the API. This is local contract evidence for AT-FILE-007, AT-FILE-006, AT-RUN-005/006 and part of AT-TRACE-006/007/009 and AT-PLANNER-009.
 
-Production acceptance requires actual host/Planner/CLI assembly, game lifecycle isolation, bounded provider cancellation and real engine behavior. Native/transport/schema success does not establish those conditions. The report adapter requires the public bounded GuaTraceReport.RenderHtml API; Gua.Testing 1.1.1 does not provide it. A consumer distribution must pin a published Gua release that provides this API before normal package/CI acceptance. No guarded capability follows from the report API.
+Production acceptance requires actual host/Planner/CLI assembly, game lifecycle isolation, bounded provider cancellation and real engine behavior. Native/transport/schema success does not establish those conditions. The report adapter uses the public bounded GuaTraceReport.RenderHtml API from pinned Gua.Testing 1.1.2. Package compatibility checks require the release source identity for both native payloads and the embedded Viewer. No guarded capability follows from the report API.
 
 ## Review regression and package failure evidence
 

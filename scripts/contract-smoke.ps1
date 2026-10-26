@@ -39,7 +39,7 @@ try {
 [pscustomobject]@{
     head = (& git -C $root rev-parse HEAD)
     sdk = (& dotnet --version)
-    guaVersion = '1.1.1'
+    guaVersion = '1.1.2'
     nativeFilesRemoved = $native.Count
     tests = $checks
     scope = 'Actual published CLI with Gua native payload removed; static forms/paths only. No host, engine, Planner or Goal scoring.'
