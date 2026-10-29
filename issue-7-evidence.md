@@ -116,3 +116,5 @@ non-regressing in event order; sequence is strictly increasing. Schema-valid
 forward/regressing sequence/revision/UI/world frame/revision faults expose no
 snapshot/history. Native bridge122 passed with skip0; existing stale-target
 reason and empty-history regression assertions remain intact.
+
+The native-bridge count above was also reported in the [bridge contract at b59a1ac](https://github.com/gua-project/gua-playtest/blob/b59a1ac25d3c86e05af9230fe12de7372f43550c/docs/gua-bridge.md#L165). That source does not identify a separate tested HEAD, timestamp or log for this count; it must not be treated as a new execution result or engine acceptance.

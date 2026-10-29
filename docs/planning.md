@@ -147,8 +147,7 @@ by a task deadline and are not conforming adapters.
 failure and invalid output, without leaking exception text. `PlannerTurn.Events`
 maps these to #6's canonical PlannerUsageLimit/PlannerConnectionFailure/
 PlannerOutputInvalid with Planner origin, never Scenario invalid. Those canonical
-reasons come from the reviewed #6 merge on main (2668926); this module does not redefine
-their priority. A noncontinuable rejected proposal exposes `TerminalEvent`.
+reasons and their priority are defined by the [execution contract](execution.md). A noncontinuable rejected proposal exposes `TerminalEvent`.
 PlannerTurn sends that ready terminal event directly to the arbiter after the
 preceding monitor's fresh units. It never opens a new capture/join after closing
 the request permit, which could extend a finite request wait to MaxDuration.
@@ -175,8 +174,7 @@ These are deterministic native-free tests, not real Codex/game E2E evidence.
 
 Keep issue #11 open for full acceptance. Remaining obligations:
 
-- #6 final reviewed/merged initial boundary and execution policy; integrate final main and
-  rerun checks/review after #6 merges.
+- #6: certified initial boundary and execution policy in the actual host composition.
 - #7/#10/#15: actual current-definition/type/value/consent/input-lifetime checks,
   guarded enqueue, public source/profile/epoch identity, real resubscribe,
   action confirmation and permitted read/condition composition (INPUT-001/003,
@@ -187,6 +185,3 @@ Keep issue #11 open for full acceptance. Remaining obligations:
 - #9/#13: send-before redaction plus persistence redaction, actual App Server
   failure/usage reporting, OS-specific sandbox/network/approval/direct-Gua
   bypass prevention (OPEN-09, PLANNER-009/010). A mock gateway is not real E2E.
-
-CI/review evidence belongs to the PR's actual final HEAD. No issue auto-closure,
-release, credentials or unrecognized software installation is performed here.
