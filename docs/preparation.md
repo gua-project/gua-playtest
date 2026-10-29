@@ -278,8 +278,7 @@ watch cancellation remains excluded; posting after primary freeze is rejected.
 
 Keep #8 open: actual approved Unity/Godot host fixture attestation, subscription/
 capture synchronization and guarded external play dispatch remain unverified.
-Installed Unity was inspected at `C:/Program Files/Unity/Hub/Editor`: 2022.3.22f1,
-6000.5.3f1 and 6000.7.0b2. Presence is not a licensed engine run or FIX-007 evidence.
+An installed engine alone is not a licensed engine run or FIX-007 evidence.
 Gua 1.1.1 lacks the published external atomic guard needed by #7; Gua PR180 is
 unpublished. No future capability is claimed. #7/#11/#15/#16 must connect actual
 host identity, permission/clock/profile, fixture, initial conditions and guarded

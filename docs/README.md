@@ -19,6 +19,13 @@
 
 各契約の日本語導入から詳細本文へ進めます。導入は読み方の説明で、フィールドや終了規則の正本を置き換えません。実コードとテストの参照を合わせて、ライブラリAPI、公開CLI、実ゲーム接続の完成範囲を確認してください。
 
+## 検証記録を読む
+
+契約書には現行の仕様、再現手順、期待結果、判定制約、重要な設計理由と現在の制限を置きます。一回限りの変更・レビュー報告はPRへ、実行日時・対象SHA・環境・コマンド・結果・ログ参照はPRまたは検証記録へ残します。過去の成功は現在の実装や実ゲームの合格を保証しません。
+
+- [基盤の検証境界](../foundation-evidence.md)、[契約の検証記録](../issue-2-evidence.md)、[時間条件](../issue-5-evidence.md)、[bridge](../issue-7-evidence.md)、[Codex protocol review](../issue-13-review-evidence.md) は、各時点の対象と未検証範囲を持つ記録です。
+- 保存層のCI失敗・scheduler調査・レビュー経緯は [PR #34 の検証記録](https://github.com/gua-project/gua-playtest/pull/34#issuecomment-6487400072)を参照してください。現在も必要な制約は [artifacts.md](artifacts.md)にあります。
+
 ## 設計と作業分割の経緯を読む
 
 | 資料 | 読み方 |
