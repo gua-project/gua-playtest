@@ -4,7 +4,7 @@ using Gua.Testing;
 using Gua.Core;
 using Gua.Runtime;
 
-if (args is [var hostMode, var pidFile] && hostMode is "observation-host" or "observation-host-delayed" or "observation-host-ambiguous")
+if (args is [var hostMode, var pidFile] && hostMode is "observation-host" or "observation-host-delayed" or "observation-host-capacity" or "observation-host-ambiguous")
 {
     File.WriteAllText(pidFile, Environment.ProcessId.ToString());
     using var runtime = new GuaRuntime();
@@ -22,9 +22,9 @@ if (args is [var hostMode, var pidFile] && hostMode is "observation-host" or "ob
         runtime.EndFrame();
     }
     if (!runtime.StartInspectorBridge(int.Parse(Environment.GetEnvironmentVariable("GUA_BRIDGE_PORT")!))) return 3;
-    if (hostMode == "observation-host-delayed")
+    if (hostMode is "observation-host-delayed" or "observation-host-capacity")
     {
-        await Task.Delay(700);
+        await Task.Delay(hostMode == "observation-host-capacity" ? 8000 : 700);
         runtime.BeginFrame("native-fixture");
         runtime.RegisterNode(new("ready", "button", "Ready", new(0, 0, 10, 10), Checked: true));
         runtime.EndFrame();

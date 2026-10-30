@@ -17,7 +17,21 @@ public sealed class ObservationRuntimeTests : IDisposable
     private readonly string root = Path.Combine(Path.GetTempPath(), "playtest-runtime-" + Guid.NewGuid().ToString("N"));
     private static string Repository => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
     public ObservationRuntimeTests() => Directory.CreateDirectory(root);
-    public void Dispose() { Directory.Delete(root, true); }
+    // Preserve bounded deterministic test evidence even when an assertion interrupts
+    // the test. CI uploads these separately from its summary TRX.
+    public void Dispose()
+    {
+        var evidence = Path.Combine(Repository, "artifacts/tests/runtime-evidence", Path.GetFileName(root));
+        Directory.CreateDirectory(evidence);
+        foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories).Take(1000))
+        {
+            if (new FileInfo(file).Length > 2 * 1024 * 1024) continue;
+            var copy = Path.Combine(evidence, Path.GetRelativePath(root, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(copy)!); File.Copy(file, copy);
+        }
+        // root is the literal per-test Temp child created by this class.
+        Directory.Delete(root, true);
+    }
     private async Task<string[]> Inputs(string mutation, int port, bool wrongHash = false)
     {
         var scenario = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(Repository, "fixtures/contracts/scenario.json")))!;
@@ -32,9 +46,9 @@ public sealed class ObservationRuntimeTests : IDisposable
             scenario["goal"]!["success"]!["read"] = read.DeepClone();
             scenario["goal"]!["success"]!["quantifier"] = mutation[10..];
         }
-        scenario["goal"]!["success"]!["expected"]!["value"] = mutation is "timeout" or "cancel" or "delayed" or "zero-false";
+        scenario["goal"]!["success"]!["expected"]!["value"] = mutation is "timeout" or "cancel" or "delayed" or "capacity" or "zero-false";
         if (mutation.StartsWith("zero-", StringComparison.Ordinal)) scenario["constraints"]!["maxActions"] = 0;
-        scenario["constraints"]!["maxDurationMilliseconds"] = mutation == "timeout" ? 300 : 3000;
+        scenario["constraints"]!["maxDurationMilliseconds"] = mutation == "timeout" ? 300 : mutation == "capacity" ? 12000 : 3000;
         environment["buildId"] = "sha256-" + (wrongHash ? new string('0', 64) : hash);
         environment["connection"] = new JsonObject { ["endpoint"] = "ws://127.0.0.1:" + port };
         environment["profile"] = "Debug";
@@ -42,6 +56,11 @@ public sealed class ObservationRuntimeTests : IDisposable
         environment["limits"]!["prepareTimeoutMilliseconds"] = 5000;
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 500;
+        if (mutation == "capacity")
+        {
+            environment["limits"]!["traceMaxEvents"] = 512;
+            environment["limits"]!["traceMaxBytes"] = 196608;
+        }
         environment["permissions"]!["actionIds"] = new JsonArray();
         environment["permissions"]!["reads"] = new JsonArray(read.DeepClone());
         if (mutation == "actions") environment["permissions"]!["actionIds"] = new JsonArray("buy");
@@ -53,7 +72,7 @@ public sealed class ObservationRuntimeTests : IDisposable
             "--scenario", Path.Combine(root, "scenario.json"), "--environment", Path.Combine(root, "environment.json"),
             "--executable", executable, "--executable-sha256", wrongHash ? new string('0', 64) : hash,
             "--working-directory", Repository, "--output-root", root, "--argument", probe,
-            "--argument", mutation == "delayed" ? "observation-host-delayed" : mutation.StartsWith("ambiguous-", StringComparison.Ordinal) ? "observation-host-ambiguous" : "observation-host",
+            "--argument", mutation == "capacity" ? "observation-host-capacity" : mutation == "delayed" ? "observation-host-delayed" : mutation.StartsWith("ambiguous-", StringComparison.Ordinal) ? "observation-host-ambiguous" : "observation-host",
             "--argument", Path.Combine(root, "pid")];
     }
     private static int Port()
@@ -72,6 +91,7 @@ public sealed class ObservationRuntimeTests : IDisposable
     [InlineData("ambiguous-none", 3)]
     [InlineData("zero-true", 0)]
     [InlineData("zero-false", 1)]
+    [InlineData("capacity", 11)]
     public async Task Actual_owned_native_bridge_uses_runner_result_trace_and_cleanup(string mode, int expected)
     {
         if (!OperatingSystem.IsWindows())
@@ -82,7 +102,7 @@ public sealed class ObservationRuntimeTests : IDisposable
         }
         var args = await Inputs(mode, Port());
         using var output = new StringWriter();
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var task = CliApplication.ExecuteAsync(args, output, cancellation.Token);
         if (mode == "cancel")
         {
@@ -92,6 +112,7 @@ public sealed class ObservationRuntimeTests : IDisposable
             cancellation.Cancel();
         }
         var exit = await task;
+        await File.WriteAllTextAsync(Path.Combine(root, "command.json"), output.ToString());
         Assert.True(expected == exit, $"Expected {expected}; got {exit}: {output}");
         using var result = JsonDocument.Parse(output.ToString());
         var details = result.RootElement.GetProperty("details");
@@ -105,13 +126,31 @@ public sealed class ObservationRuntimeTests : IDisposable
             Assert.Contains("DiagnosticsFailed", details.GetProperty("postProcessing").EnumerateArray().Select(x => x.GetString()));
             Assert.DoesNotContain("ResourceReleaseUnconfirmed", details.GetProperty("postProcessing").EnumerateArray().Select(x => x.GetString()));
         }
+        else if (mode == "capacity")
+        {
+            Assert.Equal("Passed", result.RootElement.GetProperty("status").GetString());
+            Assert.Equal("GoalSatisfied", result.RootElement.GetProperty("code").GetString());
+            Assert.False(details.GetProperty("postProcessingComplete").GetBoolean());
+        }
         else Assert.True(details.GetProperty("postProcessingComplete").GetBoolean(), output.ToString());
-        Assert.Equal("None", details.GetProperty("persistence").GetString());
+        if (mode != "capacity") Assert.Equal("None", details.GetProperty("persistence").GetString());
         int pid = int.Parse(await File.ReadAllTextAsync(Path.Combine(root, "pid")));
         Assert.Equal(pid, details.GetProperty("ownedProcessId").GetInt32());
         Assert.True(IsExited(pid), "The exact owned process must be gone before returning the Run result.");
         var directory = details.GetProperty("artifactDirectory").GetString()!;
+        using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "run.json")));
+        var inputs = metadata.RootElement.GetProperty("inputs").EnumerateArray().ToArray();
+        var runtime = inputs.Single(x => x.GetProperty("name").GetString() == "effective-runtime");
+        var sourceEnvironment = inputs.Single(x => x.GetProperty("name").GetString() == "environment");
+        Assert.Equal(sourceEnvironment.GetProperty("sha256").GetString(), runtime.GetProperty("document").GetProperty("sourceEnvironmentCopySha256").GetString());
+        Assert.Equal(runtime.GetProperty("sha256").GetString(), metadata.RootElement.GetProperty("identity").GetProperty("environmentSha256").GetString());
+        Assert.Equal(runtime.GetProperty("sha256").GetString(), details.GetProperty("effectiveEnvironmentSha256").GetString());
         var limits = new ArtifactLimits(8 * 1024 * 1024, 8 * 1024 * 1024, 10000, 65536);
+        if (mode == "capacity")
+        {
+            Assert.Contains("ArtifactFailed", await File.ReadAllTextAsync(Path.Combine(directory, "result.json")));
+            return;
+        }
         Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(directory, limits)).State);
         var trace = Directory.GetFiles(directory, "manifest.json", SearchOption.AllDirectories).Single();
         Assert.True(GuaTraceReader.Read(Path.GetDirectoryName(trace)!).Manifest.Finalized);

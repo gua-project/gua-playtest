@@ -36,7 +36,8 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     }
     public ValueTask<HostIdentity> IdentifyAsync(CancellationToken token) => new(Task.Run(() =>
     {
-        lock (gate) { token.ThrowIfCancellationRequested(); return Identify(); }
+        using var interrupt = token.Register(observations.Interrupt);
+        return Cancellable(token, Identify);
     }, token));
     private HostIdentity Identify()
     {
@@ -48,16 +49,29 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     }
     public ValueTask<InitialBoundary> SynchronizeAsync(string requestId, CancellationToken token) => new(Task.Run(() =>
     {
-        lock (gate)
+        using var interrupt = token.Register(observations.Interrupt);
+        return Cancellable(token, () =>
         {
             token.ThrowIfCancellationRequested(); observations.Resubscribe();
             var observation = Capture();
             return new InitialBoundary(LastIdentity!, true, true, requestId, observation.CapturedAt,
                 "gua-subscription-and-fresh-read", observation, this, false);
-        }
+        });
     }, token));
     public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => new(Task.Run(() =>
-    { lock (gate) { token.ThrowIfCancellationRequested(); return Capture(); } }, token));
+    {
+        using var interrupt = token.Register(observations.Interrupt);
+        return Cancellable(token, Capture);
+    }, token));
+    private T Cancellable<T>(CancellationToken token, Func<T> operation)
+    {
+        lock (gate)
+        {
+            token.ThrowIfCancellationRequested();
+            try { var result = operation(); token.ThrowIfCancellationRequested(); return result; }
+            catch (Exception) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
+        }
+    }
     private RunObservation Capture()
     {
         var identity = Identify();
@@ -88,14 +102,17 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
         return new(clock.Elapsed, s, f);
     }
     public ValueTask WaitForChangeAsync(CancellationToken token) => clock.DelayAsync(TimeSpan.FromMilliseconds(25), token);
-    public ValueTask<bool> ReleaseAsync(CancellationToken token) => new(Task.Run(() =>
+    public ValueTask<bool> ReleaseAsync(CancellationToken token)
     {
-        lock (gate)
+        observations.Interrupt();
+        return new(Task.Run(() =>
         {
-            if (closed) return true;
-            closed = true;
-            observations.Dispose();
-            return true;
-        }
-    }, CancellationToken.None));
+            lock (gate)
+            {
+                if (closed) return true;
+                observations.Dispose();
+                closed = true; return true;
+            }
+        }, CancellationToken.None));
+    }
 }

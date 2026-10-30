@@ -29,6 +29,7 @@ public sealed class BridgeObservations : IDisposable
     private string? cursorSourceId;
     private ulong cursorEpoch;
     private bool disposed;
+    private int interrupted;
     private readonly object gate = new();
 
     public BridgeObservations(string endpoint, GuaObservationProfile profile, TimeSpan requestTimeout,
@@ -47,7 +48,7 @@ public sealed class BridgeObservations : IDisposable
     {
         lock (gate)
         {
-            ObjectDisposedException.ThrowIf(disposed, this);
+            ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
             subscription?.Dispose(); subscription = null;
             context.GetVersion().EnsureCompatible("2", 1, ["observe_v1"]);
             var next = context.SubscribeObservations();
@@ -66,13 +67,20 @@ public sealed class BridgeObservations : IDisposable
     /// errors, selector candidates or values from another profile.</summary>
     public BridgeReadCollection Read(JsonObject read) => ReadBatch([read])[0];
 
+    /// <summary>Irreversibly interrupt this owned connection without waiting for a read's lock.
+    /// In-flight receipts become unavailable; this never resets or closes another host/owner.</summary>
+    public void Interrupt()
+    {
+        if (Interlocked.Exchange(ref interrupted, 1) == 0) context.Dispose();
+    }
+
     /// <summary>Identity on this same profile-bound connection, without acquiring another client or resetting the host.
     /// The caller must independently attest the game build and endpoint ownership.</summary>
     public BridgeSessionIdentity Identify()
     {
         lock (gate)
         {
-            ObjectDisposedException.ThrowIf(disposed, this);
+            ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
             context.GetVersion().EnsureCompatible("2", 1, ["observe_v1"]);
             var snapshot = ParseTransport(context.GetObserveSnapshotJson()).GetProperty("document");
             var status = context.GetContextStatus();
@@ -89,7 +97,7 @@ public sealed class BridgeObservations : IDisposable
     {
         lock (gate)
         {
-            ObjectDisposedException.ThrowIf(disposed, this);
+            ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
             if (reads.Count == 0 || reads.Count > maxNodes) throw new ArgumentOutOfRangeException(nameof(reads));
             try
             {
@@ -117,7 +125,7 @@ public sealed class BridgeObservations : IDisposable
     {
         lock (gate)
         {
-            ObjectDisposedException.ThrowIf(disposed, this);
+            ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
             try
             {
                 if (subscription is null) Resubscribe();
@@ -375,7 +383,10 @@ public sealed class BridgeObservations : IDisposable
         lock (gate)
         {
             if (disposed) return; disposed = true;
-            try { subscription?.Dispose(); } finally { subscription = null; context.Dispose(); }
+            // Interrupted context owns no live transport; do not issue an unsubscribe
+            // against its disposed socket. The subscription has no independent socket.
+            try { if (Volatile.Read(ref interrupted) == 0) subscription?.Dispose(); }
+            finally { subscription = null; context.Dispose(); }
         }
     }
     private sealed class ObservationLimitException : Exception;

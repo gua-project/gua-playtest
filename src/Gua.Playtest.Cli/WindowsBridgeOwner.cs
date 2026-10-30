@@ -18,14 +18,28 @@ internal static class WindowsBridgeOwner
             endpoint.AbsolutePath != "/" || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0)
             throw new InvalidOperationException("WindowsLoopbackRequired");
         if (process.HasExited) throw new InvalidOperationException("OwnedProcessExited");
+        var owners = ListenerOwners(endpoint.Port, (IntPtr table, ref int bytes) => GetExtendedTcpTable(table, ref bytes, false, 2, 3, 0));
+        if (owners.Count == 0) throw new ConnectionNotReadyException();
+        if (owners.Count != 1 || owners[0] != process.ProcessId || process.HasExited)
+            throw new InvalidOperationException("ListenerOwnerMismatch");
+    }
+    internal delegate uint ReadTable(IntPtr table, ref int size);
+    internal static IReadOnlyList<int> ListenerOwners(int expectedPort, ReadTable read)
+    {
         int size = 0;
-        var status = GetExtendedTcpTable(IntPtr.Zero, ref size, false, 2, 3, 0);
+        var status = read(IntPtr.Zero, ref size);
         if (status != 122 || size is < 4 or > 1048576) throw new InvalidOperationException("ListenerIdentityUnavailable");
-        var memory = Marshal.AllocHGlobal(size);
-        try
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            status = GetExtendedTcpTable(memory, ref size, false, 2, 3, 0);
-            if (status != 0) throw new InvalidOperationException("ListenerIdentityUnavailable");
+            int allocated = size;
+            var memory = Marshal.AllocHGlobal(allocated);
+            try
+            {
+            status = read(memory, ref size);
+            // The OS table can grow between size and data reads. Retry only buffer
+            // allocation, with bounded attempts/bytes; never relax owner matching.
+            if (status == 122 && size > allocated && size <= 1048576) continue;
+            if (status != 0 || size < 4 || size > allocated) throw new InvalidOperationException("ListenerIdentityUnavailable");
             int count = Marshal.ReadInt32(memory);
             if (count < 0 || count > (size - 4) / 24) throw new InvalidOperationException("ListenerIdentityUnavailable");
             var owners = new List<int>();
@@ -34,12 +48,12 @@ internal static class WindowsBridgeOwner
                 var row = IntPtr.Add(memory, 4 + i * 24);
                 int port = (ushort)IPAddress.NetworkToHostOrder((short)Marshal.ReadInt32(row, 8));
                 uint address = unchecked((uint)Marshal.ReadInt32(row, 4));
-                if (port == endpoint.Port && address is 0 or 0x0100007f) owners.Add(Marshal.ReadInt32(row, 20));
+                if (port == expectedPort && address is 0 or 0x0100007f) owners.Add(Marshal.ReadInt32(row, 20));
             }
-            if (owners.Count == 0) throw new ConnectionNotReadyException();
-            if (owners.Count != 1 || owners[0] != process.ProcessId || process.HasExited)
-                throw new InvalidOperationException("ListenerOwnerMismatch");
+            return owners;
+            }
+            finally { Marshal.FreeHGlobal(memory); }
         }
-        finally { Marshal.FreeHGlobal(memory); }
+        throw new InvalidOperationException("ListenerIdentityUnavailable");
     }
 }

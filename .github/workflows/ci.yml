@@ -46,6 +46,7 @@ jobs:
           name: foundation-${{ matrix.rid }}-${{ github.sha }}
           path: |
             artifacts/tests/*.trx
+            artifacts/tests/runtime-evidence/**
             artifacts/smoke-*/evidence.json
             artifacts/smoke-*/*.zip
             artifacts/smoke-*/feed/*.nupkg

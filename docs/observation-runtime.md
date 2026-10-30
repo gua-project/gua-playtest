@@ -21,6 +21,9 @@ set from Environment.connection.endpoint, which must be an explicit IPv4
 `ws://127.0.0.1:<port>/` endpoint without credentials, query or fragment.
 The child otherwise retains SystemProcessLauncher's existing inherited environment;
 this mechanism is not a game-process sandbox or permission grant.
+Arguments must be non-secret; credential-bearing arguments are outside this lane.
+Arguments containing password/token/authorization/secret markers are refused.
+Do not pass credentials through game arguments or the inherited process environment.
 
 Environment.buildId must be `sha256-<lowercase-executable-digest>`. The command
 locks the executable against replacement/write during the Run, verifies its hash,
@@ -55,6 +58,15 @@ after that boundary. Primary is saved before owned cleanup. Recording is
 real-data redaction and capacity policy; Gua owns Trace/reader/report HTML.
 Trace capacity is reduced to reserve the existing writer's manifest and summary
 budgets, without increasing Environment.traceMaxBytes.
+The effective Environment identity hashes the sanitized source Environment copy,
+resolved limits, executable path/hash, working directory, ordered game arguments
+and sorted explicit child environment overrides. The source Environment copy is
+retained separately from this effective runtime configuration. Different explicit
+launch/save conditions therefore form different history groups. Inherited host
+environment is not enumerated or attested by this identity.
+Trace capture failure disables further capture storage but keeps valid observation
+values available to Goal evaluation. Missing primary persistence or finalization
+failure remains postprocessing debt and cannot replace the original primary.
 
 The CLI returns the established Run exit code and a JSON `details` object with
 runId, artifactDirectory, driver, primary phase/origin, persistence and

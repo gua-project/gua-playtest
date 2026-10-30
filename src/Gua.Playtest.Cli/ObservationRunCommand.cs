@@ -105,14 +105,22 @@ internal static class ObservationRunCommand
             var redactor = new PersistenceRedactor([], ["password", "token", "authorization", "secretValue"]);
             var store = RunArtifactStore.Create(destination, artifactLimits, redactor);
             var scenarioFile = scenarioReport.Files.Values.Single(); var environmentFile = environmentReport.Files.Values.Single();
-            var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, scenarioFile.Sha256, environment.BuildId, environmentFile.Sha256);
+            // Grouping describes actual explicit launch conditions, not just the source file.
+            // Inherited host environment is deliberately not read/persisted (and is not sandboxed).
+            var environmentCopy = redactor.RedactDocument(JsonSerializer.SerializeToElement(environmentFile.CopyJson()), artifactLimits);
+            var environmentCopyHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(environmentCopy)));
+            var runtimeConfiguration = EffectiveConfiguration(environmentCopyHash, limits, launch, hash, redactor, artifactLimits);
+            var runtimeHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(runtimeConfiguration)));
+            var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, scenarioFile.Sha256, environment.BuildId, runtimeHash);
             var metadata = new RunArtifactMetadata(environment.Profile.ToLowerInvariant(),
                 [new("driver", "observation-only", "explicit-command"), new("clock", "real", "explicit-command"),
                     new("gameExecutableSha256", hash.ToLowerInvariant(), "locked-image-and-OS-listener-owner"),
+                    new("effectiveEnvironmentSha256", runtimeHash, "explicit-runtime-configuration"),
                     new("maxDurationMilliseconds", limits.MaxDurationMilliseconds.ToString(CultureInfo.InvariantCulture), "scenario-environment-minimum")],
                 new Dictionary<string, string> { ["Gua.Testing"] = "1.1.2" },
                 [new("scenario", JsonSerializer.SerializeToElement(scenarioFile.CopyJson()), scenarioFile.CopyBytes(), Path.GetExtension(scenarioPath)),
-                    new("environment", JsonSerializer.SerializeToElement(environmentFile.CopyJson()), environmentFile.CopyBytes(), Path.GetExtension(environmentPath))], identity, DateTimeOffset.UtcNow);
+                    new("environment", JsonSerializer.SerializeToElement(environmentFile.CopyJson()), environmentFile.CopyBytes(), Path.GetExtension(environmentPath)),
+                    new("effective-runtime", runtimeConfiguration)], identity, DateTimeOffset.UtcNow);
             await using var artifacts = new GuaRunArtifacts(store, metadata, artifactLimits, new GuaTraceOptions
             {
                 CaptureMode = environment.Trace.CaptureMode == "recent" ? GuaTraceCaptureMode.Recent : GuaTraceCaptureMode.Streaming,
@@ -125,6 +133,7 @@ internal static class ObservationRunCommand
             if (!artifacts.PreparationPersistence.Saved) throw new InvalidDataException("RuntimeStorageUnavailable");
             var captureGate = new object();
             bool capturesClosed = false;
+            bool capturesDisabled = false;
             long captureSequence = 0;
             var launcher = new Launcher();
             var connector = new Connector(address =>
@@ -139,12 +148,17 @@ internal static class ObservationRunCommand
                         // and cannot append Before evidence once the primary snapshot begins.
                         lock (captureGate)
                         {
-                            if (capturesClosed) return;
-                            var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, "Observation capture");
-                            artifacts.Observe("capture-" + (++captureSequence).ToString(CultureInfo.InvariantCulture),
-                                ObservationBoundary.Before, step, "gua", "fresh-read", collection.Availability.ToString(),
-                                new(host.SourceId, host.Epoch), JsonSerializer.SerializeToElement(collection), "snapshot");
-                            artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
+                            if (capturesClosed || capturesDisabled) return;
+                            capturesDisabled = !CaptureWithoutPrimaryAuthority(() =>
+                            {
+                                var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, "Observation capture");
+                                if (string.IsNullOrEmpty(step)) throw new InvalidOperationException("TraceCapacityReached");
+                                var observation = artifacts.Observe("capture-" + (++captureSequence).ToString(CultureInfo.InvariantCulture),
+                                    ObservationBoundary.Before, step, "gua", "fresh-read", collection.Availability.ToString(),
+                                    new(host.SourceId, host.Epoch), JsonSerializer.SerializeToElement(collection), "snapshot");
+                                if (string.IsNullOrEmpty(observation)) throw new InvalidOperationException("TraceCapacityReached");
+                                artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
+                            }, artifacts.MarkCaptureFailure);
                         }
                     });
             });
@@ -166,10 +180,12 @@ internal static class ObservationRunCommand
                 {
                     lock (captureGate) { capturesClosed = true; return artifacts.ConfirmPrimaryAsync(snapshot, cancel); }
                 });
-            var completion = await artifacts.CompleteAsync(outcome, DateTimeOffset.UtcNow);
+            lock (captureGate) capturesClosed = true;
+            var completion = await CompletePreservingOutcomeAsync(artifacts, outcome);
             return await CommandOutput.WriteAsync(output, diagnostics, json, outcome.Primary.Status.ToString(), outcome.Primary.Cause.Reason.ToString(),
                 completion.ExitCode(outcome), new { runId = store.RunId, artifactDirectory = store.DirectoryPath,
                     ownedProcessId = launcher.Process?.ProcessId,
+                    effectiveEnvironmentSha256 = runtimeHash,
                     driver = "observation-only", phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),
                     postProcessingComplete = outcome.PostProcessingComplete && completion.Persistence.Saved && !completion.Persistence.PostProcessingIncomplete,
                     persistence = completion.Persistence.Failure.ToString(),
@@ -181,6 +197,38 @@ internal static class ObservationRunCommand
         { return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", error.Message, 2); }
         catch (Exception)
         { return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "ObservationRuntimeRejected", 2); }
+    }
+    internal static bool CaptureWithoutPrimaryAuthority(Action capture, Action failed)
+    {
+        try { capture(); return true; }
+        catch (Exception) { failed(); return false; }
+    }
+    internal static async Task<GuaArtifactCompletion> CompletePreservingOutcomeAsync(GuaRunArtifacts artifacts, RunOutcome outcome)
+    {
+        try { return await artifacts.CompleteAsync(outcome, DateTimeOffset.UtcNow); }
+        catch (Exception)
+        {
+            // A skipped primary hook or failed finalization owes evidence debt. Do not
+            // invent a new primary or start another cleanup budget after its deadline.
+            return new(new PersistenceResult(PersistenceFailure.InvalidEvidence, true), []);
+        }
+    }
+    internal static JsonElement EffectiveConfiguration(string sourceEnvironmentCopySha256, object limits, LaunchCommand launch,
+        string hash, PersistenceRedactor redactor, ArtifactLimits artifactLimits)
+    {
+        // This command has no secret-binding input. Credential-bearing launch arguments
+        // are outside its lane; values must be non-secret. Do not inspect inherited env.
+        if (launch.Arguments.Any(x => x.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+            x.Contains("token", StringComparison.OrdinalIgnoreCase) || x.Contains("authorization", StringComparison.OrdinalIgnoreCase) ||
+            x.Contains("secret", StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("RuntimeArgumentsInvalid");
+        var configuration = JsonSerializer.SerializeToElement(new
+        {
+            driver = "observation-only", clock = "real", sourceEnvironmentCopySha256, limits,
+            executable = launch.Executable, executableSha256 = hash.ToLowerInvariant(),
+            workingDirectory = launch.WorkingDirectory, arguments = launch.Arguments,
+            childEnvironment = launch.EnvironmentVariables?.OrderBy(x => x.Key, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Value)
+        });
+        return redactor.RedactDocument(configuration, artifactLimits);
     }
     private static readonly HashSet<string> Refusals = new(StringComparer.Ordinal)
     {
