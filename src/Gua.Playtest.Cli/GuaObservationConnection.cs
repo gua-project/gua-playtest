@@ -126,7 +126,10 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     public ValueTask<bool> ReleaseAsync(CancellationToken token)
     {
         observations.Interrupt();
-        return new(Task.Run(() =>
+        // Release must not queue behind shared-pool work after the finite cleanup
+        // share has started. The owner still bounds confirmation; this dedicated
+        // worker grants no extra time and cannot change the primary result.
+        return new(Task.Factory.StartNew(() =>
         {
             lock (gate)
             {
@@ -135,6 +138,6 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
                 observations.Dispose();
                 closed = true; return true;
             }
-        }, CancellationToken.None));
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
     }
 }

@@ -15,6 +15,26 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed class SingleUiRuntimeTests
 {
     private static string Repository => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+    [Fact]
+    public async Task Owned_guarded_connection_release_starts_without_a_shared_threadpool_worker()
+    {
+        var configuration=new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var probe=Path.Combine(Repository,"tests/Gua.Playtest.ProcessProbe/bin",configuration,"net10.0/Gua.Playtest.ProcessProbe.dll");
+        var info=new ProcessStartInfo("dotnet") { RedirectStandardOutput=true,RedirectStandardError=true,UseShellExecute=false,CreateNoWindow=true };
+        info.ArgumentList.Add(probe);info.ArgumentList.Add("release-pool-pressure");
+        using var child=Process.Start(info)!;
+        var stdout=child.StandardOutput.ReadToEndAsync();var stderr=child.StandardError.ReadToEndAsync();
+        using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try { await child.WaitForExitAsync(deadline.Token); }
+        finally { if(!child.HasExited) child.Kill(true); }
+        var output=await stdout;var errors=await stderr;
+        string root=Path.Combine(Repository,"artifacts/tests/single-ui/release-pressure",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root,"facts.json"),output);await File.WriteAllTextAsync(Path.Combine(root,"stderr.txt"),errors);
+        Assert.True(child.ExitCode==0,output+errors);
+        using var facts=JsonDocument.Parse(output.Split('\n').Single(line=>line.StartsWith("{\"confirmed\"",StringComparison.Ordinal)));
+        Assert.Equal(0,facts.RootElement.GetProperty("available").GetInt32());
+        Assert.True(facts.RootElement.GetProperty("confirmed").GetBoolean());Assert.True(facts.RootElement.GetProperty("socketsDisposed").GetBoolean());
+    }
     [Theory]
     [InlineData("ui-click-host", 0, 1)]
     [InlineData("ui-click-host-fail", 1, 1)]

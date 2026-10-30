@@ -4,6 +4,45 @@ using Gua.Testing;
 using Gua.Core;
 using Gua.Runtime;
 
+if (args is ["release-pool-pressure"])
+{
+    // Only this disposable process changes its ThreadPool limits. Establish both
+    // real SDK sockets first, then leave no shared worker for a queued release.
+    using var host = new GuaRuntime();
+    host.BeginFrame("release"); host.RegisterNode(new("start", "button", "Start", new(0,0,10,10))); host.EndFrame();
+    using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback,0);
+    listener.Start(); int port=((System.Net.IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
+    if(!host.StartInspectorBridge(port)) return 3;
+    var type=typeof(Gua.Playtest.Cli.CliApplication).Assembly.GetType("Gua.Playtest.Cli.GuaObservationConnection",true)!;
+    var connection=(IPreparationConnection)Activator.CreateInstance(type, BindingFlags.Instance|BindingFlags.NonPublic,
+        null, [new Uri($"ws://127.0.0.1:{port}"),"build","Debug",new ProbeClock(),null,null,100,100000,
+            TimeSpan.FromMilliseconds(500),new Action(()=>{}),new Action<Gua.Playtest.GuaIntegration.BridgeReadCollection,HostIdentity>((_,_)=>{}),true,null],null)!;
+    var identity=connection.IdentifyAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+    using var entered=new ManualResetEventSlim(); using var unblock=new ManualResetEventSlim(); using var ended=new ManualResetEventSlim();
+    ThreadPool.GetMinThreads(out int minWorkers,out int minIo); ThreadPool.GetMaxThreads(out int maxWorkers,out int maxIo);
+    if(!ThreadPool.SetMinThreads(1,minIo) || !ThreadPool.SetMaxThreads(1,maxIo)) return 4;
+    bool confirmed=false; double duration=0; int available=0;
+    Task<bool>? release=null;
+    try
+    {
+        ThreadPool.QueueUserWorkItem(_=>{entered.Set();unblock.Wait();ended.Set();});
+        if(!entered.Wait(TimeSpan.FromSeconds(5))) return 5;
+        ThreadPool.GetAvailableThreads(out available,out _);
+        var timer=System.Diagnostics.Stopwatch.StartNew();
+        release=connection.ReleaseAsync(CancellationToken.None).AsTask();
+        confirmed=release.Wait(TimeSpan.FromMilliseconds(500)) && release.GetAwaiter().GetResult(); duration=timer.Elapsed.TotalMilliseconds;
+    }
+    finally
+    {
+        unblock.Set(); ended.Wait(TimeSpan.FromSeconds(5));
+        ThreadPool.SetMaxThreads(maxWorkers,maxIo); ThreadPool.SetMinThreads(minWorkers,minIo);
+        release?.Wait(TimeSpan.FromSeconds(5));
+    }
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { confirmed,duration,available,source=identity.SourceId,
+        socketsDisposed=type.GetField("closed",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(connection) }));
+    return confirmed && available==0 ? 0 : 1;
+}
+
 if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-already" or "ui-click-host-delayed" or "ui-click-host-late-goal")
 {
     File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
@@ -91,3 +130,10 @@ if (args is ["noisy-parent"])
     return 0;
 }
 return 2;
+
+sealed class ProbeClock : Gua.Playtest.Core.IClock
+{
+    private readonly System.Diagnostics.Stopwatch timer=System.Diagnostics.Stopwatch.StartNew();
+    public TimeSpan Elapsed=>timer.Elapsed;
+    public ValueTask DelayAsync(TimeSpan duration,CancellationToken token)=>new(Task.Delay(duration,token));
+}

@@ -63,3 +63,6 @@ joins the serialized bounded read before its final fresh capture; only terminal
 cleanup irreversibly interrupts the shared socket. Guarded session disposal and
 owned process shutdown remain separate obligations, with unconfirmed release
 reported rather than assumed.
+Connection disposal starts on a dedicated worker so shared ThreadPool work cannot
+consume its cleanup share before disposal begins. The existing finite cleanup
+deadline still bounds confirmation; an unfinished release remains unconfirmed.
