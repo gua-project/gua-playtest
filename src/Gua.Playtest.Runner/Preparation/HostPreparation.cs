@@ -67,7 +67,9 @@ public sealed class HostPreparation
                 Profile = Gua.Playtest.Core.Contracts.NavigationProfileValidation.Copy(policy.Navigation.Profile),
                 AllowedActionIds = new HashSet<string>(policy.Navigation.AllowedActionIds, StringComparer.Ordinal),
                 AllowedReads = policy.Navigation.AllowedReads.Select(r => (System.Text.Json.Nodes.JsonObject)r.DeepClone()).ToArray() },
-            Launch = policy.Launch is null ? null : policy.Launch with { Arguments = policy.Launch.Arguments.ToArray() } };
+            Launch = policy.Launch is null ? null : policy.Launch with { Arguments = policy.Launch.Arguments.ToArray(),
+                EnvironmentVariables = policy.Launch.EnvironmentVariables is null ? null :
+                    new Dictionary<string, string>(policy.Launch.EnvironmentVariables, StringComparer.Ordinal) } };
         this.launcher = launcher; this.connector = connector; this.trace = trace;
     }
 

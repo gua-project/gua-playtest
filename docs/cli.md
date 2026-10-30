@@ -86,7 +86,10 @@ permission or execution identity. It does not resolve credentials.
 
 Execution currently returns exit 2 / `ProductionRuntimeUnavailable` after valid
 inputs. Environment v1 has no host mode, executable, authoritative clock or auth
-policy fields. A trusted composition must provide those separately, preserve
+policy fields. The separate [observation-only Windows Run](observation-runtime.md)
+provides an explicit executable/hash/ownership composition for bounded, input-free
+Scenario monitoring; it does not enable Explore or Replay dispatch.
+A trusted input-producing composition must provide those separately, preserve
 Plan timing (including simulation), attest the actual game build, intersect all
 permissions and resource limits with current host authority, and pass only
 necessary secret supplies into host preparation and persistence. Its identity

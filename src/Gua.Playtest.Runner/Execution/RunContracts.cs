@@ -79,7 +79,7 @@ public sealed record RunLimits
     {
         foreach (var duration in new[] { maxDuration, preparationTimeout, cleanupTimeout, plannerTimeout, waitTimeout, actionTimeout })
             if (duration <= TimeSpan.Zero || duration > TimeSpan.FromDays(1)) throw new ArgumentOutOfRangeException(nameof(maxDuration));
-        if (maxActions <= 0 || maxDecisions <= 0 || recoveryDecisions <= 0) throw new ArgumentOutOfRangeException(nameof(maxActions));
+        if (maxActions < 0 || maxDecisions <= 0 || recoveryDecisions <= 0) throw new ArgumentOutOfRangeException(nameof(maxActions));
         if (maxEvidenceItems < 32 || maxEvidenceItems > 100000) throw new ArgumentOutOfRangeException(nameof(maxEvidenceItems));
         MaxDuration = maxDuration; PreparationTimeout = preparationTimeout; CleanupTimeout = cleanupTimeout;
         PlannerTimeout = plannerTimeout; WaitTimeout = waitTimeout; ActionTimeout = actionTimeout;

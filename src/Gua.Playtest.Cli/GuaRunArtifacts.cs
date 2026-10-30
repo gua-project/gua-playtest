@@ -31,6 +31,8 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
     public PersistenceResult PreparationPersistence { get; }
     public string RunId => store.RunId;
     public GuaRunTrace Trace => writer.Trace;
+    /// <summary>Storage failure evidence only; never changes the Run's primary outcome.</summary>
+    public void MarkCaptureFailure() { lock (gate) captureFailed = true; }
 
     /// <summary>Construct at Preparing entry before launch/connect. The existing store owns
     /// metadata sanitization and immutable summaries; Gua owns its Trace/Recording bytes.</summary>

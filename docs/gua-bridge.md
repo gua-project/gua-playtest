@@ -94,6 +94,14 @@ releases the owned cursor/connection and never resets or kills the host.
 
 ## Action boundary
 
+Published Gua.Testing 1.1.2 includes `CreateGuardedDispatchSession` and
+`GuaRemoteGuardedSession.SendUi` / `SendGameInput` / `Poll`, backed by the
+`guarded_dispatch_v1` capability. See the [pinned upstream API](https://github.com/gua-project/gua/blob/b398e531558f38220baf0b606e7c3f33904a87a5/bindings/dotnet/src/Gua.Testing/GuaRemoteGuardedDispatch.cs).
+The Playtest adapters described below retain their existing local/legacy paths;
+they do not yet compose that remote API into an input-producing CLI Run. The
+observation-only command does not dispatch. Package API availability and actual
+host capability/ownership/permission acceptance are separate checks.
+
 `ActionAttempt` separates Run ID, execution ID, action ID, session epoch and Gua
 request ID. Selector and freshly resolved Runtime ID are retained for UI attempts.
 Each execution ID is reserved before dispatch, including rejected/uncertain
@@ -131,7 +139,7 @@ lock; this adapter does not claim safe external Running dispatch for it. Gua's
 remote EnqueueAction maps generic InvalidOperationException to InvalidArgument;
 that result is retained as dispatch-unconfirmed, not proof of nonexecution.
 
-## Actual upstream API evidence and unresolved external route
+## Historical 1.1.1 upstream evidence and legacy external route
 
 All source links are pinned to Gua 1.1.1 commit
 `88f5dca4aa97c5d5187ab66ea4416377f3affc96`:
