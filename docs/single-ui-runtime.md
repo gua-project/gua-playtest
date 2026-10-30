@@ -37,6 +37,10 @@ SDK's beforeDispatch boundary. An enqueued receipt is not completion or Goal
 success. Completion is correlated by the SDK and independent fresh observations
 are evaluated by the existing condition owner. A completed click can still fail
 its Scenario or time out waiting for the Goal.
+Receipt completion retains the original approved observation window, including
+when the click uses the last action. Asynchronous effects may satisfy the Goal
+within that window; expiry records WaitExpired and does not extend to MaxDuration.
+Other eligible causes, including exhausted actions, retain normal result priority.
 
 An uncertain receipt/completion is terminal and has no retry/resend. A rejected
 preflight remains unsent; a dispatch already attempted consumes its action even

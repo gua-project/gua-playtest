@@ -18,7 +18,10 @@ public sealed class SingleUiRuntimeTests
     [Theory]
     [InlineData("ui-click-host", 0, 1)]
     [InlineData("ui-click-host-fail", 1, 1)]
-    [InlineData("ui-click-host-no-goal", 3, 1)]
+    [InlineData("ui-click-host-no-goal", 1, 1)]
+    [InlineData("ui-click-host-delayed", 0, 1)]
+    [InlineData("ui-click-host-late-goal", 1, 1)]
+    [InlineData("no-goal-one", 1, 1)]
     [InlineData("ui-click-host-already", 0, 0)]
     [InlineData("zero", 1, 0)]
     [InlineData("forbidden", 2, 0)]
@@ -45,6 +48,7 @@ public sealed class SingleUiRuntimeTests
         }
         if (mode=="scenario-forbidden") scenario["constraints"]!["allowedActionIds"]=new JsonArray();
         if (mode == "zero") scenario["constraints"]!["maxActions"] = 0;
+        if (mode is "ui-click-host-delayed" or "no-goal-one") scenario["constraints"]!["maxActions"] = 1;
         environment["permissions"]!["reads"] = new JsonArray(read.DeepClone());
         environment["permissions"]!["actionIds"] = mode == "forbidden" ? new JsonArray("reset") : new JsonArray("click");
         environment["profile"] = "Debug"; environment["trace"]!["savePolicy"] = "always";
@@ -61,12 +65,23 @@ public sealed class SingleUiRuntimeTests
         string[] args = ["click-run", "--json", "--allow-root", Repository, "--allow-root", Path.GetDirectoryName(executable)!,
             "--scenario", Path.Combine(root,"scenario.json"), "--environment", Path.Combine(root,"environment.json"), "--executable", executable,
             "--executable-sha256", hash, "--working-directory", Repository, "--output-root", root, "--target-id", "start",
-            "--argument", probe, "--argument", mode.StartsWith("ui-click-",StringComparison.Ordinal) ? mode : "ui-click-host", "--argument", pidPath];
+            "--argument", probe, "--argument", mode=="no-goal-one" ? "ui-click-host-no-goal" : mode.StartsWith("ui-click-",StringComparison.Ordinal) ? mode : "ui-click-host", "--argument", pidPath];
         using var output = new StringWriter(); using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         int exit = await CliApplication.ExecuteAsync(args, output, deadline.Token); await File.WriteAllTextAsync(Path.Combine(root,"command.json"), output.ToString());
         Assert.True(exit == expectedExit, output.ToString());
         if (mode is "forbidden" or "scenario-forbidden") { Assert.False(File.Exists(pidPath)); return; }
         using var result = JsonDocument.Parse(output.ToString()); var details = result.RootElement.GetProperty("details");
+        if (mode is "ui-click-host-no-goal" or "ui-click-host-late-goal" or "no-goal-one")
+        {
+            Assert.Equal(mode=="no-goal-one" ? "ActionsExhausted" : "WaitExpired", result.RootElement.GetProperty("code").GetString());
+            var primary=JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(details.GetProperty("artifactDirectory").GetString()!,"primary.json")))!;
+            Assert.Contains(primary["events"]!.AsArray(), item=>item?["reason"]?.GetValue<string>()=="WaitExpired");
+        }
+        if (mode is "ui-click-host-delayed" or "ui-click-host-late-goal")
+        {
+            Assert.True(File.Exists(pidPath + ".completion"));
+            Assert.Equal(mode=="ui-click-host-delayed", File.Exists(pidPath + ".goal"));
+        }
         Assert.Equal("single-ui-click", details.GetProperty("driver").GetString()); Assert.True(details.GetProperty("postProcessingComplete").GetBoolean(), output.ToString());
         Assert.Equal(expectedClicks, int.Parse(await File.ReadAllTextAsync(pidPath + ".clicks")));
         Assert.Equal(expectedClicks, details.GetProperty("actions").GetInt32());

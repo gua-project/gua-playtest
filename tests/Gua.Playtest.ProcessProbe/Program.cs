@@ -4,21 +4,30 @@ using Gua.Testing;
 using Gua.Core;
 using Gua.Runtime;
 
-if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-already")
+if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-already" or "ui-click-host-delayed" or "ui-click-host-late-goal")
 {
     File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
     using var host = new GuaRuntime();
     host.BeginFrame("title"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: clickMode == "ui-click-host-already")); host.EndFrame();
     if (!host.StartInspectorBridge(int.Parse(Environment.GetEnvironmentVariable("GUA_BRIDGE_PORT")!))) return 3;
     int count = 0;
+    var elapsed = System.Diagnostics.Stopwatch.StartNew();
+    long? goalAt = null;
     while (true)
     {
+        if (goalAt is { } due && elapsed.ElapsedMilliseconds >= due)
+        {
+            host.BeginFrame("play"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame();
+            File.WriteAllText(clickPid + ".goal", "published-after-completion"); goalAt = null;
+        }
         if (host.TryConsumeAction(GuaActionType.Click, "start", out var click))
         {
             File.WriteAllText(clickPid + ".clicks", (++count).ToString());
             if (clickMode == "ui-click-host")
             { host.BeginFrame("play"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame(); }
             host.EmitActionResult(click, clickMode != "ui-click-host-fail", clickMode == "ui-click-host-fail" ? GuaActionError.InvalidArgument : GuaActionError.None);
+            if (clickMode is "ui-click-host-delayed" or "ui-click-host-late-goal")
+            { goalAt = elapsed.ElapsedMilliseconds + (clickMode == "ui-click-host-delayed" ? 300 : 1500); File.WriteAllText(clickPid + ".completion", "emitted-before-goal"); }
         }
         await Task.Delay(5);
     }

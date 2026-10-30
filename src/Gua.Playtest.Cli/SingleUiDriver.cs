@@ -47,11 +47,14 @@ internal static class SingleUiDriver
                 if (completed.State != GuaRemoteDispatchState.Uncertain && !operation.ConfirmResult())
                     throw new RunFailureException(new(RunReason.ActionUnconfirmed, RunPhase.Execution, RunOrigin.Host));
             });
+            // Receipt confirmation does not end the approved observation opportunity.
+            // Keep its original deadline and reservation open for asynchronous effects;
+            // RunMonitor still owns Goal, cancellation and expiry arbitration.
+            if (run.Primary is null)
+                await RunMonitor.AwaitAsync(run, clock, clock, feed,
+                    async token => { await clock.DelayAsync(run.Limits.WaitTimeout, token); return true; }, _ => [], caller);
         }
         finally { operation.Complete(); }
-        if (run.Primary is null)
-            await RunMonitor.AwaitAsync(run, clock, clock, feed,
-                async token => { await clock.DelayAsync(run.Limits.MaxDuration, token); return true; }, _ => [], caller);
         return false;
     }
 }
