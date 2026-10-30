@@ -35,6 +35,8 @@ dotnet run --project src/Gua.Playtest.Cli -- dashboard --json --registry registr
 
 `doctor --json --native` は package の core/runtime の ABI/protocol/buildId と embedded Viewer の commit を確認する。ゲームを起動・接続・操作しない。native のない配置は非ゼロ。native override を拒否する。起動成功は engine/bridge の機能証拠ではない。
 
+[Windows観測専用Run](docs/observation-runtime.md) の `observe-run` は、明示した配布EXEのhashとlistener所有権を確認し、既存Scenario判定・Gua Trace・所有cleanupへ接続する。入力やLLMを使わず、Explore／Replayの操作能力や全ゲーム受入を証明しない。
+
 依存: `Core ← Runner / GuaIntegration / Planners.Codex ← Cli`。Core に engine/Codex package はない。Runner は `IStaticValidator`、clock/observation/planner/host の抽象窓口を使う。具体 Gua schema/native 連携は GuaIntegration。Codex module は #13 未実装を例外で明示し、認証や Codex 本体を同梱しない。Fake は tests にのみ存在する。
 
 Codex の [protocol converter](docs/codex-protocol.md) と CLI adapter は、相関済み完了応答・異常処理・送信前 redaction を扱う。実 provider の起動・認証・OS 隔離は OPEN-09 の確認まで利用不可で、Replay に Codex を要求しない。

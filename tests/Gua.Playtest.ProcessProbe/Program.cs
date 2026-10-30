@@ -1,6 +1,37 @@
 using System.Reflection;
 using Gua.Playtest.Runner.Preparation;
 using Gua.Testing;
+using Gua.Core;
+using Gua.Runtime;
+
+if (args is [var hostMode, var pidFile] && hostMode is "observation-host" or "observation-host-delayed" or "observation-host-ambiguous")
+{
+    File.WriteAllText(pidFile, Environment.ProcessId.ToString());
+    using var runtime = new GuaRuntime();
+    runtime.BeginFrame("native-fixture");
+    runtime.RegisterNode(new("ready", "button", "Ready", new(0, 0, 10, 10), Checked: false));
+    if (hostMode == "observation-host-ambiguous") runtime.RegisterNode(new("other", "button", "Other", new(0, 20, 10, 10), Checked: false));
+    runtime.EndFrame();
+    using var owner = hostMode == "observation-host-ambiguous" ? runtime.CreateObserveOwner(GuaObserveSource.Ui, "ready") : null;
+    using var field = owner?.Observe("flag", () => GuaValue.Bool(false));
+    if (hostMode == "observation-host-ambiguous")
+    {
+        runtime.BeginFrame("native-fixture");
+        runtime.RegisterNode(new("ready", "button", "Ready", new(0, 0, 10, 10), Checked: false));
+        runtime.RegisterNode(new("other", "button", "Other", new(0, 20, 10, 10), Checked: false));
+        runtime.EndFrame();
+    }
+    if (!runtime.StartInspectorBridge(int.Parse(Environment.GetEnvironmentVariable("GUA_BRIDGE_PORT")!))) return 3;
+    if (hostMode == "observation-host-delayed")
+    {
+        await Task.Delay(700);
+        runtime.BeginFrame("native-fixture");
+        runtime.RegisterNode(new("ready", "button", "Ready", new(0, 0, 10, 10), Checked: true));
+        runtime.EndFrame();
+    }
+    await Task.Delay(Timeout.Infinite);
+    return 0;
+}
 
 if (args is ["trace", var root])
 {

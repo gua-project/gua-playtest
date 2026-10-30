@@ -14,7 +14,8 @@ public sealed record PreparationEvent(PreparationStage Stage, PreparationCode Co
 public interface IPreparationTrace { void Record(PreparationEvent evidence); }
 
 /// <summary>Explicit trusted host policy, separate from Scenario and from Planner input.</summary>
-public sealed record LaunchCommand(string Executable, string WorkingDirectory, IReadOnlyList<string> Arguments);
+public sealed record LaunchCommand(string Executable, string WorkingDirectory, IReadOnlyList<string> Arguments,
+    IReadOnlyDictionary<string, string>? EnvironmentVariables = null);
 public sealed record PreparationPolicy(HostMode HostMode, PlayMode PlayMode, Uri Endpoint, string ExpectedBuildId,
     string RequiredProtocol, string Profile, string Clock, IReadOnlyList<string> Capabilities, bool RequireBuildAttestation,
     bool StrictStart, LaunchCommand? Launch, TimeSpan OperationTimeout, TimeSpan RetryDelay, int ConnectAttempts,
@@ -63,6 +64,11 @@ public interface IOwnedProcess
     bool HasExited { get; }
     ValueTask WaitForExitAsync(CancellationToken cancellationToken);
     ValueTask<bool> ShutdownAsync(CancellationToken cancellationToken);
+}
+/// <summary>Identity of the exact acquired process handle, never discovered by name or port.</summary>
+public interface IOwnedProcessIdentity : IOwnedProcess
+{
+    int ProcessId { get; }
 }
 public interface IProcessLauncher
 {

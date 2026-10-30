@@ -24,8 +24,8 @@ public sealed class ReplayDriver
         ArgumentNullException.ThrowIfNull(prepare);
         if (Interlocked.Exchange(ref used, 1) != 0) throw new InvalidOperationException("ReplayAlreadyUsed");
         var scenario = replay.CopyScenario();
-        // RunLimits retains its positive action-limit contract; a zero Scenario ceiling
-        // is enforced below before any action approval, including an omitted onGoal plan.
+        // A zero Scenario ceiling is enforced below before any action approval,
+        // including an omitted onGoal plan; it must never be increased by composition.
         if ((scenario.Constraints.MaxActions != 0 && limits.MaxActions > scenario.Constraints.MaxActions) || limits.MaxDuration.TotalMilliseconds > scenario.Constraints.MaxDurationMilliseconds)
             throw new ArgumentException("ReplayLimitsMismatch");
         var run = new RunSession(limits, realClock, conditionClock, replay.Success, replay.Failure, replay.Completion);

@@ -15,6 +15,7 @@ public sealed record BridgeRead(ReadAvailability Availability, string Reason,
 public sealed record BridgeChange(JsonElement Event, JsonElement Catalogs);
 public sealed record BridgeReadCollection(DateTimeOffset ObservedAt, ReadAvailability Availability,
     IReadOnlyList<BridgeRead> Reads, IReadOnlyList<BridgeChange>? Changes = null);
+public sealed record BridgeSessionIdentity(string SourceId, ulong SessionEpoch, string Profile, bool HasOutstandingRequests);
 
 /// <summary>A connection and cursor owned by one Run. Construct a separate instance against
 /// the host's Player/PublicAgent bridge for Planner reads. A caller-supplied profile cannot
@@ -64,6 +65,22 @@ public sealed class BridgeObservations : IDisposable
     /// <summary>Accepts a schema-validated common.read. Failure never carries arbitrary remote
     /// errors, selector candidates or values from another profile.</summary>
     public BridgeReadCollection Read(JsonObject read) => ReadBatch([read])[0];
+
+    /// <summary>Identity on this same profile-bound connection, without acquiring another client or resetting the host.
+    /// The caller must independently attest the game build and endpoint ownership.</summary>
+    public BridgeSessionIdentity Identify()
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            context.GetVersion().EnsureCompatible("2", 1, ["observe_v1"]);
+            var snapshot = ParseTransport(context.GetObserveSnapshotJson()).GetProperty("document");
+            var status = context.GetContextStatus();
+            var epoch = snapshot.GetProperty("sessionEpoch").GetUInt64();
+            if (epoch != status.SessionEpoch) throw new InvalidOperationException("ObservationEpochChanged");
+            return new(snapshot.GetProperty("sourceId").GetString()!, epoch, ProfileName, !status.IsClean);
+        }
+    }
 
     /// <summary>Polls once for all active reads. Temporal consumers use this batch API so one
     /// read cannot consume another read's intervening notifications. Standard fields have

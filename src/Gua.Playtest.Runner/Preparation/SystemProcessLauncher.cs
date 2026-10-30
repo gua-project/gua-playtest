@@ -24,9 +24,17 @@ public sealed class SystemProcessLauncher : IProcessLauncher
             RedirectStandardOutput = true, RedirectStandardError = true
         };
         foreach (var argument in command.Arguments) start.ArgumentList.Add(argument);
+        if (command.EnvironmentVariables is { } environment)
+        {
+            if (environment.Count > 32 || environment.Any(pair => string.IsNullOrWhiteSpace(pair.Key) ||
+                pair.Key.Length > 128 || pair.Key.Contains('=') || pair.Key.Contains('\0') || pair.Value is null ||
+                pair.Value.Length > 4096 || pair.Value.Contains('\0')))
+                throw new ArgumentException("LaunchEnvironmentInvalid");
+            foreach (var pair in environment) start.Environment[pair.Key] = pair.Value;
+        }
         return new OwnedProcess(Process.Start(start) ?? throw new IOException("ProcessCreationFailed"));
     }
-    private sealed class OwnedProcess : IOwnedProcess
+    private sealed class OwnedProcess : IOwnedProcessIdentity
     {
         private readonly Process process;
         // Drain to a non-buffering sink. Untrusted child text is neither a CLI document nor
@@ -36,12 +44,14 @@ public sealed class SystemProcessLauncher : IProcessLauncher
         internal OwnedProcess(Process process)
         {
             this.process = process;
+            ProcessId = process.Id;
             stdout = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             stderr = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
             _ = stdout.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
             _ = stderr.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
         }
         private bool disposed;
+        public int ProcessId { get; }
         public bool HasExited => disposed || process.HasExited;
         public ValueTask WaitForExitAsync(CancellationToken cancellationToken) => new(process.WaitForExitAsync(cancellationToken));
         public async ValueTask<bool> ShutdownAsync(CancellationToken cancellationToken)
