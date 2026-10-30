@@ -97,9 +97,10 @@ releases the owned cursor/connection and never resets or kills the host.
 Published Gua.Testing 1.1.2 includes `CreateGuardedDispatchSession` and
 `GuaRemoteGuardedSession.SendUi` / `SendGameInput` / `Poll`, backed by the
 `guarded_dispatch_v1` capability. See the [pinned upstream API](https://github.com/gua-project/gua/blob/b398e531558f38220baf0b606e7c3f33904a87a5/bindings/dotnet/src/Gua.Testing/GuaRemoteGuardedDispatch.cs).
-The Playtest adapters described below retain their existing local/legacy paths;
-they do not yet compose that remote API into an input-producing CLI Run. The
-observation-only command does not dispatch. Package API availability and actual
+The explicit [single UI click Run](single-ui-runtime.md) uses that remote API.
+The adapters described below retain their existing local/legacy paths; general
+semantic/raw input composition is separate. The observation-only command does
+not dispatch. Package API availability and actual
 host capability/ownership/permission acceptance are separate checks.
 
 `ActionAttempt` separates Run ID, execution ID, action ID, session epoch and Gua

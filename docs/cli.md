@@ -14,6 +14,7 @@ dashboard --registry <file> --artifact-root <existing-directory> --allow-root <e
 plan create --managed-root <private-root> --allow-root <input-root> --scenario <file> --recording <file> --timing <recorded|conditionSynchronized>
 plan accept --managed-root <private-root> --plan <managed-plan.json> --trial <trial-id> --approve --approve-expectations
 report --allow-root <existing-directory> --trace <saved-trace-directory> [--output <new-html>]
+click-run (same launch options as observe-run) --target-id <ui-id>
 explore --allow-root <existing-directory> --scenario <file> --environment <file>
 replay --allow-root <existing-directory> --plan <file> --environment <file>
 ```

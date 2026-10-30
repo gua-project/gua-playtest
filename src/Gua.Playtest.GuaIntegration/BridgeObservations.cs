@@ -67,6 +67,16 @@ public sealed class BridgeObservations : IDisposable
     /// errors, selector candidates or values from another profile.</summary>
     public BridgeReadCollection Read(JsonObject read) => ReadBatch([read])[0];
 
+    /// <summary>Same-source public guarded UI owner; no local lifecycle lease is invented.</summary>
+    public GuardedUiClick CreateGuardedUiClick()
+    {
+        lock (gate)
+        {
+            var identity = Identify();
+            return new(context, profile, identity.SourceId);
+        }
+    }
+
     /// <summary>Irreversibly interrupt this owned connection without waiting for a read's lock.
     /// In-flight receipts become unavailable; this never resets or closes another host/owner.</summary>
     public void Interrupt()

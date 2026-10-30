@@ -4,6 +4,26 @@ using Gua.Testing;
 using Gua.Core;
 using Gua.Runtime;
 
+if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-already")
+{
+    File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
+    using var host = new GuaRuntime();
+    host.BeginFrame("title"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: clickMode == "ui-click-host-already")); host.EndFrame();
+    if (!host.StartInspectorBridge(int.Parse(Environment.GetEnvironmentVariable("GUA_BRIDGE_PORT")!))) return 3;
+    int count = 0;
+    while (true)
+    {
+        if (host.TryConsumeAction(GuaActionType.Click, "start", out var click))
+        {
+            File.WriteAllText(clickPid + ".clicks", (++count).ToString());
+            if (clickMode == "ui-click-host")
+            { host.BeginFrame("play"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame(); }
+            host.EmitActionResult(click, clickMode != "ui-click-host-fail", clickMode == "ui-click-host-fail" ? GuaActionError.InvalidArgument : GuaActionError.None);
+        }
+        await Task.Delay(5);
+    }
+}
+
 if (args is [var hostMode, var pidFile] && hostMode is "observation-host" or "observation-host-delayed" or "observation-host-capacity" or "observation-host-ambiguous")
 {
     File.WriteAllText(pidFile, Environment.ProcessId.ToString());
