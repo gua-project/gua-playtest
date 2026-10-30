@@ -43,7 +43,7 @@ if (args is ["release-pool-pressure"])
     return confirmed && available==0 ? 0 : 1;
 }
 
-if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-already" or "ui-click-host-delayed" or "ui-click-host-late-goal")
+if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-private-event" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-already" or "ui-click-host-delayed" or "ui-click-host-late-goal")
 {
     File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
     using var host = new GuaRuntime();
@@ -62,9 +62,10 @@ if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui
         if (host.TryConsumeAction(GuaActionType.Click, "start", out var click))
         {
             File.WriteAllText(clickPid + ".clicks", (++count).ToString());
-            if (clickMode == "ui-click-host")
+            if (clickMode is "ui-click-host" or "ui-click-host-private-event")
             { host.BeginFrame("play"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame(); }
-            host.EmitActionResult(click, clickMode != "ui-click-host-fail", clickMode == "ui-click-host-fail" ? GuaActionError.InvalidArgument : GuaActionError.None);
+            host.EmitActionResult(clickMode == "ui-click-host-private-event" ? click with { Sensitive=true, Value="private-completion-marker" } : click,
+                clickMode != "ui-click-host-fail", clickMode == "ui-click-host-fail" ? GuaActionError.InvalidArgument : GuaActionError.None);
             if (clickMode is "ui-click-host-delayed" or "ui-click-host-late-goal")
             { goalAt = elapsed.ElapsedMilliseconds + (clickMode == "ui-click-host-delayed" ? 300 : 1500); File.WriteAllText(clickPid + ".completion", "emitted-before-goal"); }
         }

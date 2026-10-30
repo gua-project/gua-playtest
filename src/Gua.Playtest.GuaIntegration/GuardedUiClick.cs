@@ -79,6 +79,36 @@ public sealed class GuardedUiClick : IDisposable
             return receipt = Snapshot();
         }
     }
+    internal T ReadForRecording<T>(Func<IGuaContext, T> read)
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            return read(observation);
+        }
+    }
+    internal bool TryRecordingEvent(ulong requestId, out GuaActionEvent result)
+    {
+        lock (gate)
+        {
+            // A real correlated completion remains immutable after owned disconnect.
+            // Never reconnect or poll a disposed owner just to finish an artifact.
+            if (attempt?.Completion is null)
+            {
+                ObjectDisposedException.ThrowIf(disposed, this);
+                if (attempt?.State == GuaRemoteDispatchState.Enqueued) dispatch.Poll(attempt);
+            }
+            if (attempt?.State == GuaRemoteDispatchState.Uncertain)
+                throw new InvalidOperationException("RecordingCompletionUnconfirmed");
+            if (attempt?.Completion is not { } completion) { result = default; return false; }
+            result = JsonSerializer.Deserialize<GuaActionEvent>(completion.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var expected = receipt ?? throw new InvalidOperationException("RecordingReceiptMissing");
+            if (result.RequestId != requestId || result.SessionEpoch != expected.SessionEpoch || result.NodeId != expected.NodeId ||
+                result.Action != GuaActionType.Click || !result.Revision.HasValue)
+                throw new InvalidOperationException("RecordingCompletionMismatch");
+            return true;
+        }
+    }
     private GuardedUiReceipt Snapshot()
     {
         if (attempt is null) return receipt ?? throw new InvalidOperationException("NoClickAttempt");

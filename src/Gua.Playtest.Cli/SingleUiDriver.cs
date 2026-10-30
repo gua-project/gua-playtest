@@ -9,7 +9,8 @@ namespace Gua.Playtest.Cli;
 internal static class SingleUiDriver
 {
     internal static async ValueTask<bool> ExecuteAsync(RunSession run, IClock clock, GuaObservationConnection feed,
-        string targetId, Action<GuardedUiReceipt> record, Action verifyOwner, CancellationToken caller)
+        string targetId, Action<GuardedUiReceipt> record, Action verifyOwner, CancellationToken caller,
+        Func<GuardedUiClick, GuardedClickRecording>? createRecording = null)
     {
         var click = feed.Click ?? throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host));
         var operation = run.ApproveOperation(1, run.Limits.WaitTimeout);
@@ -18,7 +19,9 @@ internal static class SingleUiDriver
         {
             // Synchronous public SDK send on the serialized owner. Its hook runs once,
             // immediately before actual transport, and checks the existing Run authority.
-            var receipt = click.Click(targetId, () => { caller.ThrowIfCancellationRequested(); verifyOwner(); operation.BeginDispatch(0); }, caller);
+            void BeforeDispatch() { caller.ThrowIfCancellationRequested(); verifyOwner(); operation.BeginDispatch(0); }
+            var capture = createRecording?.Invoke(click);
+            var receipt = capture is null ? click.Click(targetId, BeforeDispatch, caller) : capture.Start(BeforeDispatch, run.Limits.WaitTimeout, caller);
             record(receipt);
             if (receipt.DispatchBegan)
             {

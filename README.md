@@ -10,7 +10,7 @@
 
 C#/.NET 10 のゲーム外 Playtest 基盤。現在は五つの project、抽象窓口、静的検証の共通 Runner、CLI 骨格、CI と配布 smoke を実装する。
 
-Windowsの明示的な固定1クリックは [click-run](docs/single-ui-runtime.md)、読取専用実行は [observe-run](docs/observation-runtime.md) を参照する。
+Windowsの明示的な固定1クリックと公式Recording保存は [click-run](docs/single-ui-runtime.md)、読取専用実行は [observe-run](docs/observation-runtime.md) を参照する。
 
 ```powershell
 dotnet restore --locked-mode

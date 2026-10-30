@@ -49,9 +49,21 @@ and action accounting separately from primary status. Trace stores bounded facts
 submission success means Enqueued only, and completion keeps the original numeric
 Gua error code. SDK dispatch errors are bounded code tokens, not arbitrary remote
 diagnostic text.
-capture/storage failures affect postprocessing. This lane does not capture an
-official Recording: its receipt is NotExecuted, and no Replay acceptance is
-claimed. It does not use a model, authentication reference, or model budget.
+Capture/storage failures affect postprocessing. An official Gua1.1.2 Recorder
+borrows this same guarded owner for the single click; it cannot send a second
+operation or dispatch from a background continuation. Successful capture contains
+one actual request ID, explicit target and native pre/post revisions. The existing
+artifact writer associates it with the Run's Trace and writes/reads it through
+GuaRecordingFile, under the same secret, capacity and save policies.
+No operation means NotExecuted; unavailable, private, rejected or unconfirmed
+capture means CaptureFailed; an actual file-write failure means SaveFailed.
+These facts do not replace the primary Goal/action result or cleanup facts.
+Recording cleanup uses its owned finite share and cannot extend the execution
+window. The command reports recordingState and recordedActions separately.
+Recording preflight failure permits the original one guarded operation only if
+the capture facade has never attempted it and has permanently closed its send
+window. Uncertain receipt/completion is never retried. No Replay acceptance is
+claimed. This lane uses no model, authentication reference, or model budget.
 
 Preparing checks actual WebSocket readiness before handing a connection to
 HostPreparation. A read-only connect/handshake cancellation not caused by the
