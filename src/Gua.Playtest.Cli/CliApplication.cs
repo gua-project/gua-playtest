@@ -35,6 +35,7 @@ public static class CliApplication
         {
             var help = "gua-playtest validate --allow-root <existing-directory> <json-or-yaml-file>\ngua-playtest validate --gua-schema <packaged-schema-name> <json-file>\ngua-playtest doctor --native\ngua-playtest plan create|accept (see docs/cli.md)\ngua-playtest report --allow-root <root> --trace <saved-trace-directory> [--output <new-html>]\ngua-playtest explore --allow-root <root> --scenario <file> --environment <file>\ngua-playtest replay --allow-root <root> --plan <file> --environment <file>\ngua-playtest dashboard --registry <file> --artifact-root <root> --allow-root <root> --port <1024..65535>\nUse --json for one final JSON document. Execution requires an approved runtime composition.";
             help += "\ngua-playtest observe-run --scenario <file> --environment <file> --executable <game.exe> --executable-sha256 <hash> --working-directory <dir> --output-root <private-dir> --allow-root <root> (Windows, observation-only; see docs/observation-runtime.md)";
+            help += "\ngua-playtest click-run (same launch options as observe-run) --target-id <explicit-ui-id> (one guarded UI click; see docs/single-ui-runtime.md)";
             await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", code = "HelpShown", help }) : help);
             return 0;
         }
@@ -47,6 +48,8 @@ public static class CliApplication
             return await DashboardCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         if (args.FirstOrDefault() == "observe-run")
             return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
+        if (args.FirstOrDefault() == "click-run")
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true);
         if (args.FirstOrDefault() is "plan" or "report" or "explore" or "replay")
             return await OfflineCommands.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         ValidationResult result;

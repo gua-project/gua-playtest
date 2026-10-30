@@ -777,19 +777,57 @@ public sealed partial class RunTests
             var clock = new Clock(); var run = new RunSession(Limits(actions: 1000), clock, clock, Condition());
             run.BeginPreparation(); run.BeginRunning(); var operation = run.ApproveOperation(1000, TimeSpan.FromSeconds(1))!;
             operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0);
+            var diagnostic = new GoalSuffixRaceDiagnostics(run.Budget.Snapshot);
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var cancel = RunBlockingFixture(() =>
+            Task? goal = null, cancel = null;
+            var waitSite = "cancel-ready";
+            try
             {
-                ready.TrySetResult();
-                Assert.True(SpinWait.SpinUntil(() => { Thread.MemoryBarrier(); return run.GoalVerified; }, TimeSpan.FromSeconds(1)));
-                Assert.True(SpinWait.SpinUntil(() => { Thread.MemoryBarrier(); return run.Budget.Snapshot.ReservedActions < 999; }, TimeSpan.FromSeconds(1)));
-                run.Evaluate(cancelled: true);
-            });
-            await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); var goal = RunBlockingFixture(() => run.Evaluate(Unit(), TimeSpan.Zero));
-            try { await Task.WhenAll(goal, cancel).WaitAsync(TimeSpan.FromSeconds(1)); } catch (InvalidOperationException) { }
-            Assert.Equal(0, run.Budget.Snapshot.ReservedActions); Assert.Equal(1, run.Budget.Snapshot.Actions);
-            Assert.Equal(999, operation.Actions.Deliveries.Count(item => item == DeliveryState.NotSent));
-            Assert.Equal(RunReason.ActionUnconfirmed, run.Primary!.Cause.Reason);
+                cancel = RunBlockingFixture(() =>
+                {
+                    diagnostic.Cancel.Start();
+                    try
+                    {
+                        ready.TrySetResult();
+                        diagnostic.Cancel.Mark("waiting-goal");
+                        Assert.True(SpinWait.SpinUntil(() => { Thread.MemoryBarrier(); return run.GoalVerified; }, TimeSpan.FromSeconds(1)));
+                        diagnostic.Cancel.Mark("goal-observed");
+                        BudgetSnapshot? sampled = null;
+                        diagnostic.Cancel.Mark("waiting-refund");
+                        Assert.True(SpinWait.SpinUntil(() => { Thread.MemoryBarrier(); sampled = run.Budget.Snapshot; return sampled.ReservedActions < 999; }, TimeSpan.FromSeconds(1)));
+                        diagnostic.Cancel.Mark("refund-observed", sampled);
+                        diagnostic.Cancel.Mark("before-cancel-evaluate");
+                        run.Evaluate(cancelled: true);
+                        diagnostic.Cancel.Mark("cancel-evaluation-returned");
+                    }
+                    catch (Exception error) { diagnostic.Cancel.Fault(error); throw; }
+                    finally { diagnostic.Cancel.Exit(); }
+                });
+                await ready.Task.WaitAsync(TimeSpan.FromSeconds(1));
+                waitSite = "goal-and-cancel";
+                goal = RunBlockingFixture(() =>
+                {
+                    diagnostic.Goal.Start();
+                    try
+                    {
+                        diagnostic.Goal.Mark("before-goal-evaluate");
+                        run.Evaluate(Unit(), TimeSpan.Zero);
+                        diagnostic.Goal.Mark("goal-evaluation-returned");
+                    }
+                    catch (Exception error) { diagnostic.Goal.Fault(error); throw; }
+                    finally { diagnostic.Goal.Exit(); }
+                });
+                try { await Task.WhenAll(goal, cancel).WaitAsync(TimeSpan.FromSeconds(1)); } catch (InvalidOperationException) { }
+                waitSite = "reservation-assertions";
+                Assert.Equal(0, run.Budget.Snapshot.ReservedActions); Assert.Equal(1, run.Budget.Snapshot.Actions);
+                Assert.Equal(999, operation.Actions.Deliveries.Count(item => item == DeliveryState.NotSent));
+                Assert.Equal(RunReason.ActionUnconfirmed, run.Primary!.Cause.Reason);
+            }
+            catch (Exception error)
+            {
+                diagnostic.TryWrite(raceOutput.WriteLine, attempt, waitSite, goal, cancel, error);
+                throw;
+            }
         }
     }
 

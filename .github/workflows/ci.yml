@@ -47,6 +47,7 @@ jobs:
           path: |
             artifacts/tests/*.trx
             artifacts/tests/runtime-evidence/**
+            artifacts/tests/single-ui/**
             artifacts/smoke-*/evidence.json
             artifacts/smoke-*/*.zip
             artifacts/smoke-*/feed/*.nupkg

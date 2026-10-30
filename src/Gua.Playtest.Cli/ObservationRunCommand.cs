@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Gua.Testing;
+using Gua.Playtest.GuaIntegration;
 using Gua.Playtest.Core;
 using Gua.Playtest.Core.Assertions;
 using Gua.Playtest.Core.Contracts;
@@ -14,8 +15,8 @@ using Gua.Playtest.Runner.Preparation;
 
 namespace Gua.Playtest.Cli;
 
-/// <summary>Explicit, deterministic, observation-only Windows Run. Not AI exploration or input dispatch.
-/// Uses the existing preparation/execution/result/artifact owners; never creates an alternate evaluator.</summary>
+/// <summary>Shared explicit Windows Run composition: observation-only or one guarded UI click.
+/// Uses existing preparation/execution/result/artifact owners; never an alternate evaluator or Planner.</summary>
 internal static class ObservationRunCommand
 {
     private sealed class Clock : IClock
@@ -29,12 +30,16 @@ internal static class ObservationRunCommand
     private sealed class Connector(Func<Uri, GuaObservationConnection> connect) : IPreparationConnector
     {
         internal GuaObservationConnection? Connection;
-        public ValueTask<IPreparationConnection> ConnectAsync(Uri endpoint, CancellationToken token) => new(Task.Run<IPreparationConnection>(() =>
+        internal readonly PendingConnections Pending = new();
+        public ValueTask<IPreparationConnection> ConnectAsync(Uri endpoint, CancellationToken token) => new(Task.Run<IPreparationConnection>(async () =>
         {
             token.ThrowIfCancellationRequested();
-            var connection = connect(endpoint);
-            if (token.IsCancellationRequested)
-            { connection.ReleaseAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult(); token.ThrowIfCancellationRequested(); }
+            var connection = await ReadyConnection.AcquireAsync(() => Pending.Track(() => connect(endpoint)), token);
+            if (!Pending.Handoff(connection))
+            {
+                await connection.ReleaseAsync(CancellationToken.None);
+                throw new OperationCanceledException(token);
+            }
             return Connection = connection;
         }, token));
     }
@@ -49,12 +54,12 @@ internal static class ObservationRunCommand
             Process = identity; return identity;
         }
     }
-    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token)
+    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, bool singleClick = false)
     {
         try
         {
             if (!OperatingSystem.IsWindows()) throw new InvalidDataException("WindowsRuntimeRequired");
-            var options = Parse(args);
+            var options = Parse(args, singleClick);
             string One(string name) => options.TryGetValue(name, out var values) && values.Count == 1 ? values[0] : throw new InvalidDataException("RuntimeArgumentsRequired");
             var roots = options.GetValueOrDefault("--allow-root") ?? throw new InvalidDataException("RuntimeArgumentsRequired");
             _ = new AllowedPaths(roots);
@@ -65,7 +70,11 @@ internal static class ObservationRunCommand
             var environmentReport = await validator.ValidateFileAsync(environmentPath, token);
             if (!scenarioReport.IsValid || !environmentReport.IsValid || scenarioReport.Document is not ScenarioDocument scenario ||
                 environmentReport.Document is not EnvironmentDocument environment) throw new InvalidDataException("RuntimeInputInvalid");
-            ValidateLane(scenario, environment);
+            ValidateLane(scenario, environment, singleClick);
+            var targetId = singleClick ? One("--target-id") : null;
+            if (targetId is not null && (targetId.Length is < 1 or > 128 || targetId.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or '.' or ':'))))
+                throw new InvalidDataException("RuntimeArgumentsInvalid");
+            var driverName = singleClick ? "single-ui-click" : "observation-only";
             var executable = StaticPathAuthority.File(One("--executable"), roots, "RuntimeExecutableOutsideRoots");
             var working = StaticPathAuthority.Directory(One("--working-directory"), roots, "RuntimeWorkingDirectoryOutsideRoots");
             var destination = StaticPathAuthority.Directory(One("--output-root"), roots, "RuntimeOutputOutsideRoots");
@@ -94,6 +103,7 @@ internal static class ObservationRunCommand
             TimeSpan Ms(long value) => TimeSpan.FromMilliseconds(value);
             var assertion = new AssertionOptions(checked((int)limits.RegexTimeoutMilliseconds), checked((int)limits.RegexMaxPatternLength));
             var success = PreparedCondition.Create(scenario.Goal.Success!, assertion);
+            var precondition = scenario.Setup is null ? null : PreparedCondition.Create(scenario.Setup, assertion);
             var clock = new Clock();
             var run = new RunSession(new(Ms(limits.MaxDurationMilliseconds), Ms(limits.PrepareTimeoutMilliseconds), Ms(limits.CleanupTimeoutMilliseconds),
                 Ms(limits.PlannerTimeoutMilliseconds), Ms(limits.WaitTimeoutMilliseconds), Ms(limits.MaxSegmentMilliseconds),
@@ -109,11 +119,11 @@ internal static class ObservationRunCommand
             // Inherited host environment is deliberately not read/persisted (and is not sandboxed).
             var environmentCopy = redactor.RedactDocument(JsonSerializer.SerializeToElement(environmentFile.CopyJson()), artifactLimits);
             var environmentCopyHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(environmentCopy)));
-            var runtimeConfiguration = EffectiveConfiguration(environmentCopyHash, limits, launch, hash, redactor, artifactLimits);
+            var runtimeConfiguration = EffectiveConfiguration(environmentCopyHash, limits, launch, hash, redactor, artifactLimits, targetId);
             var runtimeHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(runtimeConfiguration)));
             var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, scenarioFile.Sha256, environment.BuildId, runtimeHash);
             var metadata = new RunArtifactMetadata(environment.Profile.ToLowerInvariant(),
-                [new("driver", "observation-only", "explicit-command"), new("clock", "real", "explicit-command"),
+                [new("driver", driverName, "explicit-command"), new("clock", "real", "explicit-command"),
                     new("gameExecutableSha256", hash.ToLowerInvariant(), "locked-image-and-OS-listener-owner"),
                     new("effectiveEnvironmentSha256", runtimeHash, "explicit-runtime-configuration"),
                     new("maxDurationMilliseconds", limits.MaxDurationMilliseconds.ToString(CultureInfo.InvariantCulture), "scenario-environment-minimum")],
@@ -135,6 +145,23 @@ internal static class ObservationRunCommand
             bool capturesClosed = false;
             bool capturesDisabled = false;
             long captureSequence = 0;
+            GuardedUiReceipt? lastClick = null;
+            void RecordClick(GuardedUiReceipt receipt)
+            {
+                lastClick = receipt;
+                lock (captureGate)
+                {
+                    if (capturesClosed || capturesDisabled) return;
+                    capturesDisabled = !CaptureWithoutPrimaryAuthority(() =>
+                    {
+                        var enqueued = receipt.State == GuaRemoteDispatchState.Enqueued;
+                        var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, enqueued ? "Guarded UI click submission" : "Guarded UI click completion");
+                        if (string.IsNullOrEmpty(step) || !artifacts.Trace.RecordStructural(step, "runner.ui-click", JsonSerializer.SerializeToElement(receipt)))
+                            throw new InvalidOperationException("TraceCapacityReached");
+                        artifacts.Trace.EndStep(step, enqueued || receipt.State == GuaRemoteDispatchState.Completed && receipt.Succeeded == true ? GuaTraceOutcome.Passed : GuaTraceOutcome.Failed);
+                    }, artifacts.MarkCaptureFailure);
+                }
+            }
             var launcher = new Launcher();
             var connector = new Connector(address =>
             {
@@ -160,17 +187,21 @@ internal static class ObservationRunCommand
                                 artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
                             }, artifacts.MarkCaptureFailure);
                         }
-                    });
+                    }, singleClick, precondition);
             });
             var cleanup = new OwnedCleanup();
+            cleanup.Register(CleanupStage.InputRelease, connector.Pending.ReleaseAsync);
             var preparation = new HostPreparation(new(HostMode.Launch, PlayMode.Explore, endpoint, environment.BuildId, "2", environment.Profile,
-                "real", ["observe_v1"], true, true, launch, Ms(limits.PrepareTimeoutMilliseconds), TimeSpan.FromMilliseconds(25), 100,
+                "real", singleClick ? ["observe_v1", "guarded_dispatch_v1"] : ["observe_v1"], true, true, launch, Ms(limits.PrepareTimeoutMilliseconds), TimeSpan.FromMilliseconds(25), 100,
                 Ms(limits.CleanupTimeoutMilliseconds)), clock, launcher, connector, artifacts);
             PreparedHost? prepared = null;
             var outcome = await RunExecutor.ExecuteAsync(run, clock, cleanup,
                 async (session, owned, cancel) => (prepared = await preparation.PrepareAsync(session, owned, null, new ObserverAvailable(), cancel)).Boundary,
                 async (session, cancel) =>
                 {
+                    if (singleClick)
+                        return await SingleUiDriver.ExecuteAsync(session, clock, connector.Connection!, targetId!, RecordClick,
+                            () => WindowsBridgeOwner.Require(endpoint, launcher.Process!), token);
                     await RunMonitor.AwaitAsync(session, clock, clock, prepared!.Feed,
                         // The executor operation token also signals its deadline. Only the
                         // actual caller token may be classified as a user's cancellation.
@@ -186,7 +217,8 @@ internal static class ObservationRunCommand
                 completion.ExitCode(outcome), new { runId = store.RunId, artifactDirectory = store.DirectoryPath,
                     ownedProcessId = launcher.Process?.ProcessId,
                     effectiveEnvironmentSha256 = runtimeHash,
-                    driver = "observation-only", phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),
+                    driver = driverName, click = lastClick, actions = run.Budget.Snapshot.Actions,
+                    phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),
                     postProcessingComplete = outcome.PostProcessingComplete && completion.Persistence.Saved && !completion.Persistence.PostProcessingIncomplete,
                     persistence = completion.Persistence.Failure.ToString(),
                     postProcessing = outcome.PostProcessing.Select(x => x.Reason.ToString()).ToArray() });
@@ -214,7 +246,7 @@ internal static class ObservationRunCommand
         }
     }
     internal static JsonElement EffectiveConfiguration(string sourceEnvironmentCopySha256, object limits, LaunchCommand launch,
-        string hash, PersistenceRedactor redactor, ArtifactLimits artifactLimits)
+        string hash, PersistenceRedactor redactor, ArtifactLimits artifactLimits, string? clickTarget = null)
     {
         // This command has no secret-binding input. Credential-bearing launch arguments
         // are outside its lane; values must be non-secret. Do not inspect inherited env.
@@ -228,6 +260,12 @@ internal static class ObservationRunCommand
             workingDirectory = launch.WorkingDirectory, arguments = launch.Arguments,
             childEnvironment = launch.EnvironmentVariables?.OrderBy(x => x.Key, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Value)
         });
+        if (clickTarget is not null)
+        {
+            var explicitClick = JsonNode.Parse(configuration.GetRawText())!.AsObject();
+            explicitClick["driver"] = "single-ui-click"; explicitClick["clickTargetId"] = clickTarget;
+            configuration = JsonSerializer.SerializeToElement(explicitClick);
+        }
         return redactor.RedactDocument(configuration, artifactLimits);
     }
     private static readonly HashSet<string> Refusals = new(StringComparer.Ordinal)
@@ -237,19 +275,28 @@ internal static class ObservationRunCommand
         "RuntimeBuildHashMismatch", "WindowsLoopbackRequired", "RuntimeChildEnvironmentInvalid", "RuntimeSaveOutsideRoots",
         "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid"
     };
-    internal static void ValidateLane(ScenarioDocument scenario, EnvironmentDocument environment)
+    internal static void ValidateLane(ScenarioDocument scenario, EnvironmentDocument environment, bool singleClick = false)
     {
-        if (environment.Connection.Credential is not null || scenario.Setup is not null || environment.Fixture is not null ||
+        bool Initial(JsonObject condition) => condition["kind"]?.GetValue<string>() switch
+        {
+            "assertion" => condition["read"] is JsonObject read && environment.Permissions.Reads.Any(allowed => JsonNode.DeepEquals(allowed, read)),
+            "all" or "any" => condition["conditions"] is JsonArray children && children.All(child => child is JsonObject nested && Initial(nested)),
+            _ => false
+        };
+        if (environment.Connection.Credential is not null || (scenario.Setup is not null && (!singleClick || !Initial(scenario.Setup))) || environment.Fixture is not null ||
             environment.Navigation is not null || environment.Profile is not ("Player" or "Debug") || environment.Permissions.RawInput ||
-            environment.Permissions.ActionIds.Length != 0 || scenario.Goal.Failure is not null || scenario.Goal.Success is not { } success ||
+            (singleClick ? !environment.Permissions.ActionIds.SequenceEqual(["click"]) : environment.Permissions.ActionIds.Length != 0) ||
+            (singleClick && scenario.Constraints.AllowedActionIds is { } actions && !actions.Contains("click", StringComparer.Ordinal)) ||
+            scenario.Goal.Failure is not null || scenario.Goal.Success is not { } success ||
             success["kind"]?.GetValue<string>() != "assertion" || success["read"] is not JsonObject read ||
             read["valueType"]?["type"]?.GetValue<string>() is not ("bool" or "integer" or "number" or "string") ||
             !environment.Permissions.Reads.Any(allowed => JsonNode.DeepEquals(allowed, read)))
             throw new InvalidDataException("ObservationOnlyCapabilityUnavailable");
     }
-    private static Dictionary<string, List<string>> Parse(string[] args)
+    private static Dictionary<string, List<string>> Parse(string[] args, bool singleClick)
     {
-        var allowed = new[] { "--allow-root", "--scenario", "--environment", "--executable", "--executable-sha256", "--working-directory", "--output-root", "--argument", "--child-env" };
+        var allowed = new List<string> { "--allow-root", "--scenario", "--environment", "--executable", "--executable-sha256", "--working-directory", "--output-root", "--argument", "--child-env" };
+        if (singleClick) allowed.Add("--target-id");
         if (args.Length > 256 || args.Length % 2 != 1) throw new InvalidDataException("RuntimeArgumentsRequired");
         var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         for (int i = 1; i < args.Length; i += 2)
