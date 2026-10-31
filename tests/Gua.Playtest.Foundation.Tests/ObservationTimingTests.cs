@@ -144,7 +144,7 @@ public sealed class ObservationTimingTests
             if (mode == "exception") Assert.Contains(row.GetProperty("sdkCalls").EnumerateArray(), call => call.GetProperty("outcome").GetString() == "exception");
             Assert.DoesNotContain("secret-game-label", snapshot.ToString());
             Assert.Equal(JsonValueKind.Null, row.GetProperty("evaluationStartedTicks").ValueKind);
-            string directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/tests/observation-timing"));
+            string directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/tests/runtime-evidence/observation-timing"));
             Directory.CreateDirectory(directory); await File.WriteAllTextAsync(Path.Combine(directory, mode + "-" + Guid.NewGuid().ToString("N") + ".json"), snapshot.ToString());
         }
         finally { Assert.True(await connection.ReleaseAsync(default).AsTask().WaitAsync(TimeSpan.FromSeconds(3))); }
