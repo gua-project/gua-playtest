@@ -50,9 +50,10 @@ public sealed class OwnedCleanup
                             Reject(new InvalidOperationException("CleanupClockDidNotAdvance"));
                         else
                         {
-                            lastSafety = elapsed;
-                            // Count physical elapsed even between immediately completed callbacks.
-                            return last = new TimeSpan(Math.Max(last.Ticks, Math.Max(now.Ticks, independent.Ticks)));
+                            // The provider read can block. Preserve the validity comparison's
+                            // sample, but count its wait in the returned floor and fallback accounting.
+                            lastSafety = safety.Elapsed - initialSafety;
+                            return last = new TimeSpan(Math.Max(last.Ticks, Math.Max(now.Ticks, (initial + lastSafety).Ticks)));
                         }
                     }
                     catch (Exception exception) { Reject(exception); }
