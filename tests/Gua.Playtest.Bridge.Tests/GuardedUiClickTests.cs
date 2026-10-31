@@ -200,7 +200,8 @@ internal sealed class GuardedReplyProxy : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        stop.Cancel(); listener.Stop();
+        // Match BridgeFaultProxy: cancel/join forwarding before listener cleanup.
+        stop.Cancel();
         try { await serving; }
         finally { try { listener.Close(); } catch(ObjectDisposedException) { } finally { stop.Dispose(); } }
     }

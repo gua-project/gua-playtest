@@ -154,6 +154,13 @@ if (args is [var hostMode, var pidFile] && hostMode is "observation-host" or "ob
     if (!runtime.StartInspectorBridge(int.Parse(Environment.GetEnvironmentVariable("GUA_BRIDGE_PORT")!))) return 3;
     if (hostMode is "observation-host-delayed" or "observation-host-capacity")
     {
+        if (hostMode == "observation-host-delayed")
+        {
+            File.WriteAllText(pidFile + ".bridge-ready", "ready");
+            // Start the existing700ms transition only after an actual false snapshot
+            // was observed. Startup/handshake latency must not erase that test boundary.
+            while (!File.Exists(pidFile + ".false-observed")) await Task.Delay(10);
+        }
         await Task.Delay(hostMode == "observation-host-capacity" ? 8000 : 700);
         runtime.BeginFrame("native-fixture");
         runtime.RegisterNode(new("ready", "button", "Ready", new(0, 0, 10, 10), Checked: true));
