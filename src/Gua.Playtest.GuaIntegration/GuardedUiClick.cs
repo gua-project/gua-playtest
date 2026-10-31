@@ -89,7 +89,11 @@ public sealed class GuardedUiClick : IDisposable
     }
     internal bool TryRecordingEvent(ulong requestId, out GuaActionEvent result)
     {
-        lock (gate)
+        result = default;
+        // The execution owner may hold this gate across synchronous SDK I/O.
+        // An artifact continuation must yield rather than block a pool worker.
+        if (!Monitor.TryEnter(gate)) return false;
+        try
         {
             // A real correlated completion remains immutable after owned disconnect.
             // Only the execution owner polls the transport. Artifact continuations
@@ -108,6 +112,7 @@ public sealed class GuardedUiClick : IDisposable
                 throw new InvalidOperationException("RecordingCompletionMismatch");
             return true;
         }
+        finally { Monitor.Exit(gate); }
     }
     private GuardedUiReceipt Snapshot()
     {

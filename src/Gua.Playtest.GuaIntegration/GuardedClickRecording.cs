@@ -148,8 +148,16 @@ public sealed class GuardedClickRecording
         internal bool ClickInvoked { get; private set; }
         internal ExceptionDispatchInfo? NativeFailure { get; private set; }
         internal void CloseDispatch() => Volatile.Write(ref dispatchOpen, 0);
+        private void RequirePreflightRead()
+        {
+            // Gua's failure diagnostics can ask for snapshots after timeout/cancel.
+            // Optional capture must not re-enter host I/O after its send boundary.
+            if (Volatile.Read(ref dispatchOpen) == 0 || ClickInvoked || Environment.CurrentManagedThreadId != ownerThread)
+                throw new NotSupportedException("RecordingReadOutsidePreflight");
+        }
         public string GetUiTreeJson()
         {
+            RequirePreflightRead();
             var text = owner.click.ReadForRecording(c => c.GetUiTreeJson());
             using var raw = GuaJsonAdmission.Parse(text, owner.maxSnapshotBytes, owner.maxSnapshotNodes, owner.maxStringChars);
             var projected = owner.project(raw.RootElement);
@@ -162,6 +170,7 @@ public sealed class GuardedClickRecording
         }
         public GuaQueryResult Query(GuaSelector selector)
         {
+            RequirePreflightRead();
             if (selector != new GuaSelector(Id: owner.targetId)) throw new NotSupportedException("RecordingRequiresExplicitTarget");
             var result = owner.click.ReadForRecording(c => c.Query(selector));
             if (!result.Valid || result.Matches.Count != 1 || result.Matches[0].Id != owner.targetId ||
@@ -171,8 +180,8 @@ public sealed class GuardedClickRecording
                 throw new InvalidDataException("RecordingQueryRefused");
             return result;
         }
-        public GuaVersion GetVersion() => owner.click.ReadForRecording(c => c.GetVersion());
-        public GuaContextStatus GetContextStatus() => owner.click.ReadForRecording(c => c.GetContextStatus());
+        public GuaVersion GetVersion() { RequirePreflightRead(); return owner.click.ReadForRecording(c => c.GetVersion()); }
+        public GuaContextStatus GetContextStatus() { RequirePreflightRead(); return owner.click.ReadForRecording(c => c.GetContextStatus()); }
         public GuaActionError EnqueueAction(GuaActionRequest request, out ulong requestId)
         {
             if (Volatile.Read(ref dispatchOpen) == 0 || Environment.CurrentManagedThreadId != ownerThread || ClickInvoked ||

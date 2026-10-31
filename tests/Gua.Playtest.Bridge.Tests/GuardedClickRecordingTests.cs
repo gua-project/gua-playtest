@@ -53,6 +53,57 @@ public sealed class GuardedClickRecordingTests
         Assert.False(host.TryConsumeAction(GuaActionType.Click,"start",out _));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Recording_failure_diagnostics_do_not_read_the_host_after_dispatch(bool cancel)
+    {
+        using var host=new GuaRuntime(); int dispatched=0, lateTrees=0;
+        await using var proxy=new GuardedReplyProxy(Start(host),type=>
+        {
+            if(type=="guarded_click_node") Volatile.Write(ref dispatched,1);
+            if(type=="get_ui_tree" && Volatile.Read(ref dispatched)!=0) Interlocked.Increment(ref lateTrees);
+            return false;
+        });
+        using var observations=Observe(proxy.Endpoint); using var click=observations.CreateGuardedUiClick(); using var caller=new CancellationTokenSource();
+        var capture=new GuardedClickRecording(click,"start",_=>true,document=>document.Clone(),65536,1000,65536,caller.Token);
+        var sent=capture.Start(()=>{},TimeSpan.FromSeconds(1),caller.Token); capture.ObserveReceipt(sent);
+        Assert.True(host.TryConsumeAction(GuaActionType.Click,"start",out var request));
+        if(cancel) caller.Cancel();
+        else { host.EmitActionResult(request,false,GuaActionError.InvalidArgument); var completed=click.Poll(); Assert.False(completed.Succeeded); capture.ObserveReceipt(completed); }
+        await Release(capture);
+        Assert.Equal(0,Volatile.Read(ref lateTrees)); Assert.True(capture.Freeze().CaptureFailed); Assert.Null(capture.Freeze().Recording);
+        Assert.False(host.TryConsumeAction(GuaActionType.Click,"start",out _));
+    }
+
+    [Fact]
+    public async Task Recording_event_read_does_not_wait_for_the_owner_while_its_native_poll_reply_is_held()
+    {
+        using var host=new GuaRuntime();
+        var reached=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var proxy=new GuardedReplyProxy(Start(host),_=>false,afterNativeReply:type=>
+        { if(type!="guarded_poll_action") return Task.CompletedTask; reached.TrySetResult(); return resume.Task; });
+        using var observations=Observe(proxy.Endpoint); using var click=observations.CreateGuardedUiClick(); var capture=Capture(click);
+        var sent=capture.Start(()=>{},TimeSpan.FromSeconds(1),default);
+        Assert.True(host.TryConsumeAction(GuaActionType.Click,"start",out var request)); host.EmitActionResult(request,true);
+        var polling=Task.Factory.StartNew(click.Poll,CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
+        Task<bool>? reading=null;
+        try
+        {
+            await reached.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var read=typeof(GuardedUiClick).GetMethod("TryRecordingEvent",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!;
+            reading=Task.Factory.StartNew(()=> (bool)read.Invoke(click,[sent.RequestId!.Value,null])!,CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
+            Assert.False(await reading.WaitAsync(TimeSpan.FromSeconds(1)));
+        }
+        finally
+        {
+            resume.TrySetResult(); capture.ObserveReceipt(await polling.WaitAsync(TimeSpan.FromSeconds(2))); await Release(capture);
+            if(reading is not null) await reading.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        Assert.False(capture.Freeze().CaptureFailed); Assert.Equal(request.RequestId,Assert.Single(capture.Freeze().Recording!.Steps).RequestId);
+        Assert.False(host.TryConsumeAction(GuaActionType.Click,"start",out _));
+    }
+
     [Fact]
     public async Task Recorder_never_adds_native_polling_to_the_execution_owners_guarded_connection()
     {

@@ -57,6 +57,10 @@ artifact writer associates it with the Run's Trace and writes/reads it through
 GuaRecordingFile, under the same secret, capacity and save policies.
 Only the execution owner polls the guarded connection; Recording reads its
 retained correlated completion without adding transport I/O during the wait.
+If that owner is busy, the Recording read returns pending immediately instead
+of blocking a shared worker behind the owner's synchronous transport call.
+Recorder snapshot/query reads are admitted only in the initial owner preflight;
+failure/cancellation diagnostics cannot perform post-dispatch host reads.
 No operation means NotExecuted; unavailable, private, rejected or unconfirmed
 capture means CaptureFailed; an actual file-write failure means SaveFailed.
 These facts do not replace the primary Goal/action result or cleanup facts.
