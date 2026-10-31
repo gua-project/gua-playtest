@@ -142,7 +142,8 @@ internal sealed class GuardedReplyProxy : IAsyncDisposable
     private readonly CancellationTokenSource stop = new(TimeSpan.FromSeconds(15));
     private readonly Task serving;
     public string Endpoint { get; }
-    public GuardedReplyProxy(string upstream, Func<string, bool> drop, Func<string,byte[],byte[]>? rewrite = null)
+    public GuardedReplyProxy(string upstream, Func<string, bool> drop, Func<string,byte[],byte[]>? rewrite = null,
+        Func<string, Task>? afterNativeReply = null)
     {
         using var port = new TcpListener(IPAddress.Loopback, 0); port.Start(); int number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
         Endpoint = $"ws://127.0.0.1:{number}/"; listener.Prefixes.Add($"http://127.0.0.1:{number}/"); listener.Start();
@@ -177,6 +178,7 @@ internal sealed class GuardedReplyProxy : IAsyncDisposable
                         if (result.RootElement.TryGetProperty("id", out var id) && id.GetInt32() == input.RootElement.GetProperty("id").GetInt32()) break;
                     }
                     string type=input.RootElement.GetProperty("type").GetString()!;
+                    if (afterNativeReply is not null) await afterNativeReply(type).WaitAsync(stop.Token);
                     if (drop(type)) { downstream.Abort(); return; }
                     if (rewrite is not null) reply=rewrite(type,reply);
                     await downstream.SendAsync(reply, WebSocketMessageType.Text, true, stop.Token);
@@ -198,7 +200,8 @@ internal sealed class GuardedReplyProxy : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        stop.Cancel(); listener.Stop();
+        // Match BridgeFaultProxy: cancel/join forwarding before listener cleanup.
+        stop.Cancel();
         try { await serving; }
         finally { try { listener.Close(); } catch(ObjectDisposedException) { } finally { stop.Dispose(); } }
     }

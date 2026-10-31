@@ -536,6 +536,7 @@ public sealed partial class RunTests
     {
         var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
         var run = new RunSession(Limits(), real, condition); var cleanup = new OwnedCleanup();
+        using var timing = new ExecutorTimingCapture(run);
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         using var resumeProbe = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -584,7 +585,7 @@ public sealed partial class RunTests
             catch (TimeoutException)
             {
                 ThreadPool.GetAvailableThreads(out var available, out _); ThreadPool.GetMinThreads(out var minimum, out _);
-                throw new Xunit.Sdk.XunitException($"Finalization did not finish: stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}");
+                throw new Xunit.Sdk.XunitException($"Finalization did not finish: stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}, timing={timing.FailureSnapshot()}");
             }
             Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
             Assert.Equal(1, releases); Assert.Equal(stage is "completion" or "synchronous-completion", returned.Task.IsCompleted);
@@ -978,7 +979,8 @@ public sealed partial class RunTests
         CancellationTokenRegistration blocker = default;
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var callbacksBlocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var evaluate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var evaluate = new ManualResetEventSlim();
+        var fixtureElapsed = System.Diagnostics.Stopwatch.StartNew(); var phase = 0; long evaluatedAt = -1;
         var armed = false; var polls = 0;
         var executing = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(), (owner, _, _) =>
         {
@@ -989,7 +991,7 @@ public sealed partial class RunTests
                 armed && ++polls > 1 && expected == RunReason.ExecutionError
                     ? new(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host)) : null;
             return ValueTask.FromResult(boundary);
-        }, async (owner, _) =>
+        }, (owner, _) => new ValueTask<bool>(RunBlockingFixture(() =>
         {
             if (expected is RunReason.ActionsExhausted or RunReason.GoalSatisfied)
             {
@@ -999,14 +1001,19 @@ public sealed partial class RunTests
                 Assert.NotNull(owner.RequestPlanner(recovering: expected == RunReason.RecoveryExhausted));
             else if (expected == RunReason.ExplorationFinished) Assert.NotNull(owner.ApproveObservation(TimeSpan.FromSeconds(1)));
             blocker = caller.Token.Register(() => { callbacksBlocked.TrySetResult(); resumeCallbacks.Wait(); });
-            ready.TrySetResult(); await evaluate.Task; armed = true;
+            // Keep the intentionally blocked fixture on its own worker. An async
+            // pool continuation is not guaranteed to resume inside the unchanged
+            // finite closing-evidence share. The provider still returns a pending Task.
+            ready.TrySetResult(); Volatile.Write(ref phase, 1); evaluate.Wait(); armed = true;
+            Volatile.Write(ref phase, 2); Interlocked.Exchange(ref evaluatedAt, fixtureElapsed.ElapsedTicks);
             owner.Evaluate(expected == RunReason.GoalSatisfied ? Unit() : null, expected == RunReason.GoalSatisfied ? TimeSpan.Zero : null,
-                cancelled: false, executionComplete: expected == RunReason.ExplorationFinished); return true;
-        }, caller.Token).AsTask();
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); var cancelling = RunBlockingFixture(caller.Cancel);
+                cancelled: false, executionComplete: expected == RunReason.ExplorationFinished); Volatile.Write(ref phase, 3); return true;
+        })), caller.Token).AsTask();
+        Task? cancelling = null;
         try
         {
-            await callbacksBlocked.Task.WaitAsync(TimeSpan.FromSeconds(1)); evaluate.TrySetResult();
+            await ready.Task.WaitAsync(TimeSpan.FromSeconds(1)); cancelling = RunBlockingFixture(caller.Cancel);
+            await callbacksBlocked.Task.WaitAsync(TimeSpan.FromSeconds(1)); evaluate.Set();
             var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.Contains(outcome.Events, item => item.Reason == RunReason.Cancelled);
             Assert.Contains(outcome.Events, item => item.Reason == expected);
@@ -1016,7 +1023,13 @@ public sealed partial class RunTests
             if (expected == RunReason.ExecutionError) Assert.Equal(RunOrigin.Host, outcome.Primary.Cause.Origin);
             Assert.Equal(2, polls); Assert.False(cancelling.IsCompleted);
         }
-        finally { resumeCallbacks.Set(); await cancelling.WaitAsync(TimeSpan.FromSeconds(1)); blocker.Dispose(); }
+        catch
+        {
+            try { raceOutput.WriteLine($"LateToken fixture expected={expected}; phase={Volatile.Read(ref phase)}; evaluatedAtTicks={Interlocked.Read(ref evaluatedAt)}; elapsedTicks={fixtureElapsed.ElapsedTicks}; polls={Volatile.Read(ref polls)}"); }
+            catch (Exception) { /* Preserve the original assertion/stack. */ }
+            throw;
+        }
+        finally { evaluate.Set(); resumeCallbacks.Set(); cancelling ??= RunBlockingFixture(caller.Cancel); await cancelling.WaitAsync(TimeSpan.FromSeconds(1)); blocker.Dispose(); }
     }
 
     [Theory]

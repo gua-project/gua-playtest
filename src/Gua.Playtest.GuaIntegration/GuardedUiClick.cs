@@ -79,6 +79,41 @@ public sealed class GuardedUiClick : IDisposable
             return receipt = Snapshot();
         }
     }
+    internal T ReadForRecording<T>(Func<IGuaContext, T> read)
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            return read(observation);
+        }
+    }
+    internal bool TryRecordingEvent(ulong requestId, out GuaActionEvent result)
+    {
+        result = default;
+        // The execution owner may hold this gate across synchronous SDK I/O.
+        // An artifact continuation must yield rather than block a pool worker.
+        if (!Monitor.TryEnter(gate)) return false;
+        try
+        {
+            // A real correlated completion remains immutable after owned disconnect.
+            // Only the execution owner polls the transport. Artifact continuations
+            // consume retained evidence without adding I/O or stealing its window.
+            if (attempt?.Completion is null)
+            {
+                ObjectDisposedException.ThrowIf(disposed, this);
+            }
+            if (attempt?.State == GuaRemoteDispatchState.Uncertain)
+                throw new InvalidOperationException("RecordingCompletionUnconfirmed");
+            if (attempt?.Completion is not { } completion) { result = default; return false; }
+            result = JsonSerializer.Deserialize<GuaActionEvent>(completion.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var expected = receipt ?? throw new InvalidOperationException("RecordingReceiptMissing");
+            if (result.RequestId != requestId || result.SessionEpoch != expected.SessionEpoch || result.NodeId != expected.NodeId ||
+                result.Action != GuaActionType.Click || !result.Revision.HasValue)
+                throw new InvalidOperationException("RecordingCompletionMismatch");
+            return true;
+        }
+        finally { Monitor.Exit(gate); }
+    }
     private GuardedUiReceipt Snapshot()
     {
         if (attempt is null) return receipt ?? throw new InvalidOperationException("NoClickAttempt");

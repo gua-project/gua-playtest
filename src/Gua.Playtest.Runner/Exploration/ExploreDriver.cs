@@ -54,17 +54,25 @@ public static class ExploreDriver
             finally
             {
                 FiniteOperation.CancelSafely(obsolete, run.RecordException);
-                // A losing notification's real failure remains causal evidence; it cannot be hidden by queue readiness.
-                _ = change.ContinueWith(t =>
-                {
-                    foreach (var exception in t.Exception!.InnerExceptions) run.PostProviderException(exception);
-                }, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+                // Owner samples read the actual registered task, independently of
+                // notification delivery. A late continuation only observes diagnostics.
+                _ = change.ContinueWith(t => _ = t.Exception,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                 _ = pending.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
             }
         }
-        private async ValueTask SourceChangeAsync(CancellationToken token)
+        private ValueTask SourceChangeAsync(CancellationToken token)
         {
-            try { await source.WaitForChangeAsync(token).ConfigureAwait(false); }
+            Task returned;
+            try { returned = source.WaitForChangeAsync(token).AsTask(); }
+            catch (Exception exception) { returned = Task.FromException(exception); }
+            run.TrackOwnedProviderTask(returned, new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), token);
+            // Observe late raw faults even if the owner closes before classification.
+            return ClassifySourceChangeAsync(returned, token);
+        }
+        private static async ValueTask ClassifySourceChangeAsync(Task returned, CancellationToken token)
+        {
+            try { await returned.ConfigureAwait(false); }
             catch (OperationCanceledException exception) when (token.IsCancellationRequested && exception.CancellationToken == token) { throw; }
             catch (Exception exception) { throw HostFailure(exception); }
         }

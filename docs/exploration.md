@@ -29,6 +29,23 @@ attempts it even when work is interrupted or returns no neutral-input receipt.
 The callback must release only this Run's inputs and tolerate already neutral
 inputs. Failed release remains post-processing evidence under the existing rules.
 
+The owner registers the actual task returned by the source port before the
+adapter's classification await and before racing queue readiness. The source
+ValueTask is consumed once. Fixed Host fallback and supplied-token metadata
+preserve the existing await's first exception, an existing typed cause, and the
+distinction between matching requested cancellation and foreign-token failure.
+At ordinary evidence samples and interrupted closing samples it directly collects
+already-faulted owned tasks, independently of notification-continuation delivery.
+A known owned source fault closes further input admission and competes with Goal
+under the existing priority rules. Each registered task is collected once;
+registration and queued evidence retain the existing `MaxEvidenceItems` bound,
+with overflow failing closed. Successful or normally cancelled tasks add no host
+failure. Tasks still pending at the closing sample are late: their exceptions
+remain observed, but cannot reopen primary. Unowned tasks supply no evidence.
+When an owned fault and the directly awaited source contribute the same cause,
+pending evidence merges that cause once; explicit candidate order and the
+priority rules are unchanged.
+
 ## Progress and stall detection
 
 `ProgressDefinitions` is optional trusted configuration. No definitions, missing

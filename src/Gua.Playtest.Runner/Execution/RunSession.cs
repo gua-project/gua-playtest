@@ -70,6 +70,32 @@ public sealed class RunSession
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, RecordedException> recordedExceptions = new();
     private readonly object postedExceptionGate = new();
     private readonly Queue<(Exception Exception, RunEvent? Cause)> postedExceptions = new();
+    private readonly List<OwnedProviderTask> ownedProviderTasks = [];
+    private sealed class OwnedProviderTask(Task task, RunEvent? fallback, CancellationToken token)
+    {
+        internal Task Task { get; } = task;
+        internal RunEvent? Fallback { get; } = fallback;
+        internal CancellationToken Token { get; } = token;
+        private bool exceptionRead;
+        private Exception? exception;
+        internal Exception? RawFailure()
+        {
+            if (!Task.IsCompleted) return null;
+            if (!exceptionRead)
+            {
+                // Completed task only: preserve await's first exception, including
+                // a provider's AggregateException, without waiting or invoking it.
+                try { Task.GetAwaiter().GetResult(); }
+                catch (Exception caught) { exception = caught; }
+                exceptionRead = true;
+            }
+            // Cancellation classification is sampled, not cached: a token can
+            // become requested after the first input-admission sample.
+            return exception is OperationCanceledException cancelled && Token.IsCancellationRequested &&
+                cancelled.CancellationToken == Token ? null : exception;
+        }
+        internal bool HasFailure => Fallback is null ? Task.IsFaulted : RawFailure() is not null;
+    }
     private bool postedExceptionsClosed;
     private bool postedExceptionsOverflow;
     private bool postedCausalEvidence;
@@ -115,7 +141,8 @@ public sealed class RunSession
         }
     }
     private bool HasQueuedTerminalEvidence
-    { get { lock (postedExceptionGate) return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow; } }
+    { get { lock (postedExceptionGate) return pendingEvents.Count != 0 || postedCausalEvidence || postedExceptionsOverflow ||
+        ownedProviderTasks.Any(task => task.HasFailure); } }
     private bool ActionsClosingWithoutProbe => State != ExecutionState.Running || executorClosing || callerCancellation.IsCancellationRequested || IsConfirmingWork ||
         HasQueuedTerminalEvidence || approvalsClosing || Budget.Exhaustion.HasValue;
     private void SampleLifecycle(bool closing = false)
@@ -130,9 +157,24 @@ public sealed class RunSession
         // Provider clocks and diagnostic transport can be synchronous dependencies.
         // They must not hold authority's data gate while the executor finalizes.
         // An interruption does not launch a second call behind a stalled probe.
+        var timingOperation = RuntimeTiming.NextOperation();
+        // Keep diagnostic subscribers outside the authority gate, including reentrant callers.
+        var timingSafe = !Monitor.IsEntered(arbitrationGate);
+        if (timingSafe) RuntimeTiming.Mark(this, "session.lifecycle-probe.enter", timingOperation, detail: closing ? 1 : 0);
         try
         {
-            if (probe() is not { } failure) return;
+            RunFailureException? failure;
+            try
+            {
+                failure = probe();
+                if (timingSafe) RuntimeTiming.Mark(this, "session.lifecycle-probe.return", timingOperation, detail: failure is null ? 0 : 1);
+            }
+            catch
+            {
+                if (timingSafe) RuntimeTiming.Mark(this, "session.lifecycle-probe.throw", timingOperation);
+                throw;
+            }
+            if (failure is null) return;
             lock (postedExceptionGate)
             {
                 if (State != ExecutionState.Running || postedExceptionsClosed && !closing || !ReferenceEquals(initialLifecycleFailure, probe)) return;
@@ -195,7 +237,8 @@ public sealed class RunSession
         lock (arbitrationGate)
         {
             if (AbandonedEvaluation || State is ExecutionState.Completing or ExecutionState.Finished) return false;
-            cycle.AddRange(pendingEvents);
+            foreach (var pending in pendingEvents)
+                if (!cycle.Contains(pending)) cycle.Add(pending);
             if (currentEvaluation.Value is { } frame) frame.Evidence = cycle.ToArray();
             pendingEvents.Clear(); return true;
         }
@@ -676,6 +719,7 @@ public sealed class RunSession
         CollectLatchedInterruptions(cycle);
         foreach (var operation in operations.Where(x => x.IsOpen)) operation.CompleteAt(lastReal);
         cycle.AddRange(pendingEvents); pendingEvents.Clear();
+        CollectOwnedProviderTaskFaultsLocked(close: true);
         postedExceptionsClosed = true;
         foreach (var diagnostic in active.Diagnostics) RecordEmergencyException(diagnostic);
         foreach (var item in postedExceptions)
@@ -907,6 +951,48 @@ public sealed class RunSession
     // The executor retains original diagnostics separately, recording them once
     // after its waiter settles or the controller revokes that waiter.
     internal void RetainExecutorFailure(RunEvent cause) => QueuePending(cause);
+    /// <summary>Retain the actual classified provider task before racing its notification.
+    /// Registration grants no result authority; only the owner's evidence samples collect faults.
+    /// The adapter registers once per attempt and separately observes late task exceptions.</summary>
+    internal void TrackOwnedProviderTask(Task task) => TrackOwnedProviderTask(task, null, default);
+    // The actual task returned by the provider is registered before the adapter's
+    // await/classification continuation can be delayed. Metadata contains no callback.
+    internal void TrackOwnedProviderTask(Task task, RunEvent? fallback, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        lock (postedExceptionGate)
+        {
+            if (postedExceptionsClosed || ownedProviderTasks.Any(item => ReferenceEquals(item.Task, task) &&
+                item.Fallback == fallback && item.Token == token)) return;
+            if (ownedProviderTasks.Count < Limits.MaxEvidenceItems) ownedProviderTasks.Add(new(task, fallback, token));
+            else postedExceptionsOverflow = true;
+        }
+    }
+    // Called only under the existing publication gate. Task state/Exception are
+    // nonblocking data; no provider, continuation, clock or notification is invoked.
+    private void CollectOwnedProviderTaskFaultsLocked(bool close)
+    {
+        foreach (var owned in ownedProviderTasks.ToArray())
+        {
+            var task = owned.Task;
+            if (!task.IsCompleted) continue;
+            ownedProviderTasks.Remove(owned);
+            IEnumerable<Exception> faults = owned.Fallback is not null
+                ? owned.RawFailure() is { } failure ? [failure] : []
+                : task.IsFaulted ? task.Exception!.InnerExceptions : [];
+            foreach (var exception in faults)
+            {
+                if (postedExceptions.Count >= Limits.MaxEvidenceItems)
+                { postedExceptionsOverflow = true; break; }
+                var cause = (exception as RunFailureException)?.Cause ?? owned.Fallback;
+                if (cause is not null) postedCausalEvidence = true;
+                postedExceptions.Enqueue((exception, cause));
+            }
+        }
+        // Pending tasks at the closing sample are late, not authority to reopen
+        // an immutable primary. Their adapter's exception observer still owns cleanup.
+        if (close) ownedProviderTasks.Clear();
+    }
     private void PostEvidence(Exception exception, RunEvent? cause)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -924,6 +1010,7 @@ public sealed class RunSession
         lock (postedExceptionGate)
         {
             if (AbandonedEvaluation) return;
+            CollectOwnedProviderTaskFaultsLocked(close);
             if (close)
             {
                 postedExceptionsClosed = true;

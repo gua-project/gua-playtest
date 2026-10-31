@@ -53,6 +53,7 @@ public sealed class ObservationRuntimeTests : IDisposable
         environment["connection"] = new JsonObject { ["endpoint"] = "ws://127.0.0.1:" + port };
         environment["profile"] = "Debug";
         environment["trace"]!["savePolicy"] = "always";
+        if (mutation == "delayed") environment["trace"]!["captureMode"] = "streaming";
         environment["limits"]!["prepareTimeoutMilliseconds"] = 5000;
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 500;
@@ -104,6 +105,27 @@ public sealed class ObservationRuntimeTests : IDisposable
         using var output = new StringWriter();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var task = CliApplication.ExecuteAsync(args, output, cancellation.Token);
+        if (mode == "delayed")
+        {
+            // Acknowledge a real saved false snapshot; never synthesize observation data.
+            static bool FalseSnapshot(string path)
+            {
+                try
+                {
+                    return JsonNode.Parse(File.ReadAllText(path))?["Reads"] is JsonArray reads &&
+                        reads.Any(read => read?["Value"]?["value"] is JsonValue scalar && scalar.TryGetValue<bool>(out var value) && !value);
+                }
+                catch (IOException) { return false; }
+                catch (JsonException) { return false; }
+            }
+            while (!task.IsCompleted)
+            {
+                if (Directory.GetFiles(root, "*.json", SearchOption.AllDirectories)
+                    .Where(path => Path.GetFileName(Path.GetDirectoryName(path)) == "snapshots").Any(FalseSnapshot))
+                { await File.WriteAllTextAsync(Path.Combine(root, "pid.false-observed"), "observed"); break; }
+                await Task.Delay(10);
+            }
+        }
         if (mode == "cancel")
         {
             var deadline = Stopwatch.StartNew();

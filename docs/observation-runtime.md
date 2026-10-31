@@ -67,6 +67,72 @@ environment is not enumerated or attested by this identity.
 Trace capture failure disables further capture storage but keeps valid observation
 values available to Goal evaluation. Missing primary persistence or finalization
 failure remains postprocessing debt and cannot replace the original primary.
+Fresh captures run synchronous SDK reads on a dedicated worker, preserving the
+serialized gate and cancellation checks. The serial monitor joins each request
+before replacing it; completed workers exit rather than forming a retained pool.
+This removes shared-pool queueing at capture start without extending its deadline
+or promising completion when SDK I/O or the OS is delayed.
+
+The JSON `details.observationTiming` contains bounded, best-effort diagnostics for
+execution captures. All ticks use one process-local Stopwatch origin and the
+reported frequency; observation numbers correlate SDK calls and Runner evaluation
+by object identity. `queueMs` measures reservation to worker entry; `gateWaitMs`
+ends when the serialized capture body is admitted. Each SDK call reports its
+start/end and returned/exception state. `remoteSdkMs` includes SDK, transport and
+host time, without separating them. `localSelectorMs` measures the local selector
+reconstruction/check envelope; `sdkMs` sums both. `adapterNonSdkMs` is capture-body
+time outside those envelopes, including validation, serialization, owner checks
+and measurement overhead; that residual alone cannot assign exclusive blame.
+`deliveryToEvaluationMs` runs from adapter exit to
+Runner arbiter submission; evaluation start/end does not itself mean Goal passed
+or that a late unit gained authority.
+
+The diagnostics retain at most64 captures and64 calls per capture, with explicit
+drop counts. Null timestamps mean not observed at the snapshot, including possible
+late work or missing notifications; they do not prove a phase never started.
+Incomplete call sums remain null. Cancellation-exception/task/token facts and the
+existing primary result must be read separately: a requested token alone cannot
+distinguish supersession, caller cancellation and deadline expiry. Collection
+records `primaryObservedTicks` at the existing primary-persistence notification,
+so late completions can be compared with that observed closing boundary using the
+same clock. This is not the exact deadline instant or a new arbitration timestamp.
+Snapshot start/end bound a best-effort copy that can race late work. Collection
+performs no log/file I/O or RunSession reads in the measured path. Output contains
+fixed operation names, numbers and states, without selectors, values or exception
+messages. It grants no result authority and does not change deadlines or cleanup.
+
+`details.lifecycleTiming` uses the same monotonic origin and reports a bounded
+tail of at most1024 numeric events. Each event has a sequence number, fixed phase,
+operation correlation ID, elapsed ticks and whether its producer ran on the
+shared thread pool. Optional budget/remaining fields use TimeSpan ticks (100ns),
+not Stopwatch ticks; negative remaining values record observed expiry. Missing
+events mean not observed at snapshot, rather than proof that work never started.
+The snapshot reports overwritten events and may race late notifications.
+
+Controller wait creation, completion observation and continuation resumption
+are separate phases. Completion-observed records delivery of a diagnostic task
+observer, which can itself be delayed; it is not the timer's firing time or the
+task's exact state transition. TaskStatus at resumption and the pool flag provide
+additional evidence, without proving whether any particular delay was caused by
+the scheduler. Clock/lifecycle probe entry and return/throw surround the existing
+call. `executor.primary.observed` is reached after arbitration and is not an exact
+publication timestamp. Reentrant lifecycle calls that already hold the authority
+gate suppress notifications, so absence remains unknown.
+
+Cleanup events correlate each finite stage's entry/return with callback and
+owner-check observations. Primary persistence records encoding, Write, Flush and
+Move separately from the owner's remaining-share check. These boundaries help
+distinguish time spent saving from time spent reaching confirmation; they do not
+relax persistence, deadline or result requirements. Callbacks record no paths,
+game contents, exception messages or credentials and take no application locks.
+Positive operation IDs belong to Runner/store events; negative IDs identify the
+CLI artifact callback. Cleanup stage details follow `CleanupStage` (PrimarySnapshot0,
+Diagnostics1, Artifacts2, InputRelease3, ResourceRelease4, OwnershipRelease5).
+Task-status phases use the .NET TaskStatus enum; returned/confirmation/saved
+result phases use1 for true and0 for false. `release.attempt-exit` ends the finite
+attempt, not necessarily its still-running task. The separate completed-observed
+event cannot certify an on-time release. Neither a saved primary file nor a
+returned callback alone proves that the owner confirmed it within its share.
 
 The CLI returns the established Run exit code and a JSON `details` object with
 runId, artifactDirectory, driver, primary phase/origin, persistence and
