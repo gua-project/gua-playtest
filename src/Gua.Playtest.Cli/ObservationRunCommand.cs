@@ -221,6 +221,7 @@ internal static class ObservationRunCommand
                     return false;
                 }, token, (snapshot, cancel) =>
                 {
+                    observationTiming.ObservePrimary();
                     lock (captureGate) { capturesClosed = true; return artifacts.ConfirmPrimaryAsync(snapshot, cancel); }
                 });
             lock (captureGate) capturesClosed = true;

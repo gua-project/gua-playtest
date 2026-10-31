@@ -161,6 +161,7 @@ public sealed class SingleUiRuntimeTests
             .SelectMany(File.ReadLines).Select(line=>JsonNode.Parse(line)!).ToArray();
         var timing = details.GetProperty("observationTiming");
         Assert.Equal("playtest.observation-timing.v1", timing.GetProperty("schema").GetString());
+        Assert.Equal(JsonValueKind.Number, timing.GetProperty("primaryObservedTicks").ValueKind);
         if (mode == "ui-click-host")
         {
             var observations = timing.GetProperty("observations").EnumerateArray().ToArray();

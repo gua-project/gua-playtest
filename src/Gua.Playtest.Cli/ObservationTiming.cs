@@ -13,6 +13,7 @@ internal sealed class ObservationTiming : IObserver<DiagnosticListener>, IObserv
     private readonly IDisposable all;
     private IDisposable? sdk, evaluation;
     private int count;
+    private long primaryObserved;
     internal ObservationTiming(int capacity = 64)
     {
         samples = new Sample[Math.Clamp(capacity, 1, 64)];
@@ -52,18 +53,22 @@ internal sealed class ObservationTiming : IObserver<DiagnosticListener>, IObserv
     public void OnError(Exception error) { }
     public void OnCompleted() { }
     public void Dispose() { all.Dispose(); sdk?.Dispose(); evaluation?.Dispose(); }
+    internal void ObservePrimary() => Interlocked.CompareExchange(ref primaryObserved, Stopwatch.GetTimestamp(), 0);
     internal object Snapshot()
     {
         long at = Stopwatch.GetTimestamp();
+        var observations = samples.Select(x => x?.Snapshot(origin)).Where(x => x is not null).ToArray();
+        long primary = Volatile.Read(ref primaryObserved);
         return new
         {
             schema = "playtest.observation-timing.v1", frequency = Stopwatch.Frequency,
-            snapshotTicks = at - origin, limit = samples.Length,
+            snapshotStartedTicks = at - origin, snapshotEndedTicks = Stopwatch.GetTimestamp() - origin,
+            primaryObservedTicks = primary == 0 ? (long?)null : primary - origin, limit = samples.Length,
             dropped = Math.Max(0, Volatile.Read(ref count) - samples.Length),
             missingPhaseMeaning = "not-observed-at-snapshot; not proof of never-started",
             sampling = "bounded-best-effort; snapshot may race late work; missing notifications are not negative proof",
             sdkBoundary = "public SDK calls include SDK/transport/host; local-selector-check includes local reconstruction; no internal split",
-            observations = samples.Select(x => x?.Snapshot(origin)).Where(x => x is not null).ToArray()
+            observations
         };
     }
     internal sealed class Sample(int number, CancellationToken token)

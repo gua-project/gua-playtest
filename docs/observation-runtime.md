@@ -93,6 +93,10 @@ late work or missing notifications; they do not prove a phase never started.
 Incomplete call sums remain null. Cancellation-exception/task/token facts and the
 existing primary result must be read separately: a requested token alone cannot
 distinguish supersession, caller cancellation and deadline expiry. Collection
+records `primaryObservedTicks` at the existing primary-persistence notification,
+so late completions can be compared with that observed closing boundary using the
+same clock. This is not the exact deadline instant or a new arbitration timestamp.
+Snapshot start/end bound a best-effort copy that can race late work. Collection
 performs no log/file I/O or RunSession reads in the measured path. Output contains
 fixed operation names, numbers and states, without selectors, values or exception
 messages. It grants no result authority and does not change deadlines or cleanup.
