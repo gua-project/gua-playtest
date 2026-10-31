@@ -54,6 +54,23 @@ public sealed class GuardedClickRecordingTests
     }
 
     [Fact]
+    public async Task Recorder_never_adds_native_polling_to_the_execution_owners_guarded_connection()
+    {
+        using var host=new GuaRuntime(); int polls=0;
+        await using var proxy=new GuardedReplyProxy(Start(host),type=> { if(type=="guarded_poll_action") Interlocked.Increment(ref polls); return false; });
+        using var observations=Observe(proxy.Endpoint); using var click=observations.CreateGuardedUiClick(); var capture=Capture(click);
+        capture.Start(()=>{},TimeSpan.FromSeconds(1),default);
+        // Official Recorder synchronously tries its first event read before Start
+        // returns. That read must be memory-only, even while no result exists.
+        Assert.Equal(0,Volatile.Read(ref polls));
+        Assert.True(host.TryConsumeAction(GuaActionType.Click,"start",out var request)); host.EmitActionResult(request,true);
+        capture.ObserveReceipt(click.Poll()); await Release(capture);
+        Assert.Equal(1,Volatile.Read(ref polls)); Assert.False(capture.Freeze().CaptureFailed);
+        Assert.Equal(request.RequestId,Assert.Single(capture.Freeze().Recording!.Steps).RequestId);
+        Assert.False(host.TryConsumeAction(GuaActionType.Click,"start",out _));
+    }
+
+    [Fact]
     public async Task Blocked_actual_send_is_capture_failed_and_release_unconfirmed_without_waiting_for_click_lock()
     {
         using var host=new GuaRuntime();

@@ -92,11 +92,11 @@ public sealed class GuardedUiClick : IDisposable
         lock (gate)
         {
             // A real correlated completion remains immutable after owned disconnect.
-            // Never reconnect or poll a disposed owner just to finish an artifact.
+            // Only the execution owner polls the transport. Artifact continuations
+            // consume retained evidence without adding I/O or stealing its window.
             if (attempt?.Completion is null)
             {
                 ObjectDisposedException.ThrowIf(disposed, this);
-                if (attempt?.State == GuaRemoteDispatchState.Enqueued) dispatch.Poll(attempt);
             }
             if (attempt?.State == GuaRemoteDispatchState.Uncertain)
                 throw new InvalidOperationException("RecordingCompletionUnconfirmed");
