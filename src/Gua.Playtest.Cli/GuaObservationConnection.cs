@@ -66,13 +66,36 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
                 "gua-subscription-and-fresh-read", observation, this, false);
         });
     }, token));
-    public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => new(Task.Factory.StartNew(() =>
+    internal ObservationTiming? Timing { get; set; }
+    public ValueTask<RunObservation> CaptureAsync(CancellationToken token)
     {
-        // Monitor supersession also cancels this token when work completes. Do not
-        // destroy the shared source: the serial feed joins this bounded request before
-        // its final fresh capture. Terminal cleanup separately interrupts the socket.
-        return Cancellable(token, () => Capture());
-    }, token, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default));
+        var timing = Timing;
+        var sample = timing?.Reserve(token);
+        var task = Task.Factory.StartNew(() =>
+        {
+            if (sample is not null) Volatile.Write(ref sample.Worker, System.Diagnostics.Stopwatch.GetTimestamp());
+            var previous = timing?.Enter(sample);
+            try
+            {
+                var result = Cancellable(token, () =>
+                {
+                    if (sample is not null) Volatile.Write(ref sample.Gate, System.Diagnostics.Stopwatch.GetTimestamp());
+                    return Capture();
+                });
+                if (sample is not null) { Volatile.Write(ref sample.Observation, result); Volatile.Write(ref sample.Outcome, 1); }
+                return result;
+            }
+            catch (OperationCanceledException) { if (sample is not null) Volatile.Write(ref sample.Outcome, 3); throw; }
+            catch { if (sample is not null) Volatile.Write(ref sample.Outcome, 2); throw; }
+            finally
+            {
+                if (sample is not null) Volatile.Write(ref sample.Returned, System.Diagnostics.Stopwatch.GetTimestamp());
+                timing?.Restore(previous);
+            }
+        }, token, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+        if (sample is not null) Volatile.Write(ref sample.Task, task);
+        return new(task);
+    }
     private T Cancellable<T>(CancellationToken token, Func<T> operation)
     {
         lock (gate)

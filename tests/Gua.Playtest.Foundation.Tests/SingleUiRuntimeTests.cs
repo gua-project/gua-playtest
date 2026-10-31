@@ -159,6 +159,16 @@ public sealed class SingleUiRuntimeTests
         Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(details.GetProperty("artifactDirectory").GetString()!,new(8*1024*1024,8*1024*1024,10000,65536))).State);
         var events=Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!,"events.jsonl",SearchOption.AllDirectories)
             .SelectMany(File.ReadLines).Select(line=>JsonNode.Parse(line)!).ToArray();
+        var timing = details.GetProperty("observationTiming");
+        Assert.Equal("playtest.observation-timing.v1", timing.GetProperty("schema").GetString());
+        if (mode == "ui-click-host")
+        {
+            var observations = timing.GetProperty("observations").EnumerateArray().ToArray();
+            Assert.NotEmpty(observations);
+            Assert.Contains(observations, row => row.GetProperty("evaluationEndedTicks").ValueKind == JsonValueKind.Number);
+            Assert.Contains(observations, row => row.GetProperty("sdkCalls").GetArrayLength() > 0);
+            Assert.Equal(observations.Length, observations.Select(row => row.GetProperty("number").GetInt32()).Distinct().Count());
+        }
         if(savedRecording)
         {
             var attachment=Assert.Single(events,item=>item["type"]!.GetValue<string>()=="attachment" && item["data"]?["schema"]?.GetValue<string>()=="gua.recording.references.v1");

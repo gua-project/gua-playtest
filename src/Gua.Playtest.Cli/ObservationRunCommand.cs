@@ -141,6 +141,7 @@ internal static class ObservationRunCommand
                 FlushTimeout = Ms(limits.CleanupTimeoutMilliseconds)
             }, redactor, token);
             if (!artifacts.PreparationPersistence.Saved) throw new InvalidDataException("RuntimeStorageUnavailable");
+            using var observationTiming = new ObservationTiming();
             var captureGate = new object();
             bool capturesClosed = false;
             bool capturesDisabled = false;
@@ -189,7 +190,7 @@ internal static class ObservationRunCommand
                                 artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
                             }, artifacts.MarkCaptureFailure);
                         }
-                    }, singleClick, precondition);
+                    }, singleClick, precondition) { Timing = observationTiming };
             });
             var cleanup = new OwnedCleanup();
             cleanup.Register(CleanupStage.InputRelease, connector.Pending.ReleaseAsync);
@@ -230,6 +231,7 @@ internal static class ObservationRunCommand
                     ownedProcessId = launcher.Process?.ProcessId,
                     effectiveEnvironmentSha256 = runtimeHash,
                     driver = driverName, click = lastClick, actions = run.Budget.Snapshot.Actions,
+                    observationTiming = observationTiming.Snapshot(),
                     recordingState = completion.Receipts.SingleOrDefault(x => x.Kind == ArtifactKind.Recording)?.State.ToString(),
                     recordedActions = capturedRecording?.Recording?.Steps.Count ?? 0,
                     phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),

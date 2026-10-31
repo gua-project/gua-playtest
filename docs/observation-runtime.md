@@ -73,6 +73,30 @@ before replacing it; completed workers exit rather than forming a retained pool.
 This removes shared-pool queueing at capture start without extending its deadline
 or promising completion when SDK I/O or the OS is delayed.
 
+The JSON `details.observationTiming` contains bounded, best-effort diagnostics for
+execution captures. All ticks use one process-local Stopwatch origin and the
+reported frequency; observation numbers correlate SDK calls and Runner evaluation
+by object identity. `queueMs` measures reservation to worker entry; `gateWaitMs`
+ends when the serialized capture body is admitted. Each SDK call reports its
+start/end and returned/exception state. `remoteSdkMs` includes SDK, transport and
+host time, without separating them. `localSelectorMs` measures the local selector
+reconstruction/check envelope; `sdkMs` sums both. `adapterNonSdkMs` is capture-body
+time outside those envelopes, including validation, serialization, owner checks
+and measurement overhead; that residual alone cannot assign exclusive blame.
+`deliveryToEvaluationMs` runs from adapter exit to
+Runner arbiter submission; evaluation start/end does not itself mean Goal passed
+or that a late unit gained authority.
+
+The diagnostics retain at most64 captures and64 calls per capture, with explicit
+drop counts. Null timestamps mean not observed at the snapshot, including possible
+late work or missing notifications; they do not prove a phase never started.
+Incomplete call sums remain null. Cancellation-exception/task/token facts and the
+existing primary result must be read separately: a requested token alone cannot
+distinguish supersession, caller cancellation and deadline expiry. Collection
+performs no log/file I/O or RunSession reads in the measured path. Output contains
+fixed operation names, numbers and states, without selectors, values or exception
+messages. It grants no result authority and does not change deadlines or cleanup.
+
 The CLI returns the established Run exit code and a JSON `details` object with
 runId, artifactDirectory, driver, primary phase/origin, persistence and
 postprocessing facts. Cancellation may leave a diagnostics debt under Runner's
