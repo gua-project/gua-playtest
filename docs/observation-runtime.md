@@ -67,6 +67,11 @@ environment is not enumerated or attested by this identity.
 Trace capture failure disables further capture storage but keeps valid observation
 values available to Goal evaluation. Missing primary persistence or finalization
 failure remains postprocessing debt and cannot replace the original primary.
+Fresh captures run synchronous SDK reads on a dedicated worker, preserving the
+serialized gate and cancellation checks. The serial monitor joins each request
+before replacing it; completed workers exit rather than forming a retained pool.
+This removes shared-pool queueing at capture start without extending its deadline
+or promising completion when SDK I/O or the OS is delayed.
 
 The CLI returns the established Run exit code and a JSON `details` object with
 runId, artifactDirectory, driver, primary phase/origin, persistence and

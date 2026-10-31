@@ -66,13 +66,13 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
                 "gua-subscription-and-fresh-read", observation, this, false);
         });
     }, token));
-    public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => new(Task.Run(() =>
+    public ValueTask<RunObservation> CaptureAsync(CancellationToken token) => new(Task.Factory.StartNew(() =>
     {
         // Monitor supersession also cancels this token when work completes. Do not
         // destroy the shared source: the serial feed joins this bounded request before
         // its final fresh capture. Terminal cleanup separately interrupts the socket.
         return Cancellable(token, () => Capture());
-    }, token));
+    }, token, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default));
     private T Cancellable<T>(CancellationToken token, Func<T> operation)
     {
         lock (gate)

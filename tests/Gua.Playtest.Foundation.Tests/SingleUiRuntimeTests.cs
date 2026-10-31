@@ -17,6 +17,27 @@ public sealed class SingleUiRuntimeTests
 {
     private static string Repository => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
     [Fact]
+    public async Task Fresh_capture_starts_without_a_shared_threadpool_worker()
+    {
+        var configuration=new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var probe=Path.Combine(Repository,"tests/Gua.Playtest.ProcessProbe/bin",configuration,"net10.0/Gua.Playtest.ProcessProbe.dll");
+        var info=new ProcessStartInfo("dotnet") { RedirectStandardOutput=true,RedirectStandardError=true,UseShellExecute=false,CreateNoWindow=true };
+        info.ArgumentList.Add(probe); info.ArgumentList.Add("capture-pool-pressure");
+        using var child=Process.Start(info)!; var stdout=child.StandardOutput.ReadToEndAsync(); var stderr=child.StandardError.ReadToEndAsync();
+        using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try { await child.WaitForExitAsync(deadline.Token); } finally { if(!child.HasExited) child.Kill(true); }
+        var output=await stdout; var errors=await stderr;
+        string root=Path.Combine(Repository,"artifacts/tests/single-ui/capture-pressure",Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root,"facts.json"),output); await File.WriteAllTextAsync(Path.Combine(root,"stderr.txt"),errors);
+        Assert.True(child.ExitCode==0,output+errors);
+        using var facts=JsonDocument.Parse(output.Split('\n').Single(line=>line.StartsWith("{\"started\"",StringComparison.Ordinal)));
+        Assert.True(facts.RootElement.GetProperty("started").GetBoolean()); Assert.Equal(0,facts.RootElement.GetProperty("available").GetInt32());
+        Assert.Equal(0,facts.RootElement.GetProperty("poolWorker").GetInt32()); Assert.True(facts.RootElement.GetProperty("releaseConfirmed").GetBoolean());
+        Assert.Equal(16,facts.RootElement.GetProperty("serialCaptures").GetInt32());
+        foreach(var name in new[]{"workersEnded","cancelBefore","cancelAfter","closedFailure"}) Assert.True(facts.RootElement.GetProperty(name).GetBoolean(),output+errors);
+    }
+
+    [Fact]
     public async Task Owned_guarded_connection_release_starts_without_a_shared_threadpool_worker()
     {
         var configuration=new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
