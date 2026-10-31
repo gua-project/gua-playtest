@@ -9,13 +9,14 @@ internal sealed class ObservationTiming : IObserver<DiagnosticListener>, IObserv
 {
     private readonly Sample?[] samples;
     private readonly AsyncLocal<Sample?> active = new();
-    private readonly long origin = Stopwatch.GetTimestamp();
+    private readonly long origin;
     private readonly IDisposable all;
     private IDisposable? sdk, evaluation;
     private int count;
     private long primaryObserved;
-    internal ObservationTiming(int capacity = 64)
+    internal ObservationTiming(int capacity = 64, long? origin = null)
     {
+        this.origin = origin ?? Stopwatch.GetTimestamp();
         samples = new Sample[Math.Clamp(capacity, 1, 64)];
         all = DiagnosticListener.AllListeners.Subscribe(this);
     }

@@ -141,7 +141,9 @@ internal static class ObservationRunCommand
                 FlushTimeout = Ms(limits.CleanupTimeoutMilliseconds)
             }, redactor, token);
             if (!artifacts.PreparationPersistence.Saved) throw new InvalidDataException("RuntimeStorageUnavailable");
-            using var observationTiming = new ObservationTiming();
+            long timingOrigin = Stopwatch.GetTimestamp();
+            using var observationTiming = new ObservationTiming(origin: timingOrigin);
+            using var lifecycleTiming = new LifecycleTiming(run, store, timingOrigin);
             var captureGate = new object();
             bool capturesClosed = false;
             bool capturesDisabled = false;
@@ -233,6 +235,7 @@ internal static class ObservationRunCommand
                     effectiveEnvironmentSha256 = runtimeHash,
                     driver = driverName, click = lastClick, actions = run.Budget.Snapshot.Actions,
                     observationTiming = observationTiming.Snapshot(),
+                    lifecycleTiming = lifecycleTiming.Snapshot(),
                     recordingState = completion.Receipts.SingleOrDefault(x => x.Kind == ArtifactKind.Recording)?.State.ToString(),
                     recordedActions = capturedRecording?.Recording?.Steps.Count ?? 0,
                     phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),

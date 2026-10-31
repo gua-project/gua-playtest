@@ -13,6 +13,7 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
     private Exception? failure;
     private Exception? providerFailure;
     private bool signalled;
+    private readonly long timingOperation = RuntimeTiming.NextOperation();
     private readonly List<CancellationLease> cancellations = [];
     public Task Stop => stop.Task;
     public Exception? Failure => Volatile.Read(ref failure);
@@ -68,6 +69,7 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
     public void ReserveClockValidation()
     {
         run.CloseExecutorAdmission();
+        long? share = null;
         lock (gate)
         {
             if (elapsed is null)
@@ -77,8 +79,12 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
                 // One evidence share; keep at least one share for actual cleanup.
                 var releases = cleanup.SettlementResourceCount();
                 settlementShare = TimeSpan.FromTicks(Math.Max(1, run.Limits.CleanupTimeout.Ticks / (releases + 2)));
+                share = settlementShare.Ticks;
             }
         }
+        if (share is { } ticks)
+            RuntimeTiming.Mark(run, "settlement.epoch.reserved", timingOperation,
+                budgetTicks: run.Limits.CleanupTimeout.Ticks, remainingTicks: ticks);
     }
     public void Begin()
     {
@@ -89,6 +95,7 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
             foreach (var lease in cancellations) lease.Start();
         }
         stop.TrySetResult();
+        RuntimeTiming.Mark(run, "settlement.stop.signalled", timingOperation);
     }
     public TimeSpan Elapsed
     {
@@ -105,6 +112,17 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
             }
         }
     }
-    public TimeSpan EvidenceRemaining { get { var used = Elapsed; lock (gate) return settlementShare - used; } }
+    public TimeSpan EvidenceRemaining
+    {
+        get
+        {
+            RuntimeTiming.Mark(run, "settlement.evidence-share.enter", timingOperation);
+            var used = Elapsed;
+            TimeSpan remaining;
+            lock (gate) remaining = settlementShare - used;
+            RuntimeTiming.Mark(run, "settlement.evidence-share.return", timingOperation, remainingTicks: remaining.Ticks);
+            return remaining;
+        }
+    }
     public TimeSpan CleanupRemaining => run.Limits.CleanupTimeout - Elapsed;
 }

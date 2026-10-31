@@ -536,6 +536,7 @@ public sealed partial class RunTests
     {
         var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
         var run = new RunSession(Limits(), real, condition); var cleanup = new OwnedCleanup();
+        using var timing = new ExecutorTimingCapture(run);
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         using var resumeProbe = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -584,7 +585,7 @@ public sealed partial class RunTests
             catch (TimeoutException)
             {
                 ThreadPool.GetAvailableThreads(out var available, out _); ThreadPool.GetMinThreads(out var minimum, out _);
-                throw new Xunit.Sdk.XunitException($"Finalization did not finish: stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}");
+                throw new Xunit.Sdk.XunitException($"Finalization did not finish: stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}, timing={timing.FailureSnapshot()}");
             }
             Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
             Assert.Equal(1, releases); Assert.Equal(stage is "completion" or "synchronous-completion", returned.Task.IsCompleted);

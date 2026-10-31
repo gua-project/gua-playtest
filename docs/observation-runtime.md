@@ -101,6 +101,39 @@ performs no log/file I/O or RunSession reads in the measured path. Output contai
 fixed operation names, numbers and states, without selectors, values or exception
 messages. It grants no result authority and does not change deadlines or cleanup.
 
+`details.lifecycleTiming` uses the same monotonic origin and reports a bounded
+tail of at most1024 numeric events. Each event has a sequence number, fixed phase,
+operation correlation ID, elapsed ticks and whether its producer ran on the
+shared thread pool. Optional budget/remaining fields use TimeSpan ticks (100ns),
+not Stopwatch ticks; negative remaining values record observed expiry. Missing
+events mean not observed at snapshot, rather than proof that work never started.
+The snapshot reports overwritten events and may race late notifications.
+
+Controller wait creation, completion observation and continuation resumption
+are separate phases. Completion-observed records delivery of a diagnostic task
+observer, which can itself be delayed; it is not the timer's firing time or the
+task's exact state transition. TaskStatus at resumption and the pool flag provide
+additional evidence, without proving whether any particular delay was caused by
+the scheduler. Clock/lifecycle probe entry and return/throw surround the existing
+call. `executor.primary.observed` is reached after arbitration and is not an exact
+publication timestamp. Reentrant lifecycle calls that already hold the authority
+gate suppress notifications, so absence remains unknown.
+
+Cleanup events correlate each finite stage's entry/return with callback and
+owner-check observations. Primary persistence records encoding, Write, Flush and
+Move separately from the owner's remaining-share check. These boundaries help
+distinguish time spent saving from time spent reaching confirmation; they do not
+relax persistence, deadline or result requirements. Callbacks record no paths,
+game contents, exception messages or credentials and take no application locks.
+Positive operation IDs belong to Runner/store events; negative IDs identify the
+CLI artifact callback. Cleanup stage details follow `CleanupStage` (PrimarySnapshot0,
+Diagnostics1, Artifacts2, InputRelease3, ResourceRelease4, OwnershipRelease5).
+Task-status phases use the .NET TaskStatus enum; returned/confirmation/saved
+result phases use1 for true and0 for false. `release.attempt-exit` ends the finite
+attempt, not necessarily its still-running task. The separate completed-observed
+event cannot certify an on-time release. Neither a saved primary file nor a
+returned callback alone proves that the owner confirmed it within its share.
+
 The CLI returns the established Run exit code and a JSON `details` object with
 runId, artifactDirectory, driver, primary phase/origin, persistence and
 postprocessing facts. Cancellation may leave a diagnostics debt under Runner's

@@ -190,20 +190,35 @@ public sealed class RunArtifactStore
         IReadOnlyList<DecisionReference> decisions, IReadOnlyList<ExceptionEvidence> exceptions,
         CancellationToken cancellationToken = default, IReadOnlyList<RunEvent>? events = null)
     {
-        var saved = Attempt(() =>
+        var timingOperation = RuntimeTiming.NextOperation();
+        RuntimeTiming.Mark(this, "primary.confirm.start", timingOperation);
+        try
         {
-            if (primary is not null || completionAttempted) throw new InvalidDataException("PrimaryAlreadyConfirmed");
-            if (result is null || result.Cause is null || !Enum.IsDefined(result.Status) || !Enum.IsDefined(result.Cause.Reason) ||
-                !Enum.IsDefined(result.Cause.Phase) || !Enum.IsDefined(result.Cause.Origin) || !StatusConsistent(result))
-                throw new InvalidDataException("PrimaryResultInvalid");
-            ValidateReferences(observations, decisions);
-            if (observations.Any(x => x.Boundary == ObservationBoundary.AfterCleanup)) throw new InvalidDataException("ObservationBoundaryInvalid");
-            // Freeze in memory even if the disk write fails; persistence never authorizes a replacement result.
-            primary = result;
-            Publish("primary.json", Encode(new { kind = "playtestPrimaryStorage", storageVersion = 1, runId = RunId,
-                result, observations, decisions, exceptions, events = events ?? [] }), cancellationToken);
-        });
-        return saved;
+            var saved = Attempt(() =>
+            {
+                if (primary is not null || completionAttempted) throw new InvalidDataException("PrimaryAlreadyConfirmed");
+                if (result is null || result.Cause is null || !Enum.IsDefined(result.Status) || !Enum.IsDefined(result.Cause.Reason) ||
+                    !Enum.IsDefined(result.Cause.Phase) || !Enum.IsDefined(result.Cause.Origin) || !StatusConsistent(result))
+                    throw new InvalidDataException("PrimaryResultInvalid");
+                ValidateReferences(observations, decisions);
+                if (observations.Any(x => x.Boundary == ObservationBoundary.AfterCleanup)) throw new InvalidDataException("ObservationBoundaryInvalid");
+                // Freeze in memory even if the disk write fails; persistence never authorizes a replacement result.
+                primary = result;
+                RuntimeTiming.Mark(this, "primary.encode.start", timingOperation);
+                var encoded = Encode(new { kind = "playtestPrimaryStorage", storageVersion = 1, runId = RunId,
+                    result, observations, decisions, exceptions, events = events ?? [] });
+                RuntimeTiming.Mark(this, "primary.encode.returned", timingOperation);
+                Publish("primary.json", encoded, cancellationToken, timingOperation);
+            });
+            RuntimeTiming.Mark(this, "primary.saved", timingOperation, detail: saved.Saved ? 1 : 0);
+            return saved;
+        }
+        catch
+        {
+            RuntimeTiming.Mark(this, "primary.confirm.exception", timingOperation);
+            throw;
+        }
+        finally { RuntimeTiming.Mark(this, "primary.confirm.exit", timingOperation); }
     }
     /// <summary>Publish once after cleanup. Receipts are independently read before association.
     /// Original RunOutcome and exception evidence are not mutated by redaction or persistence failures.</summary>
@@ -490,7 +505,7 @@ public sealed class RunArtifactStore
         sanitizedChars += count;
         if (sanitizedChars > limits.MaxFileBytes) throw new ArtifactLimitException();
     }
-    private void Publish(string name, byte[] bytes, CancellationToken cancellationToken)
+    private void Publish(string name, byte[] bytes, CancellationToken cancellationToken, long timingOperation = 0)
     {
         if (usedBytes + bytes.Length > limits.MaxRunBytes) throw new ArtifactLimitException();
         CheckPath(DirectoryPath);
@@ -499,13 +514,26 @@ public sealed class RunArtifactStore
         {
             cancellationToken.ThrowIfCancellationRequested();
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            { file.Write(bytes); file.Flush(flushToDisk: true); }
+            {
+                MarkPrimaryPublish("primary.write.start", timingOperation);
+                file.Write(bytes);
+                MarkPrimaryPublish("primary.write.returned", timingOperation);
+                MarkPrimaryPublish("primary.flush.start", timingOperation);
+                file.Flush(flushToDisk: true);
+                MarkPrimaryPublish("primary.flush.returned", timingOperation);
+            }
             cancellationToken.ThrowIfCancellationRequested();
+            MarkPrimaryPublish("primary.move.start", timingOperation);
             File.Move(temporary, Path.Combine(DirectoryPath, name), overwrite: false);
+            MarkPrimaryPublish("primary.move.returned", timingOperation);
             publishedHashes.Add(name, Hash(bytes));
             usedBytes += bytes.Length;
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+    private void MarkPrimaryPublish(string phase, long operation)
+    {
+        if (operation != 0) RuntimeTiming.Mark(this, phase, operation);
     }
     private PersistenceResult Attempt(Action action)
     {
