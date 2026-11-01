@@ -118,19 +118,34 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
     /// <summary>Use directly as RunExecutor's pre-cleanup confirmation hook with its fresh token.</summary>
     public ValueTask<bool> ConfirmPrimaryAsync(RunSnapshot snapshot, CancellationToken token)
     {
-        lock (gate)
+        var timingOperation = ArtifactTimingDiagnostics.NextOperation();
+        ArtifactTimingDiagnostics.Mark(store, "artifact.primary.enter", timingOperation);
+        try
         {
-            if (primary is not null || completionAttempted) throw new InvalidOperationException("TracePrimaryAlreadyConfirmed");
-            primary = snapshot.Primary;
-            captureFailed |= !writer.ConfirmPrimary(Map(snapshot.Primary.Status));
-            var step = Trace.BeginStep(GuaTraceStepKind.Lifecycle, "Primary confirmation");
-            captureFailed |= !Trace.RecordStructural(step, "runner.primary", JsonSerializer.SerializeToElement(new
-                { status = primary.Status.ToString(), reason = primary.Cause.Reason.ToString(),
-                    phase = primary.Cause.Phase.ToString(), origin = primary.Cause.Origin.ToString() }));
-            Trace.EndStep(step, Map(primary.Status));
-            return ValueTask.FromResult(store.ConfirmPrimary(snapshot,
-                observations.Where(x => x.Boundary != ObservationBoundary.AfterCleanup).ToArray(), decisions.ToArray(), token).Saved);
+            lock (gate)
+            {
+                ArtifactTimingDiagnostics.Mark(store, "artifact.primary.lock-acquired", timingOperation);
+                if (primary is not null || completionAttempted) throw new InvalidOperationException("TracePrimaryAlreadyConfirmed");
+                primary = snapshot.Primary;
+                captureFailed |= !writer.ConfirmPrimary(Map(snapshot.Primary.Status));
+                var step = Trace.BeginStep(GuaTraceStepKind.Lifecycle, "Primary confirmation");
+                captureFailed |= !Trace.RecordStructural(step, "runner.primary", JsonSerializer.SerializeToElement(new
+                    { status = primary.Status.ToString(), reason = primary.Cause.Reason.ToString(),
+                        phase = primary.Cause.Phase.ToString(), origin = primary.Cause.Origin.ToString() }));
+                Trace.EndStep(step, Map(primary.Status));
+                ArtifactTimingDiagnostics.Mark(store, "artifact.primary.trace-returned", timingOperation);
+                var persistence = store.ConfirmPrimary(snapshot,
+                    observations.Where(x => x.Boundary != ObservationBoundary.AfterCleanup).ToArray(), decisions.ToArray(), token);
+                ArtifactTimingDiagnostics.Mark(store, "artifact.primary.store-returned", timingOperation, detail: persistence.Saved ? 1 : 0);
+                return ValueTask.FromResult(persistence.Saved);
+            }
         }
+        catch
+        {
+            ArtifactTimingDiagnostics.Mark(store, "artifact.primary.exception", timingOperation);
+            throw;
+        }
+        finally { ArtifactTimingDiagnostics.Mark(store, "artifact.primary.exit", timingOperation); }
     }
 
     public async Task<GuaArtifactCompletion> CompleteAsync(RunOutcome original, DateTimeOffset finishedAt,

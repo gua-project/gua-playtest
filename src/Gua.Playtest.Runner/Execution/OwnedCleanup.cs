@@ -50,9 +50,10 @@ public sealed class OwnedCleanup
                             Reject(new InvalidOperationException("CleanupClockDidNotAdvance"));
                         else
                         {
-                            lastSafety = elapsed;
-                            // Count physical elapsed even between immediately completed callbacks.
-                            return last = new TimeSpan(Math.Max(last.Ticks, Math.Max(now.Ticks, independent.Ticks)));
+                            // The provider read can block. Preserve the validity comparison's
+                            // sample, but count its wait in the returned floor and fallback accounting.
+                            lastSafety = safety.Elapsed - initialSafety;
+                            return last = new TimeSpan(Math.Max(last.Ticks, Math.Max(now.Ticks, (initial + lastSafety).Ticks)));
                         }
                     }
                     catch (Exception exception) { Reject(exception); }
@@ -157,6 +158,7 @@ public sealed class OwnedCleanup
             var snapshot = run.CapturePrimary();
             ordered = [new(CleanupStage.PrimarySnapshot, token => confirmPrimary(snapshot, token)), .. ordered];
         }
+        RuntimeTiming.Mark(run, "cleanup.enter", detail: ordered.Length);
         var issues = new List<PostProcessingIssue>();
         var resourcesConfirmed = true;
         bool AddIssue(PostProcessingIssue issue)
@@ -185,7 +187,17 @@ public sealed class OwnedCleanup
         // synchronous gate closures, invoked outside the registration lock.
         foreach (var step in ordered)
             if (step.CloseOwnership is { } close)
-                try { close(); } catch (Exception exception) { RecordStageFault(step.Stage, exception); }
+            {
+                var closeOperation = RuntimeTiming.NextOperation();
+                RuntimeTiming.Mark(run, "cleanup.ownership.close.start", closeOperation, detail: (int)step.Stage);
+                try { close(); }
+                catch (Exception exception)
+                {
+                    RuntimeTiming.Mark(run, "cleanup.ownership.close.exception", closeOperation, detail: (int)step.Stage);
+                    RecordStageFault(step.Stage, exception);
+                }
+                finally { RuntimeTiming.Mark(run, "cleanup.ownership.close.exit", closeOperation, detail: (int)step.Stage); }
+            }
         var interrupted = settlement?.Started == true;
         if (interrupted && settlement!.CleanupRemaining > TimeSpan.Zero)
         {
@@ -213,37 +225,66 @@ public sealed class OwnedCleanup
         realClock = interrupted ? new SettlementClock(settlement!) : cleanupClock!;
         var origin = interrupted ? TimeSpan.Zero : cleanupClock!.Origin;
         var deadline = interrupted ? run.Limits.CleanupTimeout : origin + run.Limits.CleanupTimeout;
+        RuntimeTiming.Mark(run, "cleanup.budget", budgetTicks: (deadline - origin).Ticks, detail: interrupted ? 1 : 0);
         if (cancellationToken.IsCancellationRequested) AddIssue(new(PostProcessingReason.Cancelled));
         for (var i = 0; i < ordered.Length; i++)
         {
             var step = ordered[i];
+            var timingOperation = RuntimeTiming.NextOperation();
+            RuntimeTiming.Mark(run, "cleanup.stage.selected", timingOperation, detail: (int)step.Stage);
             // Ownership exclusion outlives every release registered before cleanup closes,
             // including execution resources registered after preparation. Unknown releases
             // keep the exclusion even if diagnostic evidence has reached its bounded limit.
             if (step.Stage == CleanupStage.OwnershipRelease && !resourcesConfirmed)
-            { AddIssue(new(PostProcessingReason.ResourceReleaseUnconfirmed)); continue; }
+            {
+                RuntimeTiming.Mark(run, "cleanup.stage.skipped.unconfirmed", timingOperation, detail: (int)step.Stage);
+                RuntimeTiming.Mark(run, "cleanup.stage.exit", timingOperation, detail: (int)step.Stage);
+                AddIssue(new(PostProcessingReason.ResourceReleaseUnconfirmed)); continue;
+            }
             // Share remaining time fairly: a noncooperative early task cannot consume all later release attempts.
             var sampledNow = realClock.Elapsed;
             var remaining = deadline - sampledNow;
             if (remaining <= TimeSpan.Zero)
             {
+                RuntimeTiming.Mark(run, "cleanup.stage.expired", timingOperation, budgetTicks: 0,
+                    remainingTicks: remaining.Ticks, detail: (int)step.Stage);
                 AddIssue(new(PostProcessingReason.CleanupTimeout));
                 if (step.Stage is not (CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease))
-                { AddIssue(new(Failure(step.Stage))); continue; }
+                {
+                    RuntimeTiming.Mark(run, "cleanup.stage.skipped.expired", timingOperation, detail: (int)step.Stage);
+                    RuntimeTiming.Mark(run, "cleanup.stage.exit", timingOperation, detail: (int)step.Stage);
+                    AddIssue(new(Failure(step.Stage))); continue;
+                }
                 // An expired observation budget still owes a release attempt. Invoke once,
                 // accept only already-completed confirmation, and grant no additional wait.
                 using var releaseCancellation = new CancellationTokenSource();
                 Task<bool>? release = null;
+                RuntimeTiming.Mark(run, "cleanup.stage.start", timingOperation, budgetTicks: 0,
+                    remainingTicks: remaining.Ticks, detail: (int)step.Stage);
+                RuntimeTiming.Mark(run, "cleanup.release.start", timingOperation, detail: (int)step.Stage);
                 try
                 {
-                    release = step.Action(releaseCancellation.Token).AsTask();
-                    if (!release.IsCompleted || !release.GetAwaiter().GetResult()) AddIssue(new(Failure(step.Stage)));
+                    RuntimeTiming.Mark(run, "cleanup.callback.start", timingOperation, detail: (int)step.Stage);
+                    var releasing = step.Action(releaseCancellation.Token);
+                    RuntimeTiming.Mark(run, "cleanup.callback.returned", timingOperation, detail: (int)step.Stage);
+                    release = releasing.AsTask();
+                    RuntimeTiming.Mark(run, "cleanup.task.returned", timingOperation, detail: (int)release.Status);
+                    RuntimeTiming.ObserveCompletion(run, "cleanup.task.completed.observed", timingOperation, release);
+                    var confirmed = release.IsCompleted && release.GetAwaiter().GetResult();
+                    RuntimeTiming.Mark(run, "cleanup.release.confirmation", timingOperation, detail: confirmed ? 1 : 0);
+                    if (!confirmed) AddIssue(new(Failure(step.Stage)));
                 }
-                catch (Exception exception) { RecordStageFault(step.Stage, exception); }
+                catch (Exception exception)
+                {
+                    RuntimeTiming.Mark(run, "cleanup.stage.exception", timingOperation, detail: (int)step.Stage);
+                    RecordStageFault(step.Stage, exception);
+                }
                 finally
                 {
                     FiniteOperation.CancelSafely(releaseCancellation, exception => RecordStageFault(step.Stage, exception));
                     if (release is not null) _ = release.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                    RuntimeTiming.Mark(run, "cleanup.release.attempt-exit", timingOperation, detail: (int)step.Stage);
+                    RuntimeTiming.Mark(run, "cleanup.stage.exit", timingOperation, detail: (int)step.Stage);
                 }
                 continue;
             }
@@ -252,42 +293,62 @@ public sealed class OwnedCleanup
             var token = step.Stage is CleanupStage.Diagnostics or CleanupStage.Artifacts ? cancellationToken : CancellationToken.None;
             var ownedReleaseStage = step.Stage is CleanupStage.InputRelease or CleanupStage.ResourceRelease or CleanupStage.OwnershipRelease;
             Task<bool>? ownedRelease = null;
+            RuntimeTiming.Mark(run, "cleanup.stage.start", timingOperation, budgetTicks: share.Ticks,
+                remainingTicks: remaining.Ticks, detail: (int)step.Stage);
             try
             {
                 var result = await FiniteOperation.RunUntilAsync(realClock, sampledNow + share, cancellation =>
                 {
+                    RuntimeTiming.Mark(run, "cleanup.callback.start", timingOperation, detail: (int)step.Stage);
+                    if (ownedReleaseStage) RuntimeTiming.Mark(run, "cleanup.release.start", timingOperation, detail: (int)step.Stage);
                     var work = step.Action(cancellation);
+                    RuntimeTiming.Mark(run, "cleanup.callback.returned", timingOperation, detail: (int)step.Stage);
                     if (!ownedReleaseStage) return work;
                     ownedRelease = work.AsTask();
                     return new(ownedRelease);
                 }, token,
-                    exception => RecordStageFault(step.Stage, exception)).ConfigureAwait(false);
+                    exception => RecordStageFault(step.Stage, exception), run, timingOperation).ConfigureAwait(false);
+                RuntimeTiming.Mark(run, "cleanup.stage.returned", timingOperation, detail: result ? 1 : 0);
+                if (ownedReleaseStage) RuntimeTiming.Mark(run, "cleanup.release.confirmation", timingOperation, detail: result ? 1 : 0);
                 if (!result) AddIssue(new(Failure(step.Stage)));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+                RuntimeTiming.Mark(run, "cleanup.stage.cancelled", timingOperation, detail: (int)step.Stage);
                 AddIssue(new(PostProcessingReason.Cancelled)); AddIssue(new(Failure(step.Stage)));
             }
             catch (TimeoutException exception) when (FiniteOperation.IsDeadline(exception))
             {
+                RuntimeTiming.Mark(run, "cleanup.stage.timeout", timingOperation, detail: (int)step.Stage);
+                if (ownedReleaseStage) RuntimeTiming.Mark(run, "cleanup.release.timeout", timingOperation, detail: (int)step.Stage);
                 AddIssue(new(PostProcessingReason.CleanupTimeout));
                 // Expired cleanup still owes an immediate owned release attempt. Reuse
                 // the existing invocation's already-completed confirmation, without
                 // invoking twice, waiting again, or claiming that it met its deadline.
-                if (ownedRelease?.IsCompletedSuccessfully != true || !ownedRelease.GetAwaiter().GetResult())
+                var confirmed = ownedRelease?.IsCompletedSuccessfully == true && ownedRelease.GetAwaiter().GetResult();
+                if (ownedReleaseStage) RuntimeTiming.Mark(run, "cleanup.release.confirmation", timingOperation, detail: confirmed ? 1 : 0);
+                if (!confirmed)
                     AddIssue(new(Failure(step.Stage)));
             }
             catch (Exception exception)
             {
+                RuntimeTiming.Mark(run, "cleanup.stage.exception", timingOperation, detail: (int)step.Stage);
                 var original = exception is ProviderCancellationException ? exception.InnerException! : exception;
                 AddIssue(new(Failure(step.Stage), new(original.GetType().FullName ?? original.GetType().Name, original.StackTrace)));
+            }
+            finally
+            {
+                if (ownedReleaseStage) RuntimeTiming.Mark(run, "cleanup.release.attempt-exit", timingOperation, detail: (int)step.Stage);
+                RuntimeTiming.Mark(run, "cleanup.stage.exit", timingOperation, detail: (int)step.Stage);
             }
         }
         if (cancellationToken.IsCancellationRequested && !issues.Any(x => x.Reason == PostProcessingReason.Cancelled))
             AddIssue(new(PostProcessingReason.Cancelled));
         if (cleanupClock is not null) await cleanupClock.JoinTimersAsync().ConfigureAwait(false);
         _ = realClock.Elapsed; // drain any final safety-wake hint on the owner before freezing issues
-        return run.Finish(issues.AsReadOnly());
+        var outcome = run.Finish(issues.AsReadOnly());
+        RuntimeTiming.Mark(run, "cleanup.exit", detail: issues.Count);
+        return outcome;
     }
     private sealed class SettlementClock(ExecutionSettlement settlement) : IClock
     {
@@ -337,13 +398,19 @@ public static class FiniteOperation
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken, Action<Exception>? recordException,
         ExecutionSettlement settlement)
         => RunUntilCoreAsync(realClock, deadline, action, cancellationToken, recordException, settlement);
+    internal static ValueTask<T> RunUntilAsync<T>(IClock realClock, TimeSpan deadline,
+        Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken, Action<Exception>? recordException,
+        object timingOwner, long timingOperation)
+        => RunUntilCoreAsync(realClock, deadline, action, cancellationToken, recordException, null, timingOwner, timingOperation);
     private static async ValueTask<T> RunUntilCoreAsync<T>(IClock realClock, TimeSpan deadline,
         Func<CancellationToken, ValueTask<T>> action, CancellationToken cancellationToken, Action<Exception>? recordException,
-        ExecutionSettlement? settlement)
+        ExecutionSettlement? settlement, object? timingOwner = null, long timingOperation = 0)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var startDeadline = deadline;
-        if (realClock.Elapsed >= startDeadline) throw DeadlineReached("OperationDeadlineReached");
+        var invocationNow = realClock.Elapsed;
+        MarkTiming(timingOwner, "cleanup.ownercheck.before-invoke", timingOperation, (startDeadline - invocationNow).Ticks);
+        if (invocationNow >= startDeadline) throw DeadlineReached("OperationDeadlineReached");
         using var operationCancellation = new CancellationTokenSource();
         using var timerCancellation = new CancellationTokenSource();
         Task<T>? operation = null;
@@ -362,10 +429,19 @@ public static class FiniteOperation
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (settlement is not null) await settlement.RejectNewWorkAsync(cancellationToken).ConfigureAwait(false);
-            try { operation = action(operationCancellation.Token).AsTask(); }
+            try
+            {
+                operation = action(operationCancellation.Token).AsTask();
+                if (timingOwner is not null)
+                {
+                    RuntimeTiming.Mark(timingOwner, "cleanup.task.returned", timingOperation, detail: (int)operation.Status);
+                    RuntimeTiming.ObserveCompletion(timingOwner, "cleanup.task.completed.observed", timingOperation, operation);
+                }
+            }
             catch (OperationCanceledException exception) { throw NormalizeCancellation(exception, operationCancellation.Token, cancellationToken); }
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             var remaining = startDeadline - realClock.Elapsed;
+            MarkTiming(timingOwner, "cleanup.ownercheck.after-return", timingOperation, remaining.Ticks);
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (remaining <= TimeSpan.Zero) throw DeadlineReached("OperationDeadlineReached");
             timer = realClock.DelayAsync(remaining, timerCancellation.Token).AsTask();
@@ -394,6 +470,7 @@ public static class FiniteOperation
                 if (winner != timer) break;
                 await timer.ConfigureAwait(false);
                 var remainder = startDeadline - realClock.Elapsed;
+                MarkTiming(timingOwner, "cleanup.ownercheck.timer", timingOperation, remainder.Ticks);
                 if (remainder <= TimeSpan.Zero)
                 {
                     if (settlement is not null)
@@ -415,13 +492,18 @@ public static class FiniteOperation
                 // Cancellation cannot erase a completed successful stage, but cannot extend its deadline.
                 if (operation.IsCompletedSuccessfully)
                 {
-                    if (realClock.Elapsed >= startDeadline) throw DeadlineReached("OperationDeadlineReached");
+                    var cancellationNow = realClock.Elapsed;
+                    MarkTiming(timingOwner, "cleanup.ownercheck.cancelled", timingOperation, (startDeadline - cancellationNow).Ticks);
+                    if (cancellationNow >= startDeadline) throw DeadlineReached("OperationDeadlineReached");
                     return operation.GetAwaiter().GetResult();
                 }
                 await cancelled.Task.ConfigureAwait(false);
             }
             if (winner == timer) await timer.ConfigureAwait(false);
-            var expired = realClock.Elapsed >= startDeadline;
+            var validationNow = realClock.Elapsed;
+            var expired = validationNow >= startDeadline;
+            MarkTiming(timingOwner, "cleanup.ownercheck.before-adopt", timingOperation,
+                (startDeadline - validationNow).Ticks, expired ? 1 : 0);
             if (winner == timer && !expired) throw new ClockProviderException();
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (expired) throw DeadlineReached("OperationDeadlineReached");
@@ -442,6 +524,10 @@ public static class FiniteOperation
             if (recordException is not null)
                 while (callbackFaults.TryDequeue(out var fault)) recordException(fault);
         }
+    }
+    private static void MarkTiming(object? owner, string phase, long operation, long remainingTicks, int detail = -1)
+    {
+        if (owner is not null) RuntimeTiming.Mark(owner, phase, operation, remainingTicks: remainingTicks, detail: detail);
     }
     private static async ValueTask SettleExistingAsync(Task operation, ExecutionSettlement settlement)
     {

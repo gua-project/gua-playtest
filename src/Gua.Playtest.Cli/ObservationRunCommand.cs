@@ -141,14 +141,19 @@ internal static class ObservationRunCommand
                 FlushTimeout = Ms(limits.CleanupTimeoutMilliseconds)
             }, redactor, token);
             if (!artifacts.PreparationPersistence.Saved) throw new InvalidDataException("RuntimeStorageUnavailable");
+            long timingOrigin = Stopwatch.GetTimestamp();
+            using var observationTiming = new ObservationTiming(origin: timingOrigin);
+            using var lifecycleTiming = new LifecycleTiming(run, store, timingOrigin);
             var captureGate = new object();
             bool capturesClosed = false;
             bool capturesDisabled = false;
             long captureSequence = 0;
             GuardedUiReceipt? lastClick = null;
+            GuardedClickRecording? recording = null;
             void RecordClick(GuardedUiReceipt receipt)
             {
                 lastClick = receipt;
+                recording?.ObserveReceipt(receipt);
                 lock (captureGate)
                 {
                     if (capturesClosed || capturesDisabled) return;
@@ -187,7 +192,7 @@ internal static class ObservationRunCommand
                                 artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
                             }, artifacts.MarkCaptureFailure);
                         }
-                    }, singleClick, precondition);
+                    }, singleClick, precondition) { Timing = observationTiming };
             });
             var cleanup = new OwnedCleanup();
             cleanup.Register(CleanupStage.InputRelease, connector.Pending.ReleaseAsync);
@@ -201,7 +206,16 @@ internal static class ObservationRunCommand
                 {
                     if (singleClick)
                         return await SingleUiDriver.ExecuteAsync(session, clock, connector.Connection!, targetId!, RecordClick,
-                            () => WindowsBridgeOwner.Require(endpoint, launcher.Process!), token);
+                            () => WindowsBridgeOwner.Require(endpoint, launcher.Process!), token, click =>
+                            {
+                                var acquired = new GuardedClickRecording(click, targetId!,
+                                    text => text.Length <= artifactLimits.MaxStringChars && redactor.Redact(text) == text,
+                                    document => redactor.RedactDocument(document, artifactLimits), checked((int)limits.MaxObservationBytes),
+                                    artifactLimits.MaxItems, artifactLimits.MaxStringChars, token);
+                                try { cleanup.Register(CleanupStage.InputRelease, acquired.ReleaseAsync); }
+                                catch { _ = acquired.ReleaseAsync(CancellationToken.None); throw; }
+                                return recording = acquired;
+                            });
                     await RunMonitor.AwaitAsync(session, clock, clock, prepared!.Feed,
                         // The executor operation token also signals its deadline. Only the
                         // actual caller token may be classified as a user's cancellation.
@@ -209,15 +223,21 @@ internal static class ObservationRunCommand
                     return false;
                 }, token, (snapshot, cancel) =>
                 {
+                    observationTiming.ObservePrimary();
                     lock (captureGate) { capturesClosed = true; return artifacts.ConfirmPrimaryAsync(snapshot, cancel); }
                 });
             lock (captureGate) capturesClosed = true;
-            var completion = await CompletePreservingOutcomeAsync(artifacts, outcome);
+            var capturedRecording = recording?.Freeze();
+            var completion = await CompletePreservingOutcomeAsync(artifacts, outcome, capturedRecording);
             return await CommandOutput.WriteAsync(output, diagnostics, json, outcome.Primary.Status.ToString(), outcome.Primary.Cause.Reason.ToString(),
                 completion.ExitCode(outcome), new { runId = store.RunId, artifactDirectory = store.DirectoryPath,
                     ownedProcessId = launcher.Process?.ProcessId,
                     effectiveEnvironmentSha256 = runtimeHash,
                     driver = driverName, click = lastClick, actions = run.Budget.Snapshot.Actions,
+                    observationTiming = observationTiming.Snapshot(),
+                    lifecycleTiming = lifecycleTiming.Snapshot(),
+                    recordingState = completion.Receipts.SingleOrDefault(x => x.Kind == ArtifactKind.Recording)?.State.ToString(),
+                    recordedActions = capturedRecording?.Recording?.Steps.Count ?? 0,
                     phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),
                     postProcessingComplete = outcome.PostProcessingComplete && completion.Persistence.Saved && !completion.Persistence.PostProcessingIncomplete,
                     persistence = completion.Persistence.Failure.ToString(),
@@ -235,9 +255,10 @@ internal static class ObservationRunCommand
         try { capture(); return true; }
         catch (Exception) { failed(); return false; }
     }
-    internal static async Task<GuaArtifactCompletion> CompletePreservingOutcomeAsync(GuaRunArtifacts artifacts, RunOutcome outcome)
+    internal static async Task<GuaArtifactCompletion> CompletePreservingOutcomeAsync(GuaRunArtifacts artifacts, RunOutcome outcome,
+        GuardedRecordingCapture? recording = null)
     {
-        try { return await artifacts.CompleteAsync(outcome, DateTimeOffset.UtcNow); }
+        try { return await artifacts.CompleteAsync(outcome, DateTimeOffset.UtcNow, recording?.Recording, recording?.CaptureFailed ?? false); }
         catch (Exception)
         {
             // A skipped primary hook or failed finalization owes evidence debt. Do not

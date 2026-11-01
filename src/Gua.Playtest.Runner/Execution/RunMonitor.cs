@@ -60,7 +60,12 @@ public static class RunMonitor
             if (captured is null || captured.Success is null || captured.Failure is null)
                 run.Evaluate(candidates: readyEvents.Append(new(RunReason.ObservationContractViolation,
                     RunPhase.Execution, RunOrigin.Contract)), cancelled: cancelled);
-            else run.Evaluate(captured.Success, captured.CapturedAt, readyEvents, cancelled, failureUnit: captured.Failure);
+            else
+            {
+                ObservationEvaluationDiagnostics.Notify(captured, 0);
+                run.Evaluate(captured.Success, captured.CapturedAt, readyEvents, cancelled, failureUnit: captured.Failure);
+                ObservationEvaluationDiagnostics.Notify(captured, 1);
+            }
         }
         using var workCancellation = new CancellationTokenSource();
         using var workRegistration = cancellationToken.Register(() => FiniteOperation.CancelSafely(workCancellation, QueueCancellationFault));
@@ -191,7 +196,9 @@ public static class RunMonitor
                                 : new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Runner));
                         }
                     }
+                    foreach (var unit in observations) ObservationEvaluationDiagnostics.Notify(unit, 0);
                     run.EvaluateCapturedUnits(observations, finalEvents, cancellationToken.IsCancellationRequested);
+                    foreach (var unit in observations) ObservationEvaluationDiagnostics.Notify(unit, 1);
                     return new(run.Primary is null, result.Value);
                 }
                 // All ready observations/events/cancellation/current deadlines go through one arbiter.

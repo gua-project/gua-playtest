@@ -50,8 +50,8 @@ public sealed class BridgeObservations : IDisposable
         {
             ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
             subscription?.Dispose(); subscription = null;
-            context.GetVersion().EnsureCompatible("2", 1, ["observe_v1"]);
-            var next = context.SubscribeObservations();
+            ObservationCallDiagnostics.Call("get-version", context.GetVersion).EnsureCompatible("2", 1, ["observe_v1"]);
+            var next = ObservationCallDiagnostics.Call("subscribe", context.SubscribeObservations);
             try
             {
                 var document = ParseTransport(next.SnapshotJson).GetProperty("document");
@@ -91,9 +91,9 @@ public sealed class BridgeObservations : IDisposable
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
-            context.GetVersion().EnsureCompatible("2", 1, ["observe_v1"]);
-            var snapshot = ParseTransport(context.GetObserveSnapshotJson()).GetProperty("document");
-            var status = context.GetContextStatus();
+            ObservationCallDiagnostics.Call("get-version", context.GetVersion).EnsureCompatible("2", 1, ["observe_v1"]);
+            var snapshot = ParseTransport(ObservationCallDiagnostics.Call("observe-snapshot", context.GetObserveSnapshotJson)).GetProperty("document");
+            var status = ObservationCallDiagnostics.Call("context-status", context.GetContextStatus);
             var epoch = snapshot.GetProperty("sessionEpoch").GetUInt64();
             if (epoch != status.SessionEpoch) throw new InvalidOperationException("ObservationEpochChanged");
             return new(snapshot.GetProperty("sourceId").GetString()!, epoch, ProfileName, !status.IsClean);
@@ -112,7 +112,7 @@ public sealed class BridgeObservations : IDisposable
             try
             {
                 if (subscription is null) Resubscribe();
-                var changes = ParseTransport(subscription!.PollJson());
+                var changes = ParseTransport(ObservationCallDiagnostics.Call("poll", subscription!.PollJson));
                 var budget = new ObservationBudget(maxNodes, maxBytes);
                 var results = new List<BridgeReadCollection>();
                 foreach (var read in reads)
@@ -145,8 +145,8 @@ public sealed class BridgeObservations : IDisposable
                 if (changes.GetProperty("sourceId").GetString() != cursorSourceId ||
                     changes.GetProperty("sessionEpoch").GetUInt64() != cursorEpoch)
                     return Failure(ReadAvailability.Stale, "stale-source");
-                var before = context.GetContextStatus();
-                var transport = ParseTransport(context.GetObserveSnapshotJson());
+                var before = ObservationCallDiagnostics.Call("context-status", context.GetContextStatus);
+                var transport = ParseTransport(ObservationCallDiagnostics.Call("observe-snapshot", context.GetObserveSnapshotJson));
                 var snapshot = transport.GetProperty("document");
                 if (snapshot.GetProperty("sourceId").GetString() != cursorSourceId ||
                     snapshot.GetProperty("sessionEpoch").GetUInt64() != cursorEpoch)
@@ -161,15 +161,16 @@ public sealed class BridgeObservations : IDisposable
                 JsonElement tree = default;
                 if (source == "ui")
                 {
-                    var result = context.Query(BridgeSelectors.Ui((JsonObject)read["target"]!["selector"]!));
+                    var selector = BridgeSelectors.Ui((JsonObject)read["target"]!["selector"]!);
+                    var result = ObservationCallDiagnostics.Call("ui-query", () => context.Query(selector));
                     if (!result.Valid) return Failure(ReadAvailability.Unavailable, "target-unavailable");
                     ids.AddRange(result.Matches.Select(m => m.Id));
-                    tree = ParseTree(context.GetUiTreeJson(), "ui-tree.schema.json");
+                    tree = ParseTree(ObservationCallDiagnostics.Call("ui-tree", context.GetUiTreeJson), "ui-tree.schema.json");
                 }
                 else if (source == "object")
                 {
                     var selector = BridgeSelectors.World((JsonObject)read["target"]!["selector"]!);
-                    var result = context.QueryWorldObjects(selector);
+                    var result = ObservationCallDiagnostics.Call("world-query", () => context.QueryWorldObjects(selector));
                     if (!result.Valid) return Failure(ReadAvailability.Unavailable, "target-unavailable");
                     if (result.SessionEpoch != before.SessionEpoch || result.Revision != before.WorldRevision)
                         return Failure(ReadAvailability.Stale, "stale-query");
@@ -177,7 +178,7 @@ public sealed class BridgeObservations : IDisposable
                     if ((selector.Limit is not null || selector.Near is not null) && result.Spatial is null)
                         return Failure(ReadAvailability.Truncated, "query-completeness-unconfirmed");
                     ids.AddRange(result.Matches.Select(m => m.Id));
-                    tree = ParseTree(context.GetWorldObjectTreeJson(), "world-object-tree.schema.json");
+                    tree = ParseTree(ObservationCallDiagnostics.Call("world-tree", () => context.GetWorldObjectTreeJson()), "world-object-tree.schema.json");
                 }
                 else if (source == "world") ids.Add("");
                 else return Failure(ReadAvailability.Unavailable, "invalid-read");
@@ -185,7 +186,7 @@ public sealed class BridgeObservations : IDisposable
                     return Failure(ReadAvailability.Stale, "duplicate-target");
                 if (ids.Count > maxNodes) return Failure(ReadAvailability.Truncated, "node-limit");
                 budget.TakeNodes(Math.Max(0, ids.Count - 1));
-                var after = context.GetContextStatus();
+                var after = ObservationCallDiagnostics.Call("context-status", context.GetContextStatus);
                 if (before.SessionEpoch != after.SessionEpoch || before.Revision != after.Revision ||
                     before.WorldRevision != after.WorldRevision ||
                     snapshot.GetProperty("uiRevision").GetUInt64() != after.Revision ||
@@ -199,7 +200,7 @@ public sealed class BridgeObservations : IDisposable
                 {
                     var currentIds = tree.GetProperty("nodes").EnumerateArray().ToLookup(n => n.GetProperty("id").GetString()!, StringComparer.Ordinal);
                     if (ids.Any(id => currentIds[id].Count() != 1)) return Failure(ReadAvailability.Stale, "target-changed") with { Changes = Array.Empty<BridgeChange>() };
-                    if (!BridgeSelectors.UiMatchesTree((JsonObject)read["target"]!["selector"]!, tree, ids))
+                    if (!ObservationCallDiagnostics.Call("local-selector-check", () => BridgeSelectors.UiMatchesTree((JsonObject)read["target"]!["selector"]!, tree, ids)))
                         return Failure(ReadAvailability.Stale, "stale-query");
                 }
                 var entriesByKey = region is "observe" or "property" ? snapshot.GetProperty("entries").EnumerateArray()
@@ -281,7 +282,7 @@ public sealed class BridgeObservations : IDisposable
                     }
                 }
                 // Collecting targets and Values may race a Notify that changes only Observe revision.
-                var finalSnapshot = ParseTransport(context.GetObserveSnapshotJson()).GetProperty("document");
+                var finalSnapshot = ParseTransport(ObservationCallDiagnostics.Call("observe-snapshot", context.GetObserveSnapshotJson)).GetProperty("document");
                 if (finalSnapshot.GetProperty("sourceId").GetString() != cursorSourceId ||
                     finalSnapshot.GetProperty("sessionEpoch").GetUInt64() != cursorEpoch ||
                     finalSnapshot.GetProperty("revision").GetUInt64() != snapshot.GetProperty("revision").GetUInt64() ||

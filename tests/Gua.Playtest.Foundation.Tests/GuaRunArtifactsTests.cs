@@ -163,6 +163,30 @@ public sealed class GuaRunArtifactsTests : IDisposable
     }
 
     [Fact]
+    public async Task Actual_guarded_recording_write_failure_keeps_primary_and_completed_cleanup_facts()
+    {
+        using var host=new GuaRuntime(); host.BeginFrame("title"); host.RegisterNode(new("start","button","Start",new(0,0,10,10))); host.EndFrame();
+        using var port=new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback,0); port.Start(); int number=((System.Net.IPEndPoint)port.LocalEndpoint).Port; port.Stop();
+        Assert.True(host.StartInspectorBridge(number));
+        using var observations=new BridgeObservations(host.InspectorBridgeUrl,GuaObservationProfile.Debug,TimeSpan.FromSeconds(2),100,65536);
+        using var click=observations.CreateGuardedUiClick();
+        var recording=new GuardedClickRecording(click,"start",_=>true,document=>document.Clone(),65536,1000,65536,default);
+        recording.Start(()=>{},TimeSpan.FromSeconds(1),default);
+        Assert.True(host.TryConsumeAction(GuaActionType.Click,"start",out var request)); host.EmitActionResult(request,true);
+        recording.ObserveReceipt(click.Poll());
+        using var share=new CancellationTokenSource(TimeSpan.FromSeconds(2)); Assert.True(await recording.ReleaseAsync(share.Token));
+        var recorded=recording.Freeze(); Assert.False(recorded.CaptureFailed); Assert.Single(recorded.Recording!.Steps);
+        var store=Store(); await using var capture=new GuaRunArtifacts(store,Metadata,Limits,Options(),Redactor);
+        // Real filesystem refusal, after genuine capture and confirmed release; no fault switch in product.
+        File.WriteAllText(Path.Combine(Assert.Single(Directory.GetDirectories(root,".gua-pending-*")),"recording"),"blocked");
+        var primary=Primary(true); var original=new RunOutcome(primary,[],[],[]); await ConfirmCore(capture,new(primary,[],[]));
+        var completed=await ObservationRunCommand.CompletePreservingOutcomeAsync(capture,original,recorded);
+        Assert.Equal(ArtifactState.Saved,completed.Receipts[0].State);
+        Assert.Equal(ArtifactState.SaveFailed,completed.Receipts[1].State); Assert.Equal(11,completed.ExitCode(original));
+        Assert.Same(primary,original.Primary); Assert.Empty(original.PostProcessing); Assert.True(original.PostProcessingComplete);
+    }
+
+    [Fact]
     public async Task Actual_flush_write_failure_and_recording_secret_refusal_are_separate()
     {
         var store = Store(); await using var capture = new GuaRunArtifacts(store, Metadata, Limits, Options(), Redactor);

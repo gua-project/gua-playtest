@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Gua.Playtest.Cli;
 using Gua.Playtest.Runner.Artifacts;
 using Gua.Core;
+using Gua.Testing.Recording;
 using Xunit;
 
 namespace Gua.Playtest.Foundation.Tests;
@@ -15,6 +16,27 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed class SingleUiRuntimeTests
 {
     private static string Repository => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+    [Fact]
+    public async Task Fresh_capture_starts_without_a_shared_threadpool_worker()
+    {
+        var configuration=new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var probe=Path.Combine(Repository,"tests/Gua.Playtest.ProcessProbe/bin",configuration,"net10.0/Gua.Playtest.ProcessProbe.dll");
+        var info=new ProcessStartInfo("dotnet") { RedirectStandardOutput=true,RedirectStandardError=true,UseShellExecute=false,CreateNoWindow=true };
+        info.ArgumentList.Add(probe); info.ArgumentList.Add("capture-pool-pressure");
+        using var child=Process.Start(info)!; var stdout=child.StandardOutput.ReadToEndAsync(); var stderr=child.StandardError.ReadToEndAsync();
+        using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try { await child.WaitForExitAsync(deadline.Token); } finally { if(!child.HasExited) child.Kill(true); }
+        var output=await stdout; var errors=await stderr;
+        string root=Path.Combine(Repository,"artifacts/tests/single-ui/capture-pressure",Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root,"facts.json"),output); await File.WriteAllTextAsync(Path.Combine(root,"stderr.txt"),errors);
+        Assert.True(child.ExitCode==0,output+errors);
+        using var facts=JsonDocument.Parse(output.Split('\n').Single(line=>line.StartsWith("{\"started\"",StringComparison.Ordinal)));
+        Assert.True(facts.RootElement.GetProperty("started").GetBoolean()); Assert.Equal(0,facts.RootElement.GetProperty("available").GetInt32());
+        Assert.Equal(0,facts.RootElement.GetProperty("poolWorker").GetInt32()); Assert.True(facts.RootElement.GetProperty("releaseConfirmed").GetBoolean());
+        Assert.Equal(16,facts.RootElement.GetProperty("serialCaptures").GetInt32());
+        foreach(var name in new[]{"workersEnded","cancelBefore","cancelAfter","closedFailure"}) Assert.True(facts.RootElement.GetProperty(name).GetBoolean(),output+errors);
+    }
+
     [Fact]
     public async Task Owned_guarded_connection_release_starts_without_a_shared_threadpool_worker()
     {
@@ -38,6 +60,7 @@ public sealed class SingleUiRuntimeTests
     [Theory]
     [InlineData("ui-click-host", 0, 1)]
     [InlineData("ui-click-host-fail", 1, 1)]
+    [InlineData("ui-click-host-private-event", 11, 1)]
     [InlineData("ui-click-host-no-goal", 1, 1)]
     [InlineData("ui-click-host-delayed", 0, 1)]
     [InlineData("ui-click-host-late-goal", 1, 1)]
@@ -102,7 +125,27 @@ public sealed class SingleUiRuntimeTests
             Assert.True(File.Exists(pidPath + ".completion"));
             Assert.Equal(mode=="ui-click-host-delayed", File.Exists(pidPath + ".goal"));
         }
-        Assert.Equal("single-ui-click", details.GetProperty("driver").GetString()); Assert.True(details.GetProperty("postProcessingComplete").GetBoolean(), output.ToString());
+        Assert.Equal("single-ui-click", details.GetProperty("driver").GetString());
+        Assert.Equal(mode is not ("ui-click-host-fail" or "ui-click-host-private-event"), details.GetProperty("postProcessingComplete").GetBoolean());
+        var savedRecording = expectedClicks == 1 && mode is not ("ui-click-host-fail" or "ui-click-host-private-event");
+        Assert.Equal(savedRecording ? "Saved" : expectedClicks == 0 ? "NotExecuted" : "CaptureFailed", details.GetProperty("recordingState").GetString());
+        Assert.Equal(savedRecording ? 1 : 0, details.GetProperty("recordedActions").GetInt32());
+        var recordings=Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!,"recording.json",SearchOption.AllDirectories);
+        if (savedRecording)
+        {
+            var recorded=Assert.Single(GuaRecordingFile.Load(Assert.Single(recordings)).Steps);
+            Assert.Equal(GuaRecordedAction.click,recorded.Action); Assert.Equal("start",recorded.Target!.Id);
+            Assert.Equal(details.GetProperty("click").GetProperty("requestId").GetUInt64(),recorded.RequestId);
+            Assert.Equal(details.GetProperty("click").GetProperty("revision").GetUInt64(),recorded.PreRevision);
+            Assert.True(recorded.PostRevision>=recorded.PreRevision); Assert.False(recorded.Sensitive);
+        }
+        else Assert.Empty(recordings);
+        if(mode=="ui-click-host-private-event")
+        {
+            Assert.Equal("GoalSatisfied",result.RootElement.GetProperty("code").GetString());
+            foreach(var file in Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!,"*",SearchOption.AllDirectories))
+                Assert.DoesNotContain("private-completion-marker",await File.ReadAllTextAsync(file));
+        }
         Assert.Equal(expectedClicks, int.Parse(await File.ReadAllTextAsync(pidPath + ".clicks")));
         Assert.Equal(expectedClicks, details.GetProperty("actions").GetInt32());
         if (expectedClicks == 1)
@@ -116,6 +159,24 @@ public sealed class SingleUiRuntimeTests
         Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(details.GetProperty("artifactDirectory").GetString()!,new(8*1024*1024,8*1024*1024,10000,65536))).State);
         var events=Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!,"events.jsonl",SearchOption.AllDirectories)
             .SelectMany(File.ReadLines).Select(line=>JsonNode.Parse(line)!).ToArray();
+        var timing = details.GetProperty("observationTiming");
+        Assert.Equal("playtest.observation-timing.v1", timing.GetProperty("schema").GetString());
+        Assert.Equal(JsonValueKind.Number, timing.GetProperty("primaryObservedTicks").ValueKind);
+        if (mode == "ui-click-host")
+        {
+            var observations = timing.GetProperty("observations").EnumerateArray().ToArray();
+            Assert.NotEmpty(observations);
+            Assert.Contains(observations, row => row.GetProperty("evaluationEndedTicks").ValueKind == JsonValueKind.Number);
+            Assert.Contains(observations, row => row.GetProperty("sdkCalls").GetArrayLength() > 0);
+            Assert.Equal(observations.Length, observations.Select(row => row.GetProperty("number").GetInt32()).Distinct().Count());
+        }
+        if(savedRecording)
+        {
+            var attachment=Assert.Single(events,item=>item["type"]!.GetValue<string>()=="attachment" && item["data"]?["schema"]?.GetValue<string>()=="gua.recording.references.v1");
+            var traceDirectory=Path.GetDirectoryName(Assert.Single(Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!,"events.jsonl",SearchOption.AllDirectories)))!;
+            var reference=JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(traceDirectory,attachment["data"]!["blob"]!.GetValue<string>())))!;
+            Assert.Equal(details.GetProperty("click").GetProperty("requestId").GetUInt64().ToString(System.Globalization.CultureInfo.InvariantCulture),Assert.Single(reference["steps"]!.AsArray())!["requestId"]!.GetValue<string>());
+        }
         var clickSteps=events.Where(item=>item["type"]!.GetValue<string>()=="runner.ui-click").Select(item=>item["stepId"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
         if(expectedExit==0) Assert.DoesNotContain(events,item=>item["type"]!.GetValue<string>()=="step.end" && clickSteps.Contains(item["stepId"]!.GetValue<string>()) && item["data"]?["outcome"]?.GetValue<string>()=="failed");
         if(mode=="ui-click-host-fail") Assert.Contains(events,item=>item["type"]!.GetValue<string>()=="runner.ui-click" &&

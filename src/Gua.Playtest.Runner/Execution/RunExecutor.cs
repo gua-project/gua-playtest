@@ -117,11 +117,18 @@ public static class RunExecutor
                 // Close new authority, then validate the outstanding/current sample
                 // using a share of the same cleanup epoch, without joining its thread.
                 settlement.ReserveClockValidation();
-                clockRead ??= Task.Factory.StartNew(run.ReadAuthoritativeReal, CancellationToken.None,
-                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                clockRead ??= StartClockProbe();
                 var allowance = settlement.EvidenceRemaining;
                 if (!clockRead.IsCompleted && allowance > TimeSpan.Zero)
-                    await Task.WhenAny(clockRead, owner, FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
+                {
+                    var operation = RuntimeTiming.NextOperation();
+                    RuntimeTiming.Mark(run, "executor.clock-wait.create", operation, remainingTicks: allowance.Ticks);
+                    var timer = FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None);
+                    RuntimeTiming.ObserveCompletion(run, "executor.clock-wait.completion-observed", operation, timer);
+                    await Task.WhenAny(clockRead, owner, timer).ConfigureAwait(false);
+                    RuntimeTiming.Mark(run, "executor.clock-wait.resume", operation, detail: (int)timer.Status);
+                    RuntimeTiming.Mark(run, "executor.clock-wait.probe-status", operation, detail: (int)clockRead.Status);
+                }
                 if (owner.IsCompleted || run.Primary is not null) { settlement.Begin(); break; }
                 try
                 {
@@ -140,16 +147,29 @@ public static class RunExecutor
                 run.PostProviderException(new RunFailureException(interruptionCause, interruption));
                 settlement.Interrupt(interruption); break;
             }
-            await Task.WhenAny(owner, Task.Delay(10)).ConfigureAwait(false);
+            var pollOperation = RuntimeTiming.NextOperation();
+            RuntimeTiming.Mark(run, "executor.poll-wait.create", pollOperation, budgetTicks: TimeSpan.FromMilliseconds(10).Ticks);
+            var pollTimer = Task.Delay(10);
+            RuntimeTiming.ObserveCompletion(run, "executor.poll-wait.completion-observed", pollOperation, pollTimer);
+            await Task.WhenAny(owner, pollTimer).ConfigureAwait(false);
+            RuntimeTiming.Mark(run, "executor.poll-wait.resume", pollOperation, detail: (int)pollTimer.Status);
+            RuntimeTiming.Mark(run, "executor.poll-wait.owner-status", pollOperation, detail: (int)owner.Status);
             if (!owner.IsCompleted && !settlement.Started && run.Primary is null && clockRead is null)
-                clockRead = Task.Factory.StartNew(run.ReadAuthoritativeReal, CancellationToken.None,
-                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                clockRead = StartClockProbe();
         }
         if (settlement.Started && !owner.IsCompleted)
         {
             var remaining = settlement.EvidenceRemaining;
             if (remaining > TimeSpan.Zero)
-                await Task.WhenAny(owner, FiniteOperation.DelayIndependentAsync(remaining, CancellationToken.None)).ConfigureAwait(false);
+            {
+                var operation = RuntimeTiming.NextOperation();
+                RuntimeTiming.Mark(run, "executor.evidence-wait.create", operation, remainingTicks: remaining.Ticks);
+                var timer = FiniteOperation.DelayIndependentAsync(remaining, CancellationToken.None);
+                RuntimeTiming.ObserveCompletion(run, "executor.evidence-wait.completion-observed", operation, timer);
+                await Task.WhenAny(owner, timer).ConfigureAwait(false);
+                RuntimeTiming.Mark(run, "executor.evidence-wait.resume", operation, detail: (int)timer.Status);
+                RuntimeTiming.Mark(run, "executor.evidence-wait.owner-status", operation, detail: (int)owner.Status);
+            }
         }
         if (owner.IsFaulted) evidence.Failure = owner.Exception!.InnerException ?? owner.Exception;
         if (run.Primary is null)
@@ -191,11 +211,36 @@ public static class RunExecutor
             run.FinalizeInterruptedExecution(candidates, cancellationToken.IsCancellationRequested,
                 evidence.Execution?.IsCompletedSuccessfully == true && evidence.Execution.Result, failure);
         }
+        // This is a gate-free observation after arbitration, not the exact primary publication instant.
+        RuntimeTiming.Mark(run, "executor.primary.observed");
         _ = owner.ContinueWith(task => _ = task.Exception, CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         if (clockRead is not null) _ = clockRead.ContinueWith(task => _ = task.Exception, CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         return await cleanup.CompleteAsync(run, run.AuthoritativeRealClock, cancellationToken, confirmPrimary, settlement).ConfigureAwait(false);
+
+        Task<TimeSpan> StartClockProbe()
+        {
+            var operation = RuntimeTiming.NextOperation();
+            RuntimeTiming.Mark(run, "executor.clock-probe.create", operation);
+            var task = Task.Factory.StartNew(() =>
+            {
+                RuntimeTiming.Mark(run, "executor.clock-probe.enter", operation);
+                try
+                {
+                    var result = run.ReadAuthoritativeReal();
+                    RuntimeTiming.Mark(run, "executor.clock-probe.return", operation);
+                    return result;
+                }
+                catch
+                {
+                    RuntimeTiming.Mark(run, "executor.clock-probe.throw", operation);
+                    throw;
+                }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            RuntimeTiming.ObserveCompletion(run, "executor.clock-probe.completion-observed", operation, task);
+            return task;
+        }
 
         async ValueTask RetainCompletedFaultAsync<TValue>(Task<TValue>? task, CancellationToken suppliedToken, RunPhase phase)
         {
