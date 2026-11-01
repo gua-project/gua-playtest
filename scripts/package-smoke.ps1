@@ -102,7 +102,7 @@ function Assert-OfflineCommands([string]$Command, [string]$Label) {
 }
 function Assert-NativeIdentity([string]$Command, [string]$Directory, [string]$Label) {
     $ridSuffix = [IO.Path]::Combine('runtimes', $Rid, 'native')
-    $manifests = @(Get-ChildItem -LiteralPath $Directory -Recurse -File -Filter 'gua-core-build-manifest.json' |
+    $manifests = @(Get-ChildItem -LiteralPath $Directory -Force -Recurse -File -Filter 'gua-core-build-manifest.json' |
         Where-Object { $_.DirectoryName -eq $Directory -or $_.DirectoryName.EndsWith($ridSuffix, [StringComparison]::Ordinal) })
     if ($manifests.Count -ne 1) { throw 'Expected exactly one current-RID core manifest' }
     $manifest = $manifests[0]
