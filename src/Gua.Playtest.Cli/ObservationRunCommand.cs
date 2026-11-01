@@ -71,6 +71,8 @@ internal static class ObservationRunCommand
             if (!scenarioReport.IsValid || !environmentReport.IsValid || scenarioReport.Document is not ScenarioDocument scenario ||
                 environmentReport.Document is not EnvironmentDocument environment) throw new InvalidDataException("RuntimeInputInvalid");
             ValidateLane(scenario, environment, singleClick);
+            // Validate the installed remote-enabled testing SDK before any game launch.
+            PackageCompatibility.CheckNative();
             var targetId = singleClick ? One("--target-id") : null;
             if (targetId is not null && (targetId.Length is < 1 or > 128 || targetId.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or '.' or ':'))))
                 throw new InvalidDataException("RuntimeArgumentsInvalid");
@@ -127,7 +129,7 @@ internal static class ObservationRunCommand
                     new("gameExecutableSha256", hash.ToLowerInvariant(), "locked-image-and-OS-listener-owner"),
                     new("effectiveEnvironmentSha256", runtimeHash, "explicit-runtime-configuration"),
                     new("maxDurationMilliseconds", limits.MaxDurationMilliseconds.ToString(CultureInfo.InvariantCulture), "scenario-environment-minimum")],
-                new Dictionary<string, string> { ["Gua.Testing"] = "1.1.2" },
+                new Dictionary<string, string> { ["Gua.Testing"] = "1.2.0" },
                 [new("scenario", JsonSerializer.SerializeToElement(scenarioFile.CopyJson()), scenarioFile.CopyBytes(), Path.GetExtension(scenarioPath)),
                     new("environment", JsonSerializer.SerializeToElement(environmentFile.CopyJson()), environmentFile.CopyBytes(), Path.GetExtension(environmentPath)),
                     new("effective-runtime", runtimeConfiguration)], identity, DateTimeOffset.UtcNow);

@@ -9,7 +9,7 @@ public sealed record GuardedUiReceipt(GuaRemoteDispatchState State, bool Dispatc
     bool? Succeeded, string Reason, string SourceId, ulong SessionEpoch, string Profile, ulong Revision, string? NodeId = null,
     int? GuaErrorCode = null, string? DispatchError = null);
 
-/// <summary>One explicit UI click, using the published 1.1.2 remote atomic guard.
+/// <summary>One explicit UI click, using the published 1.2.0 remote atomic guard.
 /// Borrows the observation context and owns a separate guarded connection. Never retries an attempt.</summary>
 public sealed class GuardedUiClick : IDisposable
 {

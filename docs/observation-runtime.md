@@ -143,7 +143,7 @@ exact acquired process; it does not establish graceful game-exit behavior,
 terminate descendants or exercise an attached-game lifecycle.
 
 Input-producing external Runs still require an atomic host dispatch capability.
-Published Gua.Testing 1.1.2 exposes `GuaRemoteGuardedSession`; its public capability
+Published Gua.Testing 1.2.0 exposes `GuaRemoteGuardedSession`; its public capability
 and host support must be verified and connected by an input-producing composition.
 This observation command does not wire that API or establish its game acceptance.
 A local mutex, a successful observation, or this listener-owner check does not
