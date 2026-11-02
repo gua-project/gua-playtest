@@ -12,6 +12,7 @@
 | [preparation.md](preparation.md) | launch／attach、承認Setup、開始identity、所有権 |
 | [observation-runtime.md](observation-runtime.md) | Windows配布EXEへの観測専用Run、hashとlistener所有権、Scenario・Trace・cleanup |
 | [single-ui-runtime.md](single-ui-runtime.md) | 明示したUIを1回guarded clickし、独立Goal・Trace・cleanupへつなぐ固定操作Run |
+| [replay-runtime.md](replay-runtime.md) | 保存済み固定1クリック Plan の Windows 試行、実証拠と明示採用の分離 |
 | [execution.md](execution.md) | Runの状態、合否の確定、期限・予算・監視・後処理 |
 | [gua-bridge.md](gua-bridge.md) | Guaへの観測と入力の接続、epoch・profile・完了確認・公開版の限界 |
 | [planning.md](planning.md) | 公開Planner入力、提案の採用、送信直前確認、実隔離との境界 |
