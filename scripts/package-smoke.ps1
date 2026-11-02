@@ -100,6 +100,40 @@ function Assert-OfflineCommands([string]$Command, [string]$Label) {
     Assert-Cli $Command @('report', '--allow-root', $stage, '--trace', $trace, '--output', $html) 2 'ReportOutputExists'
     Assert-Cli $Command @('replay', '--allow-root', $contractRoot, '--plan', (Join-Path $contractRoot 'plan.json'), '--environment', (Join-Path $contractRoot 'environment.json')) 2 'ProductionRuntimeUnavailable'
 }
+function Assert-NativeIdentity([string]$Command, [string]$Directory, [string]$Label) {
+    $ridSuffix = [IO.Path]::Combine('runtimes', $Rid, 'native')
+    $manifests = @(Get-ChildItem -LiteralPath $Directory -Force -Recurse -File -Filter 'gua-core-build-manifest.json' |
+        Where-Object { $_.DirectoryName -eq $Directory -or $_.DirectoryName.EndsWith($ridSuffix, [StringComparison]::Ordinal) })
+    if ($manifests.Count -ne 1) { throw 'Expected exactly one current-RID core manifest' }
+    $manifest = $manifests[0]
+    $original = [IO.File]::ReadAllBytes($manifest.FullName)
+    $metadata = [Text.Encoding]::UTF8.GetString($original) | ConvertFrom-Json
+    if ($metadata.build.sourceCommit -ne '2e12fb3cfdf822418f349515027d6f620c5ee63b' -or
+        $metadata.build.flavor -ne 'development' -or !$metadata.build.remoteEnabled -or
+        $metadata.build.remotePermissionCeiling -ne 'debug') { throw 'Public testing SDK purpose mismatch' }
+    try {
+        # A missing producer manifest used to pass doctor: this is an admission
+        # regression, not just a DLL loader failure. Each invocation is fresh.
+        Remove-Item -LiteralPath $manifest.FullName
+        Assert-Cli $Command @('doctor', '--native') 2 'native-package-unavailable-or-incompatible'
+        [IO.File]::WriteAllBytes($manifest.FullName, $original)
+        $metadata.build.remoteEnabled = $false
+        [IO.File]::WriteAllText($manifest.FullName, ($metadata | ConvertTo-Json -Depth 8))
+        Assert-Cli $Command @('doctor', '--native') 2 'native-package-unavailable-or-incompatible'
+        [IO.File]::WriteAllBytes($manifest.FullName, $original)
+        $metadata = [Text.Encoding]::UTF8.GetString($original) | ConvertFrom-Json
+        $metadata.files[0].sha256 = ('0' * 64)
+        [IO.File]::WriteAllText($manifest.FullName, ($metadata | ConvertTo-Json -Depth 8))
+        Assert-Cli $Command @('doctor', '--native') 2 'native-package-unavailable-or-incompatible'
+        # Native admission has no effect on offline Scenario validation.
+        Assert-Cli $Command @('validate', '--allow-root', $contractRoot, (Join-Path $contractRoot 'scenario.json')) 0 'Valid'
+    }
+    finally { [IO.File]::WriteAllBytes($manifest.FullName, $original) }
+    Assert-Cli $Command @('doctor', '--native') 0 'native-package-compatible'
+    $script:records += [pscustomobject]@{ operation = 'native-identity'; placement = $Label
+        flavor = 'development'; remoteEnabled = $true; remotePermissionCeiling = 'debug'
+        sourceCommit = $metadata.build.sourceCommit; scope = 'Client SDK DLL hashes and build identity; not game build attestation or license closure' }
+}
 Set-Content -LiteralPath $valid -Value '{"id":{"value":"ready"}}' -Encoding utf8NoBOM
 Set-Content -LiteralPath $invalid -Value '{"id":42}' -Encoding utf8NoBOM
 $published = Join-Path $stage 'published'
@@ -113,6 +147,7 @@ if (!$IsWindows) { & chmod +x $exe; if ($LASTEXITCODE) { throw 'chmod failed' } 
 Assert-Cli $exe @('validate', '--gua-schema', 'selector.schema.json', $valid) 0 'gua-schema-valid'
 Assert-Cli $exe @('validate', '--gua-schema', 'selector.schema.json', $invalid) 2 'gua-schema-invalid'
 Assert-Cli $exe @('doctor', '--native') 0 'native-package-compatible'
+Assert-NativeIdentity $exe $extracted 'archive'
 Assert-OfflineCommands $exe 'archive'
 Assert-PackagedDashboard $exe 'archive'
 # Remove just Gua native assets from this uniquely created extraction. Offline validation must still work.
@@ -142,14 +177,15 @@ $toolExe = Join-Path $tool $(if ($IsWindows) { 'gua-playtest.exe' } else { 'gua-
 Assert-Cli $toolExe @('validate', '--gua-schema', 'selector.schema.json', $valid) 0 'gua-schema-valid'
 Assert-Cli $toolExe @('validate', '--gua-schema', 'selector.schema.json', $invalid) 2 'gua-schema-invalid'
 Assert-Cli $toolExe @('doctor', '--native') 0 'native-package-compatible'
+Assert-NativeIdentity $toolExe $tool 'tool'
 Assert-OfflineCommands $toolExe 'tool'
 Assert-PackagedDashboard $toolExe 'tool'
 [pscustomobject]@{
     rid = $Rid
     head = (& git rev-parse HEAD)
     sdk = (& dotnet --version)
-    guaVersion = '1.1.2'
-    guaCommit = 'b398e531558f38220baf0b606e7c3f33904a87a5'
+    guaVersion = '1.2.0'
+    guaCommit = '2e12fb3cfdf822418f349515027d6f620c5ee63b'
     archiveSha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
     checks = $records
     scope = 'Actual archive/fresh Tool offline validate, Plan refusal, saved report and fail-closed Replay; no engine, bridge or Codex authentication/execution.'

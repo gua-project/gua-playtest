@@ -9,8 +9,37 @@ bridge は Gua の観測・入力を Playtest の判断へ接続する具体的�
 [BridgeObservations.ReadBatch](../src/Gua.Playtest.GuaIntegration/BridgeObservations.cs)は評価passで必要なreadsをまとめ、Observe cursorからの変化を扱います。[BridgeUiActions](../src/Gua.Playtest.GuaIntegration/BridgeUiActions.cs)と [OwnedGameInput](../src/Gua.Playtest.GuaIntegration/OwnedGameInput.cs)では送信前拒否と送信後不明、所有入力の解放を追えます。[Bridge.Tests](../tests/Gua.Playtest.Bridge.Tests)の試験と、下記の公開 Gua・guard・transportの制限を一緒に読んでください。通信と実エンジン受け入れの違いは [fixture-evidence.md](fixture-evidence.md)、全体の入口は [開発者ガイド](developer-guide.ja.md)です。
 
 Core remains native-free. `Gua.Playtest.GuaIntegration` alone owns Gua.Testing/
-Gua.Runtime 1.1.2 dependencies. No Gua sources, native libraries, protocol schemas,
+Gua.Runtime 1.2.0 dependencies. No Gua sources, native libraries, protocol schemas,
 Selector implementation, input scheduler or World command interpreter are copied.
+
+## Distribution purpose
+
+The public testing SDK is pinned to Gua 1.2.0, source
+`2e12fb3cfdf822418f349515027d6f620c5ee63b`. Its native assets deliberately use
+`development`, `Release`, remote ON and the Debug permission ceiling. This is
+the **client testing SDK** policy; it does not require a game to be Development
+or authorize a Debug connection to a Player host. Source builds default to
+Shipping / remote OFF. A port or environment variable cannot restore a compiled-out
+transport. A game intended for QA must explicitly opt into its chosen remote-enabled
+distribution when built. AI-player remains Player-only; Playtest never promotes it.
+
+`doctor --native` and the Windows `observe-run` / `click-run` launch paths check
+the installed SDK's current-RID native pair before use. Both component manifests,
+the two payload SHA256 values, source/build IDs, immutable core/runtime build-info,
+ABI/protocol and embedded Viewer source must match the pinned public testing SDK.
+Missing, mixed or unsupported distribution identities fail closed. Native directory
+overrides, ambiguous installations and a current-directory native shadow are rejected.
+The manifest's producer `LICENSE` entry is not copied by NuGet as a runtime asset;
+the check verifies the actual core/runtime payloads, not producer staging completeness
+or distribution license closure. Keep the manifests with the two DLLs when copying a
+published archive or installed Tool.
+
+This validates a trusted installed client package, not a hostile mutable filesystem,
+remote game's binary provenance, authentication or permission grant. The game's EXE,
+GDExtension and native manifest/hash evidence are checked separately when preparing an
+acceptance target. Host capability (`guarded_dispatch_v1`), source/epoch/profile/revision,
+listener ownership, configured permission and fresh observations remain required.
+Offline validate and saved-result inspection do not require native assets or remote opt-in.
 
 ## Observation boundary
 
@@ -94,9 +123,9 @@ releases the owned cursor/connection and never resets or kills the host.
 
 ## Action boundary
 
-Published Gua.Testing 1.1.2 includes `CreateGuardedDispatchSession` and
+Published Gua.Testing 1.2.0 includes `CreateGuardedDispatchSession` and
 `GuaRemoteGuardedSession.SendUi` / `SendGameInput` / `Poll`, backed by the
-`guarded_dispatch_v1` capability. See the [pinned upstream API](https://github.com/gua-project/gua/blob/b398e531558f38220baf0b606e7c3f33904a87a5/bindings/dotnet/src/Gua.Testing/GuaRemoteGuardedDispatch.cs).
+`guarded_dispatch_v1` capability. See the [pinned upstream API](https://github.com/gua-project/gua/blob/2e12fb3cfdf822418f349515027d6f620c5ee63b/bindings/dotnet/src/Gua.Testing/GuaRemoteGuardedDispatch.cs).
 The explicit [single UI click Run](single-ui-runtime.md) uses that remote API.
 The adapters described below retain their existing local/legacy paths; general
 semantic/raw input composition is separate. The observation-only command does

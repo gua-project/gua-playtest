@@ -30,7 +30,7 @@ input permission and never accepts `--target-id`.
 The supplied action ceiling is not increased. If the initial Goal already holds,
 no click is sent. Otherwise one operation is reserved. Zero budget prevents the
 click. A fresh unique selector result is matched against the actual UI tree; the
-published Gua1.1.2 `guarded_dispatch_v1` session binds source, epoch, profile and
+published Gua1.2.0 `guarded_dispatch_v1` session binds source, epoch, profile and
 revision at the host. A local lifecycle lease or unguarded send is not used.
 The Run's current dispatch authority and owned listener are checked at the public
 SDK's beforeDispatch boundary. An enqueued receipt is not completion or Goal
@@ -49,7 +49,7 @@ and action accounting separately from primary status. Trace stores bounded facts
 submission success means Enqueued only, and completion keeps the original numeric
 Gua error code. SDK dispatch errors are bounded code tokens, not arbitrary remote
 diagnostic text.
-Capture/storage failures affect postprocessing. An official Gua1.1.2 Recorder
+Capture/storage failures affect postprocessing. An official Gua1.2.0 Recorder
 borrows this same guarded owner for the single click; it cannot send a second
 operation or dispatch from a background continuation. Successful capture contains
 one actual request ID, explicit target and native pre/post revisions. The existing

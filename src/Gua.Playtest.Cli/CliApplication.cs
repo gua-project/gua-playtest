@@ -41,7 +41,7 @@ public static class CliApplication
         }
         if (args is ["--version"])
         {
-            await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", code = "VersionShown", version = "0.1.0-dev", guaVersion = "1.1.2" }) : "0.1.0-dev (Gua packages 1.1.2)");
+            await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", code = "VersionShown", version = "0.1.0-dev", guaVersion = "1.2.0" }) : "0.1.0-dev (Gua packages 1.2.0)");
             return 0;
         }
         if (args.FirstOrDefault() == "dashboard")
