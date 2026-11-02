@@ -5,6 +5,7 @@ using Gua.Playtest.Runner.Artifacts;
 using Gua.Playtest.Runner.Execution;
 using Gua.Playtest.Runner.Planning;
 using Gua.Playtest.Runner.Preparation;
+using Gua.Playtest.Runner.Replay;
 using Gua.Testing;
 using Gua.Testing.Recording;
 
@@ -38,6 +39,14 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
     /// metadata sanitization and immutable summaries; Gua owns its Trace/Recording bytes.</summary>
     public GuaRunArtifacts(RunArtifactStore store, RunArtifactMetadata metadata, ArtifactLimits limits,
         GuaTraceOptions options, PersistenceRedactor recordingRedactor, CancellationToken token = default)
+        : this(store, metadata, limits, options, recordingRedactor, token, null) { }
+
+    public static GuaRunArtifacts CreateReplay(RunArtifactStore store, RunArtifactMetadata metadata, ArtifactLimits limits,
+        GuaTraceOptions options, PersistenceRedactor redactor, RunIdentity identity, CancellationToken token = default)
+        => new(store, metadata, limits, options, redactor, token, identity);
+
+    private GuaRunArtifacts(RunArtifactStore store, RunArtifactMetadata metadata, ArtifactLimits limits,
+        GuaTraceOptions options, PersistenceRedactor recordingRedactor, CancellationToken token, RunIdentity? replayIdentity)
     {
         ArgumentNullException.ThrowIfNull(store); ArgumentNullException.ThrowIfNull(recordingRedactor);
         if (metadata.Profile != options.Profile) throw new ArgumentException("ArtifactProfileMismatch");
@@ -47,7 +56,7 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
             bytes => SafeRecordingEncoding(recordingRedactor, bytes),
             document => recordingRedactor.RedactDocument(document, limits),
             recordingRedactor.IsSensitiveField, recordingRedactor.Redact, limits.MaxStringChars, limits.MaxItems);
-        PreparationPersistence = store.BeginPreparation(metadata, token);
+        PreparationPersistence = replayIdentity is null ? store.BeginPreparation(metadata, token) : store.BeginReplayPreparation(metadata, replayIdentity, token);
     }
     private static bool SafeRecordingEncoding(PersistenceRedactor redactor, ReadOnlyMemory<byte> bytes)
     {
@@ -148,8 +157,15 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
         finally { ArtifactTimingDiagnostics.Mark(store, "artifact.primary.exit", timingOperation); }
     }
 
-    public async Task<GuaArtifactCompletion> CompleteAsync(RunOutcome original, DateTimeOffset finishedAt,
+    public Task<GuaArtifactCompletion> CompleteAsync(RunOutcome original, DateTimeOffset finishedAt,
         GuaRecording? recording = null, bool recordingCaptureFailed = false, CancellationToken token = default)
+        => CompleteCoreAsync(original, finishedAt, recording, recordingCaptureFailed, token, null);
+
+    public Task<GuaArtifactCompletion> CompleteReplayAsync(ReplayOutcome replay, DateTimeOffset finishedAt, CancellationToken token = default)
+        => CompleteCoreAsync(replay.Run, finishedAt, null, false, token, replay);
+
+    private async Task<GuaArtifactCompletion> CompleteCoreAsync(RunOutcome original, DateTimeOffset finishedAt,
+        GuaRecording? recording, bool recordingCaptureFailed, CancellationToken token, ReplayOutcome? replay)
     {
         ObservationReference[] cleanup;
         lock (gate)
@@ -168,7 +184,8 @@ public sealed class GuaRunArtifacts : IPreparationTrace, IAsyncDisposable
         var trace = captureFailed && bundles.Trace.State is GuaArtifactState.Saved or GuaArtifactState.OmittedOnSuccess
             ? new ArtifactReceipt(ArtifactKind.Trace, ArtifactState.CaptureFailed) : Receipt(ArtifactKind.Trace, bundles.Trace);
         ArtifactReceipt[] receipts = [trace, Receipt(ArtifactKind.Recording, bundles.Recording)];
-        return new(store.Complete(original, receipts, cleanup, finishedAt, token), receipts);
+        return new(replay is null ? store.Complete(original, receipts, cleanup, finishedAt, token) :
+            store.CompleteReplay(replay, receipts, cleanup, finishedAt, token), receipts);
     }
     private static GuaTraceOutcome Map(ResultStatus status) => status switch
     { ResultStatus.Passed => GuaTraceOutcome.Passed, ResultStatus.Aborted => GuaTraceOutcome.Interrupted, _ => GuaTraceOutcome.Failed };

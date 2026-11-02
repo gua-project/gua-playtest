@@ -48,6 +48,13 @@ jobs:
             artifacts/tests/*.trx
             artifacts/tests/runtime-evidence/**
             artifacts/tests/single-ui/**
+            # Keep only Replay diagnostics/summaries. Never publish the private
+            # Plan authority key, candidate graph or Recording input contents.
+            artifacts/tests/replay-runtime/*/command.json
+            artifacts/tests/replay-runtime/*/accepted-command.json
+            artifacts/tests/replay-runtime/**/primary.json
+            artifacts/tests/replay-runtime/**/completion.json
+            artifacts/tests/replay-runtime/**/result.json
             artifacts/smoke-*/evidence.json
             artifacts/smoke-*/*.zip
             artifacts/smoke-*/feed/*.nupkg

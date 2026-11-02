@@ -84,7 +84,7 @@ Plan to condition-synchronized timing.
 Only the seven public UI actions are admitted; game-input-only and mixed batches are
 Unsupported before operation approval.
 
-UI wire v1 lacks atomic remote epoch guarding. A trusted host lifecycle lease, shared
+The legacy `GuaUiReplay` UI wire v1 path lacks atomic remote epoch guarding. A trusted host lifecycle lease, shared
 with **every** frame writer, reset and replacement, is mandatory. A local connection lock
 alone cannot provide that guarantee. Completion must match actual request ID, session
 epoch and resolved target; a reset after host execution does not confirm the old action.
@@ -123,5 +123,7 @@ Unsupported strict modes fail before playback instead of falling back to weaker 
 These APIs consume Recording, while Trace remains Gua's execution evidence format.
 They provide no Planner or adoption command. Concrete engine wiring, Profile/permission
 certification, real Planner isolation, Trace persistence and CLI composition use their
-respective host integration boundaries. Public package 1.1.1 does not include upstream
-PR180's unpublished guarded remote additions.
+respective host integration boundaries. Pinned Gua 1.2.0 also supplies guarded remote
+dispatch. The separate [one-click Windows Replay](replay-runtime.md) uses
+`GuaGuardedClickReplay`, the public GuaReplayer scheduler and remote atomic guard.
+It does not relax the legacy adapter's lease or broaden its timing support.
