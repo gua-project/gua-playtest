@@ -17,6 +17,7 @@ report --allow-root <existing-directory> --trace <saved-trace-directory> [--outp
 click-run (same launch options as observe-run) --target-id <ui-id>
 explore --allow-root <existing-directory> --scenario <file> --environment <file>
 replay --allow-root <existing-directory> --plan <file> --environment <file>
+replay-run --managed-root <private-plans> --plan <managed-plan> --environment <file> (explicit Windows launch options; see replay-runtime.md)
 ```
 
 `dashboard` serves the read-only saved index on the
@@ -85,7 +86,7 @@ CLI ceiling never raises an existing limit. Other limits remain the explicit
 Environment values. This is a provisional offline reduction, not host-certified
 permission or execution identity. It does not resolve credentials.
 
-Execution currently returns exit 2 / `ProductionRuntimeUnavailable` after valid
+The offline Explore/Replay commands return exit 2 / `ProductionRuntimeUnavailable` after valid
 inputs. Environment v1 has no host mode, executable, authoritative clock or auth
 policy fields. The separate [observation-only Windows Run](observation-runtime.md)
 provides an explicit executable/hash/ownership composition for bounded, input-free
@@ -96,8 +97,10 @@ permissions and resource limits with current host authority, and pass only
 necessary secret supplies into host preparation and persistence. Its identity
 must hash effective secret-free conditions separately from the retained source
 Environment hash. Missing inputs cannot be filled by defaults. Published
-Gua.Testing 1.1.1 has no required external atomic guard; a local mutex or dummy
-lease cannot replace it. Explore additionally requires the approved isolated
+Gua.Testing 1.2.0 supplies remote atomic guards. The separate
+[one-click Windows Replay](replay-runtime.md) explicitly connects that supported lane;
+it does not enable general Replay or Explore. A local mutex or dummy lease cannot
+replace a required host guarantee. Explore additionally requires the approved isolated
 live Codex provider. No successful Run or trial is fabricated at this boundary.
 
 `CliApplication.WriteRunResultAsync` supplies the result display boundary for a
