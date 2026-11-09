@@ -353,9 +353,42 @@ public sealed class ExploreTests
         Assert.Equal(2, s.Run.Budget.Snapshot.RecoveryDecisions);
         Assert.All(planner.Inputs, input =>
         {
-            var json = ContractJson.Serialize(input);
-            Assert.DoesNotContain("739", json); Assert.DoesNotContain("\"hp\"", json); Assert.DoesNotContain("minImprovement", json);
+            AssertPrivateMetricAbsent(JsonNode.Parse(ContractJson.Serialize(input))!);
         });
+    }
+    [Fact]
+    public void PrivateMetricCheckAcceptsUnrelatedCorrelationIdContainingTheSameDigits()
+    {
+        // The original ARM failure contained these digits only inside the random request ID.
+        AssertPrivateMetricAbsent(JsonNode.Parse("""{"decisionRequestId":"decision-739db86c00f74572a18530c44eea65c9-1","observation":{"reads":[]}}""")!);
+    }
+    [Theory]
+    [InlineData("{\"observation\":{\"reads\":[{\"value\":{\"type\":\"number\",\"value\":739}}]}}")]
+    [InlineData("{\"feedback\":[{\"value\":\"739\"}]}")]
+    [InlineData("{\"observation\":{\"reads\":[{\"read\":{\"name\":\"hp\"}}]}}")]
+    [InlineData("{\"feedback\":[{\"minImprovement\":10}]}")]
+    public void PrivateMetricCheckStillRejectsLeakedValueReadOrThreshold(string leaked)
+        => Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertPrivateMetricAbsent(JsonNode.Parse(leaked)!));
+
+    private static void AssertPrivateMetricAbsent(JsonNode document)
+    {
+        var json = document.ToJsonString();
+        // Correlation IDs are independent random strings, not metric values. Search
+        // actual JSON scalar values rather than matching digits inside those IDs.
+        Assert.False(ContainsPrivateValue(document), "Private metric value reached Planner input.");
+        Assert.DoesNotContain("\"hp\"", json);
+        Assert.DoesNotContain("minImprovement", json);
+
+        static bool ContainsPrivateValue(JsonNode? node) => node switch
+        {
+            JsonObject obj => obj.Any(property => ContainsPrivateValue(property.Value)),
+            JsonArray array => array.Any(ContainsPrivateValue),
+            JsonValue value when value.GetValueKind() == System.Text.Json.JsonValueKind.Number =>
+                value.TryGetValue<double>(out var number) && number == 739,
+            JsonValue value when value.GetValueKind() == System.Text.Json.JsonValueKind.String =>
+                value.GetValue<string>() == "739",
+            _ => false
+        };
     }
     [Fact]
     public async Task CancellationBeforeQueuedSendNeverInvokesTransport()
