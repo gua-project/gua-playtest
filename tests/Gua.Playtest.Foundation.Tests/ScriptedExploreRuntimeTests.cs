@@ -58,6 +58,14 @@ public sealed class ScriptedExploreRuntimeTests
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["maxDecisions"] = 4;
+        if (mode == "ui-click-host-no-goal")
+        {
+            // Isolate final-decision exhaustion after the first approved click.
+            // Four RPC-heavy turns could instead correctly reach the unchanged
+            // global deadline before their final observation window closes.
+            environment["limits"]!["maxDecisions"] = 1;
+            environment["limits"]!["recoveryDecisionLimit"] = 1;
+        }
         environment["trace"]!["savePolicy"] = "always";
         if (mode == "private-goal")
         {
@@ -106,6 +114,12 @@ public sealed class ScriptedExploreRuntimeTests
         Assert.Equal("scripted-ui-explore", details.GetProperty("driver").GetString());
         Assert.Equal(expectedClicks, int.Parse(await File.ReadAllTextAsync(pid + ".clicks")));
         Assert.Equal(expectedClicks, details.GetProperty("actions").GetInt32());
+        if (mode == "ui-click-host-no-goal")
+        {
+            Assert.Equal("DecisionsExhausted", result.RootElement.GetProperty("code").GetString());
+            Assert.Equal(1, details.GetProperty("plannerRequests").GetInt32());
+            Assert.Equal(1, details.GetProperty("decisions").GetInt32());
+        }
         if (mode != "cancel-consumed")
             Assert.Equal(mode is not ("ui-click-host-fail" or "ui-click-host-private-event" or "ui-click-host-no-result"), details.GetProperty("postProcessingComplete").GetBoolean());
         if (mode == "ui-click-host")
