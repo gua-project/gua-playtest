@@ -28,6 +28,19 @@ internal static class RuntimeTiming
         catch { /* Diagnostic delivery must not change execution. */ }
     }
 
+    // Publish references only; failure observers sample Status without waiting or
+    // scheduling another continuation. Task state reads are independent, not atomic.
+    internal static void TrackWait(object owner, string phase, long operation,
+        Task timer, Task ownerTask, Task whenAny)
+    {
+        try
+        {
+            if (Listener?.IsEnabled(phase) == true)
+                Listener.Write(phase, (owner, Stopwatch.GetTimestamp(), operation, timer, ownerTask, whenAny));
+        }
+        catch { /* Diagnostic delivery must not change execution. */ }
+    }
+
     // This is the observer's delivery time, not the task's transition or timer fire time.
     internal static void ObserveCompletion(object owner, string phase, long operation, Task task)
     {
