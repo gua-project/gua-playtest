@@ -12,6 +12,7 @@ C#/.NET 10 のゲーム外 Playtest 基盤。現在は五つの project、抽象
 
 Windowsの明示的な固定1クリックと公式Recording保存は [click-run](docs/single-ui-runtime.md)、読取専用実行は [observe-run](docs/observation-runtime.md) を参照する。
 保存済み固定1クリック Plan の Windows 試行は [replay-run](docs/replay-runtime.md) を参照する。探索・歩行・一般 Replay の受入とは区別する。
+Player の公開 UI を使う台本型 Planner／ExploreDriver 接続は [scripted-explore-run](docs/scripted-explore-runtime.md) を参照する。外部 LLM や一般探索戦略は使わない。
 
 ```powershell
 dotnet restore --locked-mode

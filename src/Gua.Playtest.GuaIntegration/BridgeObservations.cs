@@ -16,6 +16,8 @@ public sealed record BridgeChange(JsonElement Event, JsonElement Catalogs);
 public sealed record BridgeReadCollection(DateTimeOffset ObservedAt, ReadAvailability Availability,
     IReadOnlyList<BridgeRead> Reads, IReadOnlyList<BridgeChange>? Changes = null);
 public sealed record BridgeSessionIdentity(string SourceId, ulong SessionEpoch, string Profile, bool HasOutstandingRequests);
+public sealed record UiSnapshotIdentity(string SourceId, ulong SessionEpoch, string Profile, ulong Revision, ulong FrameSequence);
+public sealed record UiSnapshotReads(UiSnapshotIdentity Identity, IReadOnlyList<BridgeReadCollection> Collections);
 
 /// <summary>A connection and cursor owned by one Run. Construct a separate instance against
 /// the host's Player/PublicAgent bridge for Planner reads. A caller-supplied profile cannot
@@ -66,6 +68,58 @@ public sealed class BridgeObservations : IDisposable
     /// <summary>Accepts a schema-validated common.read. Failure never carries arbitrary remote
     /// errors, selector candidates or values from another profile.</summary>
     public BridgeReadCollection Read(JsonObject read) => ReadBatch([read])[0];
+
+    /// <summary>Point-in-time standard UI values from ONE complete native UI tree. No delta or interval evidence.
+    /// Uses Gua's selector engine over that immutable tree; source/profile/epoch bracket the capture.</summary>
+    public UiSnapshotReads ReadUiSnapshot(IReadOnlyList<JsonObject> reads)
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed || Volatile.Read(ref interrupted) != 0, this);
+            if (reads.Count == 0 || reads.Count > maxNodes || reads.Any(read =>
+                read["target"]?["source"]?.GetValue<string>() != "ui" || read["region"]?.GetValue<string>() != "standard"))
+                throw new ArgumentException("UiSnapshotReadRequired");
+            var before = ParseTransport(ObservationCallDiagnostics.Call("observe-snapshot", context.GetObserveSnapshotJson)).GetProperty("document");
+            var tree = ParseTree(ObservationCallDiagnostics.Call("ui-tree", context.GetUiTreeJson), "ui-tree.schema.json");
+            var after = ParseTransport(ObservationCallDiagnostics.Call("observe-snapshot", context.GetObserveSnapshotJson)).GetProperty("document");
+            if (before.GetProperty("sourceId").GetString() != after.GetProperty("sourceId").GetString() ||
+                before.GetProperty("sessionEpoch").GetUInt64() != after.GetProperty("sessionEpoch").GetUInt64() ||
+                !tree.TryGetProperty("sessionEpoch", out var epoch) || epoch.GetUInt64() != after.GetProperty("sessionEpoch").GetUInt64() ||
+                tree.GetProperty("frameSequence").GetUInt64() < before.GetProperty("uiFrame").GetUInt64() ||
+                tree.GetProperty("frameSequence").GetUInt64() > after.GetProperty("uiFrame").GetUInt64())
+                throw new InvalidOperationException("UiSnapshotIdentityChanged");
+            var identity = new UiSnapshotIdentity(after.GetProperty("sourceId").GetString()!, epoch.GetUInt64(),
+                profile.ToString(), tree.GetProperty("revision").GetUInt64(), tree.GetProperty("frameSequence").GetUInt64());
+            var nodes = tree.GetProperty("nodes").EnumerateArray().ToLookup(node => node.GetProperty("id").GetString()!, StringComparer.Ordinal);
+            var budget = new ObservationBudget(maxNodes, maxBytes);
+            var capturedAt = DateTimeOffset.UtcNow;
+            var collections = new List<BridgeReadCollection>();
+            foreach (var read in reads)
+            {
+                var ids = BridgeSelectors.UiSnapshotIds(read["target"]!["selector"]!.AsObject(), tree);
+                if (ids is null) { collections.Add(Failure(ReadAvailability.Unavailable, "target-unavailable")); continue; }
+                budget.TakeNodes(ids.Length);
+                var entries = new List<BridgeRead>();
+                foreach (var id in ids)
+                {
+                    var matching = nodes[id].ToArray();
+                    if (matching.Length != 1) throw new InvalidOperationException("UiSnapshotTargetInvalid");
+                    var field = matching[0]; bool found = true;
+                    foreach (string part in read["field"]!.GetValue<string>().Split('.'))
+                        if (field.ValueKind != JsonValueKind.Object || !field.TryGetProperty(part, out field)) { found = false; break; }
+                    var value = found ? Scalar(field, read["valueType"]!.AsObject()) : null;
+                    var target = new ObservationIdentity(identity.SourceId, identity.SessionEpoch, ProfileName, "ui", id,
+                        identity.Revision, identity.FrameSequence, ValueTypeIdentity: read["valueType"]!.ToJsonString());
+                    if (value is { } actual) budget.TakeBytes(actual.GetRawText());
+                    entries.Add(value.HasValue ? new(ReadAvailability.Available, "available", target, value)
+                        : new(ReadAvailability.Unavailable, "read-unavailable", target));
+                }
+                collections.Add(entries.Count == 0 ? Failure(ReadAvailability.Unavailable, "target-unavailable") :
+                    new(capturedAt, ReadAvailability.Available, entries.AsReadOnly()));
+            }
+            return new(identity, collections.AsReadOnly());
+        }
+    }
 
     /// <summary>Same-source public guarded UI owner; no local lifecycle lease is invented.</summary>
     public GuardedUiClick CreateGuardedUiClick()

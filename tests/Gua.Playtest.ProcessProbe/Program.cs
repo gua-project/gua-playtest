@@ -104,10 +104,17 @@ if (args is ["release-pool-pressure"])
     return confirmed && available==0 ? 0 : 1;
 }
 
+bool scriptedUiFixture = args.Length == 2 && args[0].StartsWith("scripted-ui-click-host", StringComparison.Ordinal);
+if (scriptedUiFixture) args[0] = args[0][9..];
 if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-private-event" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-no-result" or "ui-click-host-already" or "ui-click-host-delayed" or "ui-click-host-late-goal")
 {
     File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
     using var host = new GuaRuntime();
+    if (scriptedUiFixture)
+    {
+        host.EnableGameInput(GuaGameInputCapabilities.Semantic, () => { }, GuaGameInputCapabilities.Semantic);
+        host.PublishGameInputActions("scripted-ui-fixture", []);
+    }
     host.BeginFrame("title"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: clickMode == "ui-click-host-already")); host.EndFrame();
     if (!host.StartInspectorBridge(int.Parse(Environment.GetEnvironmentVariable("GUA_BRIDGE_PORT")!))) return 3;
     int count = 0;

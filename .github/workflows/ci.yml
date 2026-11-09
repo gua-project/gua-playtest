@@ -55,6 +55,10 @@ jobs:
             artifacts/tests/replay-runtime/**/primary.json
             artifacts/tests/replay-runtime/**/completion.json
             artifacts/tests/replay-runtime/**/result.json
+            artifacts/tests/scripted-explore/*/command.json
+            artifacts/tests/scripted-explore/**/primary.json
+            artifacts/tests/scripted-explore/**/completion.json
+            artifacts/tests/scripted-explore/**/result.json
             artifacts/smoke-*/evidence.json
             artifacts/smoke-*/*.zip
             artifacts/smoke-*/feed/*.nupkg

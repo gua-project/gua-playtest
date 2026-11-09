@@ -125,6 +125,7 @@ public sealed class RunSession
     public ExecutionState State { get; private set; } = ExecutionState.Created;
     public PrimaryResult? Primary { get; private set; }
     public bool GoalVerified => State is ExecutionState.Completing or ExecutionState.Finished ? frozenGoalVerified : goalVerified;
+    internal bool HasSuccessCondition => success is not null;
     public TimeSpan? RunningOrigin { get; private set; }
     public TimeSpan NextRealEvaluationAt => State == ExecutionState.Preparing ? preparationOrigin + Limits.PreparationTimeout :
         operations.Where(x => x.IsOpen).Select(x => x.NextDeadline).Append(RunningOrigin!.Value + Limits.MaxDuration).Min();

@@ -54,12 +54,14 @@ internal static class ObservationRunCommand
             Process = identity; return identity;
         }
     }
-    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, bool singleClick = false)
+    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, bool singleClick = false, bool scriptedExplore = false)
     {
         try
         {
             if (!OperatingSystem.IsWindows()) throw new InvalidDataException("WindowsRuntimeRequired");
+            singleClick |= scriptedExplore;
             var options = Parse(args, singleClick);
+            token.ThrowIfCancellationRequested();
             string One(string name) => options.TryGetValue(name, out var values) && values.Count == 1 ? values[0] : throw new InvalidDataException("RuntimeArgumentsRequired");
             var roots = options.GetValueOrDefault("--allow-root") ?? throw new InvalidDataException("RuntimeArgumentsRequired");
             _ = new AllowedPaths(roots);
@@ -68,15 +70,30 @@ internal static class ObservationRunCommand
             var validator = StaticPathAuthority.Validator(roots);
             var scenarioReport = await validator.ValidateFileAsync(scenarioPath, token);
             var environmentReport = await validator.ValidateFileAsync(environmentPath, token);
+            token.ThrowIfCancellationRequested();
             if (!scenarioReport.IsValid || !environmentReport.IsValid || scenarioReport.Document is not ScenarioDocument scenario ||
                 environmentReport.Document is not EnvironmentDocument environment) throw new InvalidDataException("RuntimeInputInvalid");
             ValidateLane(scenario, environment, singleClick);
+            if (scriptedExplore)
+            {
+                bool PublicUi(JsonObject condition) => condition["kind"]?.GetValue<string>() switch
+                {
+                    "assertion" => ScriptedUiExplore.PublicUiReadAllowed(condition["read"]),
+                    "all" or "any" => condition["conditions"] is JsonArray children && children.All(child => child is JsonObject nested && PublicUi(nested)),
+                    _ => false
+                };
+                if (environment.Profile != "Player" || !PublicUi(scenario.Goal.Success!) || scenario.Setup is { } setup && !PublicUi(setup))
+                    throw new InvalidDataException("ScriptedExplorePublicUiRequired");
+            }
             // Validate the installed remote-enabled testing SDK before any game launch.
             PackageCompatibility.CheckNative();
             var targetId = singleClick ? One("--target-id") : null;
             if (targetId is not null && (targetId.Length is < 1 or > 128 || targetId.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or '.' or ':'))))
                 throw new InvalidDataException("RuntimeArgumentsInvalid");
-            var driverName = singleClick ? "single-ui-click" : "observation-only";
+            if (scriptedExplore && ScriptedUiExplore.PublicReads(targetId!).Any(read =>
+                !environment.Permissions.Reads.Any(allowed => JsonNode.DeepEquals(read, allowed))))
+                throw new InvalidDataException("ScriptedExplorePublicUiRequired");
+            var driverName = scriptedExplore ? "scripted-ui-explore" : singleClick ? "single-ui-click" : "observation-only";
             var executable = StaticPathAuthority.File(One("--executable"), roots, "RuntimeExecutableOutsideRoots");
             var working = StaticPathAuthority.Directory(One("--working-directory"), roots, "RuntimeWorkingDirectoryOutsideRoots");
             var destination = StaticPathAuthority.Directory(One("--output-root"), roots, "RuntimeOutputOutsideRoots");
@@ -92,6 +109,7 @@ internal static class ObservationRunCommand
                 endpoint.Port <= 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0 || endpoint.UserInfo.Length != 0)
                 throw new InvalidDataException("WindowsLoopbackRequired");
             var child = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["GUA_BRIDGE_PORT"] = endpoint.Port.ToString(CultureInfo.InvariantCulture) };
+            if (scriptedExplore) child.Add("GUA_OBSERVATION_PROFILE", "player");
             foreach (var binding in options.GetValueOrDefault("--child-env") ?? [])
             {
                 var split = binding.IndexOf('=');
@@ -122,6 +140,13 @@ internal static class ObservationRunCommand
             var environmentCopy = redactor.RedactDocument(JsonSerializer.SerializeToElement(environmentFile.CopyJson()), artifactLimits);
             var environmentCopyHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(environmentCopy)));
             var runtimeConfiguration = EffectiveConfiguration(environmentCopyHash, limits, launch, hash, redactor, artifactLimits, targetId);
+            if (scriptedExplore)
+            {
+                var configured = JsonNode.Parse(runtimeConfiguration.GetRawText())!.AsObject();
+                configured["driver"] = driverName; configured["planner"] = "scripted-one-ui-click";
+                configured["publicObservationProfile"] = "Player";
+                runtimeConfiguration = redactor.RedactDocument(JsonSerializer.SerializeToElement(configured), artifactLimits);
+            }
             var runtimeHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(runtimeConfiguration)));
             var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, scenarioFile.Sha256, environment.BuildId, runtimeHash);
             var metadata = new RunArtifactMetadata(environment.Profile.ToLowerInvariant(),
@@ -152,6 +177,7 @@ internal static class ObservationRunCommand
             long captureSequence = 0;
             GuardedUiReceipt? lastClick = null;
             GuardedClickRecording? recording = null;
+            ScriptedUiExplore? explore = null;
             void RecordClick(GuardedUiReceipt receipt)
             {
                 lastClick = receipt;
@@ -163,7 +189,9 @@ internal static class ObservationRunCommand
                     {
                         var enqueued = receipt.State == GuaRemoteDispatchState.Enqueued;
                         var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, enqueued ? "Guarded UI click submission" : "Guarded UI click completion");
-                        if (string.IsNullOrEmpty(step) || !artifacts.Trace.RecordStructural(step, "runner.ui-click", JsonSerializer.SerializeToElement(receipt)))
+                        if (string.IsNullOrEmpty(step) || !artifacts.Trace.RecordStructural(step,
+                            scriptedExplore ? "runner.explore-ui-click" : "runner.ui-click", scriptedExplore ?
+                                JsonSerializer.SerializeToElement(new { receipt, decisionReference = explore?.DecisionReference }) : JsonSerializer.SerializeToElement(receipt)))
                             throw new InvalidOperationException("TraceCapacityReached");
                         artifacts.Trace.EndStep(step, enqueued || receipt.State == GuaRemoteDispatchState.Completed && receipt.Succeeded == true ? GuaTraceOutcome.Passed : GuaTraceOutcome.Failed);
                     }, artifacts.MarkCaptureFailure);
@@ -194,30 +222,71 @@ internal static class ObservationRunCommand
                                 artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
                             }, artifacts.MarkCaptureFailure);
                         }
-                    }, singleClick, precondition) { Timing = observationTiming };
+                    }, singleClick && !scriptedExplore, precondition, scopedSnapshots: scriptedExplore) { Timing = observationTiming };
             });
             var cleanup = new OwnedCleanup();
             cleanup.Register(CleanupStage.InputRelease, connector.Pending.ReleaseAsync);
+            GuardedClickRecording CreateRecording(GuardedUiClick click)
+            {
+                var acquired = new GuardedClickRecording(click, targetId!,
+                    text => text.Length <= artifactLimits.MaxStringChars && redactor.Redact(text) == text,
+                    document => redactor.RedactDocument(document, artifactLimits), checked((int)limits.MaxObservationBytes),
+                    artifactLimits.MaxItems, artifactLimits.MaxStringChars, token);
+                try { cleanup.Register(CleanupStage.InputRelease, acquired.ReleaseAsync); }
+                catch { _ = acquired.ReleaseAsync(CancellationToken.None); throw; }
+                return recording = acquired;
+            }
+            if (scriptedExplore)
+            {
+                explore = new(endpoint, () => connector.Connection!, clock, targetId!, checked((int)limits.MaxObservationNodes),
+                    checked((int)limits.MaxObservationBytes), Ms(limits.WaitTimeoutMilliseconds),
+                    () => WindowsBridgeOwner.Require(endpoint, launcher.Process!), RecordClick, CreateRecording,
+                    (logicalId, snapshot) =>
+                    {
+                        lock (captureGate)
+                        {
+                            if (capturesClosed || capturesDisabled) return;
+                            capturesDisabled = !CaptureWithoutPrimaryAuthority(() =>
+                            {
+                                var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, "Public Planner snapshot");
+                                if (string.IsNullOrEmpty(step) || string.IsNullOrEmpty(artifacts.Observe(logicalId, ObservationBoundary.Before,
+                                    step, "planner-public", "Player UI point snapshot", "snapshot",
+                                    new(snapshot.Identity.SourceId, snapshot.Identity.SessionEpoch.ToString(CultureInfo.InvariantCulture)),
+                                    JsonSerializer.SerializeToElement(snapshot), "snapshot"))) throw new InvalidOperationException("TraceCapacityReached");
+                                artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
+                            }, artifacts.MarkCaptureFailure);
+                        }
+                    }, proposal =>
+                    {
+                        lock (captureGate)
+                        {
+                            if (capturesClosed || capturesDisabled) return;
+                            capturesDisabled = !CaptureWithoutPrimaryAuthority(() =>
+                            {
+                                var step = artifacts.Trace.BeginStep(GuaTraceStepKind.Mark, "Planner dispatch approval");
+                                if (string.IsNullOrEmpty(step) || !artifacts.RecordPlannerDecision(step,
+                                    new(proposal.RunId, proposal.DecisionRequestId, proposal.BasedOnObservationId,
+                                        Runner.Planning.PlannerFeedbackCode.Approved), "click")) throw new InvalidOperationException("TraceCapacityReached");
+                                artifacts.Trace.EndStep(step, GuaTraceOutcome.Passed);
+                            }, artifacts.MarkCaptureFailure);
+                        }
+                    });
+                cleanup.Register(CleanupStage.ResourceRelease, explore.ReleaseAsync);
+            }
             var preparation = new HostPreparation(new(HostMode.Launch, PlayMode.Explore, endpoint, environment.BuildId, "2", environment.Profile,
-                "real", singleClick ? ["observe_v1", "guarded_dispatch_v1"] : ["observe_v1"], true, true, launch, Ms(limits.PrepareTimeoutMilliseconds), TimeSpan.FromMilliseconds(25), 100,
+                "real", singleClick && !scriptedExplore ? ["observe_v1", "guarded_dispatch_v1"] : ["observe_v1"], true, true, launch, Ms(limits.PrepareTimeoutMilliseconds), TimeSpan.FromMilliseconds(25), 100,
                 Ms(limits.CleanupTimeoutMilliseconds)), clock, launcher, connector, artifacts);
             PreparedHost? prepared = null;
             var outcome = await RunExecutor.ExecuteAsync(run, clock, cleanup,
-                async (session, owned, cancel) => (prepared = await preparation.PrepareAsync(session, owned, null, new ObserverAvailable(), cancel)).Boundary,
+                async (session, owned, cancel) => (prepared = await preparation.PrepareAsync(session, owned, null,
+                    (IPreparationPlannerCheck?)explore ?? new ObserverAvailable(), cancel)).Boundary,
                 async (session, cancel) =>
                 {
+                    if (explore is not null)
+                        return await explore.ExecuteAsync(session, prepared!.Boundary, limits, store.RunId, scenario.Goal.Objective, cleanup, token);
                     if (singleClick)
                         return await SingleUiDriver.ExecuteAsync(session, clock, connector.Connection!, targetId!, RecordClick,
-                            () => WindowsBridgeOwner.Require(endpoint, launcher.Process!), token, click =>
-                            {
-                                var acquired = new GuardedClickRecording(click, targetId!,
-                                    text => text.Length <= artifactLimits.MaxStringChars && redactor.Redact(text) == text,
-                                    document => redactor.RedactDocument(document, artifactLimits), checked((int)limits.MaxObservationBytes),
-                                    artifactLimits.MaxItems, artifactLimits.MaxStringChars, token);
-                                try { cleanup.Register(CleanupStage.InputRelease, acquired.ReleaseAsync); }
-                                catch { _ = acquired.ReleaseAsync(CancellationToken.None); throw; }
-                                return recording = acquired;
-                            });
+                            () => WindowsBridgeOwner.Require(endpoint, launcher.Process!), token, CreateRecording);
                     await RunMonitor.AwaitAsync(session, clock, clock, prepared!.Feed,
                         // The executor operation token also signals its deadline. Only the
                         // actual caller token may be classified as a user's cancellation.
@@ -236,6 +305,9 @@ internal static class ObservationRunCommand
                     ownedProcessId = launcher.Process?.ProcessId,
                     effectiveEnvironmentSha256 = runtimeHash,
                     driver = driverName, click = lastClick, actions = run.Budget.Snapshot.Actions,
+                    decisions = run.Budget.Snapshot.Decisions, plannerRequests = explore?.Requests ?? 0,
+                    plannerDecision = explore?.DecisionReference,
+                    pollsStarted = explore?.PollsStarted ?? 0, pollsCompleted = explore?.PollsCompleted ?? 0,
                     observationTiming = observationTiming.Snapshot(),
                     lifecycleTiming = lifecycleTiming.Snapshot(),
                     recordingState = completion.Receipts.SingleOrDefault(x => x.Kind == ArtifactKind.Recording)?.State.ToString(),
@@ -296,7 +368,7 @@ internal static class ObservationRunCommand
         "WindowsRuntimeRequired", "RuntimeArgumentsRequired", "RuntimeInputOutsideRoots", "RuntimeInputInvalid",
         "RuntimeExecutableOutsideRoots", "RuntimeWorkingDirectoryOutsideRoots", "RuntimeOutputOutsideRoots", "RuntimeBuildIdentityInvalid",
         "RuntimeBuildHashMismatch", "WindowsLoopbackRequired", "RuntimeChildEnvironmentInvalid", "RuntimeSaveOutsideRoots",
-        "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid"
+        "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid", "ScriptedExplorePublicUiRequired"
     };
     internal static void ValidateLane(ScenarioDocument scenario, EnvironmentDocument environment, bool singleClick = false)
     {

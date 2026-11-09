@@ -17,6 +17,11 @@ grant authority. This is the existing exchange format, not a second Decision.
 
 ## Public projection
 
+The bounded Windows [scripted-explore-run](scripted-explore-runtime.md) composes
+this gate with ExploreDriver and a built-in one-click script against a real
+Player source. It does not implement arbitrary strategy or external Codex
+isolation, and never uses a Debug response as public Planner input.
+
 `PlannerGate(run, realClock, authority, runId, publicObjective, effectiveLimits)`
 accepts the objective and resolved secret-free limits only. Its advertised Run
 ceilings must equal the execution owner's limits. `Begin(ProjectedPlannerState,

@@ -250,6 +250,84 @@ public sealed class ExploreTests
                 release ?? (_ => ValueTask.FromResult(true)), Cleanup, token, record);
     }
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QueueWakeReturnsCallerCancellationToken(bool unrelatedCancellation)
+    {
+        var s = new Setup(); using var cancel = new CancellationTokenSource();
+        using var unrelated = new CancellationTokenSource(); unrelated.Cancel();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Feed.WaitOverride = token =>
+        {
+            entered.TrySetResult();
+            return new(unrelatedCancellation ? Task.FromCanceled(unrelated.Token) : Task.Delay(Timeout.Infinite, token));
+        };
+        // Exercise the real queue/source race directly, independently of which
+        // asynchronous winner the higher-level monitor happens to observe first.
+        var feedType = typeof(ExploreDriver).GetNestedType("Feed", System.Reflection.BindingFlags.NonPublic)!;
+        var feed = (IRunObservationFeed)Activator.CreateInstance(feedType, s.Feed, s.Run,
+            (Action<ProgressObservation>)(_ => { }), (Func<TimeSpan?>)(() => null))!;
+        var callsType = typeof(ExploreDriver).Assembly.GetType("Gua.Playtest.Runner.Exploration.ExploreCalls")!;
+        using var calls = (IDisposable)Activator.CreateInstance(callsType, new object?[] { null })!;
+        feedType.GetField("Calls")!.SetValue(feed, calls);
+        var wait = feed.WaitForChangeAsync(cancel.Token).AsTask();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        if (!unrelatedCancellation)
+        {
+            cancel.Cancel();
+            var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+            Assert.Equal(cancel.Token, exception.CancellationToken);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<RunFailureException>(() => wait);
+            Assert.Equal(RunReason.ExecutionError, exception.Cause.Reason);
+            Assert.Equal(RunOrigin.Host, exception.Cause.Origin);
+            Assert.Equal(unrelated.Token, Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException).CancellationToken);
+        }
+    }
+    [Theory]
+    [InlineData(true, "goal")]
+    [InlineData(false, "goal")]
+    [InlineData(true, "expires")]
+    [InlineData(false, "expires")]
+    [InlineData(true, "cancel")]
+    [InlineData(false, "cancel")]
+    public async Task FinalBudgetWindowRetainsOriginalDeadlineForDelayedGoal(bool finalAction, string outcome)
+    {
+        var s = new Setup(success: true, limits: Limits(actions: finalAction ? 1 : 30, decisions: finalAction ? 30 : 1, recovery: 1));
+        var planner = new Planner(_ => Action()); int completed = 0;
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var change = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Feed.WaitOverride = token =>
+        {
+            if (Volatile.Read(ref completed) != 0 && s.Run.NextRealEvaluationAt == TimeSpan.FromSeconds(2))
+                waiting.TrySetResult();
+            return new ValueTask(change.Task.WaitAsync(token));
+        };
+        var work = new Work(async (_, calls, token) =>
+        {
+            await calls.SendAsync(0, before => { before(); return new ExploreSend<bool>(true, true); }, token);
+            Volatile.Write(ref completed, 1); return new(ExploreWorkStatus.Completed, true);
+        });
+        using var cancellation = new CancellationTokenSource();
+        var execution = s.Execute(planner, work, cancellation.Token).AsTask();
+        var first = await Task.WhenAny(execution, waiting.Task).WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.True(first == waiting.Task, "Observation opportunity closed: " + s.Run.Primary?.Cause.Reason);
+        Assert.Equal(TimeSpan.FromSeconds(2), s.Run.NextRealEvaluationAt);
+        s.Feed.Goal = outcome == "goal";
+        s.Clock.At(outcome == "expires" ? 2000 : 300);
+        if (outcome == "cancel") cancellation.Cancel();
+        change.TrySetResult();
+        Assert.False(await execution.WaitAsync(TimeSpan.FromSeconds(3)));
+        var expected = outcome == "goal" ? RunReason.GoalSatisfied : outcome == "cancel" ? RunReason.Cancelled :
+            finalAction ? RunReason.ActionsExhausted : RunReason.DecisionsExhausted;
+        Assert.True(expected == s.Run.Primary!.Cause.Reason,
+            $"Expected {expected}, got {s.Run.Primary.Cause.Reason}: " + System.Text.Json.JsonSerializer.Serialize(s.Run.Exceptions));
+        if (outcome == "expires") Assert.Contains(s.Run.Events, e => e.Reason == RunReason.WaitExpired);
+        Assert.Equal(1, s.Run.Budget.Snapshot.Actions); Assert.Single(planner.Inputs);
+    }
+    [Theory]
     [InlineData(false, ResultStatus.Unverified, RunReason.ExplorationFinished)]
     [InlineData(true, ResultStatus.Failed, RunReason.SuccessUnconfirmed)]
     public async Task PlannerFinishNeverGradesMachineGoal(bool success, ResultStatus status, RunReason reason)
