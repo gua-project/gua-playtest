@@ -11,17 +11,54 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed partial class RunTests
 {
     [Fact]
+    public void ExecutorTimingSamplesOwnedWaitTasksWithoutCompletionObserverDelivery()
+    {
+        var clock = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), clock, clock);
+        using var timing = new ExecutorTimingCapture(run);
+        var timer = new TaskCompletionSource(); var owner = new TaskCompletionSource();
+        var whenAny = Task.WhenAny(owner.Task, timer.Task);
+        var operation = RuntimeTiming.NextOperation();
+        RuntimeTiming.Mark(run, "controlled.wait.create", operation);
+        RuntimeTiming.TrackWait(run, "controlled.wait.tasks", operation, timer.Task, owner.Task, whenAny);
+        using (var before = JsonDocument.Parse(timing.FailureSnapshot()))
+        {
+            var wait = before.RootElement.GetProperty("waits")[0];
+            Assert.Equal((int)TaskStatus.WaitingForActivation, wait.GetProperty("timerStatus").GetInt32());
+            Assert.Equal((int)TaskStatus.WaitingForActivation, wait.GetProperty("whenAnyStatus").GetInt32());
+        }
+        timer.SetResult();
+        using var after = JsonDocument.Parse(timing.FailureSnapshot());
+        var sample = after.RootElement.GetProperty("waits")[0];
+        Assert.Equal(operation, sample.GetProperty("operation").GetInt64());
+        Assert.Equal((int)TaskStatus.RanToCompletion, sample.GetProperty("timerStatus").GetInt32());
+        Assert.Equal((int)TaskStatus.WaitingForActivation, sample.GetProperty("ownerStatus").GetInt32());
+        Assert.Equal((int)TaskStatus.RanToCompletion, sample.GetProperty("whenAnyStatus").GetInt32());
+        Assert.True(sample.GetProperty("sampledTimestamp").GetInt64() >= sample.GetProperty("registeredTimestamp").GetInt64());
+        Assert.Contains(timing.Entries, item => item.Phase == "controlled.wait.create" && item.Operation == operation);
+        Assert.DoesNotContain(timing.Entries, item => item.Phase.EndsWith("completion-observed") || item.Phase.EndsWith("resume"));
+        RuntimeTiming.TrackWait(new object(), "controlled.wait.tasks", operation, timer.Task, owner.Task, whenAny);
+        using var filtered = JsonDocument.Parse(timing.FailureSnapshot());
+        Assert.Single(filtered.RootElement.GetProperty("waits").EnumerateArray());
+    }
+
+    [Fact]
     public void ExecutorTimingFailureSnapshotIsBoundedAndSerializesTupleFieldsExplicitly()
     {
         var clock = new CancellationArbitrationClock();
         var run = new RunSession(Limits(), clock, clock);
         using var timing = new ExecutorTimingCapture(run);
         for (var index = 0; index < 520; index++)
+        {
+            RuntimeTiming.TrackWait(run, "controlled.wait.tasks", index + 1, Task.CompletedTask, Task.CompletedTask, Task.CompletedTask);
             timing.OnNext(new KeyValuePair<string, object?>("controlled.phase",
                 ((object)run, (long)index, (long)index + 1, (long?)100, (long?)50, (int)TaskStatus.Running, true)));
+        }
         using var snapshot = JsonDocument.Parse(timing.FailureSnapshot());
         var root = snapshot.RootElement;
         Assert.Equal(8, root.GetProperty("overflow").GetInt64());
+        Assert.Equal(8, root.GetProperty("waitsOverflow").GetInt64());
+        Assert.Equal(512, root.GetProperty("waits").GetArrayLength());
         Assert.Equal(512, root.GetProperty("phases").GetArrayLength());
         var phase = root.GetProperty("phases")[0];
         Assert.Equal("controlled.phase", phase.GetProperty("phase").GetString());
@@ -53,9 +90,42 @@ public sealed partial class RunTests
             Assert.Contains(entries, item => item.Phase == "executor.poll-wait.resume" && item.Operation == created.Operation);
             Assert.Contains(entries, item => item.Phase == "executor.poll-wait.completion-observed" && item.Operation == created.Operation);
             Assert.Contains(entries, item => item.Phase == "executor.primary.observed");
+            using var snapshot = JsonDocument.Parse(timing.FailureSnapshot());
+            Assert.Contains(snapshot.RootElement.GetProperty("waits").EnumerateArray(), item =>
+                item.GetProperty("phase").GetString() == "executor.poll-wait.tasks" &&
+                item.GetProperty("operation").GetInt64() == created.Operation);
             Assert.All(entries, item => Assert.False(item.InAuthorityGate));
         }
         finally { release.TrySetResult(true); await execution.WaitAsync(TimeSpan.FromSeconds(1)); }
+    }
+
+    [Fact]
+    public async Task ExecutorTimingCorrelatesEvidenceWaitWhileOwnerRemainsBlocked()
+    {
+        var clock = new CancellationArbitrationClock();
+        var run = new RunSession(Limits(), clock, clock);
+        using var timing = new ExecutorTimingCapture(run);
+        using var caller = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        var execution = RunExecutor.ExecuteAsync(run, clock, new OwnedCleanup(),
+            (_, _) => { entered.TrySetResult(); release.Wait(); return ValueTask.FromResult(true); },
+            (_, _) => ValueTask.FromResult(true), caller.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            caller.Cancel();
+            await execution.WaitAsync(TimeSpan.FromSeconds(1));
+            var created = timing.Entries.Single(item => item.Phase == "executor.evidence-wait.create");
+            using var snapshot = JsonDocument.Parse(timing.FailureSnapshot());
+            var wait = snapshot.RootElement.GetProperty("waits").EnumerateArray().Single(item =>
+                item.GetProperty("phase").GetString() == "executor.evidence-wait.tasks");
+            Assert.Equal(created.Operation, wait.GetProperty("operation").GetInt64());
+            Assert.Equal((int)TaskStatus.RanToCompletion, wait.GetProperty("timerStatus").GetInt32());
+            Assert.Equal((int)TaskStatus.WaitingForActivation, wait.GetProperty("ownerStatus").GetInt32());
+            Assert.Equal((int)TaskStatus.RanToCompletion, wait.GetProperty("whenAnyStatus").GetInt32());
+        }
+        finally { release.Set(); await execution.WaitAsync(TimeSpan.FromSeconds(1)); }
     }
 
     [Theory]
@@ -97,6 +167,8 @@ public sealed partial class RunTests
         private readonly ConcurrentBag<IDisposable> subscriptions = [];
         private long firstPollOperation;
         private long received;
+        private long waitsReceived;
+        private readonly ConcurrentQueue<(string Phase, long Timestamp, long Operation, Task Timer, Task Owner, Task WhenAny)> waits = [];
         public readonly ConcurrentQueue<(string Phase, long Timestamp, long Operation, long? Budget, long? Remaining, int Detail, bool Pool, bool InAuthorityGate)> Entries = [];
         public readonly TaskCompletionSource PollCreated = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource PollCompletionObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -112,6 +184,12 @@ public sealed partial class RunTests
         }
         public void OnNext(KeyValuePair<string, object?> item)
         {
+            if (item.Value is ValueTuple<object, long, long, Task, Task, Task> tasks && ReferenceEquals(tasks.Item1, owner))
+            {
+                if (Interlocked.Increment(ref waitsReceived) <= 512)
+                    waits.Enqueue((item.Key, tasks.Item2, tasks.Item3, tasks.Item4, tasks.Item5, tasks.Item6));
+                return;
+            }
             if (item.Value is not ValueTuple<object, long, long, long?, long?, int, bool> value || !ReferenceEquals(value.Item1, owner)) return;
             if (Interlocked.Increment(ref received) <= 512)
                 Entries.Enqueue((item.Key, value.Item2, value.Item3, value.Item4, value.Item5, value.Item6, value.Item7, Monitor.IsEntered(authorityGate)));
@@ -128,6 +206,15 @@ public sealed partial class RunTests
             snapshotTimestamp = Stopwatch.GetTimestamp(),
             stopwatchFrequency = Stopwatch.Frequency,
             overflow = Math.Max(0, Volatile.Read(ref received) - 512),
+            waitsOverflow = Math.Max(0, Volatile.Read(ref waitsReceived) - 512),
+            // No joins, provider calls, exception getters or continuation delivery.
+            // These are sequential samples, not an atomic multi-task transition.
+            waits = waits.ToArray().Select(item => new
+            {
+                phase = item.Phase, registeredTimestamp = item.Timestamp, operation = item.Operation,
+                sampledTimestamp = Stopwatch.GetTimestamp(), timerStatus = (int)item.Timer.Status,
+                ownerStatus = (int)item.Owner.Status, whenAnyStatus = (int)item.WhenAny.Status
+            }),
             phases = Entries.ToArray().Select(item => new
             {
                 phase = item.Phase, timestamp = item.Timestamp, operation = item.Operation,

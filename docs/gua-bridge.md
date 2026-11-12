@@ -43,6 +43,14 @@ Offline validate and saved-result inspection do not require native assets or rem
 
 ## Observation boundary
 
+The explicit UI-only scripted lane also uses `ReadUiSnapshot`: it takes standard
+fields from one complete native UI tree, runs the existing Gua selector engine
+over that immutable tree, and brackets source/profile/epoch and frame identity.
+Later UI revision changes do not mix its point values. It claims no delta or
+interval continuity. Its capture-scoped read connections do not change the
+persistent `ReadBatch` path below. No Debug game capture is filtered into Player
+data; the actual server profile is checked before the native tree is used.
+
 `BridgeObservations(endpoint, profile, requestTimeout, maxNodes, maxBytes)` owns
 one GuaWebSocketContext and its Observe cursor. Runner judgement and Planner
 projection require distinct instances with explicitly configured host endpoints.

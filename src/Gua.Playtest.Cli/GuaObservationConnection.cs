@@ -15,7 +15,10 @@ namespace Gua.Playtest.Cli;
 /// Initial conditions are read-only; no Setup effects or Planner capability. No interval continuity claim.</summary>
 internal sealed class GuaObservationConnection : IPreparationConnection, IRunObservationFeed
 {
-    private readonly BridgeObservations observations;
+    private readonly Func<BridgeObservations> createObservations;
+    private BridgeObservations? currentObservations;
+    private BridgeObservations observations => currentObservations ?? throw new InvalidOperationException("ObservationScopeClosed");
+    private readonly bool scopedSnapshots;
     private readonly IClock clock;
     private readonly PreparedCondition? success, failure;
     private readonly PreparedCondition? precondition;
@@ -32,17 +35,24 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     internal GuaObservationConnection(Uri endpoint, string build, string profile, IClock clock,
         PreparedCondition? success, PreparedCondition? failure, int maxNodes, int maxBytes, TimeSpan timeout, Action verifyOwner,
         Action<BridgeReadCollection, HostIdentity> recordCapture, bool enableClick = false, PreparedCondition? precondition = null)
+        : this(endpoint, build, profile, clock, success, failure, maxNodes, maxBytes, timeout, verifyOwner, recordCapture, enableClick, precondition, false) { }
+    internal GuaObservationConnection(Uri endpoint, string build, string profile, IClock clock,
+        PreparedCondition? success, PreparedCondition? failure, int maxNodes, int maxBytes, TimeSpan timeout, Action verifyOwner,
+        Action<BridgeReadCollection, HostIdentity> recordCapture, bool enableClick, PreparedCondition? precondition, bool scopedSnapshots)
     {
         this.build = build; this.profile = profile; this.clock = clock; this.success = success; this.failure = failure;
         this.verifyOwner = verifyOwner;
         this.recordCapture = recordCapture;
         this.enableClick = enableClick;
         this.precondition = precondition;
-        observations = new(endpoint.AbsoluteUri, Enum.Parse<GuaObservationProfile>(profile), timeout, maxNodes, maxBytes);
+        this.scopedSnapshots = scopedSnapshots;
+        if (scopedSnapshots && enableClick) throw new ArgumentException("ScopedSnapshotCannotOwnClick");
+        createObservations = () => new(endpoint.AbsoluteUri, Enum.Parse<GuaObservationProfile>(profile), timeout, maxNodes, maxBytes);
+        if (!scopedSnapshots) currentObservations = createObservations();
     }
     public ValueTask<HostIdentity> IdentifyAsync(CancellationToken token) => new(Task.Run(() =>
     {
-        using var interrupt = token.Register(observations.Interrupt);
+        using var interrupt = token.Register(() => currentObservations?.Interrupt());
         return Cancellable(token, Identify);
     }, token));
     private HostIdentity Identify()
@@ -57,7 +67,7 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     }
     public ValueTask<InitialBoundary> SynchronizeAsync(string requestId, CancellationToken token) => new(Task.Run(() =>
     {
-        using var interrupt = token.Register(observations.Interrupt);
+        using var interrupt = token.Register(() => currentObservations?.Interrupt());
         return Cancellable(token, () =>
         {
             token.ThrowIfCancellationRequested(); observations.Resubscribe();
@@ -101,8 +111,16 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
         lock (gate)
         {
             token.ThrowIfCancellationRequested();
+            ObjectDisposedException.ThrowIf(closed, this);
+            // This optional lane admits standard UI snapshots only. Each scope
+            // establishes a full boundary and claims no lost delta continuity.
+            if (scopedSnapshots) currentObservations = createObservations();
             try { var result = operation(); token.ThrowIfCancellationRequested(); return result; }
             catch (Exception) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
+            finally
+            {
+                if (scopedSnapshots) { currentObservations?.Dispose(); currentObservations = null; }
+            }
         }
     }
     private RunObservation Capture(bool includePrecondition = false)
@@ -111,7 +129,7 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
         var setup = includePrecondition ? precondition : null;
         var requests = new[] { success, failure, setup }.Where(x => x is not null).SelectMany(x => x!.Leaves)
             .Select(x => JsonNode.Parse(x.DefinitionJson)!["read"]!.AsObject()).ToArray();
-        var collections = observations.ReadBatch(requests);
+        var collections = scopedSnapshots ? observations.ReadUiSnapshot(requests).Collections : observations.ReadBatch(requests);
         int index = 0;
         ConditionObservationUnit Unit(PreparedCondition? condition)
         {
@@ -148,7 +166,7 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     public ValueTask WaitForChangeAsync(CancellationToken token) => clock.DelayAsync(TimeSpan.FromMilliseconds(25), token);
     public ValueTask<bool> ReleaseAsync(CancellationToken token)
     {
-        observations.Interrupt();
+        currentObservations?.Interrupt();
         // Release must not queue behind shared-pool work after the finite cleanup
         // share has started. The owner still bounds confirmation; this dedicated
         // worker grants no extra time and cannot change the primary result.
@@ -158,7 +176,7 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
             {
                 if (closed) return true;
                 Click?.Dispose();
-                observations.Dispose();
+                currentObservations?.Dispose();
                 closed = true; return true;
             }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));

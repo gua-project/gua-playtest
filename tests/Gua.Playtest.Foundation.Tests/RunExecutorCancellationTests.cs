@@ -541,7 +541,8 @@ public sealed partial class RunTests
         using var resumeProbe = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var armed = false; var releases = 0; var probeOnPool = 0;
+        var armed = false; var releases = 0; var probeOnPool = 0; var probeEntered = 0; var probeReturned = 0;
+        var watchdog = TimeSpan.FromSeconds(5);
         ValueTask<bool> Execute()
         {
             if (stage == "synchronous-completion") { armed = true; returned.TrySetResult(); return ValueTask.FromResult(true); }
@@ -565,7 +566,11 @@ public sealed partial class RunTests
             boundary.InitialLifecycleFailure = () =>
             {
                 if (armed)
-                { Volatile.Write(ref probeOnPool, Thread.CurrentThread.IsThreadPoolThread ? 1 : 0); entered.TrySetResult(); resumeProbe.Wait(); }
+                {
+                    Volatile.Write(ref probeOnPool, Thread.CurrentThread.IsThreadPoolThread ? 1 : 0);
+                    Volatile.Write(ref probeEntered, 1); entered.TrySetResult();
+                    try { resumeProbe.Wait(); } finally { Volatile.Write(ref probeReturned, 1); }
+                }
                 return null;
             };
             return ValueTask.FromResult(boundary);
@@ -578,21 +583,24 @@ public sealed partial class RunTests
         }).AsTask()).Unwrap();
         try
         {
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await entered.Task.WaitAsync(watchdog);
             if (deadline) real.At(Limits().MaxDuration); else caller.Cancel();
-            RunOutcome outcome;
-            try { outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1)); }
-            catch (TimeoutException)
+            string Diagnostic()
             {
                 ThreadPool.GetAvailableThreads(out var available, out _); ThreadPool.GetMinThreads(out var minimum, out _);
-                throw new Xunit.Sdk.XunitException($"Finalization did not finish: stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}, timing={timing.FailureSnapshot()}");
+                return $"stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeEntered={Volatile.Read(ref probeEntered)}, probeReturned={Volatile.Read(ref probeReturned)}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}, timing={timing.FailureSnapshot()}";
             }
+            var outcome = await AwaitFinalizationWithWatchdogAsync(executing, Diagnostic);
             Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
             Assert.Equal(1, releases); Assert.Equal(stage is "completion" or "synchronous-completion", returned.Task.IsCompleted);
-            resume.Set(); resumeProbe.Set(); await returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.True(outcome.PostProcessingComplete, $"Cleanup was not confirmed: {string.Join(",", outcome.PostProcessing.Select(item => item.Reason))}");
+            Assert.Equal(ExecutionState.Finished, run.State);
+            if (stage is "completion" or "synchronous-completion")
+            { Assert.Equal(1, Volatile.Read(ref probeEntered)); Assert.Equal(0, Volatile.Read(ref probeReturned)); }
+            resume.Set(); resumeProbe.Set(); await returned.Task.WaitAsync(watchdog);
             Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Events, run.Events);
         }
-        finally { resume.Set(); resumeProbe.Set(); await executing.WaitAsync(TimeSpan.FromSeconds(1)); }
+        finally { resume.Set(); resumeProbe.Set(); await executing.WaitAsync(watchdog); }
     }
 
     [Theory]

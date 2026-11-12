@@ -51,6 +51,8 @@ public static class ExploreDriver
             var change = SourceChangeAsync(obsolete.Token).AsTask();
             var pending = calls.WaitAsync(obsolete.Token).AsTask();
             try { await await Task.WhenAny(change, pending).ConfigureAwait(false); }
+            catch (OperationCanceledException exception) when (token.IsCancellationRequested && exception.CancellationToken == obsolete.Token)
+            { throw new OperationCanceledException("ExploreWaitCancelled", exception, token); }
             finally
             {
                 FiniteOperation.CancelSafely(obsolete, run.RecordException);
@@ -169,6 +171,16 @@ public static class ExploreDriver
                             approved.ConfirmResult();
                     }).ConfigureAwait(false);
                 if (result.Completed) receipt = result.Value;
+                if (run.Primary is null && run.HasSuccessCondition && !run.GoalVerified &&
+                    receipt is { Status: ExploreWorkStatus.Completed, InputsNeutral: true } && run.Budget.Exhaustion.HasValue)
+                {
+                    // Confirmation above settles actual work immediately. Keep its EXISTING
+                    // operation open through the remaining final observation opportunity.
+                    // No approval, reservation or deadline is created/rebased here. The monitor
+                    // still owns failure/cancel/original deadline/Goal arbitration.
+                    await RunMonitor.AwaitAsync(run, run.AuthoritativeRealClock, run.AuthoritativeConditionClock,
+                        feed, UntilWindowCloses, _ => [], cancellationToken).ConfigureAwait(false);
+                }
             }
             finally { feed.Calls = null; }
             var completion = approved.Complete();
@@ -186,6 +198,9 @@ public static class ExploreDriver
             if (kind == "finish" && !reported) return true;
         }
         return false;
+
+        static async ValueTask<bool> UntilWindowCloses(CancellationToken token)
+        { await Task.Delay(Timeout.InfiniteTimeSpan, token).ConfigureAwait(false); return true; }
 
         void UpdateProgress(JsonObject? action = null, bool reported = false)
         {

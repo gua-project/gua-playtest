@@ -18,6 +18,7 @@ click-run (same launch options as observe-run) --target-id <ui-id>
 explore --allow-root <existing-directory> --scenario <file> --environment <file>
 replay --allow-root <existing-directory> --plan <file> --environment <file>
 replay-run --managed-root <private-plans> --plan <managed-plan> --environment <file> (explicit Windows launch options; see replay-runtime.md)
+scripted-explore-run --target-id <explicit-ui-id> (Player-only; same explicit Windows launch options; see scripted-explore-runtime.md)
 ```
 
 `dashboard` serves the read-only saved index on the
@@ -99,7 +100,10 @@ must hash effective secret-free conditions separately from the retained source
 Environment hash. Missing inputs cannot be filled by defaults. Published
 Gua.Testing 1.2.0 supplies remote atomic guards. The separate
 [one-click Windows Replay](replay-runtime.md) explicitly connects that supported lane;
-it does not enable general Replay or Explore. A local mutex or dummy lease cannot
+it does not enable general Replay or Explore. The bounded
+[Player UI scripted Explore](scripted-explore-runtime.md) uses the existing
+PlannerGate/ExploreDriver without an external model or arbitrary script.
+A local mutex or dummy lease cannot
 replace a required host guarantee. Explore additionally requires the approved isolated
 live Codex provider. No successful Run or trial is fabricated at this boundary.
 

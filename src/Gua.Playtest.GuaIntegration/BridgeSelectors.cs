@@ -13,8 +13,14 @@ internal static class BridgeSelectors
     // responses carry no revision, so their IDs alone cannot establish current membership.
     public static bool UiMatchesTree(JsonObject selector, JsonElement tree, IEnumerable<string> remoteIds)
     {
+        var selected = UiSnapshotIds(selector, tree); var ids = remoteIds.ToArray();
+        return selected is not null && ids.Length == ids.Distinct(StringComparer.Ordinal).Count() &&
+            ids.ToHashSet(StringComparer.Ordinal).SetEquals(selected);
+    }
+    public static string[]? UiSnapshotIds(JsonObject selector, JsonElement tree)
+    {
         var nodes = tree.GetProperty("nodes").EnumerateArray().ToArray();
-        if (nodes.Select(n => n.GetProperty("id").GetString()).Distinct(StringComparer.Ordinal).Count() != nodes.Length) return false;
+        if (nodes.Select(n => n.GetProperty("id").GetString()).Distinct(StringComparer.Ordinal).Count() != nodes.Length) return null;
         using var local = new GuaContext();
         local.BeginFrame(tree.GetProperty("screen").GetString()!);
         foreach (var node in nodes)
@@ -25,9 +31,7 @@ internal static class BridgeSelectors
                 Text: node.TryGetProperty("text", out var text) ? text.GetString() : null));
         local.EndFrame();
         var result = local.Query(Ui(selector));
-        var ids = remoteIds.ToArray();
-        return result.Valid && ids.Length == ids.Distinct(StringComparer.Ordinal).Count() &&
-            ids.ToHashSet(StringComparer.Ordinal).SetEquals(result.Matches.Select(m => m.Id));
+        return result.Valid ? result.Matches.Select(m => m.Id).ToArray() : null;
     }
     private static string? Text(JsonObject s, string key) => s[key]?["value"]?.GetValue<string>();
     private static GuaMatchMode Match(JsonObject s, string key) => s[key]?["match"]?.GetValue<string>() switch

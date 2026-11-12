@@ -29,6 +29,16 @@ public sealed class GuardedUiClick : IDisposable
     public string SourceId => dispatch.SourceId;
     public GuardedUiReceipt? Receipt { get { lock (gate) return receipt; } }
 
+    /// <summary>Original server-owned definitions on this same guarded source. No projection or synthesis.</summary>
+    public string GetGameInputActionsJson()
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            return dispatch.GetGameInputActionsJson();
+        }
+    }
+
     public GuardedUiReceipt Click(string targetId, Action beforeDispatch, CancellationToken token)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetId);

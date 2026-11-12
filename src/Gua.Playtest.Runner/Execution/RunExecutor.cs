@@ -125,7 +125,9 @@ public static class RunExecutor
                     RuntimeTiming.Mark(run, "executor.clock-wait.create", operation, remainingTicks: allowance.Ticks);
                     var timer = FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None);
                     RuntimeTiming.ObserveCompletion(run, "executor.clock-wait.completion-observed", operation, timer);
-                    await Task.WhenAny(clockRead, owner, timer).ConfigureAwait(false);
+                    var clockWhenAny = Task.WhenAny(clockRead, owner, timer);
+                    RuntimeTiming.TrackWait(run, "executor.clock-wait.tasks", operation, timer, owner, clockWhenAny);
+                    await clockWhenAny.ConfigureAwait(false);
                     RuntimeTiming.Mark(run, "executor.clock-wait.resume", operation, detail: (int)timer.Status);
                     RuntimeTiming.Mark(run, "executor.clock-wait.probe-status", operation, detail: (int)clockRead.Status);
                 }
@@ -151,7 +153,9 @@ public static class RunExecutor
             RuntimeTiming.Mark(run, "executor.poll-wait.create", pollOperation, budgetTicks: TimeSpan.FromMilliseconds(10).Ticks);
             var pollTimer = Task.Delay(10);
             RuntimeTiming.ObserveCompletion(run, "executor.poll-wait.completion-observed", pollOperation, pollTimer);
-            await Task.WhenAny(owner, pollTimer).ConfigureAwait(false);
+            var pollWhenAny = Task.WhenAny(owner, pollTimer);
+            RuntimeTiming.TrackWait(run, "executor.poll-wait.tasks", pollOperation, pollTimer, owner, pollWhenAny);
+            await pollWhenAny.ConfigureAwait(false);
             RuntimeTiming.Mark(run, "executor.poll-wait.resume", pollOperation, detail: (int)pollTimer.Status);
             RuntimeTiming.Mark(run, "executor.poll-wait.owner-status", pollOperation, detail: (int)owner.Status);
             if (!owner.IsCompleted && !settlement.Started && run.Primary is null && clockRead is null)
@@ -166,7 +170,9 @@ public static class RunExecutor
                 RuntimeTiming.Mark(run, "executor.evidence-wait.create", operation, remainingTicks: remaining.Ticks);
                 var timer = FiniteOperation.DelayIndependentAsync(remaining, CancellationToken.None);
                 RuntimeTiming.ObserveCompletion(run, "executor.evidence-wait.completion-observed", operation, timer);
-                await Task.WhenAny(owner, timer).ConfigureAwait(false);
+                var evidenceWhenAny = Task.WhenAny(owner, timer);
+                RuntimeTiming.TrackWait(run, "executor.evidence-wait.tasks", operation, timer, owner, evidenceWhenAny);
+                await evidenceWhenAny.ConfigureAwait(false);
                 RuntimeTiming.Mark(run, "executor.evidence-wait.resume", operation, detail: (int)timer.Status);
                 RuntimeTiming.Mark(run, "executor.evidence-wait.owner-status", operation, detail: (int)owner.Status);
             }
