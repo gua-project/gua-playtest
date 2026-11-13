@@ -52,6 +52,7 @@ jobs:
             # Plan authority key, candidate graph or Recording input contents.
             artifacts/tests/replay-runtime/*/command.json
             artifacts/tests/replay-runtime/*/accepted-command.json
+            artifacts/tests/replay-runtime/*/replay-timing.json
             artifacts/tests/replay-runtime/**/primary.json
             artifacts/tests/replay-runtime/**/completion.json
             artifacts/tests/replay-runtime/**/result.json

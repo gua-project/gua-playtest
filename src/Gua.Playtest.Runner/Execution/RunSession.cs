@@ -507,7 +507,10 @@ public sealed class RunSession
         if (elapsedWait is { } wait && (count != 0 || wait <= TimeSpan.Zero || wait > Limits.WaitTimeout))
             throw new ArgumentOutOfRangeException(nameof(elapsedWait));
         var waitCompletesAt = elapsedWait is { } duration ? ReadCondition() + duration : (TimeSpan?)null;
+        bool sampleClock = RuntimeTiming.Enabled("replay.approval");
+        long beforeClock = sampleClock ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         var now = ReadReal();
+        long afterClock = sampleClock ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (authorityDeadline is { } boundary && now >= boundary)
         {
             if (expiryCause is not null) QueuePending(expiryCause);
@@ -523,7 +526,7 @@ public sealed class RunSession
             if (count > 0 && reservation is null) return null;
             var operation = new ApprovedOperation(this, Min(now + window + (elapsedWait ?? TimeSpan.Zero), RunningOrigin.Value + Limits.MaxDuration), reservation,
                 count > 0 ? Min(now + Limits.ActionTimeout, RunningOrigin.Value + Limits.MaxDuration) : null,
-                waitCompletesAt: waitCompletesAt, observationWindow: elapsedWait.HasValue ? window : null, requiresSettlement: requiresSettlement);
+                waitCompletesAt: waitCompletesAt, observationWindow: elapsedWait.HasValue ? window : null, requiresSettlement: requiresSettlement) { DiagnosticClock = (beforeClock, afterClock, now.Ticks) };
             operations.Add(operation);
             if (Budget.Exhaustion.HasValue) { approvalsClosing = true; closingExhaustions.UnionWith(Budget.Exhaustions); }
             return operation;
@@ -557,6 +560,7 @@ public sealed class RunSession
     }
     public sealed class ApprovedOperation
     {
+        internal (long Before, long After, long Elapsed) DiagnosticClock { get; init; }
         private readonly RunSession owner;
         public TimeSpan Deadline { get; }
         public TimeSpan ResultDeadline { get; }

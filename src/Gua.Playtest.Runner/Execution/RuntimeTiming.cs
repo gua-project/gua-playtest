@@ -16,6 +16,22 @@ internal static class RuntimeTiming
 
     internal static long NextOperation() => Interlocked.Increment(ref nextOperation);
 
+    internal static bool Enabled(string phase)
+    {
+        try { return Listener?.IsEnabled(phase) == true; }
+        catch { return false; }
+    }
+
+    internal static void MarkAt(object owner, string phase, long ticks, long? budgetTicks, long? remainingTicks)
+    {
+        try
+        {
+            if (Listener?.IsEnabled(phase) == true)
+                Listener.Write(phase, (owner, ticks, 0L, budgetTicks, remainingTicks, -1, Thread.CurrentThread.IsThreadPoolThread));
+        }
+        catch { /* Diagnostics cannot change authority or provider behavior. */ }
+    }
+
     internal static void Mark(object owner, string phase, long operation = 0,
         long? budgetTicks = null, long? remainingTicks = null, int detail = -1)
     {

@@ -7,6 +7,15 @@ namespace Gua.Playtest.GuaIntegration;
 internal static class ObservationCallDiagnostics
 {
     private static readonly DiagnosticListener Listener = new("Gua.Playtest.ObservationSdk");
+    internal static void Replay(int phase, ulong requestId = 0, int state = -1)
+    {
+        try
+        {
+            if (Listener.IsEnabled("Replay"))
+                Listener.Write("Replay", (Stopwatch.GetTimestamp(), phase, requestId, state));
+        }
+        catch { /* Numeric test observers cannot change transport results. */ }
+    }
     internal static T Call<T>(string operation, Func<T> call)
     {
         Notify(operation, 0);
