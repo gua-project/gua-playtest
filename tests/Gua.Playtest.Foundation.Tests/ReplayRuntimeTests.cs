@@ -18,6 +18,7 @@ public sealed class ReplayRuntimeTests
     private static string Repository => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
     [Theory]
     [InlineData("success", 0, 1)]
+    [InlineData("player", 0, 1)]
     [InlineData("failure", 1, 1)]
     [InlineData("no-goal", 1, 1)]
     [InlineData("no-budget", 1, 0)]
@@ -48,7 +49,7 @@ public sealed class ReplayRuntimeTests
         scenario["constraints"]!["maxActions"] = mode == "no-budget" ? 0 : mode is "no-goal" or "cancel-after-send" ? 2 : 1;
         environment["permissions"]!["reads"] = new JsonArray(read.DeepClone());
         environment["permissions"]!["actionIds"] = new JsonArray("click");
-        environment["profile"] = "Debug"; environment["trace"]!["savePolicy"] = "always";
+        environment["profile"] = mode == "player" ? "Player" : "Debug"; environment["trace"]!["savePolicy"] = "always";
         environment["limits"]!["prepareTimeoutMilliseconds"] = 5000; environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         if (mode == "offset-window") environment["limits"]!["waitTimeoutMilliseconds"] = 2000;
@@ -159,7 +160,7 @@ public sealed class ReplayRuntimeTests
                 Assert.Contains(primary.RootElement.GetProperty("events").EnumerateArray(), e => e.GetProperty("reason").GetString() == "Cancelled");
             }
         }
-        if (mode is not ("success" or "already"))
+        if (mode is not ("success" or "player" or "already"))
         {
             if (mode == "no-goal")
             {

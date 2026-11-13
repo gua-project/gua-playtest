@@ -53,6 +53,18 @@ internal static class ReplayRunCommand
             Process = identity; return identity;
         }
     }
+    // Lower a Debug-capable child's public runtime profile only when explicitly
+    // requested by the already-validated Environment. This cannot enable remote
+    // access or raise a compiled profile ceiling; actual host identity is checked.
+    internal static Dictionary<string, string> ChildEnvironment(int port, string profile)
+    {
+        if (profile is not ("Player" or "Debug")) throw new ArgumentException("ReplayProfileInvalid", nameof(profile));
+        var child = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        { ["GUA_BRIDGE_PORT"] = port.ToString(CultureInfo.InvariantCulture) };
+        if (profile == "Player") child.Add("GUA_OBSERVATION_PROFILE", "player");
+        return child;
+    }
+
     internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token)
     {
         try
@@ -105,7 +117,7 @@ internal static class ReplayRunCommand
             if (endpoint.Scheme != "ws" || endpoint.Host != "127.0.0.1" || endpoint.AbsolutePath != "/" ||
                 endpoint.Port <= 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0 || endpoint.UserInfo.Length != 0)
                 throw new InvalidDataException("WindowsLoopbackRequired");
-            var child = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["GUA_BRIDGE_PORT"] = endpoint.Port.ToString(CultureInfo.InvariantCulture) };
+            var child = ChildEnvironment(endpoint.Port, environment.Profile);
             foreach (var binding in options.GetValueOrDefault("--child-env") ?? [])
             {
                 var split = binding.IndexOf('=');
