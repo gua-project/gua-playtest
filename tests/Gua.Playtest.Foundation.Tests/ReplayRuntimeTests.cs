@@ -52,6 +52,16 @@ public sealed class ReplayRuntimeTests
         environment["profile"] = mode == "player" ? "Player" : "Debug"; environment["trace"]!["savePolicy"] = "always";
         environment["limits"]!["prepareTimeoutMilliseconds"] = 5000; environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
+        // These rows verify real composition, not a one-second host SLA.
+        // Exact deadline/fresh-capture boundaries are checked with virtual clocks.
+        var nativeProgress = mode is "success" or "player" or "already" or "failure" or "save-failure" or "no-goal" or "cancel-after-send";
+        if (nativeProgress)
+        {
+            scenario["constraints"]!["maxDurationMilliseconds"] = 15000;
+            environment["limits"]!["maxDurationMilliseconds"] = 15000;
+            environment["limits"]!["waitTimeoutMilliseconds"] = 5000;
+            environment["limits"]!["maxSegmentMilliseconds"] = 5000;
+        }
         if (mode == "offset-window") environment["limits"]!["waitTimeoutMilliseconds"] = 2000;
         using var port = new TcpListener(IPAddress.Loopback, 0); port.Start(); var number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
         environment["connection"] = new JsonObject { ["endpoint"] = $"ws://127.0.0.1:{number}" };
@@ -80,7 +90,7 @@ public sealed class ReplayRuntimeTests
             "--executable", executable, "--executable-sha256", hash, "--working-directory", Repository, "--output-root", root,
             "--argument", probe, "--argument", mode == "failure" ? "ui-click-host-fail" : mode is "cancel-after-send" or "no-result" ? "ui-click-host-no-result" : mode == "no-goal" ? "ui-click-host-no-goal" : mode == "already" ? "ui-click-host-already" : "ui-click-host", "--argument", pid };
         if (mode != "candidate-refused") args.Add("--allow-candidate");
-        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(nativeProgress ? 30 : 15));
         if (mode == "cancel-before") cancel.Cancel();
         using var output = new StringWriter();
         var execution = CliApplication.ExecuteAsync(args.ToArray(), output, cancel.Token);
@@ -122,7 +132,7 @@ public sealed class ReplayRuntimeTests
         var summary = command.RootElement.GetProperty("code").GetString() + " (" + Path.Combine(root, "command.json") + ")";
         if (mode == "no-goal")
         {
-            // The fixed real deadlines are unchanged. This case tests independent
+            // This case tests independent
             // Goal/trial eligibility, not which of two legitimate expiry facts wins.
             Assert.True(exit is 1 or 3, summary);
             Assert.Contains(command.RootElement.GetProperty("code").GetString(), new[] { "WaitExpired", "MaxDuration" });
@@ -199,7 +209,8 @@ public sealed class ReplayRuntimeTests
         // candidate override. It gets a fresh process, Run and guarded owner.
         args.Remove("--allow-candidate"); timing.NextHost();
         using var acceptedOutput = new StringWriter();
-        var acceptedExit = await CliApplication.ExecuteAsync(args.ToArray(), acceptedOutput, cancel.Token);
+        using var acceptedDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var acceptedExit = await CliApplication.ExecuteAsync(args.ToArray(), acceptedOutput, acceptedDeadline.Token);
         await File.WriteAllTextAsync(Path.Combine(root, "accepted-command.json"), acceptedOutput.ToString());
         timing.SaveFailure(root, acceptedExit != 0); Assert.Equal(0, acceptedExit);
         using var accepted = JsonDocument.Parse(acceptedOutput.ToString());

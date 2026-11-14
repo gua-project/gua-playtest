@@ -72,3 +72,26 @@ recorded timing and broader Replay capabilities remain separate integration work
 For the same-Recording candidate/trial/adoption sequence after scripted Explore,
 see [the bounded Player round trip](scripted-explore-replay.md). This does not
 broaden the single-click Replay lane or establish general Replay/repair support.
+
+## Native fixture clocks
+
+Native Replay success/Player/already-Goal, failure/save-failure, no-Goal and
+cancel-after-send composition rows use a test-only five-second operation window
+and fifteen-second Running budget. The same-Recording Player round trip uses
+these fixture inputs too. These are bounded composition checks, not a one-second
+native performance SLA. Preparation (five seconds), cleanup (three seconds),
+production defaults, outcome assertions and the AfterPlan fresh-capture contract
+are unchanged. The per-command harness watchdog is thirty seconds; the round-trip
+sequence has a sixty-second outer watchdog. Neither is a product response promise.
+Refusal, offset-window and intentionally missing-result rows retain their original
+budgets. Five seconds is an operation wait, fifteen seconds is Running, not a
+single total UX timeout including preparation, cleanup and artifact persistence.
+
+`RunTests.AfterPlanFinalCaptureRetainsOriginalWindowDespiteHeldGoal` checks fresh
+capture just before and exactly at the original observation deadline with a
+controlled clock, an on-time settled final action and an already retained Goal.
+At expiry the action budget closes without granting stale success or more work.
+Existing owner-confirmation, cancellation, provider-timeout and failure-arbitration
+tests remain applicable. The main Windows artifact 14098270931 is preserved:
+this coverage policy adjustment does not explain its natural delay or repair a
+proven product defect.

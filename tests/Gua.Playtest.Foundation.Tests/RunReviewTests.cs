@@ -111,6 +111,38 @@ public sealed partial class RunTests
         }
         old.TrySetResult(new(TimeSpan.Zero, Unit("false"), Unit("false"))); final.TrySetResult(new(clock.Elapsed, Unit("false"), Unit("false")));
     }
+    [Theory]
+    [InlineData(1999, true)]
+    [InlineData(2000, false)]
+    public async Task AfterPlanFinalCaptureRetainsOriginalWindowDespiteHeldGoal(int captureAt, bool completed)
+    {
+        var clock = new Clock();
+        var run = Running(clock, limits: Limits(actions: 1), policy: CompletionPolicy.AfterPlan);
+        Assert.Null(run.Evaluate(Unit(), TimeSpan.Zero)); Assert.True(run.GoalVerified);
+        var operation = run.ApproveOperation(1, TimeSpan.FromSeconds(2))!;
+        operation.BeginDispatch(0); operation.Actions!.ConfirmSent(0);
+        var work = new TaskCompletionSource<int>(); int captures = 0;
+        var feed = new CallbackCaptureFeed(_ =>
+        {
+            if (++captures == 1) { clock.At(900); work.SetResult(1); }
+            else clock.At(captureAt);
+            return ValueTask.FromResult(new RunObservation(clock.Elapsed, Unit(), Unit("false")));
+        });
+        var result = await RunMonitor.AwaitAsync(run, clock, clock, feed, _ => new ValueTask<int>(work.Task), _ => [],
+            confirmCompletedWork: _ => Assert.True(operation.ConfirmResult()));
+        operation.Complete();
+        Assert.Equal(2, captures); Assert.True(run.GoalVerified); Assert.True(run.ActionsClosing);
+        Assert.Equal(completed, result.Completed);
+        if (completed)
+            Assert.Equal(RunReason.GoalSatisfied, run.Evaluate(executionComplete: true)!.Cause.Reason);
+        else
+        {
+            Assert.Equal(RunReason.ActionsExhausted, run.Primary!.Cause.Reason);
+            Assert.Contains(run.Events, x => x.Reason == RunReason.WaitExpired);
+        }
+        Assert.Equal(1, run.Budget.Snapshot.Actions);
+        Assert.Throws<InvalidOperationException>(() => run.ApproveOperation(1, TimeSpan.FromSeconds(1)));
+    }
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task CleanupEvidenceLimitIsAggregateAndDoesNotSkipRelease(bool failedPrimary)
     {
