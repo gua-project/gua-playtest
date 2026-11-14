@@ -21,11 +21,15 @@ internal sealed class LifecycleTiming : IObserver<DiagnosticListener>, IObserver
     }
     public void OnNext(DiagnosticListener listener)
     {
-        if (listener.Name == "Gua.Playtest.RuntimeTiming") runtime = listener.Subscribe(this);
+        // Replay transport correlation is opt-in test diagnostics, not normal command output.
+        if (listener.Name == "Gua.Playtest.RuntimeTiming") runtime = listener.Subscribe(this,
+            phase => !phase.StartsWith("replay.", StringComparison.Ordinal));
         if (listener.Name == "Gua.Playtest.ArtifactTiming") artifact = listener.Subscribe(this);
     }
     public void OnNext(KeyValuePair<string, object?> notification)
     {
+        // IsEnabled predicates do not filter Write delivery when another observer enables it.
+        if (notification.Key.StartsWith("replay.", StringComparison.Ordinal)) return;
         if (notification.Value is not ValueTuple<object, long, long, long?, long?, int, bool> value ||
             !ReferenceEquals(value.Item1, run) && !ReferenceEquals(value.Item1, store)) return;
         long number = Interlocked.Increment(ref sequence);

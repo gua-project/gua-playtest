@@ -18,6 +18,7 @@ public sealed class ReplayRuntimeTests
     private static string Repository => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
     [Theory]
     [InlineData("success", 0, 1)]
+    [InlineData("player", 0, 1)]
     [InlineData("failure", 1, 1)]
     [InlineData("no-goal", 1, 1)]
     [InlineData("no-budget", 1, 0)]
@@ -48,7 +49,7 @@ public sealed class ReplayRuntimeTests
         scenario["constraints"]!["maxActions"] = mode == "no-budget" ? 0 : mode is "no-goal" or "cancel-after-send" ? 2 : 1;
         environment["permissions"]!["reads"] = new JsonArray(read.DeepClone());
         environment["permissions"]!["actionIds"] = new JsonArray("click");
-        environment["profile"] = "Debug"; environment["trace"]!["savePolicy"] = "always";
+        environment["profile"] = mode == "player" ? "Player" : "Debug"; environment["trace"]!["savePolicy"] = "always";
         environment["limits"]!["prepareTimeoutMilliseconds"] = 5000; environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         if (mode == "offset-window") environment["limits"]!["waitTimeoutMilliseconds"] = 2000;
@@ -73,7 +74,7 @@ public sealed class ReplayRuntimeTests
         if (mode == "changed") await File.AppendAllTextAsync(Path.Combine(Path.GetDirectoryName(plan)!, "recording.json"), " ");
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var probe = Path.Combine(Repository, "tests/Gua.Playtest.ProcessProbe/bin", configuration, "net10.0/Gua.Playtest.ProcessProbe.dll");
-        var pid = Path.Combine(root, "pid");
+        var pid = Path.Combine(root, "pid"); using var timing = new ReplayFailureDiagnostics(pid);
         var args = new List<string> { "replay-run", "--json", "--allow-root", Repository, "--allow-root", Path.GetDirectoryName(executable)!,
             "--plan", plan, "--managed-root", managed, "--environment", Path.Combine(root, "environment.json"),
             "--executable", executable, "--executable-sha256", hash, "--working-directory", Repository, "--output-root", root,
@@ -104,6 +105,19 @@ public sealed class ReplayRuntimeTests
         }
         var exit = await execution;
         await File.WriteAllTextAsync(Path.Combine(root, "command.json"), output.ToString());
+        if (mode == "no-result")
+        {
+            // Existing lost-completion control exercises failure-only export without
+            // changing any runtime deadline or injecting a new product delay.
+            Assert.True(timing.SaveFailure(root, true));
+            var journal = JsonSerializer.SerializeToElement(timing.Snapshot()).GetProperty("journal");
+            var rows = journal.GetProperty("rows").EnumerateArray().ToArray();
+            Assert.Contains(rows, row => row.GetProperty("phase").GetInt32() == 50);
+            Assert.DoesNotContain(rows, row => row.GetProperty("phase").GetInt32() == 53);
+            Assert.Contains(rows, row => row.GetProperty("phase").GetInt32() == 32);
+            Assert.Contains(rows, row => row.GetProperty("phase").GetInt32() == 10);
+            Assert.Contains(rows, row => row.GetProperty("phase").GetInt32() == 11);
+        }
         using var command = JsonDocument.Parse(output.ToString());
         var summary = command.RootElement.GetProperty("code").GetString() + " (" + Path.Combine(root, "command.json") + ")";
         if (mode == "no-goal")
@@ -113,7 +127,7 @@ public sealed class ReplayRuntimeTests
             Assert.True(exit is 1 or 3, summary);
             Assert.Contains(command.RootElement.GetProperty("code").GetString(), new[] { "WaitExpired", "MaxDuration" });
         }
-        else Assert.True(exit == expectedExit, summary);
+        else { timing.SaveFailure(root, exit != expectedExit); Assert.True(exit == expectedExit, summary); }
         if (expectedExit == 2 || mode == "cancel-before") { Assert.False(File.Exists(pid)); return; }
         var details = command.RootElement.GetProperty("details");
         Assert.Equal(expectedClicks, int.Parse(await File.ReadAllTextAsync(pid + ".clicks")));
@@ -159,7 +173,7 @@ public sealed class ReplayRuntimeTests
                 Assert.Contains(primary.RootElement.GetProperty("events").EnumerateArray(), e => e.GetProperty("reason").GetString() == "Cancelled");
             }
         }
-        if (mode is not ("success" or "already"))
+        if (mode is not ("success" or "player" or "already"))
         {
             if (mode == "no-goal")
             {
@@ -183,13 +197,18 @@ public sealed class ReplayRuntimeTests
         Assert.True(await manager.IsAcceptedAsync(plan));
         // A successful real trial can be adopted explicitly, then executed without
         // candidate override. It gets a fresh process, Run and guarded owner.
-        args.Remove("--allow-candidate");
+        args.Remove("--allow-candidate"); timing.NextHost();
         using var acceptedOutput = new StringWriter();
         var acceptedExit = await CliApplication.ExecuteAsync(args.ToArray(), acceptedOutput, cancel.Token);
         await File.WriteAllTextAsync(Path.Combine(root, "accepted-command.json"), acceptedOutput.ToString());
-        Assert.Equal(0, acceptedExit);
+        timing.SaveFailure(root, acceptedExit != 0); Assert.Equal(0, acceptedExit);
         using var accepted = JsonDocument.Parse(acceptedOutput.ToString());
         Assert.True(accepted.RootElement.GetProperty("details").GetProperty("acceptedAtStart").GetBoolean());
         Assert.NotEqual(details.GetProperty("runId").GetString(), accepted.RootElement.GetProperty("details").GetProperty("runId").GetString());
+        Assert.False(File.Exists(Path.Combine(root, "replay-timing.json")));
+        var correlated = JsonSerializer.SerializeToElement(timing.Snapshot()).GetProperty("journal").GetProperty("rows").EnumerateArray().ToArray();
+        Assert.Contains(correlated, row => row.GetProperty("phase").GetInt32() == 10 && row.GetProperty("c").GetInt32() == 2);
+        Assert.Contains(correlated, row => row.GetProperty("phase").GetInt32() == 50 && row.GetProperty("segment").GetInt32() == 2);
+        Assert.Contains(correlated, row => row.GetProperty("phase").GetInt32() == 33 && row.GetProperty("c").GetInt32() == 2);
     }
 }

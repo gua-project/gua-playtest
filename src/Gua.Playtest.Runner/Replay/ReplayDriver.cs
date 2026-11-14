@@ -119,6 +119,13 @@ public sealed class ReplayDriver
                     active = owner.ApproveOperation(batch.Count, limits.WaitTimeout);
                     if (active is null) return false;
                     var batchOperation = active;
+                    if (batchOperation.DiagnosticClock.Before != 0)
+                    {
+                        RuntimeTiming.MarkAt(owner, "replay.approval.before", batchOperation.DiagnosticClock.Before,
+                            batchOperation.DiagnosticClock.Elapsed, batchOperation.ResultDeadline.Ticks);
+                        RuntimeTiming.MarkAt(owner, "replay.approval.after", batchOperation.DiagnosticClock.After,
+                            batchOperation.DiagnosticClock.Elapsed, batchOperation.ResultDeadline.Ticks);
+                    }
                     var pendingPoint = false;
                     using var calls = new ReplayCalls(owner, batchOperation, () => playback.Check(batch, starting: false), () => dispatched++);
                     var pump = new PumpFeed(feed!, calls, owner, () =>

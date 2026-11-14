@@ -45,6 +45,8 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
 
     private async ValueTask<T> InvokeAsync<T>(Func<T> callback, CancellationToken token)
     {
+        long timing = RuntimeTiming.NextOperation();
+        RuntimeTiming.Mark(run, "replay.queue.request", timing);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, closed.Token);
         var effectiveToken = linked.Token;
         var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -52,13 +54,17 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
         {
             try
             {
+                RuntimeTiming.Mark(run, "replay.queue.invoke", timing);
                 effectiveToken.ThrowIfCancellationRequested();
                 if (run.State != Core.Contracts.ExecutionState.Running || !operation.IsOpen || run.HasPendingTerminalEvidence)
                     throw Failure(RunReason.ActionFailed, RunOrigin.Host);
-                completion.TrySetResult(callback());
+                var value = callback();
+                RuntimeTiming.Mark(run, "replay.queue.return", timing);
+                completion.TrySetResult(value);
             }
             catch (Exception exception)
             {
+                RuntimeTiming.Mark(run, "replay.queue.fault", timing, detail: exception is OperationCanceledException ? 1 : 0);
                 if (exception is not (OperationCanceledException or ReplayDispatchClosedException)) run.PostProviderException(exception is RunFailureException ? exception
                     : new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host), exception));
                 completion.TrySetException(exception);
@@ -67,10 +73,13 @@ internal sealed class ReplayCalls(RunSession run, RunSession.ApprovedOperation o
         try
         {
             await channel.Writer.WriteAsync(call, effectiveToken).ConfigureAwait(false);
+            RuntimeTiming.Mark(run, "replay.queue.admitted", timing);
             // Capture the token value before disposal; a cancelled queued callback may outlive
             // this waiter, and may only test the captured token before invoking transport.
             using var cancellation = effectiveToken.Register(() => completion.TrySetCanceled(token.IsCancellationRequested ? token : closed.Token));
-            return await completion.Task.ConfigureAwait(false);
+            var result = await completion.Task.ConfigureAwait(false);
+            RuntimeTiming.Mark(run, "replay.queue.delivered", timing);
+            return result;
         }
         catch (OperationCanceledException exception) when (token.IsCancellationRequested && exception.CancellationToken == effectiveToken)
         { throw new OperationCanceledException("ReplayCallerCancelled", exception, token); }

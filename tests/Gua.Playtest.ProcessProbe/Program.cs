@@ -108,7 +108,7 @@ bool scriptedUiFixture = args.Length == 2 && args[0].StartsWith("scripted-ui-cli
 if (scriptedUiFixture) args[0] = args[0][9..];
 if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui-click-host-private-event" or "ui-click-host-fail" or "ui-click-host-no-goal" or "ui-click-host-no-result" or "ui-click-host-already" or "ui-click-host-delayed" or "ui-click-host-late-goal")
 {
-    File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
+    using var replayTiming = Gua.Playtest.TestSupport.ReplayTimingJournal.OpenHost(clickPid); File.WriteAllText(clickPid, Environment.ProcessId.ToString()); File.WriteAllText(clickPid + ".clicks", "0");
     using var host = new GuaRuntime();
     if (scriptedUiFixture)
     {
@@ -129,14 +129,14 @@ if (args is [var clickMode, var clickPid] && clickMode is "ui-click-host" or "ui
         }
         if (host.TryConsumeAction(GuaActionType.Click, "start", out var click))
         {
-            File.WriteAllText(clickPid + ".clicks", (++count).ToString());
+            replayTiming?.Mark(50, unchecked((long)click.RequestId)); File.WriteAllText(clickPid + ".clicks", (++count).ToString());
             if (clickMode is "ui-click-host" or "ui-click-host-private-event")
-            { host.BeginFrame("play"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame(); }
+            { replayTiming?.Mark(51); host.BeginFrame("play"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame(); replayTiming?.Mark(52); }
             // Controlled lost-completion fixture: consume exactly once but never
             // publish a receipt. Production adapters must not retry this action.
-            if (clickMode != "ui-click-host-no-result")
+            if (clickMode != "ui-click-host-no-result") { replayTiming?.Mark(53);
                 host.EmitActionResult(clickMode == "ui-click-host-private-event" ? click with { Sensitive=true, Value="private-completion-marker" } : click,
-                    clickMode != "ui-click-host-fail", clickMode == "ui-click-host-fail" ? GuaActionError.InvalidArgument : GuaActionError.None);
+                    clickMode != "ui-click-host-fail", clickMode == "ui-click-host-fail" ? GuaActionError.InvalidArgument : GuaActionError.None); replayTiming?.Mark(54); }
             if (clickMode is "ui-click-host-delayed" or "ui-click-host-late-goal")
             { goalAt = elapsed.ElapsedMilliseconds + (clickMode == "ui-click-host-delayed" ? 300 : 1500); File.WriteAllText(clickPid + ".completion", "emitted-before-goal"); }
         }

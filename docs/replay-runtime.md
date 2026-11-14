@@ -32,6 +32,13 @@ All existing limits remain effective. Zero action allowance cannot send. AfterPl
 requires the complete step even when Goal was already true; completed input alone
 never establishes Goal or trial success.
 
+When Environment.profile is `Player`, Replay launches the child with the published
+`GUA_OBSERVATION_PROFILE=player` setting, matching the scripted Explore source lane.
+This lowers a Debug-capable runtime; it cannot enable remote in a Shipping/OFF build
+or raise its compiled profile ceiling. Debug retains its existing launch behavior.
+The actual source/profile/epoch and owned endpoint are still verified, rather than
+trusting the launch setting as identity evidence.
+
 Original Plan/Scenario/Recording bytes and hashes are retained. Windows read-sharing
 locks bind acceptance checks, playback and trial publication to those same inputs.
 Gua resolves the same explicit ID again and atomically checks source/epoch/profile/
@@ -61,3 +68,7 @@ retained Plan/Recording hashes. Gua owns Recording parsing, Trace and HTML rende
 Playtest keeps its secret/capacity policy. Publish results/counts/hashes, not private
 Recording content or the authority key. General exploration, walking, hold/release,
 recorded timing and broader Replay capabilities remain separate integration work.
+
+For the same-Recording candidate/trial/adoption sequence after scripted Explore,
+see [the bounded Player round trip](scripted-explore-replay.md). This does not
+broaden the single-click Replay lane or establish general Replay/repair support.

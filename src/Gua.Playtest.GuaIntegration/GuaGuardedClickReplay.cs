@@ -92,7 +92,12 @@ public sealed class GuaGuardedClickReplay(Func<GuardedUiClick> owner, Action ver
             var receipt = calls.SendAsync(0, beforeSend =>
             {
                 verify();
-                var result = click.Click(target, beforeSend, token); record(result);
+                ObservationCallDiagnostics.Replay(30);
+                GuardedUiReceipt result;
+                try { result = click.Click(target, beforeSend, token); }
+                catch { ObservationCallDiagnostics.Replay(35); throw; }
+                ObservationCallDiagnostics.Replay(31, result.RequestId ?? 0, (int)result.State);
+                record(result);
                 return new ReplaySend<GuardedUiReceipt>(result,
                     result.State is GuaRemoteDispatchState.Enqueued or GuaRemoteDispatchState.Completed);
             }, token).AsTask().GetAwaiter().GetResult();
@@ -104,8 +109,14 @@ public sealed class GuaGuardedClickReplay(Func<GuardedUiClick> owner, Action ver
         {
             var value = calls.ReadAsync(() =>
             {
-                verify(); var receipt = click.Poll(); if (receipt.State != GuaRemoteDispatchState.Enqueued) record(receipt);
+                verify(); ObservationCallDiagnostics.Replay(32, requestId);
+                GuardedUiReceipt receipt;
+                try { receipt = click.Poll(); }
+                catch { ObservationCallDiagnostics.Replay(36, requestId); throw; }
+                ObservationCallDiagnostics.Replay(33, receipt.RequestId ?? 0, (int)receipt.State);
+                if (receipt.State != GuaRemoteDispatchState.Enqueued) record(receipt);
                 var found = click.TryRecordingEvent(requestId, out var completion);
+                ObservationCallDiagnostics.Replay(34, requestId, found ? 1 : 0);
                 return (found, completion);
             }, token).AsTask().GetAwaiter().GetResult();
             result = value.completion;

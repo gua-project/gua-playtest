@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../src/Gua.Playtest.Cli/Gua.Playtest.Cli.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/Gua.Playtest.Cli/Gua.Playtest.Cli.csproj" />
+    <Compile Include="../Shared/ReplayTimingJournal.cs" Link="ReplayTimingJournal.cs" />
+  </ItemGroup>
 </Project>
