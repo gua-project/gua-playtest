@@ -289,6 +289,21 @@ public sealed class DashboardTests : IDisposable
         var index = Index(); var snapshot = await index.ReadAsync(); var detail = snapshot.Runs[0].Details[0];
         Assert.Equal("Saved", detail.State); Assert.NotNull(detail.Report);
         Assert.Contains("dashboard-viewer-fixture", Encoding.UTF8.GetString(index.ReadReport(detail.Report)));
+        // A consumer correlates the saved Run ID and authoritative failed result
+        // independently of a successful offline HTML export command.
+        var savedRun = Assert.Single(snapshot.Runs);
+        Assert.Equal(store.RunId, savedRun.RunId);
+        Assert.Equal(ResultStatus.Failed, savedRun.Result!.Status);
+        using var output = new StringWriter();
+        var exported = Path.Combine(root, "exported-report.html");
+        Assert.Equal(0, await CliApplication.ExecuteAsync(["report", "--json", "--allow-root", root,
+            "--trace", trace.ArtifactPath, "--output", exported], output));
+        using var command = JsonDocument.Parse(output.ToString());
+        Assert.Equal("CommandSucceeded", command.RootElement.GetProperty("status").GetString());
+        Assert.Equal("SavedTraceRead", command.RootElement.GetProperty("code").GetString());
+        Assert.True(command.RootElement.GetProperty("details").GetProperty("finalized").GetBoolean());
+        Assert.Contains("dashboard-viewer-fixture", await File.ReadAllTextAsync(exported));
+        Assert.Equal(ResultStatus.Failed, Assert.Single((await index.ReadAsync()).Runs).Result!.Status);
         Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/../../result.json"));
         File.WriteAllText(html, "changed"); Assert.Throws<InvalidDataException>(() => index.ReadReport(detail.Report));
         Assert.Equal("Unreadable", (await index.ReadAsync()).Runs[0].Details[0].State);

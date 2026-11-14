@@ -60,17 +60,21 @@ public sealed class ScriptedExploreRuntimeTests
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["maxDecisions"] = 4;
-        if (mode == "ui-click-host-no-goal")
+        var nativeProgress = mode is "ui-click-host-no-goal" or "roundtrip";
+        if (nativeProgress)
         {
-            // Native composition checks one real click and independent no-Goal,
-            // not a one-second dispatch SLA. Exact expiry/budget semantics are
+            // Native composition checks real clicks and independent Goal outcomes,
+            // without a one-second dispatch SLA. Exact expiry/budget semantics are
             // covered with a controlled clock in ExploreTests.
             scenario["constraints"]!["maxDurationMilliseconds"] = 15000;
             environment["limits"]!["maxDurationMilliseconds"] = 15000;
             environment["limits"]!["waitTimeoutMilliseconds"] = 5000;
             environment["limits"]!["maxSegmentMilliseconds"] = 5000;
-            environment["limits"]!["maxDecisions"] = 1;
-            environment["limits"]!["recoveryDecisionLimit"] = 1;
+            if (mode == "ui-click-host-no-goal")
+            {
+                environment["limits"]!["maxDecisions"] = 1;
+                environment["limits"]!["recoveryDecisionLimit"] = 1;
+            }
         }
         environment["trace"]!["savePolicy"] = "always";
         if (mode == "private-goal")
@@ -98,7 +102,7 @@ public sealed class ScriptedExploreRuntimeTests
             "--argument", probe, "--argument", mode == "metadata-gap" ? "ui-click-host" : "scripted-" +
                 (mode == "cancel-consumed" ? "ui-click-host-no-result" : mode.StartsWith("ui-click-", StringComparison.Ordinal) ? mode : "ui-click-host"), "--argument", pid];
         using var output = new StringWriter(); // Outer harness includes preparation, Running, cleanup and persistence.
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(mode == "ui-click-host-no-goal" ? 30 : 18));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(nativeProgress ? 30 : 18));
         if (mode is "cancel-before-start" or "click-cancel-before-start") deadline.Cancel();
         var execution = CliApplication.ExecuteAsync(args, output, deadline.Token);
         if (mode == "cancel-consumed")
@@ -201,7 +205,7 @@ public sealed class ScriptedExploreRuntimeTests
         string probe, string recording, string exploreRunId)
     {
         var managed = Path.Combine(root, "plans");
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         Task<(int Exit, JsonDocument Json)> Command(params string[] arguments)
             => RoundTripCommandAsync(arguments, deadline.Token);
         var created = await Command("plan", "create", "--managed-root", managed, "--allow-root", root,

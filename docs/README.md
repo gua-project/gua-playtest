@@ -18,6 +18,7 @@
 | [execution.md](execution.md) | Runの状態、合否の確定、期限・予算・監視・後処理 |
 | [gua-bridge.md](gua-bridge.md) | Guaへの観測と入力の接続、epoch・profile・完了確認・公開版の限界 |
 | [planning.md](planning.md) | 公開Planner入力、提案の採用、送信直前確認、実隔離との境界 |
+| [cloud-consumption.md](cloud-consumption.md) | 既存 CLI の結果・Run ID・HTML を消費するローカル契約と実行可能な検証例 |
 | [artifacts.md](artifacts.md) | 結果とGua成果物の参照保存、redaction、読戻し、後処理失敗 |
 | [fixture-evidence.md](fixture-evidence.md) | 事前固定caseと故障注入、独立oracle、実ゲームに必要な証拠 |
 | [schemas](schemas/) | 機械可読の文書・交換形式。schema適合と実行許可・Goal判定は別 |
