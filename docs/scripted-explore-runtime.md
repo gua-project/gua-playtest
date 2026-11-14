@@ -91,3 +91,39 @@ The command reports action/decision counts and script request count separately.
 This is a bounded scripted Planner integration. It does not supply general
 exploration strategy, Navigation, general Replay/repair, private judgement
 alongside a Debug host, or real Codex process isolation and authentication.
+
+
+## Test clocks and native no-Goal coverage
+
+The native `ui-click-host-no-goal` fixture checks a real Player click, correlated
+successful host completion, one proposal/decision, independent machine failure
+when Goal stays false, official Recording/result readers and owned process and
+listener cleanup. It retains the exact one-click/count/result assertions. It is
+not a guarantee of dispatch within one second. Its test-only operation/result
+and observation allowances are 5 seconds, and its Running ceiling is 15 seconds.
+The latter is a separate whole-Running limit, not a per-reaction allowance or
+an end-to-end UX promise. Preparation remains 5 seconds and cleanup 3 seconds;
+a 30-second outer test watchdog includes those phases and persistence. Other
+fixture rows, contract examples and product timeouts are unchanged. A response
+can still correctly expire before send if it exceeds the fixture's finite limit.
+These are explicit integration-test inputs, not changed product defaults.
+
+`ExploreTests.FinalDecisionDeadlineDistinguishesUnsentDispatchFromSentCompletion`
+uses a controlled clock at 999/1000 milliseconds: unsent work may dispatch
+before the boundary, must not dispatch at it, and a sent but unconfirmed effect
+fails as ActionUnconfirmed at the boundary without refund/retry. Timely confirmed
+work keeps its original final observation deadline; Goal false then closes the
+last decision as DecisionsExhausted with WaitExpired. Existing
+`FinalBudgetWindowRetainsOriginalDeadlineForDelayedGoal` covers Goal before
+expiry, exact expiry and cancellation after a controlled send. Thus correctness
+of inclusive deadlines, final-decision opportunity and before/after-send failure
+is independent of CI transport speed. A budget-exhaustion reason alone never
+proves that a click occurred.
+
+The fixture budget choice follows the explicit review decision to separate
+clock semantics from a one-second native dispatch performance assumption. It
+does not explain or repair the original natural Windows delays (the earlier
+adopted Replay subscription poll and the later no-Goal ui-tree span remain
+cause-unresolved). Runtime authority, dispatch scheduling, cleanup policy and
+security settings are unchanged. Broader real-game or latency acceptance still
+requires its own evidence.

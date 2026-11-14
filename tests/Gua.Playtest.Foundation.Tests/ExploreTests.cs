@@ -287,6 +287,58 @@ public sealed class ExploreTests
         }
     }
     [Theory]
+    [InlineData(false, 999)]
+    [InlineData(false, 1000)]
+    [InlineData(true, 999)]
+    [InlineData(true, 1000)]
+    public void FinalDecisionDeadlineDistinguishesUnsentDispatchFromSentCompletion(bool alreadySent, int atMilliseconds)
+    {
+        var s = new Setup(success: true, limits: Limits(decisions: 1, recovery: 1));
+        var request = s.Gate.Begin(s.Feed.Frame().Public)!;
+        Assert.True(s.Gate.ConfirmResponse(request));
+        var json = Encoding.UTF8.GetBytes(ContractJson.Serialize(new PlannerDecisionDocument(
+            "run-1", request.DecisionRequestId, request.CopyInput().BasedOnObservationId, Action())));
+        var approved = s.Gate.Adopt(request, json).Approved!;
+        Assert.NotNull(approved);
+        var originalDeadline = approved.Deadline;
+        Assert.Equal(TimeSpan.FromMilliseconds(1000), approved.ResultDeadline);
+        Assert.Equal(TimeSpan.FromMilliseconds(2000), originalDeadline);
+        if (alreadySent)
+        {
+            Assert.Equal(PlannerFeedbackCode.Approved, approved.BeginDispatch(0));
+            approved.ConfirmSent(0);
+        }
+        s.Clock.At(atMilliseconds);
+        if (!alreadySent)
+        {
+            Assert.Equal(atMilliseconds < 1000 ? PlannerFeedbackCode.Approved : PlannerFeedbackCode.ResponseClosed,
+                approved.BeginDispatch(0));
+            if (atMilliseconds < 1000) approved.ConfirmSent(0);
+        }
+        if (atMilliseconds < 1000)
+        {
+            Assert.True(approved.ConfirmResult());
+            Assert.Null(s.Run.Evaluate(Unit(false), s.Clock.Elapsed));
+            s.Clock.At(1999);
+            Assert.Null(s.Run.Evaluate(Unit(false), s.Clock.Elapsed));
+            Assert.Equal(originalDeadline, approved.Deadline); // No rebased final opportunity.
+            s.Clock.At(2000);
+        }
+        else Assert.False(approved.ConfirmResult());
+        s.Run.Evaluate(Unit(false), s.Clock.Elapsed);
+        Assert.Equal(alreadySent && atMilliseconds == 1000 ? RunReason.ActionUnconfirmed : RunReason.DecisionsExhausted,
+            s.Run.Primary!.Cause.Reason);
+        Assert.Equal(alreadySent || atMilliseconds < 1000 ? 1 : 0, s.Run.Budget.Snapshot.Actions);
+        Assert.Equal(1, s.Run.Budget.Snapshot.Decisions);
+        Assert.False(s.Run.GoalVerified);
+        Assert.Contains(s.Run.Events, e => e.Reason == RunReason.DecisionsExhausted);
+        if (!alreadySent || atMilliseconds < 1000) Assert.Contains(s.Run.Events, e => e.Reason == RunReason.WaitExpired);
+        Assert.DoesNotContain(s.Run.Events, e => e.Reason is RunReason.MaxDuration or RunReason.PlannerTimeout);
+        Assert.Equal(PlannerFeedbackCode.ResponseClosed, approved.BeginDispatch(0));
+        Assert.Null(s.Gate.Begin(s.Feed.Frame().Public)); // No retry or refund after closure.
+    }
+
+    [Theory]
     [InlineData(true, "goal")]
     [InlineData(false, "goal")]
     [InlineData(true, "expires")]

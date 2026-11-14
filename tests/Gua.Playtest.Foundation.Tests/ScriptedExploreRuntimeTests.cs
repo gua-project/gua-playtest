@@ -62,9 +62,13 @@ public sealed class ScriptedExploreRuntimeTests
         environment["limits"]!["maxDecisions"] = 4;
         if (mode == "ui-click-host-no-goal")
         {
-            // Isolate final-decision exhaustion after the first approved click.
-            // Four RPC-heavy turns could instead correctly reach the unchanged
-            // global deadline before their final observation window closes.
+            // Native composition checks one real click and independent no-Goal,
+            // not a one-second dispatch SLA. Exact expiry/budget semantics are
+            // covered with a controlled clock in ExploreTests.
+            scenario["constraints"]!["maxDurationMilliseconds"] = 15000;
+            environment["limits"]!["maxDurationMilliseconds"] = 15000;
+            environment["limits"]!["waitTimeoutMilliseconds"] = 5000;
+            environment["limits"]!["maxSegmentMilliseconds"] = 5000;
             environment["limits"]!["maxDecisions"] = 1;
             environment["limits"]!["recoveryDecisionLimit"] = 1;
         }
@@ -93,7 +97,8 @@ public sealed class ScriptedExploreRuntimeTests
             "--executable-sha256", hash, "--working-directory", Repository, "--output-root", root, "--target-id", "start",
             "--argument", probe, "--argument", mode == "metadata-gap" ? "ui-click-host" : "scripted-" +
                 (mode == "cancel-consumed" ? "ui-click-host-no-result" : mode.StartsWith("ui-click-", StringComparison.Ordinal) ? mode : "ui-click-host"), "--argument", pid];
-        using var output = new StringWriter(); using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(18));
+        using var output = new StringWriter(); // Outer harness includes preparation, Running, cleanup and persistence.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(mode == "ui-click-host-no-goal" ? 30 : 18));
         if (mode is "cancel-before-start" or "click-cancel-before-start") deadline.Cancel();
         var execution = CliApplication.ExecuteAsync(args, output, deadline.Token);
         if (mode == "cancel-consumed")
@@ -121,12 +126,17 @@ public sealed class ScriptedExploreRuntimeTests
             Assert.Equal("DecisionsExhausted", result.RootElement.GetProperty("code").GetString());
             Assert.Equal(1, details.GetProperty("plannerRequests").GetInt32());
             Assert.Equal(1, details.GetProperty("decisions").GetInt32());
+            Assert.Equal("Failed", result.RootElement.GetProperty("status").GetString());
+            Assert.True(details.GetProperty("click").GetProperty("succeeded").GetBoolean());
+            var verified = await RunArtifactReader.ReadResultAsync(details.GetProperty("artifactDirectory").GetString()!,
+                new(8 * 1024 * 1024, 8 * 1024 * 1024, 10000, 65536));
+            Assert.Equal(ResultReadState.Verified, verified.State);
         }
         if (mode != "cancel-consumed")
             Assert.Equal(mode is not ("ui-click-host-fail" or "ui-click-host-private-event" or "ui-click-host-no-result"), details.GetProperty("postProcessingComplete").GetBoolean());
-        if (mode is "ui-click-host" or "roundtrip")
+        if (mode is "ui-click-host" or "roundtrip" or "ui-click-host-no-goal")
         {
-            Assert.Equal("GoalSatisfied", result.RootElement.GetProperty("code").GetString());
+            if (mode != "ui-click-host-no-goal") Assert.Equal("GoalSatisfied", result.RootElement.GetProperty("code").GetString());
             Assert.Equal(1, details.GetProperty("plannerRequests").GetInt32());
             Assert.Equal(1, details.GetProperty("decisions").GetInt32());
             var recording = GuaRecordingFile.Load(Assert.Single(Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!, "recording.json", SearchOption.AllDirectories)));
