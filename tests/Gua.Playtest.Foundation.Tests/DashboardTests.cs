@@ -304,6 +304,15 @@ public sealed class DashboardTests : IDisposable
         Assert.True(command.RootElement.GetProperty("details").GetProperty("finalized").GetBoolean());
         Assert.Contains("dashboard-viewer-fixture", await File.ReadAllTextAsync(exported));
         Assert.Equal(ResultStatus.Failed, Assert.Single((await index.ReadAsync()).Runs).Result!.Status);
+        var consumerCommand = JsonSerializer.SerializeToElement(new
+        { status = "Failed", code = "ActionFailed", details = new
+            { runId = store.RunId, artifactDirectory = store.DirectoryPath, postProcessingComplete = true } });
+        await RunReportConsumptionAssertions.VerifyAsync(consumerCommand, Path.Combine(root, "s1.json"), Artifacts, root);
+        // Controlled invalid CLI evidence must fail correlation before any HTTP serving.
+        var wrongRun = System.Text.Json.Nodes.JsonNode.Parse(consumerCommand.GetRawText())!;
+        wrongRun["details"]!["runId"] = "unrelated-run";
+        await Assert.ThrowsAsync<Xunit.Sdk.EqualException>(() => RunReportConsumptionAssertions.VerifyAsync(
+            JsonSerializer.SerializeToElement(wrongRun), Path.Combine(root, "s1.json"), Artifacts, root));
         Assert.Throws<FileNotFoundException>(() => index.ReadReport("/reports/../../result.json"));
         File.WriteAllText(html, "changed"); Assert.Throws<InvalidDataException>(() => index.ReadReport(detail.Report));
         Assert.Equal("Unreadable", (await index.ReadAsync()).Runs[0].Details[0].State);

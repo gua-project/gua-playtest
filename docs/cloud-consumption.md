@@ -61,3 +61,39 @@ and check owned-process cleanup separately. Job submission, authentication,
 transfer and hosted URLs require the actual Cloud-side contract and are not
 implemented or inferred here. Current CI stability investigations do not erase
 the historical basic-flow proof, and a green rerun does not resolve their causes.
+
+## Connected Run-to-report acceptance
+
+`RunReportConsumptionAssertions` is a test-only consumer of these existing
+contracts. It correlates the final CLI Run ID, status, reason and postprocessing
+with `RunArtifactReader`, verifies the current Scenario hash and build/Environment
+selection, then obtains that Run's opaque report link from `/api/snapshot`.
+The HTTP response is the existing sandboxed iframe wrapper, not raw report bytes:
+decode its `srcdoc` and compare it with the receipt-validated saved HTML. Reading
+the snapshot/report must leave every original Run file unchanged. Controlled
+wrong-Run CLI evidence must fail correlation before serving any report.
+
+The existing cross-platform Dashboard fixture exercises this connected consumer
+with a real finalized Gua Trace and a persisted Failed Run. Its CLI envelope is
+constructed test evidence, not an executed game command. The Windows scripted
+runtime roundtrip and no-Goal rows use their actual CLI entrypoint output; the
+same-Recording trial and adopted Replay also pass their actual result through
+this consumer. Existing click/Goal/Recording/adoption/cleanup assertions remain.
+These tests use the CLI application entrypoint in-process plus actual loopback
+HTTP. They do not prove a new external CLI process, packaged native game run,
+browser rendering, real action2d run or deployed Cloud integration.
+
+```powershell
+dotnet test tests/Gua.Playtest.Foundation.Tests -c Release --filter "FullyQualifiedName~DashboardTests|FullyQualifiedName~ScriptedExploreRuntimeTests"
+```
+
+Run the Windows native rows on the established Windows verification machine,
+then full regression, boundary checks, archive/fresh Tool and contract smoke.
+Linux executes the connected saved-Trace/HTTP consumer, but the Windows native
+rows return the existing platform refusal before game composition. Retain exact
+tree, first failure artifacts and per-stage evidence. A passing local consumer
+cannot establish every #18/#26 browser or real-Runner acceptance condition.
+Before implementing actual Cloud submission or delivery, obtain the Cloud repo
+and caller contract: admitted worker inputs, result acquisition, artifact policy
+and destination. Those are the remaining integration decisions; a new service,
+authentication scheme or transfer protocol is not selected by this test slice.
