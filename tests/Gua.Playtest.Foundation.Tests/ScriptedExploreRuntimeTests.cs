@@ -60,7 +60,7 @@ public sealed class ScriptedExploreRuntimeTests
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["maxDecisions"] = 4;
-        var nativeProgress = mode is "ui-click-host-no-goal" or "roundtrip";
+        var nativeProgress = mode is "ui-click-host" or "ui-click-host-no-goal" or "roundtrip";
         if (nativeProgress)
         {
             // Native composition checks real clicks and independent Goal outcomes,

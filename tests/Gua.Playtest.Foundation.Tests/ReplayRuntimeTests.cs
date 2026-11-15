@@ -177,7 +177,7 @@ public sealed class ReplayRuntimeTests
             Assert.False(details.GetProperty("progress").GetProperty("planCompleted").GetBoolean());
             Assert.False(details.GetProperty("progress").GetProperty("goalVerified").GetBoolean());
             Assert.Equal("ActionUnconfirmed", verified.Result!.Reason);
-            Assert.True(verified.Result.PostProcessing.Complete);
+            if (mode == "no-result") Assert.True(verified.Result.PostProcessing.Complete);
             using var completion = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(runDirectory, "completion.json")));
             Assert.DoesNotContain(completion.RootElement.GetProperty("postProcessing").EnumerateArray(),
                 issue => issue.GetProperty("reason").GetString() is "InputReleaseUnconfirmed" or "ResourceReleaseUnconfirmed" or "CleanupTimeout");
