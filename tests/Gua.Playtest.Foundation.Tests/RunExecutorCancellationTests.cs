@@ -537,6 +537,8 @@ public sealed partial class RunTests
         var real = new CancellationArbitrationClock(); var condition = new CancellationArbitrationClock();
         var run = new RunSession(Limits(), real, condition); var cleanup = new OwnedCleanup();
         using var timing = new ExecutorTimingCapture(run);
+        using var independent = new ControlledExecutorTime();
+        using var controlledPhases = new ControlledTimePhases(run, independent);
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         using var resumeProbe = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -558,7 +560,7 @@ public sealed partial class RunTests
             resume.Wait(); returned.TrySetResult(); return true;
         }));
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
-        var executing = RunBlockingFixture(() => RunExecutor.ExecuteAsync(run, real, cleanup, (owner, _, _) =>
+        var executing = RunBlockingFixture(() => RunExecutor.ExecuteWithTimeAsync(run, real, cleanup, (owner, _, _) =>
         {
             var capture = owner.ArmRunningBoundary();
             var boundary = capture.Certify(capture.RequestId, TimeSpan.Zero,
@@ -574,13 +576,13 @@ public sealed partial class RunTests
                 return null;
             };
             return ValueTask.FromResult(boundary);
-        }, (_, _) => Execute(), caller.Token, null, _ =>
+        }, (_, _) => Execute(), caller.Token, _ =>
         {
             if (stage != "initial") return;
             armed = true; condition.Driver.Value = true;
             condition.OnDriverRead = () =>
             { entered.TrySetResult(); try { resume.Wait(); } finally { returned.TrySetResult(); } };
-        }).AsTask()).Unwrap();
+        }, independent).AsTask()).Unwrap();
         try
         {
             await entered.Task.WaitAsync(watchdog);
@@ -590,7 +592,17 @@ public sealed partial class RunTests
                 ThreadPool.GetAvailableThreads(out var available, out _); ThreadPool.GetMinThreads(out var minimum, out _);
                 return $"stage={stage}, deadline={deadline}, state={run.State}, primary={run.Primary?.Cause}, releases={Volatile.Read(ref releases)}, providerReturned={returned.Task.IsCompleted}, probeEntered={Volatile.Read(ref probeEntered)}, probeReturned={Volatile.Read(ref probeReturned)}, probeOnPool={Volatile.Read(ref probeOnPool)}, validatedReal={run.LastValidatedReal}, executor={executing.Status}, workers={ThreadPool.ThreadCount}, available={available}, minimum={minimum}, processors={Environment.ProcessorCount}, timing={timing.FailureSnapshot()}";
             }
+            await AdvanceInterruptedExecutorAsync(independent, timing, executing);
             var outcome = await AwaitFinalizationWithWatchdogAsync(executing, Diagnostic);
+            raceOutput.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                stage, deadline, providerMs = real.Elapsed.TotalMilliseconds,
+                physicalMs = independent.Elapsed.TotalMilliseconds,
+                cleanupBudgetMs = run.Limits.CleanupTimeout.TotalMilliseconds,
+                timers = independent.History,
+                phases = controlledPhases.Entries.Select(p => new { p.Phase, p.Operation, p.PhysicalTicks, p.WallTimestamp }).ToArray()
+            }));
+            Assert.True(independent.Elapsed < run.Limits.CleanupTimeout);
             Assert.Equal(deadline ? RunReason.MaxDuration : RunReason.Cancelled, outcome.Primary.Cause.Reason);
             Assert.Equal(1, releases); Assert.Equal(stage is "completion" or "synchronous-completion", returned.Task.IsCompleted);
             Assert.True(outcome.PostProcessingComplete, $"Cleanup was not confirmed: {string.Join(",", outcome.PostProcessing.Select(item => item.Reason))}");

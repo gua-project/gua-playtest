@@ -51,14 +51,26 @@ public static class RunExecutor
             token => prepare(run, cleanup, token), boundary => new PreparedRun(true, boundary
                 ?? throw new InvalidOperationException("RunningBoundaryCertificateRequired")), execute, cancellationToken, confirmPrimary, registerInitialObservation).ConfigureAwait(false);
 
+    internal static ValueTask<RunOutcome> ExecuteWithTimeAsync(RunSession run, IClock realClock,
+        OwnedCleanup cleanup, Func<RunSession, OwnedCleanup, CancellationToken, ValueTask<RunStartBoundary>> prepare,
+        Func<RunSession, CancellationToken, ValueTask<bool>> execute, CancellationToken cancellationToken,
+        Action<RunSession>? registerInitialObservation, IExecutorTime time)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+        return ExecuteCoreAsync(run, realClock, cleanup, token => prepare(run, cleanup, token),
+            boundary => new PreparedRun(true, boundary ?? throw new InvalidOperationException("RunningBoundaryCertificateRequired")),
+            execute, cancellationToken, null, registerInitialObservation, time);
+    }
+
     private static async ValueTask<RunOutcome> ExecuteCoreAsync<T>(RunSession run, IClock realClock,
         OwnedCleanup cleanup, Func<CancellationToken, ValueTask<T>> prepare, Func<T, PreparedRun> mapPreparation,
         Func<RunSession, CancellationToken, ValueTask<bool>> execute, CancellationToken cancellationToken,
-        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary, Action<RunSession>? registerInitialObservation = null)
+        Func<RunSnapshot, CancellationToken, ValueTask<bool>>? confirmPrimary, Action<RunSession>? registerInitialObservation = null,
+        IExecutorTime? time = null)
     {
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(realClock);
         ArgumentNullException.ThrowIfNull(cleanup); ArgumentNullException.ThrowIfNull(prepare); ArgumentNullException.ThrowIfNull(execute);
-        var settlement = new ExecutionSettlement(run, cleanup);
+        var settlement = new ExecutionSettlement(run, cleanup, time);
         using var cancellation = cancellationToken.Register(settlement.Begin);
         var evidence = new OwnerEvidence();
         // Keep the original provider invocation/timer ordering on the owner. The
@@ -71,6 +83,7 @@ public static class RunExecutor
         }).AsTask(), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
         Task<TimeSpan>? clockRead = null;
         var physical = Stopwatch.StartNew();
+        var independentOrigin = time?.Elapsed ?? TimeSpan.Zero;
         var observedState = ExecutionState.Created;
         var physicalLimit = run.Limits.PreparationTimeout;
         Exception? interruption = null;
@@ -107,10 +120,11 @@ public static class RunExecutor
             if (run.State != observedState && run.State is ExecutionState.Preparing or ExecutionState.Running)
             {
                 observedState = run.State; physical.Restart();
+                independentOrigin = time?.Elapsed ?? TimeSpan.Zero;
                 var bound = run.ExecutorDeadline;
                 physicalLimit = bound.Deadline - run.LastValidatedReal;
             }
-            if (physical.Elapsed >= physicalLimit)
+            if ((time is null ? physical.Elapsed : time.Elapsed - independentOrigin) >= physicalLimit)
             {
                 var bound = run.ExecutorDeadline;
                 // A stale watermark cannot prove that a healthy clock stopped.
@@ -123,7 +137,7 @@ public static class RunExecutor
                 {
                     var operation = RuntimeTiming.NextOperation();
                     RuntimeTiming.Mark(run, "executor.clock-wait.create", operation, remainingTicks: allowance.Ticks);
-                    var timer = FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None);
+                    var timer = settlement.DelayAsync(allowance, CancellationToken.None);
                     RuntimeTiming.ObserveCompletion(run, "executor.clock-wait.completion-observed", operation, timer);
                     var clockWhenAny = Task.WhenAny(clockRead, owner, timer);
                     RuntimeTiming.TrackWait(run, "executor.clock-wait.tasks", operation, timer, owner, clockWhenAny);
@@ -151,7 +165,7 @@ public static class RunExecutor
             }
             var pollOperation = RuntimeTiming.NextOperation();
             RuntimeTiming.Mark(run, "executor.poll-wait.create", pollOperation, budgetTicks: TimeSpan.FromMilliseconds(10).Ticks);
-            var pollTimer = Task.Delay(10);
+            var pollTimer = time?.DelayAsync(TimeSpan.FromMilliseconds(10), CancellationToken.None) ?? Task.Delay(10);
             RuntimeTiming.ObserveCompletion(run, "executor.poll-wait.completion-observed", pollOperation, pollTimer);
             var pollWhenAny = Task.WhenAny(owner, pollTimer);
             RuntimeTiming.TrackWait(run, "executor.poll-wait.tasks", pollOperation, pollTimer, owner, pollWhenAny);
@@ -168,7 +182,7 @@ public static class RunExecutor
             {
                 var operation = RuntimeTiming.NextOperation();
                 RuntimeTiming.Mark(run, "executor.evidence-wait.create", operation, remainingTicks: remaining.Ticks);
-                var timer = FiniteOperation.DelayIndependentAsync(remaining, CancellationToken.None);
+                var timer = settlement.DelayAsync(remaining, CancellationToken.None);
                 RuntimeTiming.ObserveCompletion(run, "executor.evidence-wait.completion-observed", operation, timer);
                 var evidenceWhenAny = Task.WhenAny(owner, timer);
                 RuntimeTiming.TrackWait(run, "executor.evidence-wait.tasks", operation, timer, owner, evidenceWhenAny);

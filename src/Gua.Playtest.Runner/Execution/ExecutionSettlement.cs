@@ -4,11 +4,14 @@ using Gua.Playtest.Core.Contracts;
 namespace Gua.Playtest.Runner.Execution;
 
 /// <summary>One cleanup epoch shared by interrupted evidence settlement and releases.</summary>
-internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
+internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup, IExecutorTime? time = null)
 {
     private readonly object gate = new();
     private Stopwatch? elapsed;
     private TimeSpan realOrigin, settlementShare, lastElapsed, lastPhysical;
+    private TimeSpan independentOrigin;
+    internal Task DelayAsync(TimeSpan duration, CancellationToken token)
+        => time?.DelayAsync(duration, token) ?? FiniteOperation.DelayIndependentAsync(duration, token);
     private readonly TaskCompletionSource stop = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Exception? failure;
     private Exception? providerFailure;
@@ -76,6 +79,7 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
             {
                 realOrigin = run.LastValidatedReal;
                 elapsed = Stopwatch.StartNew();
+                independentOrigin = time?.Elapsed ?? TimeSpan.Zero;
                 // One evidence share; keep at least one share for actual cleanup.
                 var releases = cleanup.SettlementResourceCount();
                 settlementShare = TimeSpan.FromTicks(Math.Max(1, run.Limits.CleanupTimeout.Ticks / (releases + 2)));
@@ -104,7 +108,7 @@ internal sealed class ExecutionSettlement(RunSession run, OwnedCleanup cleanup)
             lock (gate)
             {
                 if (elapsed is null) return TimeSpan.Zero;
-                var physical = elapsed.Elapsed;
+                var physical = time is null ? elapsed.Elapsed : time.Elapsed - independentOrigin;
                 lastElapsed = new(Math.Max((lastElapsed + physical - lastPhysical).Ticks,
                     (run.LastValidatedReal - realOrigin).Ticks));
                 lastPhysical = physical;
