@@ -76,15 +76,14 @@ broaden the single-click Replay lane or establish general Replay/repair support.
 ## Native fixture clocks
 
 Native Replay success/Player/already-Goal, failure/save-failure, no-Goal and
-cancel-after-send composition rows use a test-only five-second operation window
+cancel-after-send/missing-result composition rows use a test-only five-second operation window
 and fifteen-second Running budget. The same-Recording Player round trip uses
 these fixture inputs too. These are bounded composition checks, not a one-second
 native performance SLA. Preparation (five seconds), cleanup (three seconds),
 production defaults, outcome assertions and the AfterPlan fresh-capture contract
 are unchanged. The per-command harness watchdog is thirty seconds; the round-trip
 sequence has a sixty-second outer watchdog. Neither is a product response promise.
-Refusal, offset-window and intentionally missing-result rows retain their original
-budgets. Five seconds is an operation wait, fifteen seconds is Running, not a
+Refusal and offset-window rows retain their original budgets. Five seconds is an operation wait, fifteen seconds is Running, not a
 single total UX timeout including preparation, cleanup and artifact persistence.
 
 `RunTests.AfterPlanFinalCaptureRetainsOriginalWindowDespiteHeldGoal` checks fresh
@@ -95,3 +94,16 @@ Existing owner-confirmation, cancellation, provider-timeout and failure-arbitrat
 tests remain applicable. The main Windows artifact 14098270931 is preserved:
 this coverage policy adjustment does not explain its natural delay or repair a
 proven product defect.
+
+The missing-result native row must first prove one host consume and one dispatch,
+with no emitted ordinary completion. It still requires ActionUnconfirmed, zero
+completed steps, no completed Plan/verified Goal/trial, and confirmed cleanup. Its
+five-second window checks that native composition premise; it is not an exact
+expiry oracle. `RunTests.QueuedReplayMissingReceiptDistinguishesUnsentDeadline`
+uses a controlled clock: before expiry no terminal result, then the original
+absolute deadline closes an unsent queued call as WaitExpired/ActionsExhausted,
+or a sent call without a result as ActionUnconfirmed. A sent action is not
+refunded or retried; late result confirmation cannot change the primary. Both
+paths require successful independent input/resource cleanup. The unsent row is
+the negative control: a timeout alone must not manufacture a missing sent receipt.
+This test policy does not explain the natural SDK delay observed in CI.
