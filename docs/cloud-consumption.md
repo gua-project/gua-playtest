@@ -70,6 +70,12 @@ entrypoint takes a synchronous trusted local bookkeeping callback; it introduces
 no command-line option, remote credential, submission schema or service. Existing
 `ExecuteAsync` and executable/Tool behavior remain unchanged. Offline commands
 and dashboard serving are refused by the admission entrypoint.
+An in-process owner may explicitly set `includeTimingDiagnostics:false` on this
+new entrypoint. Only the non-authoritative `observationTiming`/`lifecycleTiming`
+JSON fields become null; default/normal CLI output stays unchanged. Primary,
+postprocessing, Run identity, other result fields and persisted evidence are not
+filtered or reconstructed. This permits a bounded result consumer to avoid large
+diagnostic arrays without increasing its envelope limit or parsing partial JSON.
 
 After input validation, locked executable hash verification and fixed runtime
 configuration, the callback receives `RunStartIdentity`: newly allocated Run ID,

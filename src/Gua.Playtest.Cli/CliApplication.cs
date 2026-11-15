@@ -33,14 +33,15 @@ public static class CliApplication
     /// bookkeeping after fixed input/Run identity, before Gua artifact acquisition or launch.
     /// No CLI switch or remote authorization is introduced.</summary>
     public static Task<int> ExecuteWithRunAdmissionAsync(string[] args, TextWriter output, TextWriter diagnostics,
-        Func<RunStartIdentity, CancellationToken, bool> admission, CancellationToken cancellationToken = default)
+        Func<RunStartIdentity, CancellationToken, bool> admission, CancellationToken cancellationToken = default,
+        bool includeTimingDiagnostics = true)
     {
         ArgumentNullException.ThrowIfNull(admission);
-        return ExecuteCoreAsync(args, output, diagnostics, admission, cancellationToken);
+        return ExecuteCoreAsync(args, output, diagnostics, admission, cancellationToken, includeTimingDiagnostics);
     }
 
     static async Task<int> ExecuteCoreAsync(string[] args, TextWriter output, TextWriter diagnostics,
-        Func<RunStartIdentity, CancellationToken, bool>? admission, CancellationToken cancellationToken)
+        Func<RunStartIdentity, CancellationToken, bool>? admission, CancellationToken cancellationToken, bool includeTimingDiagnostics = true)
     {
         var json = args.Contains("--json", StringComparer.Ordinal);
         if (args.Count(x => x == "--json") > 1) return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "DuplicateJsonOption", 2);
@@ -65,13 +66,13 @@ public static class CliApplication
         if (args.FirstOrDefault() == "dashboard")
             return await DashboardCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         if (args.FirstOrDefault() == "observe-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
         if (args.FirstOrDefault() == "click-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true, admission: admission);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
         if (args.FirstOrDefault() == "scripted-explore-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, scriptedExplore: true, admission: admission);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, scriptedExplore: true, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
           if (args.FirstOrDefault() == "replay-run")
-              return await ReplayRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission);
+              return await ReplayRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission, includeTimingDiagnostics);
         if (args.FirstOrDefault() is "plan" or "report" or "explore" or "replay")
             return await OfflineCommands.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         ValidationResult result;

@@ -81,6 +81,27 @@ public sealed class ObservationRuntimeTests : IDisposable
     private static bool IsExited(int id)
     { try { using var process = Process.GetProcessById(id); return process.HasExited; } catch (ArgumentException) { return true; } }
 
+    [Fact]
+    public async Task Compact_start_entrypoint_omits_only_timing_diagnostics_and_retains_real_result()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        int port = Port(); var args = await Inputs("success", port); RunStartIdentity? start = null;
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(25)); using var output = new StringWriter();
+        Assert.Equal(0, await CliApplication.ExecuteWithRunAdmissionAsync(args, output, TextWriter.Null,
+            (info, _) => { start = info; return true; }, stop.Token, includeTimingDiagnostics: false));
+        Assert.NotNull(start); using var result = JsonDocument.Parse(output.ToString());
+        var details = result.RootElement.GetProperty("details");
+        Assert.Equal("Passed", result.RootElement.GetProperty("status").GetString());
+        Assert.Equal(start.RunId, details.GetProperty("runId").GetString());
+        Assert.True(details.GetProperty("postProcessingComplete").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, details.GetProperty("observationTiming").ValueKind);
+        Assert.Equal(JsonValueKind.Null, details.GetProperty("lifecycleTiming").ValueKind);
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(details.GetProperty("artifactDirectory").GetString()!,
+            new(8 * 1024 * 1024, 8 * 1024 * 1024, 10000, 65536))).State);
+        Assert.True(IsExited(int.Parse(await File.ReadAllTextAsync(Path.Combine(root, "pid")))));
+        using var listener = new TcpListener(IPAddress.Loopback, port); listener.Start();
+    }
+
     [Theory]
     [InlineData("deny", 2)] [InlineData("throw", 2)] [InlineData("cancel-inside", 4)] [InlineData("cancel-before", 4)]
     public async Task Start_admission_refusal_fault_and_cancellation_acquire_no_game_or_Gua_artifacts(string mode, int expected)

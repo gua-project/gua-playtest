@@ -66,7 +66,7 @@ internal static class ReplayRunCommand
     }
 
     internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token,
-        Func<RunStartIdentity, CancellationToken, bool>? admission = null)
+        Func<RunStartIdentity, CancellationToken, bool>? admission = null, bool includeTimingDiagnostics = true)
     {
         try
         {
@@ -275,8 +275,8 @@ internal static class ReplayRunCommand
                 new { runId = store.RunId, artifactDirectory = store.DirectoryPath, ownedProcessId = launcher.Process?.ProcessId,
                     effectiveEnvironmentSha256 = runtimeHash, driver = driverName, click = lastClick,
                     progress = outcome.Progress, planSha256 = replay.PlanSha256, scenarioSha256 = replay.ScenarioSha256, recordingSha256 = replay.RecordingSha256,
-                    trialId, trialState, acceptedAtStart = accepted, observationTiming = observationTiming.Snapshot(),
-                    lifecycleTiming = lifecycleTiming?.Snapshot(),
+                    trialId, trialState, acceptedAtStart = accepted, observationTiming = includeTimingDiagnostics ? observationTiming.Snapshot() : null,
+                    lifecycleTiming = includeTimingDiagnostics ? lifecycleTiming?.Snapshot() : null,
                     postProcessingComplete = exit == 0 || outcome.Run.PostProcessingComplete && completion.Persistence.Saved &&
                         !completion.Persistence.PostProcessingIncomplete && trialState != "SaveFailed",
                     persistence = completion.Persistence.Failure.ToString() });

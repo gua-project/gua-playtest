@@ -55,7 +55,7 @@ internal static class ObservationRunCommand
         }
     }
     internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, bool singleClick = false, bool scriptedExplore = false,
-        Func<RunStartIdentity, CancellationToken, bool>? admission = null)
+        Func<RunStartIdentity, CancellationToken, bool>? admission = null, bool includeTimingDiagnostics = true)
     {
         try
         {
@@ -310,8 +310,8 @@ internal static class ObservationRunCommand
                     decisions = run.Budget.Snapshot.Decisions, plannerRequests = explore?.Requests ?? 0,
                     plannerDecision = explore?.DecisionReference,
                     pollsStarted = explore?.PollsStarted ?? 0, pollsCompleted = explore?.PollsCompleted ?? 0,
-                    observationTiming = observationTiming.Snapshot(),
-                    lifecycleTiming = lifecycleTiming.Snapshot(),
+                    observationTiming = includeTimingDiagnostics ? observationTiming.Snapshot() : null,
+                    lifecycleTiming = includeTimingDiagnostics ? lifecycleTiming.Snapshot() : null,
                     recordingState = completion.Receipts.SingleOrDefault(x => x.Kind == ArtifactKind.Recording)?.State.ToString(),
                     recordedActions = capturedRecording?.Recording?.Steps.Count ?? 0,
                     phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),
