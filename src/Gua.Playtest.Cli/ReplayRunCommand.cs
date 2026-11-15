@@ -65,7 +65,8 @@ internal static class ReplayRunCommand
         return child;
     }
 
-    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token)
+    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token,
+        Func<RunStartIdentity, CancellationToken, bool>? admission = null)
     {
         try
         {
@@ -159,6 +160,7 @@ internal static class ReplayRunCommand
             runtimeConfiguration = JsonSerializer.SerializeToElement(configuration);
             var runtimeHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(runtimeConfiguration)));
             var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, scenarioFile.Sha256, environment.BuildId, runtimeHash);
+            RunAdmission.Require(admission, store.RunId, identity, environmentFile.Sha256, token);
             var metadata = new RunArtifactMetadata(environment.Profile.ToLowerInvariant(),
                 [new("driver", driverName, "explicit-command"), new("clock", "real", "explicit-command"),
                     new("gameExecutableSha256", hash.ToLowerInvariant(), "locked-image-and-OS-listener-owner"),
@@ -309,7 +311,7 @@ internal static class ReplayRunCommand
         "WindowsRuntimeRequired", "RuntimeArgumentsRequired", "RuntimeInputOutsideRoots", "RuntimeInputInvalid",
         "RuntimeExecutableOutsideRoots", "RuntimeWorkingDirectoryOutsideRoots", "RuntimeOutputOutsideRoots", "RuntimeBuildIdentityInvalid",
         "RuntimeBuildHashMismatch", "WindowsLoopbackRequired", "RuntimeChildEnvironmentInvalid", "RuntimeSaveOutsideRoots",
-        "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid",
+        "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid", "RunAdmissionRejected", "RunAdmissionFailed",
         "ReplayLaneUnsupported", "ReplayInputChanged", "ManagedPlanRequired", "ReplayCandidateNotAccepted"
     };
     private static Dictionary<string, List<string>> Parse(string[] args)

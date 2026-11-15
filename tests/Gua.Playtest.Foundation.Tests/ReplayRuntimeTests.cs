@@ -93,7 +93,8 @@ public sealed class ReplayRuntimeTests
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(nativeProgress ? 30 : 15));
         if (mode == "cancel-before") cancel.Cancel();
         using var output = new StringWriter();
-        var execution = CliApplication.ExecuteAsync(args.ToArray(), output, cancel.Token);
+        var execution = mode == "success" ? RunStartAssertions.ExecuteAsync(args.ToArray(), output, cancel.Token)
+            : CliApplication.ExecuteAsync(args.ToArray(), output, cancel.Token);
         if (mode == "save-failure")
         {
             while (!File.Exists(pid))

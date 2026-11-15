@@ -27,10 +27,26 @@ public static class CliApplication
         => await ExecuteAsync(args, output, TextWriter.Null, cancellationToken);
 
     public static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, CancellationToken cancellationToken = default)
+        => await ExecuteCoreAsync(args, output, diagnostics, null, cancellationToken);
+
+    /// <summary>Runtime-only composition entrypoint. Admission is synchronous trusted local
+    /// bookkeeping after fixed input/Run identity, before Gua artifact acquisition or launch.
+    /// No CLI switch or remote authorization is introduced.</summary>
+    public static Task<int> ExecuteWithRunAdmissionAsync(string[] args, TextWriter output, TextWriter diagnostics,
+        Func<RunStartIdentity, CancellationToken, bool> admission, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        return ExecuteCoreAsync(args, output, diagnostics, admission, cancellationToken);
+    }
+
+    static async Task<int> ExecuteCoreAsync(string[] args, TextWriter output, TextWriter diagnostics,
+        Func<RunStartIdentity, CancellationToken, bool>? admission, CancellationToken cancellationToken)
     {
         var json = args.Contains("--json", StringComparer.Ordinal);
         if (args.Count(x => x == "--json") > 1) return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "DuplicateJsonOption", 2);
         args = args.Where(x => x != "--json").ToArray();
+        if (admission is not null && args.FirstOrDefault() is not ("observe-run" or "click-run" or "scripted-explore-run" or "replay-run"))
+            return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "RuntimeCommandRequired", 2);
         if (args is ["--help"] or [])
         {
             var help = "gua-playtest validate --allow-root <existing-directory> <json-or-yaml-file>\ngua-playtest validate --gua-schema <packaged-schema-name> <json-file>\ngua-playtest doctor --native\ngua-playtest plan create|accept (see docs/cli.md)\ngua-playtest report --allow-root <root> --trace <saved-trace-directory> [--output <new-html>]\ngua-playtest explore --allow-root <root> --scenario <file> --environment <file>\ngua-playtest replay --allow-root <root> --plan <file> --environment <file>\ngua-playtest dashboard --registry <file> --artifact-root <root> --allow-root <root> --port <1024..65535>\nUse --json for one final JSON document. Execution requires an approved runtime composition.";
@@ -49,13 +65,13 @@ public static class CliApplication
         if (args.FirstOrDefault() == "dashboard")
             return await DashboardCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         if (args.FirstOrDefault() == "observe-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission);
         if (args.FirstOrDefault() == "click-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true, admission: admission);
         if (args.FirstOrDefault() == "scripted-explore-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, scriptedExplore: true);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, scriptedExplore: true, admission: admission);
           if (args.FirstOrDefault() == "replay-run")
-              return await ReplayRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
+              return await ReplayRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission);
         if (args.FirstOrDefault() is "plan" or "report" or "explore" or "replay")
             return await OfflineCommands.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         ValidationResult result;

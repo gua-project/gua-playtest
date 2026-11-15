@@ -104,7 +104,8 @@ public sealed class ScriptedExploreRuntimeTests
         using var output = new StringWriter(); // Outer harness includes preparation, Running, cleanup and persistence.
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(nativeProgress ? 30 : 18));
         if (mode is "cancel-before-start" or "click-cancel-before-start") deadline.Cancel();
-        var execution = CliApplication.ExecuteAsync(args, output, deadline.Token);
+        var execution = mode == "ui-click-host" ? RunStartAssertions.ExecuteAsync(args, output, deadline.Token)
+            : CliApplication.ExecuteAsync(args, output, deadline.Token);
         if (mode == "cancel-consumed")
         {
             while (!File.Exists(pid + ".clicks") || (await File.ReadAllTextAsync(pid + ".clicks", deadline.Token)) != "1")

@@ -82,6 +82,30 @@ public sealed class ObservationRuntimeTests : IDisposable
     { try { using var process = Process.GetProcessById(id); return process.HasExited; } catch (ArgumentException) { return true; } }
 
     [Theory]
+    [InlineData("deny", 2)] [InlineData("throw", 2)] [InlineData("cancel-inside", 4)] [InlineData("cancel-before", 4)]
+    public async Task Start_admission_refusal_fault_and_cancellation_acquire_no_game_or_Gua_artifacts(string mode, int expected)
+    {
+        if (!OperatingSystem.IsWindows()) return; // Native fixture coverage is Windows-only.
+        int port = Port(); var args = await Inputs("success", port); int calls = 0;
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(25)); if (mode == "cancel-before") stop.Cancel();
+        using var output = new StringWriter(); using var diagnostics = new StringWriter();
+        int exit = await CliApplication.ExecuteWithRunAdmissionAsync(args, output, diagnostics, (_, _) =>
+        {
+            calls++;
+            if (mode == "throw") throw new IOException("private-fixture-exception");
+            if (mode == "cancel-inside") stop.Cancel();
+            return mode == "cancel-inside";
+        }, stop.Token);
+        Assert.Equal(expected, exit); Assert.Equal(mode == "cancel-before" ? 0 : 1, calls);
+        Assert.False(File.Exists(Path.Combine(root, "pid")));
+        Assert.Empty(Directory.GetFiles(root, "run.json", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(root, "result.json", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(root, "manifest.json", SearchOption.AllDirectories));
+        Assert.DoesNotContain("private-fixture-exception", output.ToString() + diagnostics);
+        using var listener = new TcpListener(IPAddress.Loopback, port); listener.Start();
+    }
+
+    [Theory]
     [InlineData("success", 0)]
     [InlineData("timeout", 3)]
     [InlineData("cancel", 4)]
@@ -104,7 +128,8 @@ public sealed class ObservationRuntimeTests : IDisposable
         var args = await Inputs(mode, Port());
         using var output = new StringWriter();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        var task = CliApplication.ExecuteAsync(args, output, cancellation.Token);
+        var task = mode == "success" ? RunStartAssertions.ExecuteAsync(args, output, cancellation.Token)
+            : CliApplication.ExecuteAsync(args, output, cancellation.Token);
         if (mode == "delayed")
         {
             // Acknowledge a real saved false snapshot; never synthesize observation data.
