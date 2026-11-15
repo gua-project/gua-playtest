@@ -93,7 +93,7 @@ exploration strategy, Navigation, general Replay/repair, private judgement
 alongside a Debug host, or real Codex process isolation and authentication.
 
 
-## Test clocks and native no-Goal coverage
+## Test clocks and native composition coverage
 
 The native `ui-click-host-no-goal` fixture checks a real Player click, correlated
 successful host completion, one proposal/decision, independent machine failure
@@ -103,8 +103,11 @@ not a guarantee of dispatch within one second. Its test-only operation/result
 and observation allowances are 5 seconds, and its Running ceiling is 15 seconds.
 The latter is a separate whole-Running limit, not a per-reaction allowance or
 an end-to-end UX promise. Preparation remains 5 seconds and cleanup 3 seconds;
-a 30-second outer test watchdog includes those phases and persistence. Other
-fixture rows, contract examples and product timeouts are unchanged. A response
+a 30-second outer test watchdog includes those phases and persistence. The
+positive `ui-click-host` row and same-Recording `roundtrip` use these same
+budgets: they check native composition, not one-second startup/dispatch speed.
+Their one-click, Goal, Recording, result and cleanup assertions are unchanged.
+Other fixture rows, contract examples and product timeouts are unchanged. A response
 can still correctly expire before send if it exceeds the fixture's finite limit.
 These are explicit integration-test inputs, not changed product defaults.
 

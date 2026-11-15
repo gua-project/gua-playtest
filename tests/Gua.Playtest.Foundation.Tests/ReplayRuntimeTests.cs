@@ -54,7 +54,7 @@ public sealed class ReplayRuntimeTests
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         // These rows verify real composition, not a one-second host SLA.
         // Exact deadline/fresh-capture boundaries are checked with virtual clocks.
-        var nativeProgress = mode is "success" or "player" or "already" or "failure" or "save-failure" or "no-goal" or "cancel-after-send";
+        var nativeProgress = mode is "success" or "player" or "already" or "failure" or "save-failure" or "no-goal" or "cancel-after-send" or "no-result";
         if (nativeProgress)
         {
             scenario["constraints"]!["maxDurationMilliseconds"] = 15000;
@@ -117,8 +117,8 @@ public sealed class ReplayRuntimeTests
         await File.WriteAllTextAsync(Path.Combine(root, "command.json"), output.ToString());
         if (mode == "no-result")
         {
-            // Existing lost-completion control exercises failure-only export without
-            // changing any runtime deadline or injecting a new product delay.
+            // Require the host-consumed/missing-receipt premise, with the native
+            // composition window above. Exact expiry is tested with a controlled clock.
             Assert.True(timing.SaveFailure(root, true));
             var journal = JsonSerializer.SerializeToElement(timing.Snapshot()).GetProperty("journal");
             var rows = journal.GetProperty("rows").EnumerateArray().ToArray();
@@ -174,6 +174,10 @@ public sealed class ReplayRuntimeTests
             Assert.Equal("ActionUnconfirmed", command.RootElement.GetProperty("code").GetString());
             Assert.Equal(1, details.GetProperty("progress").GetProperty("dispatchedSteps").GetInt32());
             Assert.Equal(0, details.GetProperty("progress").GetProperty("completedSteps").GetInt32());
+            Assert.False(details.GetProperty("progress").GetProperty("planCompleted").GetBoolean());
+            Assert.False(details.GetProperty("progress").GetProperty("goalVerified").GetBoolean());
+            Assert.Equal("ActionUnconfirmed", verified.Result!.Reason);
+            if (mode == "no-result") Assert.True(verified.Result.PostProcessing.Complete);
             using var completion = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(runDirectory, "completion.json")));
             Assert.DoesNotContain(completion.RootElement.GetProperty("postProcessing").EnumerateArray(),
                 issue => issue.GetProperty("reason").GetString() is "InputReleaseUnconfirmed" or "ResourceReleaseUnconfirmed" or "CleanupTimeout");

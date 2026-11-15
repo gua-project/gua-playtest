@@ -60,7 +60,7 @@ public sealed class ScriptedExploreRuntimeTests
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["maxDecisions"] = 4;
-        var nativeProgress = mode is "ui-click-host-no-goal" or "roundtrip";
+        var nativeProgress = mode is "ui-click-host" or "ui-click-host-no-goal" or "roundtrip";
         if (nativeProgress)
         {
             // Native composition checks real clicks and independent Goal outcomes,
@@ -154,6 +154,8 @@ public sealed class ScriptedExploreRuntimeTests
         Assert.Throws<ArgumentException>(() => Process.GetProcessById(int.Parse(File.ReadAllText(pid))));
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         await Assert.ThrowsAsync<SocketException>(() => socket.ConnectAsync(IPAddress.Loopback, port));
+        if (mode is "roundtrip" or "ui-click-host-no-goal")
+            await RunReportConsumptionAssertions.VerifyAsync(result.RootElement, Path.Combine(root, "scenario.json"), root, root);
         if (mode == "roundtrip")
         {
             var recording = Assert.Single(Directory.GetFiles(details.GetProperty("artifactDirectory").GetString()!, "recording.json", SearchOption.AllDirectories));
@@ -235,7 +237,7 @@ public sealed class ScriptedExploreRuntimeTests
         var trialDetails = trialJson.RootElement.GetProperty("details");
         Assert.Equal("Saved", trialDetails.GetProperty("trialState").GetString());
         Assert.False(trialDetails.GetProperty("acceptedAtStart").GetBoolean());
-        await VerifyReplayAsync(trialDetails, "trial");
+        await VerifyReplayAsync(trialJson.RootElement, "trial");
         var trialId = trialDetails.GetProperty("trialId").GetString()!;
         Assert.False(string.IsNullOrWhiteSpace(trialId)); Assert.False(await manager.IsAcceptedAsync(plan));
         var unapproved = await Command("plan", "accept", "--managed-root", managed, "--plan", plan, "--trial", trialId, "--approve");
@@ -250,7 +252,7 @@ public sealed class ScriptedExploreRuntimeTests
         var replayDetails = replayJson.RootElement.GetProperty("details");
         Assert.True(replayDetails.GetProperty("acceptedAtStart").GetBoolean());
         Assert.NotEqual(trialDetails.GetProperty("runId").GetString(), replayDetails.GetProperty("runId").GetString());
-        await VerifyReplayAsync(replayDetails, "adopted");
+        await VerifyReplayAsync(replayJson.RootElement, "adopted");
         // Alter only the private copied input. Old trial/adoption cannot authorize
         // a changed Recording, while the original Explore Recording stays fixed.
         await File.AppendAllTextAsync(Path.Combine(Path.GetDirectoryName(plan)!, "recording.json"), " ");
@@ -264,8 +266,9 @@ public sealed class ScriptedExploreRuntimeTests
             replayRunId = replayDetails.GetProperty("runId").GetString(), candidateRefused = true,
             explicitAdoption = true, changedRecordingRefused = true, clicksPerReplay = 1, profile = "Player" }));
 
-        async Task VerifyReplayAsync(JsonElement details, string phase)
+        async Task VerifyReplayAsync(JsonElement command, string phase)
         {
+            var details = command.GetProperty("details");
             Assert.True(details.GetProperty("postProcessingComplete").GetBoolean());
             Assert.Equal(recordingHash, details.GetProperty("recordingSha256").GetString());
             Assert.NotEqual(exploreRunId, details.GetProperty("runId").GetString());
@@ -278,6 +281,7 @@ public sealed class ScriptedExploreRuntimeTests
             var verified = await RunArtifactReader.ReadResultAsync(details.GetProperty("artifactDirectory").GetString()!,
                 new(8 * 1024 * 1024, 8 * 1024 * 1024, 10000, 65536));
             Assert.Equal(ResultReadState.Verified, verified.State);
+            await RunReportConsumptionAssertions.VerifyAsync(command, Path.Combine(root, "scenario.json"), Path.Combine(root, phase), root);
         }
     }
 
