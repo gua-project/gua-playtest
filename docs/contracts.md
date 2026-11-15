@@ -32,7 +32,15 @@ Every object controlling Playtest behavior rejects unknown properties. Version 1
 
 `goal.objective` is natural language; optional `goal.success` and `goal.failure` are machine conditions. No steps, Goal references, or workflows are allowed in Goal. A Scenario with no success describes unverified exploration; a Planner's finish report cannot establish Passed. Setup describes a desired condition; an Environment fixture identifier selects an approved runtime fixture. No configuration field evaluates code.
 
-## Gua 1.1.1 reuse and version checks
+## Gua SDK・同梱スキーマ・ホストの互換性
+
+| 確認するもの | 参照先 |
+| --- | --- |
+| Playtest が使う SDK | [GuaIntegration の依存指定](../src/Gua.Playtest.GuaIntegration/Gua.Playtest.GuaIntegration.csproj) で `Gua.Testing`、`Gua.Runtime`、`Gua.Testing.Recording` を 1.2.0 に固定しています。配布物の確認方法は [Gua bridge](gua-bridge.md#distribution-purpose) を参照してください。 |
+| Core がオフライン検証に使う Gua スキーマ | [`schemas/gua-1.1.1`](schemas/gua-1.1.1/) にある、タグ `gua-v1.1.1`（`88f5dca4aa97c5d5187ab66ea4416377f3affc96`）から変更せずに取り込んだファイルです。MIT ライセンスと SHA-256 の一覧も含みます。 |
+| 接続先ゲームで使える機能 | 接続先の ABI、プロトコル、必要な機能を確認します。送信時にホスト側で検査する操作には、[対応するホスト機能](gua-bridge.md#action-boundary)と現在の操作権限が必要です。 |
+
+Core に同梱したスキーマの `$id` 参照はローカルで解決します。参照先が見つからなければ検証に失敗し、HTTP には接続しません。Core は Gua の公開 Value スキーマを使い、`GuaValue` のネイティブ呼び出しは行いません。SDK 側のスキーマを検証する `validate --gua-schema` は、Gua.Testing 1.2.0 の `GuaDistribution.ValidateJson` を使います。
 
 Environment may additionally contain the versioned optional [NavigationProfile](navigation.md).
 It declares actor/space, capsule offsets, explicit movement basis, scalar observations,
@@ -40,11 +48,9 @@ bounded survey and budgets, author-approved approaches and a named preparation f
 Static form validity is separate from trusted host preparation and current input/query authority.
 Omitting navigation retains the existing Environment/Scenario/Replay contract.
 
-Gua schemas under `schemas/gua-1.1.1` are unchanged copies from tag `gua-v1.1.1`, commit `88f5dca4aa97c5d5187ab66ea4416377f3affc96`, with the upstream MIT license and SHA-256 manifest. The product embeds these files and resolves their `$id` references locally. An unresolved reference fails; there is no HTTP fallback. Package consumers use Gua.Testing 1.1.1 `GuaDistribution.ReadSchema/ValidateJson` for Gua-only validation. Core reuses the exact public Value schema without calling `GuaValue` P/Invoke.
-
 Value v1 uses bool/integer/number/string/enum/list/set; integer range is ±9007199254740991, numbers are finite, enum identity includes enumType, and collection element type survives empty values. No null/object/nested collection is introduced into Value. Existing Gua nullable state and Input vector objects keep their distinct schemas. Enum membership comes from Gua enum-catalog-v1; catalog availability and dynamic type consistency are runtime checks.
 
-Gua `GuaVersion.EnsureCompatible` checks required ABI, protocol and capabilities for the connected context before use. ABI 1/protocol `"2"` describe 1.1.1, not a new Playtest version policy. UI tree v2, World tree v1, Value/Observe v1, Trace v1, metadata v2, Timed Segment v1 and spatial-r1 are independently versioned. UI Recording's managed reader handles v1; game-input v2 uses `GuaTimedSegmentImport.FromRecording`. A schema accepting Recording v2 does not promise UI v2 replay. No blanket rejection of future compatible Gua versions is added.
+現在の接続では `GuaVersion.EnsureCompatible` で ABI 1 とプロトコル `"2"` を確認し、経路に必要な機能も確認します。例えば観測には `observe_v1` が必要です。SDK は上表の版に固定し、接続先ゲームは経路ごとの互換条件で判断します。UI tree v2、World tree v1、Value/Observe v1、Trace v1、metadata v2、Timed Segment v1、spatial-r1 にはそれぞれ独立した版があります。UI Recording の読み取りは v1 に対応し、ゲーム入力の v2 は `GuaTimedSegmentImport.FromRecording` を使います。Recording v2 がスキーマ検証に通っても、UI の v2 再生が使えるとは限りません。
 
 ## Targets and observation identity
 

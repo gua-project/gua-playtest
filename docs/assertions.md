@@ -61,7 +61,7 @@ Temporal Pending/Expired, arbitrary time/group nesting, target membership change
 
 ## Acceptance and remaining integration
 
-`AssertionTests` supplies literal golden scalar/collection/boundary expectations, an independent 26-operator × 15-type compatibility table, a real regex timeout and loader/raw-JSON checks. `TruthLogicTests` supplies nine literal truth-table rows, errors in decisive groups and no-history examples. `AssertionIntegrationTests` checks unchanged upstream valid/invalid Value and comparison fixtures against the real Gua 1.1.1 native API and Core, including subnormals, plus trusted Runner eager preparation/execution and an invalid unselected nested branch.
+`AssertionTests` では、単一値・コレクション・境界値の固定期待値、26演算子 × 15型の組み合わせ、正規表現の実際のタイムアウト、読み込みと元の JSON の扱いを確認します。`TruthLogicTests` には三値論理の９行の表、結果が決まるグループ内でのエラー、過去の成立を持ち越さない例があります。`AssertionIntegrationTests` は Gua の正常・異常 Value と比較のテストデータをそのまま使い、[テストの依存指定](../tests/Gua.Playtest.Foundation.Tests/packages.lock.json) にある Gua 1.2.0 のネイティブ API と Core で、非正規化数を含む結果を確認します。Runner の事前準備と実行、選ばれない入れ子の分岐にある不正な比較も検証します。
 
 | Requirement | Evidence / remaining owner |
 | --- | --- |
