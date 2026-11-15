@@ -21,8 +21,8 @@ internal static class RunAdmission
     internal static void Require(Func<RunStartIdentity, CancellationToken, bool>? admit,
         string runId, RunIdentity identity, string sourceEnvironmentSha256, CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();
         if (admit is null) return;
+        token.ThrowIfCancellationRequested();
         bool accepted;
         try { accepted = admit(new(runId, identity, sourceEnvironmentSha256), token); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }

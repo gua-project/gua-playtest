@@ -9,6 +9,12 @@ namespace Gua.Playtest.Foundation.Tests;
 public sealed class RunAdmissionTests
 {
     static readonly RunIdentity Identity = new("fixture", "v1", new string('a', 64), "build", new string('b', 64));
+    [Fact]
+    public void Absent_admission_does_not_add_a_new_cancellation_checkpoint_to_normal_CLI()
+    {
+        using var stop = new CancellationTokenSource(); stop.Cancel();
+        RunAdmission.Require(null, "run", Identity, new string('c', 64), stop.Token);
+    }
     [Theory]
     [InlineData("deny", "RunAdmissionRejected")] [InlineData("throw", "RunAdmissionFailed")]
     [InlineData("unrelated-cancel", "RunAdmissionFailed")]
