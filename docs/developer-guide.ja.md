@@ -70,11 +70,11 @@ dotnet build --no-restore -c Release
 
 ```powershell
 dotnet run --no-build -c Release --project src/Gua.Playtest.Cli -- --help
-dotnet run --no-build -c Release --project src/Gua.Playtest.Cli -- validate --allow-root ./fixtures/contracts ./fixtures/contracts/scenario.json
-dotnet run --no-build -c Release --project src/Gua.Playtest.Cli -- validate --allow-root ./fixtures/contracts ./fixtures/contracts/bad-hash.json
+dotnet run --no-build -c Release --project src/Gua.Playtest.Cli -- --json validate --allow-root ./fixtures/contracts ./fixtures/contracts/scenario.json
+dotnet run --no-build -c Release --project src/Gua.Playtest.Cli -- --json validate --allow-root ./fixtures/contracts ./fixtures/contracts/bad-hash.json
 ```
 
-`scenario.json` は終了0、stdout は `{"status":"Valid","code":"Valid"}` です。このfixtureの成功条件は checkbox の `state.checked == true` という形式の例であり、実店舗の購入証拠ではありません。`bad-hash.json` は終了2で固定参照の不一致を示します。期待するコード一覧は [expected.json](../fixtures/contracts/expected.json)にあります。`--allow-root` は呼出し側が与える読み取り範囲です。参照ファイルの相対パスは、その参照を持つ文書から解決されます。
+`scenario.json` の終了コードは 0 で、標準出力は `{"status":"Valid","code":"Valid","details":null}` です。このテストデータはチェックボックスの `state.checked == true` を成功条件にする書き方の例です。`bad-hash.json` の終了コードは 2 で、固定参照のハッシュが一致しないことを示します。期待するコードは [expected.json](../fixtures/contracts/expected.json) にあります。`--allow-root` で読み取りを許す範囲を指定します。相対パスは、その参照を書いた文書の位置から解決します。
 
 判定の実装を追った後は、対応する既存テストを選べます。
 
@@ -92,10 +92,10 @@ node --test tools/fixture-oracle.test.mjs
 
 **自然言語の達成報告は合否を決めません。** 成功条件のない探索は、Planner が finish を返しても Passed にできません。判定用の期待値・失敗条件と公開Planner観測は別に保持し、Debug接続の結果を後から間引くだけで公開profileの境界を作ったことにしません。
 
-**公開packageの能力と接続経路の完成は別です。** Gua.Testing 1.2.0を使用します。送信直前チェックとホスト側enqueueを一体に守る guarded 経路や、実 Planner の隔離、実エンジンの受け入れ条件は [gua-bridge.md](gua-bridge.md)、[planning.md](planning.md)、[fixture-evidence.md](fixture-evidence.md)の制限を確認します。未公開APIを使える前提でfallbackを作らないでください。
+**SDK の版と、接続先で使える機能を確認します。** Playtest は Gua.Testing 1.2.0 を使います。送信時にホスト側で対象や権限を確認する操作には、接続先の `guarded_dispatch_v1` と現在の操作許可が必要です。確認方法は [Gua bridge](gua-bridge.md#action-boundary)、実 Planner の隔離は [planning.md](planning.md)、実エンジンで必要な証拠は [fixture-evidence.md](fixture-evidence.md) を参照してください。
 
 **保存時の検査と結果の読戻しにも境界があります。** `RunArtifactStore.Complete` は成果物の長さ・hash・参照を保存時に検査します。`RunArtifactReader.ReadResultAsync` の `Verified` は `result.json` の形式・サイズ・Run identityの確認で、Trace／Recording本体の事後改変がないことまで再検証した結果ではありません。
 
-**CLIの入口とライブラリの実装範囲は別です。** 公開CLIのコマンドは `--help` と `CliApplication` で確認してください。run/replay/report の正式なCLI compositionは #15 の統合作業です。ライブラリに準備・判定APIがあっても、それだけで `run` コマンドを使えることにはなりません。
+**目的に合う入口を [CLI 一覧](cli.md) から選びます。** 保存した Trace を読むなら `report`、Windows でゲームを起動して観測するなら `observe-run` を使います。`explore` と `replay` は入力の解決までを行い、有効な入力でも終了コード 2 の `ProductionRuntimeUnavailable` を返します。入力付きで実行できる範囲と起動条件は、一覧から各コマンドの手順を確認してください。
 
 結果の比較には同じ Scenario の定義・bytes hash、実ゲームの buildId、実効 Environment のidentityが必要です。Gua ライブラリの buildId をゲームの版番号として使うことはできません。過去の緑のCI、Fake試験、保存ファイルのschema適合は、それぞれが確認した範囲の証拠です。実ゲーム・実Planner・配布consumerの受け入れには各境界の独立した証拠が必要です。

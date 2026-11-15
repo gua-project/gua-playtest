@@ -8,7 +8,9 @@ Run は一回の試行です。Created → Preparing → Running → Completing 
 
 OnGoal／AfterPlanの厳密な完了条件、送信後不明、最後の操作の予算、時計の境界は下記の契約を参照してください。[RunTests](../tests/Gua.Playtest.Foundation.Tests/RunTests.cs)、[RunReviewTests](../tests/Gua.Playtest.Foundation.Tests/RunReviewTests.cs)、[RunClockBoundaryTests](../tests/Gua.Playtest.Foundation.Tests/RunClockBoundaryTests.cs)が再現例です。保存は [artifacts.md](artifacts.md)、起動前の責務は [preparation.md](preparation.md)、読む順番は [開発者ガイド](developer-guide.ja.md)にあります。
 
-Issue #6 provides native-free `Gua.Playtest.Runner.Execution`. One trusted execution owner serializes all calls. Transport callbacks return evidence; they cannot mutate primary results. `RunSession` is a per-Run object, never a shared cross-Run controller. #8/#10 assemble Explore/Replay adapters; #11 authorizes current reads/actions. No unavailable upstream guarded API or new Gua release is inferred. Gua.Testing remains pinned to 1.1.1; capability checks and unsupported action rejection stay in the concrete adapter/gate.
+Issue #6 の `Gua.Playtest.Runner.Execution` はネイティブライブラリを読み込みません。信頼された実行管理側が呼び出しを一つずつ処理します。通信のコールバックは観測や操作の証拠を返し、一次結果の確定は実行管理側が行います。`RunSession` は Run ごとに作ります。Explore／Replay の接続は #8／#10、現在の観測・操作の許可は #11 が扱います。
+
+Gua への接続には [GuaIntegration が依存する Gua.Testing 1.2.0](contracts.md#gua-sdk同梱スキーマホストの互換性) を使います。必要なホスト機能の確認と、対応していない操作の拒否は、実際に接続するアダプターと送信前の検査が担当します。公開 SDK の API があっても、接続先の能力や権限を確認できなければ操作を拒否します。
 
 ## States and result boundary
 
@@ -30,7 +32,24 @@ Other transition requests fail with fixed codes. `BeginRunning` uses one real Ru
 
 ## Complete candidate priority and tie-break
 
-One `Evaluate` call reads real time once and handles a complete evaluation unit, including current cancellation/global deadline. The owner must not call Evaluate separately for callbacks that belong to one unit. Both condition trees are evaluated even after Goal success, and errors remain candidates. The earliest enum in a class wins, then phase enum, then origin enum; event arrival order cannot choose the result.
+`Evaluate` は実時間を一度読み、取消と Run 全体の期限を含めて一つの評価単位を処理します。同じ評価単位に属するコールバックはまとめて評価します。Goal が成立した後も成功・失敗の両方の条件木を評価し、エラーは終端候補に残します。同じ優先度では表の理由の順、次に phase、origin の列挙順で決めます。
+
+| Priority | Reasons in tie-break order | Status |
+| --- | --- | --- |
+| 0 | InvalidContract, ObservationContractViolation | Invalid |
+| 1 | FailureCondition, PreparationTimeout, ActionFailed, ActionUnconfirmed, PlannerTimeout, ExecutionError, PlannerOutputInvalid, PlannerUsageLimit, PlannerConnectionFailure | Failed |
+| 2 | Cancelled | Aborted |
+| 3 | MaxDuration | TimedOut |
+| 4 | GoalImpossible, ActionsExhausted, DecisionsExhausted, RecoveryExhausted, WaitExpired, SuccessUnconfirmed, ExplorationFinished | Failed, except ExplorationFinished and no-success budget completion are Unverified |
+| 5 | GoalSatisfied | Passed |
+
+予算を使い切った場合、最後に許可した操作や判断と、その後の有限の観測機会が終わってから、予算枯渇を終端候補に加えます。例えば最後の購入で Goal が成立し、完了条件も満たした場合は、予算を使い切った事実を記録したうえで、予算枯渇を終端候補から外します。同じ評価単位に取消もあれば、表に従って `Aborted` になります。契約違反、失敗、Run 全体の期限も Goal 成立より優先します。採用しなかった理由はイベント記録に残します。独立した32行のテスト表で、契約違反・失敗・取消・期限・成功の組み合わせ、両方のコールバック順、同順位の選び方を確認します。
+
+成功条件のない探索が終了を宣言した場合や、通常の予算消化で終了した場合は `Unverified` になります。成功条件がある Run が通常終了し、成立を確認できない場合（`Unknown` を含む）は `Failed / SuccessUnconfirmed` です。エラー、取消、Run 全体の期限には、どちらの Goal でも固有の結果を適用します。`GoalSatisfied` を確定できるのは機械評価だけです。公開の候補イベントから成立を宣言することはできません。
+
+`OnGoal` は成功条件全体が成立した事実を保持し、承認済みで処理中の操作を確定してから一次結果を決めます。`AfterPlan` はさらに、中間条件、通常の入力解除、操作の完了確認を経て、ドライバーが最後まで実行したと報告することを求めます。Goal が成立した後も必須の失敗監視を続けます。`Completing` に入ると送信を閉じ、一次結果を固定します。その後に成功、取消、不正な観測が届いても一次結果は変わりません。
+
+### Arbitration and interruption
 
 Only short data publication holds the evaluation arbitration gate; its clocks, lifecycle watches
 and condition providers run outside it. An active unit retains a bounded immutable
@@ -96,21 +115,6 @@ bounded pending-evidence queue; a late producer cannot append after terminal clo
 A known false driver result is included in the same unit before that sampling, even when the caller was already cancelled.
 Provider callbacks still only enqueue evidence. Existing priorities, provider/driver
 cancellation behavior, absolute deadlines and finite cleanup bounds remain unchanged.
-
-| Priority | Reasons in tie-break order | Status |
-| --- | --- | --- |
-| 0 | InvalidContract, ObservationContractViolation | Invalid |
-| 1 | FailureCondition, PreparationTimeout, ActionFailed, ActionUnconfirmed, PlannerTimeout, ExecutionError, PlannerOutputInvalid, PlannerUsageLimit, PlannerConnectionFailure | Failed |
-| 2 | Cancelled | Aborted |
-| 3 | MaxDuration | TimedOut |
-| 4 | GoalImpossible, ActionsExhausted, DecisionsExhausted, RecoveryExhausted, WaitExpired, SuccessUnconfirmed, ExplorationFinished | Failed, except ExplorationFinished and no-success budget completion are Unverified |
-| 5 | GoalSatisfied | Passed |
-
-Terminal budget exhaustion becomes eligible after the final approved operation/decision and finite observation opportunity have ended. If that final unit establishes verified success and the completion policy is met, exhaustion is recorded but is not a terminal predicate. This preserves the last purchase success without changing the priority of *terminal* budget failure. Contract/failure/cancellation/global deadline always retain their priorities over that success. Other unused causes remain in the event ledger. Independent literal 32-row tests cover every contract/failure/cancellation/deadline/success combination, both callback orders, and same-class tie tests.
-
-No-success exploration cannot produce Passed: finish and ordinary budget completion are Unverified. With success configured, incomplete or Unknown success is Failed/SuccessUnconfirmed on ordinary completion, never an escape to Unverified. Actual errors, cancellation and global timeout retain their own statuses for either kind of Goal. Public candidate events cannot assert GoalSatisfied; only machine evaluation can verify it.
-
-`OnGoal` retains whole-success facts but settles outstanding approved operations before confirmation. `AfterPlan` additionally requires the driver to report full execution completion after intermediates, normal input releases and action confirmations. It continues mandatory failure monitoring after Goal success. Completing closes dispatch and primary results permanently; later success/cancellation/invalid observations cannot rewrite them.
 
 RunExecutor closes new preparation/driver work, Planner requests, approvals and dispatch as soon as cancellation or its safety deadline is observed. Its independent controller also bounds synchronous provider invocation and startup validation before those providers return a Task. The existing owner may settle evidence from work already in flight for one finite share of the existing CleanupTimeout. This starts a single cleanup epoch at interruption: elapsed real and independent time consume that same budget, and the remaining time is reserved for snapshot/resource cleanup. Neither settlement nor a recovered clock restarts the budget or extends preparation/Running deadlines. No new source observation is started to settle interrupted work.
 
@@ -245,7 +249,7 @@ The confirmation hook blocks new planner requests, permit approval, transport di
 Monitor real/condition timer targets are retained separately even when providers reuse a completed Task. The owner validates each selected wake target, reschedules an early hint against independent elapsed while preserving work/change/cancellation races, and rejects a clock that remains early after that finite interval. Cleanup counts independent elapsed through the end of every provider clock read, even without a delivered wake hint and including immediately completed callbacks; its origin is the first validated cleanup read, and source progress cannot repeatedly reset the physical baseline or grant a fresh overall budget.
 
 
-Superseding a finite capture wrapper does not prove the underlying feed call ended. Default feeds are joined within the existing owner deadline before any fresh post-work capture; requested source-token cancellation is an ended call, while other faults remain evidence. Only a trusted IIndependentRunObservationFeed may replace without joining: each invocation must own an independent request scope, synchronize fresh source state, and never queue behind the obsolete call or let its cancellation affect the replacement. This capability is not inferred for Gua1.1.1; source/guard acceptance remains open. Startup source timestamps below readiness floors or outside current validated clocks queue ObservationContractViolation/Preparation/Contract while retaining original InvalidOperationException type/stack. Missing initial observation or success/failure maps queues the same cause while retaining ArgumentNullException evidence; Runner API misuse remains separate.
+Superseding a finite capture wrapper does not prove the underlying feed call ended. Default feeds are joined within the existing owner deadline before any fresh post-work capture; requested source-token cancellation is an ended call, while other faults remain evidence. Only a trusted IIndependentRunObservationFeed may replace without joining: each invocation must own an independent request scope, synchronize fresh source state, and never queue behind the obsolete call or let its cancellation affect the replacement. The adapter must establish this capability independently of the Gua SDK version and guarded dispatch support. Startup source timestamps below readiness floors or outside current validated clocks queue ObservationContractViolation/Preparation/Contract while retaining original InvalidOperationException type/stack. Missing initial observation or success/failure maps queues the same cause while retaining ArgumentNullException evidence; Runner API misuse remains separate.
 
 Trusted lifecycle integration retains an already-armed exact process watch on the opaque start boundary. The serialized owner samples it after initial observation/clock processing in the same first Running arbitration cycle, before choosing primary; initial goal success cannot skip known host failure. This is internal adapter evidence, not a new public readiness/permission capability. Late provider callbacks use a bounded exception posting queue. Only the owner drains posts and freezes registration before primary confirmation, preventing worker mutation of pending events or snapshot lists. Drained original exceptions remain owned by the active evaluation until diagnostics are recorded; interruption retains their bounded original type/stack graph before abandoning a stalled lifecycle sample.
 The same internal queue distinguishes secondary callback diagnostics from actual provider failure evidence. A typed provider failure ready before closure carries its guarded cause into owner arbitration; callback faults cannot claim that cause. Queue overflow latches a constant-size fail-closed flag under the same lock: the owner emits Runner ExecutionError rather than allowing goal success after causal evidence was dropped. The queue and recorded evidence retain their existing limits. Both diagnostic and cause registration close atomically before the immutable primary. Later posts cannot change the primary, operation accounting or exception snapshots.

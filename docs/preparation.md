@@ -279,8 +279,4 @@ watch cancellation remains excluded; posting after primary freeze is rejected.
 Keep #8 open: actual approved Unity/Godot host fixture attestation, subscription/
 capture synchronization and guarded external play dispatch remain unverified.
 An installed engine alone is not a licensed engine run or FIX-007 evidence.
-Gua 1.1.1 lacks the published external atomic guard needed by #7; Gua PR180 is
-unpublished. No future capability is claimed. #7/#11/#15/#16 must connect actual
-host identity, permission/clock/profile, fixture, initial conditions and guarded
-dispatch; #9 must persist lifecycle evidence before launch. AT-START-001..007,
-AT-GOAL-003 and cooperative AT-REPLAY require those independent real results.
+Gua.Testing 1.2.0 の [公開 API](gua-bridge.md#action-boundary) があっても、接続先で送信時の検査が有効かは実際の経路で確認します。#7／#11／#15／#16 の統合では、ホストの識別、権限・時計・profile、fixture、初期条件、ホストで検査する送信を確認します。#9 は起動前にライフサイクルの証拠を保存します。AT-START-001..007、AT-GOAL-003、関連する AT-REPLAY の受け入れには、それぞれ独立した実行結果が必要です。

@@ -1,141 +1,57 @@
-# 実装前に具体化する詳細契約
+# 仕様の決定状況
 
-## 未決定の境界と決定先を読む
+OPEN-ID は、公開する形式、数値、実行時の境界などを決めた経緯を追うための識別子です。実装や試験の状態は各契約と検証記録で確認してください。判断が残っている項目は、影響を受ける契約を公開・実装する前に詰めます。
 
-OPEN-ID は仕様の数値や境界を明示的に決めるための識別子です。「未実装機能の一覧」ではありません。例えば時計の保証やPlanner隔離の方式が未決定なら、契約の決まった純粋比較は進められても、該当する実接続を受け入れ済みにはできません。
-
-項目ごとの解決先契約、担当、試験例を一緒に読みます。本文に起票前の検討事項と後の解決記録が並ぶ場合は、参照先の詳細契約と実コードを確認してください。公開Gua版と未公開能力、実接続の証拠を取り違えないための全体説明は [開発者ガイド](developer-guide.ja.md)にあります。
-
-ここにあるのは採用機能の撤回案ではなく、大枠の合意から実装へ進む際にまだ確定していない境界・実数値・API形式である。新しい機能を際限なく増やすための一覧ではない。
-
-全項目が決まるまでプロジェクト全体を止めない。各項目は影響する契約の公開・実装前に閉じる。解決内容は要件IDと試験例へ反映し、旧案と併記して曖昧に残さない。
+起票時の検討事項、仮の担当、当時の判断は [改稿前の記録](https://github.com/gua-project/gua-playtest/blob/ee78e841279ae4fdcdaf5bf86af5e1a197aef8d3/docs/03-open-decisions.md) にあります。作業 ID と実 Issue 番号の対応は [traceability.json](traceability.json) を参照してください。
 
 ## OPEN-01 wire/ABIの互換性とschema改版
 
-追加観測値とInputAction metadataを既存schemaへどう載せるか、旧clientのadditionalProperties制約、version negotiation、公開package/ABIの改版単位。既存descriptionは新設しない。
-
-**担当案:** G-01 G-03 G-04 T-01 P-01
-
-**固定する時点:** 破壊的なprotocol変更・型生成・全client実装に入る前。契約済みのFake/プロジェクト作業は継続可能。
-
-**状態:** Gua側は1.1.1公開契約で確定。Playtest版1のlocal schema registry、版/能力の分離はcontracts.mdへ反映。
+Playtest の文書形式 v1 では、同梱スキーマをローカルで解決し、文書形式の版、SDK の版、接続先の能力を個別に確認します。追加観測値には Gua Observe v1 を使います。InputAction の説明は既存の必須フィールド `description` を使います。Gua スキーマの取得元と現在の SDK は [文書契約](contracts.md) を参照してください。
 
 ## OPEN-02 Value・演算子の細部とenum境界
 
-P-03の比較契約は [assertions.md](assertions.md) で確定。Gua1.1.1 Value仕様を再利用し、containsAll/Any、連続sequence、絶対許容差、.NET regexと明示的上限を具体化。実providerのenum metadata/identityはP-07で接続する。
+**比較規則は確定済みです。** P-03 の契約は [assertions.md](assertions.md#open-02-decisions) にあります。Gua の Value v1 を使い、元の JSON が持つ型を保って比較します。例えば、`[x]` に対する `containsAll [x,x]` は True です。必要な数まで重複して含むかではなく、各値が含まれるかで判定します。空の期待値、連続する要素列、絶対許容差、.NET 正規表現とその実行上限も同じ契約で決まっています。
 
-enumTypeの名前衝突・定義更新、flags/alias/未定義数値の扱い、stringの比較/Unicode、setの等価・正規化と-0、collection containsAllの重複と空の意味、integer/number境界、regex方言と実行上限。型・許可集合は再議論せず具体例へ固定する。
-
-**担当案:** G-01 P-03
-
-**固定する時点:** 正規化・serializer・比較エンジンの互換契約を公開する前。
-
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+**接続時に確認する事項**は、Gua から受け取る enum カタログの有効性と、観測対象の同一性です。これは P-07 の範囲です。実際の観測を比較処理へ渡すときの扱いは [Gua bridge](gua-bridge.md#observation-boundary) に従います。
 
 ## OPEN-03 Observeの変更検知・寿命・購読境界
 
-getter型登録の変化をいつ検出するか、公開frame/tickか明示通知か、登録解除/同名再登録/collectionのin-place変更、getter例外、購読とSnapshotの連続性、欠損通知。任意の内部変数代入が自動で観測できるとは仮定しない。
-
-**担当案:** G-02 G-03 T-03
-
-**固定する時点:** G-02のnative/binding API実装前。最初に閉じる契約課題。
-
-**状態:** Gua Observe v1で確定済み。frame sample/Notify、Owner/登録寿命、Snapshot/cursor、gap/staleを再利用。
+Gua Observe v1 のフレーム単位の取得と明示通知、Owner と登録の寿命、Snapshot と購読カーソルを使います。内部変数への代入をすべて自動で観測できるとは限りません。欠落や古い観測を扱う規則は [Gua bridge](gua-bridge.md#observation-boundary) を参照してください。
 
 ## OPEN-04 既存標準stateとカスタムObserveの参照
 
-visible/enabled/worldPosition等の既存fieldと同名Observeの名前衝突、UI/world selectorの正式対応、取得不能なproperty/複数一致/対象差替え、同一性とschemaキャッシュの境界。
-
-**担当案:** G-02 P-01 P-03 P-07
-
-**固定する時点:** 正式Target schemaとselector変換を固定する前。
-
-**状態:** Target/readのsource/region/selectorと同一性cacheはcontracts.mdで確定。比較/時間意味は#4/#5、runtime解決は#7。
+Target と read の `source`、`region`、`selector`、キャッシュの同一性は [文書契約](contracts.md#targets-and-observation-identity) で決まっています。比較は [assertions.md](assertions.md)、時間条件は [conditions.md](conditions.md)、実行時の解決は [Gua bridge](gua-bridge.md) を参照してください。
 
 ## OPEN-05 条件評価の完全な状態表
 
-P-03の通常三値表・不正優先・全leaf事前検証は [assertions.md](assertions.md) で確定。P-04のquantifier、任意ネスト、within/for、観測連続性、Pending/Satisfied/Expiredとgroupへのローカル期限伝播は [conditions.md](conditions.md) で確定。独立した完全時間状態表は `tests/fixtures/playtest/condition-state-table.json`、三値・対象数・期限境界の固定期待値は `ConditionTests` に収録する。
+[比較契約](assertions.md) と [条件契約](conditions.md) で、三値論理、全比較の事前検証、対象数、入れ子、`within` と `for`、観測の連続性、保持状態と期限切れの伝播が決まっています。観測エラーは真偽と時間状態を分けて扱います。成立前の保持はリセットし、期限とタイマーは進めます。Running や待機の開始時には、同じ観測時刻を複数の条件で共有します。
 
-承認済みの三値・通常all・時間成立履歴・within/forを維持しつつ、任意のネスト、Unknown中の期限切れ、対象数変化とforの継続、観測errorとPending/Expired、同時観測境界を真理値表・状態機械へ落とす。
-
-**担当案:** P-03 P-04 P-05
-
-**固定する時点:** P-04の公開意味規則とgolden fixture確定前。
-
-**状態:** 条件境界の意味規則と受け入れデータを確定。観測errorも真偽と時間状態を分離し、holdをリセットして期限・timerを進める。Running/waitの同時観測起点は明示capture timestampで共有する。P-05のRun終端優先順位・全体期限/予算、P-07/P-10の実Observe連続性・profile/操作抑止、P-15の実fixture統合受け入れは後続の未完了範囲として維持する。条件仕様の確定はこれらの実統合完了を意味しない。
+[条件の状態表](../tests/fixtures/playtest/condition-state-table.json) と [ConditionTests](../tests/Gua.Playtest.Foundation.Tests/ConditionTests.cs) で期待値を確認できます。Run の終端や予算は [OPEN-06](#open-06-終端述語理由コード予算最終操作)、実観測の連続性・profile・操作抑止や実ゲームでの受け入れは、各接続経路と [検証条件](fixture-evidence.md) を参照してください。
 
 ## OPEN-06 終端述語・理由コード・予算最終操作
 
-主結果優先順位は承認済み。ただし予算枯渇を終端候補にする時点、最後の承認済み操作の成功、完了未確認をいつ継続不能と判定するか、phase/origin/reasonの正式列挙とtie-breakを固定する。最後の操作の成功を直ちに予算切れで打消さない既存合意を守る。
-
-**担当案:** P-05 P-13
-
-**固定する時点:** 実行制御とCLI result schema公開前。
-
-**状態:** コントローラの終端述語・列挙・tie-break・最終承認操作の有限観測機会を [execution.md](execution.md) で確定。実host/Planner/Replay/CLIとFIX-007統合受け入れは後続Issueで未完了。
+終端候補を選ぶ条件、理由の一覧、同順位の決め方、最後に許可された操作で結果を確認できる時間は [実行契約](execution.md) にあります。最後の操作で成功し、完了条件も満たした場合は、予算を使い切ったことだけで失敗にはしません。ホスト、Planner、Replay、CLI を組み合わせた検証は、各経路と FIX-007 の証拠で確認します。
 
 ## OPEN-07 元Recordingの時刻・host順序保証・simulation能力
 
-記録時刻が送信/適用/結果受信のどれか、旧記録の変換可否、同offset順序、ホスト適用時刻の計測、leaseとsimulation時計の関係、原子的適用を要求する場合の能力検査。保証不能な厳密モードは拒否する。
-
-**担当案:** G-05 P-09
-
-**固定する時点:** Timed Segment executorとRecording互換変換の実装前。
-
-**状態:** 公開 Gua 1.1.1 を消費する境界は [replay.md](replay.md) で固定。UI の記録時刻、legacy-unknown 変換、同 offset 順序、明示 clock/capability、実時間 lease/cleanup を区別し、厳密能力不足を拒否する。実 engine の適用時刻・simulation/lease 計測は引き続き受け入れ証拠が必要。
+[Replay 契約](replay.md#published-gua-adapters-and-timing) で、UI の記録時刻、古い記録の時刻が不明な場合の変換、同一オフセットでの順序、必要な時計とホスト能力、実時間のリースと後処理を扱います。厳密な時間規則を満たせない場合は実行前に拒否します。実エンジンが操作を適用した時刻や、シミュレーション時計とリースの挙動には実測の証拠が必要です。
 
 ## OPEN-08 Replay Planの参照範囲・hash・採用証拠
 
-固定bytes SHA-256は承認済み。Plan本体と採用証拠の格納場所/hash対象、自己参照hashの回避、Recording範囲の完全カバレッジ・飛ばす操作、既存waitとの競合、候補試験の完走条件を固定する。
-
-**担当案:** P-01 P-09 P-14
-
-**固定する時点:** plan create/acceptのファイル形式を公開する前。
-
-**状態:** bytes SHA-256、外部採用証拠、全Recording境界はcontracts.mdで確定。[replay.md](replay.md) の runtime は保持 bytes と全範囲・順序付き checkpoint を消費し、既存 wait を黙って削除しない。実完走/採用の受け入れは#10/#14。
+[文書契約](contracts.md) は、元バイト列の SHA-256、Plan の外に置く採用証拠、Recording 全体を扱う境界を定めます。[Replay 契約](replay.md) は保持したバイト列と順序付きチェックポイントを使い、既存の待機を残します。試行が最後まで実行されたことと、Plan が明示採用されたことは [採用契約](plan-adoption.md) の証拠で確認します。
 
 ## OPEN-09 Planner実行隔離と接続契約
 
-対応するCodex/App Server版、利用できる出力schema制約、sandbox/承認/ネットワーク/直接Gua接続の防止をOSごとに検証する。プロンプトやアセンブリ分離だけで技術的境界と称さない。
-
-**担当案:** P-10 P-12
-
-**固定する時点:** 実Plannerを実ゲームへ接続する前。
-
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+実 Planner を実ゲームへ接続する前に、対応する Codex／App Server の版、出力スキーマ、サンドボックス、承認、ネットワーク、直接の Gua 接続を防ぐ仕組みを OS ごとに確認します。隔離はプロンプトやアセンブリの分離だけでは確認できません。[Planner 契約](planning.md) と [Codex 接続の調査](codex-protocol.md) を参照してください。
 
 ## OPEN-10 資源制限・既定値・設定場所
 
-Trace byte/event/queue/attachment上限、準備/cleanup/Planner/waitの既定期限、区間時間とmaxLateness、観測打切り、regex上限、停滞初期値の格納場所。100stepは確定、8行動/3反復/3回復や20msは提案値/説明用値として区別する。
-
-**担当案:** T-01 P-01 P-05 P-11
-
-**固定する時点:** 無制限動作を残さず、その機能の公開・本番fixture実行前に有限値を固定する。
-
-**状態:** 公開形式は明示有限Environment limitsで確定。100step以外に提案既定値を導入しない。Runの明示有限上限・cleanup配分はexecution.mdで確定。実効設定解決とTrace/回復/CLI統合は#9/#12/#15。
+Environment には有限の上限を明示します。Run の時間・件数上限と後処理の時間配分は [実行契約](execution.md) にあります。Trace の 100 step は合意済みです。8行動・3反復・3回復や 20ms は起票時の提案・説明に使った値です。実行時に適用する上限は、[保存](artifacts.md)、[回復](exploration.md)、[CLI](cli.md) の各契約で確認します。
 
 ## OPEN-11 配布と互換性の実測値
 
-利用するGua正式版、native/engine/OS実行経路、Viewer配布API、Codex対応範囲を実測する。v0.1の配布方針は確定だが、実測していない版・OSを対応済みにしない。
-
-**担当案:** G-06 P-12 P-16 P-17
-
-**固定する時点:** 配布公開と対応表の確定前。
-
-**状態:** 未確定。具体的な案を別途確認してから、決定した仕様と受け入れデータへ更新する。
+現行 SDK の依存とパッケージ検査は [文書契約](contracts.md) と [Gua bridge](gua-bridge.md#distribution-purpose) にあります。配布時の互換性を示すには、対象のネイティブ配布物、エンジン、OS、Viewer、Codex の組み合わせで実行した証拠が必要です。
 
 ## OPEN-12 正式名称とIssue対応の確定
 
-仮のフィールド/インターフェース/Package ID/Reason名と、既存APIの命名の対応。今回のG-/T-/P-IDは起票用仮IDであり実GitHub番号ではない。移管後のURLは実際の移管結果で更新する。
-
-**担当案:** P-01 P-13 P-17
-
-**固定する時点:** 公開API・NuGet登録・GitHub起票前。
-
-**状態:** 型/schema名と実Issue対応はcontracts.mdとtraceability.jsonで確定。結果reason/tie-breakは#6、CLI入口の正式組立は#15。
-
-## 今回の整理から見た最初の一件
-
-OPEN-03はGua 1.1.1で確定済み。現在はPlaytest側のOPEN-02/05/06/09/11を担当Issueで具体化し、確定した契約から並行実装する。
-
-これはObserveを別方式へ変更する決定ではない。既に採用したAPIとread-only方針を維持し、どの瞬間に変化を確定して通知するかを具体化する。
+型とスキーマの名称は [文書契約](contracts.md)、作業 ID と実 Issue の対応は [traceability.json](traceability.json) にあります。結果の理由と同順位の規則は [実行契約](execution.md)、現在使えるコマンドは [CLI](cli.md) を参照してください。
