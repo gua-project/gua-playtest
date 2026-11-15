@@ -76,12 +76,15 @@ public sealed class GuardedReplayTests
     public async Task Real_guarded_host_preserves_one_attempt_completion_and_refusal(string mode)
     {
         using var host = new GuaRuntime(); var endpoint = Start(host);
-        using var observation = new BridgeObservations(endpoint, GuaObservationProfile.Debug, TimeSpan.FromSeconds(1), 100, 65536);
+        // Native composition verifies lifecycle/receipt facts, not one-second connection speed.
+        // Keep the separate static Batch() offset boundary independent of this fixture allowance.
+        var batch = Batch() with { Timeout = TimeSpan.FromSeconds(5) };
+        using var observation = new BridgeObservations(endpoint, GuaObservationProfile.Debug, TimeSpan.FromSeconds(5), 100, 65536);
         using var click = observation.CreateGuardedUiClick();
         using var control = new GuaWebSocketContext(endpoint);
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-        var receipts = new List<GuardedUiReceipt>();
-        var calls = new Calls(mode == "cancel-before" ? () => cancel.Cancel() : null, () =>
+        var receipts = new List<GuardedUiReceipt>(); bool cancelledByFixture = false;
+        var calls = new Calls(mode == "cancel-before" ? () => { cancelledByFixture = true; cancel.Cancel(); } : null, () =>
         {
             if (mode is "success" or "failed" or "reset-after")
             {
@@ -94,18 +97,19 @@ public sealed class GuardedReplayTests
             receipt => receipts.Add(receipt), TimeSpan.FromMilliseconds(5));
         if (mode == "cancel-before")
         {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => replay.PlayAsync(Batch(), calls, cancel.Token).AsTask());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => replay.PlayAsync(batch, calls, cancel.Token).AsTask());
+            Assert.True(cancelledByFixture); // an outer watchdog is not this control's evidence
             Assert.Equal(0, calls.Sends);
         }
         else
         {
-            var result = await replay.PlayAsync(Batch(), calls, cancel.Token);
+            var result = await replay.PlayAsync(batch, calls, cancel.Token);
             Assert.Equal(mode == "success" ? ReplayReceiptStatus.Succeeded : mode == "reset-after" ? ReplayReceiptStatus.Unconfirmed : ReplayReceiptStatus.Failed, result.Status);
             Assert.Equal(mode is "success" or "failed" ? 1 : 0, result.CompletedSteps);
             Assert.Equal(1, calls.Sends);
         }
         var sends = calls.Sends;
-        Assert.Throws<InvalidOperationException>(() => { _ = replay.PlayAsync(Batch(), calls, default); });
+        Assert.Throws<InvalidOperationException>(() => { _ = replay.PlayAsync(batch, calls, default); });
         Assert.Equal(sends, calls.Sends);
         Assert.False(host.TryConsumeAction(GuaActionType.Click, "start", out _));
     }

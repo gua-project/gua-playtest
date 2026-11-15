@@ -107,3 +107,14 @@ refunded or retried; late result confirmation cannot change the primary. Both
 paths require successful independent input/resource cleanup. The unsent row is
 the negative control: a timeout alone must not manufacture a missing sent receipt.
 This test policy does not explain the natural SDK delay observed in CI.
+
+The standalone `GuardedReplayTests` native transport composition fixture likewise
+uses five-second client requests (including initial identity connection) and a
+five-second native batch. It checks receipt/lifecycle/refusal behavior, not
+connection setup within one second. Its eight-second caller cancellation remains
+unchanged; it has no Runner Running phase. Static unsupported-input/offset tests
+retain their original two-second batch boundary. Reset-after, stale, cancel,
+completion counts and no-repeat assertions are unchanged. Product request defaults
+and Runner/cleanup deadlines are not changed by these test-only inputs.
+The cancel-before control also requires its explicit fixture cancellation hook,
+so a caller watchdog firing during setup cannot falsely satisfy that case.
