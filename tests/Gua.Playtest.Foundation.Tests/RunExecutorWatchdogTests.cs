@@ -10,13 +10,19 @@ public sealed partial class RunTests
     // stalls, so snapshots are observation times, not exact one-second samples.
     private async Task<T> AwaitFinalizationWithWatchdogAsync<T>(Task<T> execution, Func<string> capture)
     {
+        await AwaitFinalizationWithWatchdogAsync((Task)execution, capture);
+        return await execution;
+    }
+
+    private async Task AwaitFinalizationWithWatchdogAsync(Task execution, Func<string> capture)
+    {
         var elapsed = Stopwatch.StartNew();
         using var timers = new CancellationTokenSource();
         var diagnostic = Task.Delay(TimeSpan.FromSeconds(1), timers.Token);
         var watchdog = Task.Delay(TimeSpan.FromSeconds(5), timers.Token);
         try
         {
-            return await AwaitFinalizationWatchdogCoreAsync(execution, diagnostic, watchdog, capture,
+            await AwaitFinalizationWatchdogCoreAsync(execution, diagnostic, watchdog, capture,
                 message => raceOutput.WriteLine($"Finalization elapsedMs={elapsed.Elapsed.TotalMilliseconds:F3}: {message}"),
                 () => elapsed.Elapsed >= TimeSpan.FromSeconds(1));
         }
@@ -24,6 +30,13 @@ public sealed partial class RunTests
     }
 
     private static async Task<T> AwaitFinalizationWatchdogCoreAsync<T>(Task<T> execution,
+        Task diagnostic, Task watchdog, Func<string> capture, Action<string> record, Func<bool> diagnosticDue)
+    {
+        await AwaitFinalizationWatchdogCoreAsync((Task)execution, diagnostic, watchdog, capture, record, diagnosticDue);
+        return await execution;
+    }
+
+    private static async Task AwaitFinalizationWatchdogCoreAsync(Task execution,
         Task diagnostic, Task watchdog, Func<string> capture, Action<string> record, Func<bool> diagnosticDue)
     {
         // Register the terminal race before observing diagnostics, so delayed
@@ -35,9 +48,8 @@ public sealed partial class RunTests
         var winner = await terminal;
         if (winner == watchdog)
             throw new Xunit.Sdk.XunitException($"Finalization did not finish within five-second outer test watchdog: {capture()}");
-        var result = await execution;
+        await execution;
         if (slow) record($"completed after threshold: {capture()}");
-        return result;
     }
 
     [Fact]

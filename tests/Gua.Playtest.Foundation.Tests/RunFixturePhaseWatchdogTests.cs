@@ -6,11 +6,8 @@ public sealed partial class RunTests
 {
     // Fixture coordination only. Neither this timeout nor its diagnostic threshold
     // is passed into RunSession, FiniteOperation, cleanup or a provider.
-    private async Task AwaitFixturePhaseAsync(Task work, string phase, Func<string> capture)
-    {
-        await AwaitFixturePhaseAsync(Complete(work), phase, capture);
-        static async Task<bool> Complete(Task task) { await task; return true; }
-    }
+    private Task AwaitFixturePhaseAsync(Task work, string phase, Func<string> capture)
+        => AwaitFinalizationWithWatchdogAsync(work, () => $"fixturePhase={phase}; {capture()}");
     private Task<T> AwaitFixturePhaseAsync<T>(Task<T> work, string phase, Func<string> capture)
         => AwaitFinalizationWithWatchdogAsync(work, () => $"fixturePhase={phase}; {capture()}");
 
@@ -83,6 +80,36 @@ public sealed partial class RunTests
         await JoinFixtureWithoutMaskingAsync(() => Task.CompletedTask, new TimeoutException(),
             _ => Assert.Fail("Successful join must not report failure"));
         Assert.Equal(42, await AwaitFixturePhaseAsync(Task.FromResult(42), "ready",
-            () => throw new InvalidOperationException("Fast success must not capture")));
+            () => "synthetic-completed-work"));
+    }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task FixturePhaseRetainsActualTaskWinnerBeforeObserverResumes(bool workFirst)
+    {
+        var work = new TaskCompletionSource(); var stop = new TaskCompletionSource();
+        var threshold = new TaskCompletionSource();
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var resume = new ManualResetEventSlim();
+        int records = 0;
+        var waiting = AwaitFinalizationWatchdogCoreAsync((Task)work.Task, threshold.Task, stop.Task,
+            () => "controlled", _ =>
+            {
+                if (Interlocked.Increment(ref records) != 1) return;
+                held.TrySetResult();
+                if (!resume.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("Controlled observer hold did not release");
+            }, () => false);
+        var notification = RunBlockingFixture(() => threshold.SetResult());
+        try
+        {
+            await held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // The observer is explicitly stopped before it inspects the terminal
+            // race. Complete both tasks, then let it inspect the recorded winner.
+            if (workFirst) { work.SetResult(); stop.SetResult(); }
+            else { stop.SetResult(); work.SetResult(); }
+            resume.Set();
+            if (workFirst) await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+            else await Assert.ThrowsAsync<Xunit.Sdk.XunitException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+        finally { resume.Set(); await notification.WaitAsync(TimeSpan.FromSeconds(5)); }
     }
 }
