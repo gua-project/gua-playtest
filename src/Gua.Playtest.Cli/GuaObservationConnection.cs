@@ -134,8 +134,9 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
         // complete UI tree. Mixed/nonstandard reads keep their cursor semantics.
         bool clickPointSnapshot = enableClick && requests.All(read =>
             read["target"]?["source"]?.GetValue<string>() == "ui" && read["region"]?.GetValue<string>() == "standard");
-        var collections = scopedSnapshots || clickPointSnapshot
-            ? observations.ReadUiSnapshot(requests).Collections : observations.ReadBatch(requests);
+        var collections = scopedSnapshots ? observations.ReadUiSnapshot(requests).Collections
+            : clickPointSnapshot ? observations.ReadUiPointBatch(requests)
+            : observations.ReadBatch(requests);
         int index = 0;
         ConditionObservationUnit Unit(PreparedCondition? condition)
         {

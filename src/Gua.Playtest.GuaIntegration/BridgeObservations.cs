@@ -158,6 +158,14 @@ public sealed class BridgeObservations : IDisposable
     /// read cannot consume another read's intervening notifications. Standard fields have
     /// snapshot-only evidence; Observe notifications do not imply continuous standard state.</summary>
     public IReadOnlyList<BridgeReadCollection> ReadBatch(IReadOnlyList<JsonObject> reads)
+        => ReadBatchCore(reads, uiPoints: false);
+
+    /// <summary>Standard UI point values without cursor continuity. Applies the same
+    /// bounded failure projection as ReadBatch, discarding partial values on overflow.</summary>
+    public IReadOnlyList<BridgeReadCollection> ReadUiPointBatch(IReadOnlyList<JsonObject> reads)
+        => ReadBatchCore(reads, uiPoints: true);
+
+    private IReadOnlyList<BridgeReadCollection> ReadBatchCore(IReadOnlyList<JsonObject> reads, bool uiPoints)
     {
         lock (gate)
         {
@@ -165,6 +173,7 @@ public sealed class BridgeObservations : IDisposable
             if (reads.Count == 0 || reads.Count > maxNodes) throw new ArgumentOutOfRangeException(nameof(reads));
             try
             {
+                if (uiPoints) return ReadUiSnapshot(reads).Collections;
                 if (subscription is null) Resubscribe();
                 var changes = ParseTransport(ObservationCallDiagnostics.Call("poll", subscription!.PollJson));
                 var budget = new ObservationBudget(maxNodes, maxBytes);

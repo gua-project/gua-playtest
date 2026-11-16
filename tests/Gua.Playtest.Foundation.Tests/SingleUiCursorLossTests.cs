@@ -75,6 +75,57 @@ public sealed class SingleUiCursorLossTests
         finally { Assert.True(await connection.ReleaseAsync(default)); }
     }
 
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task Fixed_click_point_reads_keep_growth_limits_unknown_and_recover(bool byteLimit)
+    {
+        using var host = new GuaRuntime();
+        void Publish(bool oversized, bool goal)
+        {
+            host.BeginFrame("fixture");
+            host.RegisterNode(new("start", "button", oversized && byteLimit ? new string('x', 8192) : "Start",
+                new(0, 0, 10, 10), Checked: goal));
+            if (oversized && !byteLimit)
+                foreach (var id in new[] { "extra-one", "extra-two" }) host.RegisterNode(new(id, "button", id, new(0, 0, 10, 10)));
+            host.EndFrame();
+        }
+        Publish(false, false);
+        using var port = new TcpListener(IPAddress.Loopback, 0); port.Start();
+        int number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
+        Assert.True(host.StartInspectorBridge(number));
+        var clock = new MonotonicClock();
+        var definition = JsonNode.Parse("""{"kind":"assertion","read":{"target":{"source":"ui","selector":{"id":{"value":"start"}}},"region":"standard","field":"state.checked","valueType":{"type":"bool"}},"quantifier":"one","operator":"equals","expected":{"type":"bool","value":true}}""")!.AsObject();
+        var condition = PreparedCondition.Create(definition, new AssertionOptions(100, 1024));
+        BridgeReadCollection? collection = null;
+        var connection = new GuaObservationConnection(new(host.InspectorBridgeUrl), "fixture-build", "Debug", clock,
+            condition, null, byteLimit ? 100 : 2, byteLimit ? 4096 : 65536, TimeSpan.FromSeconds(2),
+            () => { }, (captured, _) => Volatile.Write(ref collection, captured), enableClick: true);
+        try
+        {
+            await connection.IdentifyAsync(default);
+            var initial = await connection.SynchronizeAsync("limits-initial", default);
+            Assert.Equal(TruthValue.False, condition.Start(clock, TimeSpan.Zero)
+                .EvaluateAt(initial.Observation.Success, initial.Observation.CapturedAt).Evaluation.Truth);
+            Publish(true, true);
+            var oversized = await connection.CaptureAsync(default);
+            Assert.Equal(ReadAvailability.Truncated, Volatile.Read(ref collection)!.Availability);
+            var limit = Assert.Single(collection!.Reads);
+            Assert.Equal(ReadAvailability.Truncated, limit.Availability);
+            Assert.Null(limit.Identity); Assert.Null(limit.Value); Assert.Null(limit.EnumCatalog);
+            Assert.Equal(TruthValue.Unknown, condition.Start(clock, TimeSpan.Zero)
+                .EvaluateAt(oversized.Success, oversized.CapturedAt).Evaluation.Truth);
+            Publish(false, true);
+            var recovered = await connection.CaptureAsync(default);
+            Assert.Equal(ReadAvailability.Available, Volatile.Read(ref collection)!.Availability);
+            Assert.Equal(TruthValue.True, condition.Start(clock, TimeSpan.Zero)
+                .EvaluateAt(recovered.Success, recovered.CapturedAt).Evaluation.Truth);
+            Assert.Equal(initial.CapturedIdentity.SourceId, connection.LastIdentity!.SourceId);
+            Assert.Equal(initial.CapturedIdentity.Epoch, connection.LastIdentity.Epoch);
+            Assert.Null(connection.Click!.Receipt);
+            Assert.False(host.TryConsumeAction(GuaActionType.Click, "start", out _));
+        }
+        finally { Assert.True(await connection.ReleaseAsync(default)); }
+    }
+
     private sealed class MonotonicClock : IClock
     {
         private readonly Stopwatch time = Stopwatch.StartNew();
