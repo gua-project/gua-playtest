@@ -113,10 +113,7 @@ NotSent, SentUnconfirmed, PartialExecution and Confirmed. Uncertain/partial work
 closes new Planner requests even before the arbiter receives ActionUnconfirmed;
 there is no automatic resend. Only reserved requests can be refunded.
 
-The gate does not make a check/send race atomic. #7's concrete guarded transport
-must compare current epoch/profile/definitions while enqueuing/consuming. Gua
-1.1.1's external unguarded route cannot satisfy this; upstream PR 180 is not a
-published capability. No unrestricted transport fallback is introduced.
+PlannerGate の確認が済んだ後でも、送信までに接続先の状態は変わりえます。#7 の通信経路では、ホストが現在の epoch、profile、入力定義を確認し、操作の受付・消費を一体で行う必要があります。[Gua.Testing 1.2.0 の公開 API](gua-bridge.md#action-boundary) を使う場合も、接続先の `guarded_dispatch_v1` と操作許可を確認します。条件を満たさない場合は送信を拒否します。
 
 ## Monitoring, faults and diagnostics
 
