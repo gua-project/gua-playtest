@@ -86,6 +86,8 @@ There is no identity cache to accidentally reuse across replacement or reset.
 Query truncation and configured byte/node limits return truncated.
 `ReadUiPointBatch` applies this same failure projection to standard UI point
 snapshots without claiming cursor continuity; overflow discards all partial values.
+The batch byte ceiling includes serialized collection identities and metadata,
+including repeated reads, not only the scalar values.
 The packaged
 managed client buffers a remote response before this adapter can inspect its
 length: these are returned-document limits, not a total transport-memory ceiling.

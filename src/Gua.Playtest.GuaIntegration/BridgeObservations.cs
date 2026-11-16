@@ -173,7 +173,13 @@ public sealed class BridgeObservations : IDisposable
             if (reads.Count == 0 || reads.Count > maxNodes) throw new ArgumentOutOfRangeException(nameof(reads));
             try
             {
-                if (uiPoints) return ReadUiSnapshot(reads).Collections;
+                if (uiPoints)
+                {
+                    var points = ReadUiSnapshot(reads).Collections;
+                    var pointBudget = new ObservationBudget(maxNodes, maxBytes);
+                    foreach (var point in points) pointBudget.TakeBytes(JsonSerializer.Serialize(point));
+                    return points;
+                }
                 if (subscription is null) Resubscribe();
                 var changes = ParseTransport(ObservationCallDiagnostics.Call("poll", subscription!.PollJson));
                 var budget = new ObservationBudget(maxNodes, maxBytes);

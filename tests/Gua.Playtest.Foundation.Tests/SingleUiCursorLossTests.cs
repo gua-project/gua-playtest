@@ -126,6 +126,38 @@ public sealed class SingleUiCursorLossTests
         finally { Assert.True(await connection.ReleaseAsync(default)); }
     }
 
+    [Fact]
+    public void Fixed_click_point_batch_counts_aggregate_serialized_metadata()
+    {
+        using var host = new GuaRuntime();
+        host.BeginFrame("fixture"); host.RegisterNode(new("start", "button", "Start", new(0, 0, 10, 10), Checked: true)); host.EndFrame();
+        using var port = new TcpListener(IPAddress.Loopback, 0); port.Start();
+        int number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
+        Assert.True(host.StartInspectorBridge(number));
+        const int maxBytes = 4096;
+        using var observations = new BridgeObservations(host.InspectorBridgeUrl, GuaObservationProfile.Debug,
+            TimeSpan.FromSeconds(2), 100, maxBytes);
+        var read = JsonNode.Parse("""{"target":{"source":"ui","selector":{"id":{"value":"start"}}},"region":"standard","field":"state.checked","valueType":{"type":"bool"}}""")!.AsObject();
+        var single = Assert.Single(observations.ReadUiPointBatch([read]));
+        Assert.Equal(ReadAvailability.Available, single.Availability);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(System.Text.Json.JsonSerializer.Serialize(single)) < maxBytes);
+        var repeated = Enumerable.Range(0, 32).Select(_ => (JsonObject)read.DeepClone()).ToArray();
+        var scalarSnapshot = observations.ReadUiSnapshot(repeated);
+        Assert.All(scalarSnapshot.Collections, item => Assert.Equal(ReadAvailability.Available, item.Availability));
+        Assert.True(scalarSnapshot.Collections.Sum(item => System.Text.Encoding.UTF8.GetByteCount(
+            System.Text.Json.JsonSerializer.Serialize(item))) > maxBytes);
+        var bounded = observations.ReadUiPointBatch(repeated);
+        Assert.Equal(repeated.Length, bounded.Count);
+        Assert.All(bounded, item =>
+        {
+            Assert.Equal(ReadAvailability.Truncated, item.Availability);
+            var failure = Assert.Single(item.Reads);
+            Assert.Null(failure.Identity); Assert.Null(failure.Value); Assert.Null(failure.EnumCatalog);
+        });
+        Assert.Equal(ReadAvailability.Available, Assert.Single(observations.ReadUiPointBatch([read])).Availability);
+        Assert.False(host.TryConsumeAction(GuaActionType.Click, "start", out _));
+    }
+
     private sealed class MonotonicClock : IClock
     {
         private readonly Stopwatch time = Stopwatch.StartNew();
