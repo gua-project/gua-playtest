@@ -37,6 +37,11 @@ SDK's beforeDispatch boundary. An enqueued receipt is not completion or Goal
 success. Completion is correlated by the SDK and independent fresh observations
 are evaluated by the existing condition owner. A completed click can still fail
 its Scenario or time out waiting for the Goal.
+When all active reads are standard UI fields, fixed-click observation uses one
+complete UI tree with source/epoch/profile bracketing and Gua's selector engine.
+This is point evidence, independent of an old Observe cursor; it restores no
+notification history or interval continuity. Mixed/nonstandard reads retain the
+existing cursor checks and fail closed on lost history.
 Receipt completion retains the original approved observation window, including
 when the click uses the last action. Asynchronous effects may satisfy the Goal
 within that window; expiry records WaitExpired and does not extend to MaxDuration.
