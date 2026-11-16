@@ -16,16 +16,20 @@ public sealed partial class RunTests
         using var clock = new OwnerReadBarrierClock(); var run = new RunSession(Limits(), clock, new Clock());
         using var caller = new CancellationTokenSource();
         var pending = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var timing = new ExecutorTimingCapture(run);
+        Exception? bodyFailure = null;
         CancellationToken supplied = default;
         ValueTask<bool> Provider(CancellationToken token)
         { supplied = token; clock.ArmOwner(); return new(pending.Task); }
         var cleanup = new OwnedCleanup(); var releases = 0;
+        string Diagnostic() => $"state={run.State}; pending={pending.Task.Status}; entered={clock.Entered.Task.Status}; returned={clock.Returned.Task.Status}; releases={Volatile.Read(ref releases)}; timing={timing.FailureSnapshot()}";
         cleanup.Register(CleanupStage.ResourceRelease, _ => { releases++; return ValueTask.FromResult(true); });
         var executing = RunExecutor.ExecuteAsync(run, clock, cleanup,
             (_, token) => preparation ? Provider(token) : ValueTask.FromResult(true), (_, token) => Provider(token), caller.Token).AsTask();
+        Assert.Equal(TimeSpan.FromSeconds(1), run.Limits.CleanupTimeout);
         try
         {
-            await clock.Entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await AwaitFixturePhaseAsync(clock.Entered.Task, "owner-read-entered", Diagnostic);
             Exception original;
             try
             {
@@ -37,16 +41,22 @@ public sealed partial class RunTests
             catch (Exception exception) { original = exception; }
             if (kind == 3) pending.SetCanceled(supplied); else pending.SetException(original);
             caller.Cancel();
-            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            var outcome = await AwaitFixturePhaseAsync(executing, "executor-finalized", Diagnostic);
             Assert.Equal(kind is 2 or 3 ? RunReason.Cancelled : kind == 0 && !preparation ? RunReason.ActionFailed : RunReason.ExecutionError,
                 outcome.Primary.Cause.Reason);
             Assert.Equal(preparation ? RunPhase.Preparation : RunPhase.Execution, outcome.Primary.Cause.Phase);
             Assert.Equal(1, releases); Assert.False(clock.Returned.Task.IsCompleted);
             Assert.Contains(outcome.Exceptions, item => item.Type == (kind == 3 ? typeof(TaskCanceledException) : original.GetType()).FullName && !string.IsNullOrEmpty(item.StackTrace));
-            clock.Resume.Set(); await clock.Returned.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            clock.Resume.Set(); await AwaitFixturePhaseAsync(clock.Returned.Task, "owner-read-returned", Diagnostic);
             Assert.Same(outcome.Primary, run.Primary); Assert.Equal(outcome.Exceptions, run.Exceptions);
         }
-        finally { clock.Resume.Set(); await clock.Returned.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+        catch (Exception error) { bodyFailure = error; throw; }
+        finally
+        {
+            clock.Resume.Set();
+            await JoinFixtureWithoutMaskingAsync(() => AwaitFixturePhaseAsync(clock.Returned.Task,
+                "finally-owner-read-returned", Diagnostic), bodyFailure, raceOutput.WriteLine);
+        }
     }
     private sealed class ThrowingDeadlineData : TimeoutException
     {
@@ -266,6 +276,9 @@ public sealed partial class RunTests
         using var caller = new CancellationTokenSource(); using var resume = new ManualResetEventSlim();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var timing = new ExecutorTimingCapture(run);
+        Exception? bodyFailure = null;
+        Task? cancelling = null;
         Exception original; try { throw new InvalidDataException("original fault"); } catch (Exception exception) { original = exception; }
         var cause = new RunEvent(preparation ? RunReason.ExecutionError : RunReason.ActionFailed,
             preparation ? RunPhase.Preparation : RunPhase.Execution, RunOrigin.Host);
@@ -279,18 +292,26 @@ public sealed partial class RunTests
         }
         var executing = RunExecutor.ExecuteAsync(run, clock, cleanup,
             (_, token) => preparation ? Fault(token) : ValueTask.FromResult(true), (_, token) => Fault(token), caller.Token).AsTask();
+        string Diagnostic() => $"state={run.State}; entered={entered.Task.Status}; ended={ended.Task.Status}; cancel={cancelling?.Status}; releases={Volatile.Read(ref releases)}; timing={timing.FailureSnapshot()}";
+        Assert.Equal(TimeSpan.FromSeconds(1), run.Limits.CleanupTimeout);
         try
         {
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
-            var cancelling = RunBlockingFixture(caller.Cancel);
-            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            await AwaitFixturePhaseAsync(entered.Task, "cancellation-callback-entered", Diagnostic);
+            cancelling = RunBlockingFixture(caller.Cancel);
+            var outcome = await AwaitFixturePhaseAsync(executing, "executor-finalized", Diagnostic);
             Assert.Equal(cause, outcome.Primary.Cause);
             Assert.Contains(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName && !string.IsNullOrEmpty(item.StackTrace));
             Assert.Equal(1, releases); Assert.False(ended.Task.IsCompleted);
-            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); await cancelling.WaitAsync(TimeSpan.FromSeconds(1));
+            resume.Set(); await AwaitFixturePhaseAsync(ended.Task, "cancellation-callback-ended", Diagnostic); await AwaitFixturePhaseAsync(cancelling, "caller-cancel-returned", Diagnostic);
             Assert.Equal(outcome.Exceptions, run.Exceptions); Assert.Same(outcome.Primary, run.Primary);
         }
-        finally { resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+        catch (Exception error) { bodyFailure = error; throw; }
+        finally
+        {
+            resume.Set();
+            await JoinFixtureWithoutMaskingAsync(() => AwaitFixturePhaseAsync(ended.Task,
+                "finally-cancellation-callback-ended", Diagnostic), bodyFailure, raceOutput.WriteLine);
+        }
     }
 
     [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)]
@@ -670,6 +691,9 @@ public sealed partial class RunTests
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var snapshotReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var timing = new ExecutorTimingCapture(run);
+        Exception? bodyFailure = null;
+        string Diagnostic() => $"state={run.State}; entered={entered.Task.Status}; ended={ended.Task.Status}; snapshot={snapshotReady.Task.Status}; finish={finish.Task.Status}; timing={timing.FailureSnapshot()}";
         RunSnapshot? snapshot = null;
         async ValueTask<bool> LateWork()
         {
@@ -696,21 +720,28 @@ public sealed partial class RunTests
             : RunExecutor.ExecuteAsync(run, real, new OwnedCleanup(),
                 (_, _) => stage == "preparation" ? LateWork() : ValueTask.FromResult(true),
                 (_, _) => LateWork(), caller.Token, Confirm).AsTask();
+        Assert.Equal(TimeSpan.FromSeconds(1), run.Limits.CleanupTimeout);
         try
         {
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await AwaitFixturePhaseAsync(entered.Task, "provider-entered", Diagnostic);
             if (deadline) real.At(stage == "preparation" ? Limits().PreparationTimeout : Limits().MaxDuration);
             else caller.Cancel();
-            await snapshotReady.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await AwaitFixturePhaseAsync(snapshotReady.Task, "primary-snapshot-entered", Diagnostic);
             Assert.False(ended.Task.IsCompleted);
-            resume.Set(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); finish.TrySetResult();
-            var outcome = await executing.WaitAsync(TimeSpan.FromSeconds(1));
+            resume.Set(); await AwaitFixturePhaseAsync(ended.Task, "abandoned-provider-ended", Diagnostic); finish.TrySetResult();
+            var outcome = await AwaitFixturePhaseAsync(executing, "executor-finalized", Diagnostic);
             Assert.Equal(deadline ? stage == "preparation" ? RunReason.PreparationTimeout : RunReason.MaxDuration : RunReason.Cancelled,
                 outcome.Primary.Cause.Reason);
             Assert.Equal(snapshot!.Exceptions, outcome.Exceptions);
             Assert.DoesNotContain(outcome.Exceptions, item => item.Type == typeof(InvalidDataException).FullName);
         }
-        finally { resume.Set(); finish.TrySetResult(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
+        catch (Exception error) { bodyFailure = error; throw; }
+        finally
+        {
+            resume.Set(); finish.TrySetResult();
+            await JoinFixtureWithoutMaskingAsync(() => AwaitFixturePhaseAsync(ended.Task,
+                "finally-abandoned-provider-ended", Diagnostic), bodyFailure, raceOutput.WriteLine);
+        }
     }
 
     [Theory]
