@@ -83,7 +83,12 @@ Snapshot/queries/tree/context checks are bracketed; an epoch or revision change
 returns stale. Independent host sampling is not presented as simultaneous.
 Observe identity retains the snapshot's frame, standard identity the tree frame.
 There is no identity cache to accidentally reuse across replacement or reset.
-Query truncation and configured byte/node limits return truncated. The packaged
+Query truncation and configured byte/node limits return truncated.
+`ReadUiPointBatch` applies this same failure projection to standard UI point
+snapshots without claiming cursor continuity; overflow discards all partial values.
+The batch byte ceiling includes serialized collection identities and metadata,
+including repeated reads, not only the scalar values.
+The packaged
 managed client buffers a remote response before this adapter can inspect its
 length: these are returned-document limits, not a total transport-memory ceiling.
 A hard preallocation transport ceiling remains an upstream/integration obligation.

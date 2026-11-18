@@ -60,7 +60,8 @@ public sealed class ScriptedExploreRuntimeTests
         environment["limits"]!["cleanupTimeoutMilliseconds"] = 3000;
         environment["limits"]!["waitTimeoutMilliseconds"] = 1000;
         environment["limits"]!["maxDecisions"] = 4;
-        var nativeProgress = mode is "ui-click-host" or "ui-click-host-no-goal" or "roundtrip";
+        var nativeProgress = mode is "ui-click-host" or "ui-click-host-no-goal" or "roundtrip"
+            or "ui-click-host-no-result" or "cancel-consumed";
         if (nativeProgress)
         {
             // Native composition checks real clicks and independent Goal outcomes,
@@ -96,6 +97,9 @@ public sealed class ScriptedExploreRuntimeTests
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         string probe = Path.Combine(Repository, "tests/Gua.Playtest.ProcessProbe/bin", configuration, "net10.0/Gua.Playtest.ProcessProbe.dll");
         string pid = Path.Combine(root, "pid");
+        // Separate host consumption from the guarded enqueue acknowledgement.
+        // This test-only journal never participates in dispatch or extends a budget.
+        using var hostTiming = Gua.Playtest.TestSupport.ReplayTimingJournal.Create(pid);
         string[] args = [mode == "click-cancel-before-start" ? "click-run" : "scripted-explore-run", "--json", "--allow-root", Repository, "--allow-root", Path.GetDirectoryName(executable)!,
             "--scenario", Path.Combine(root,"scenario.json"), "--environment", Path.Combine(root,"environment.json"), "--executable", executable,
             "--executable-sha256", hash, "--working-directory", Repository, "--output-root", root, "--target-id", "start",
@@ -104,7 +108,8 @@ public sealed class ScriptedExploreRuntimeTests
         using var output = new StringWriter(); // Outer harness includes preparation, Running, cleanup and persistence.
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(nativeProgress ? 30 : 18));
         if (mode is "cancel-before-start" or "click-cancel-before-start") deadline.Cancel();
-        var execution = CliApplication.ExecuteAsync(args, output, deadline.Token);
+        var execution = mode == "ui-click-host" ? RunStartAssertions.ExecuteAsync(args, output, deadline.Token)
+            : CliApplication.ExecuteAsync(args, output, deadline.Token);
         if (mode == "cancel-consumed")
         {
             while (!File.Exists(pid + ".clicks") || (await File.ReadAllTextAsync(pid + ".clicks", deadline.Token)) != "1")
@@ -113,6 +118,8 @@ public sealed class ScriptedExploreRuntimeTests
         }
         int exit = await execution;
         await File.WriteAllTextAsync(Path.Combine(root, "command.json"), output.ToString());
+        var hostEvidence = JsonSerializer.SerializeToElement(new { mode, journal = hostTiming.Snapshot() });
+        await File.WriteAllTextAsync(Path.Combine(root, "host-timing.json"), hostEvidence.GetRawText());
         if (mode is "cancel-before-start" or "click-cancel-before-start")
         { Assert.Equal(4, exit); Assert.Contains("Interrupted", output.ToString()); Assert.False(File.Exists(pid)); return; }
         string Summary() { using var parsed = JsonDocument.Parse(output.ToString()); var d = parsed.RootElement.GetProperty("details"); return JsonSerializer.Serialize(new
@@ -123,6 +130,8 @@ public sealed class ScriptedExploreRuntimeTests
         { Assert.Contains("ScriptedExplorePublicUiRequired", output.ToString()); Assert.False(File.Exists(pid)); return; }
         using var result = JsonDocument.Parse(output.ToString()); var details = result.RootElement.GetProperty("details");
         Assert.Equal("scripted-ui-explore", details.GetProperty("driver").GetString());
+        if (mode is "ui-click-host-no-result" or "cancel-consumed")
+            Assert.True(result.RootElement.GetProperty("code").GetString() == "ActionUnconfirmed", Summary());
         Assert.Equal(expectedClicks, int.Parse(await File.ReadAllTextAsync(pid + ".clicks")));
         Assert.Equal(expectedClicks, details.GetProperty("actions").GetInt32());
         if (mode == "ui-click-host-no-goal")
@@ -149,7 +158,22 @@ public sealed class ScriptedExploreRuntimeTests
             Assert.Equal("Player", details.GetProperty("click").GetProperty("profile").GetString());
             Assert.Equal(details.GetProperty("runId").GetString(), details.GetProperty("plannerDecision").GetProperty("runId").GetString());
         }
-        if (mode is "ui-click-host-no-result" or "cancel-consumed") Assert.Equal("ActionUnconfirmed", result.RootElement.GetProperty("code").GetString());
+        if (mode is "ui-click-host-no-result" or "cancel-consumed")
+        {
+            Assert.Equal("ActionUnconfirmed", result.RootElement.GetProperty("code").GetString());
+            Assert.Equal(1, details.GetProperty("plannerRequests").GetInt32());
+            Assert.Equal(1, details.GetProperty("decisions").GetInt32());
+            var journal = hostEvidence.GetProperty("journal");
+            var hostRows = journal.GetProperty("rows").EnumerateArray().ToArray();
+            var consumed = Assert.Single(hostRows, row => row.GetProperty("phase").GetInt32() == 50);
+            Assert.Equal(details.GetProperty("click").GetProperty("requestId").GetInt64(), consumed.GetProperty("operation").GetInt64());
+            Assert.DoesNotContain(hostRows, row => row.GetProperty("phase").GetInt32() is 53 or 54);
+            Assert.All(journal.GetProperty("segments").EnumerateArray(), segment =>
+            {
+                Assert.False(segment.GetProperty("dropped").GetBoolean());
+                Assert.Equal(0, segment.GetProperty("errors").GetInt32());
+            });
+        }
         if (mode == "metadata-gap") { Assert.Equal(0, details.GetProperty("plannerRequests").GetInt32()); Assert.Equal("Preparation", details.GetProperty("phase").GetString()); }
         Assert.Throws<ArgumentException>(() => Process.GetProcessById(int.Parse(File.ReadAllText(pid))));
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);

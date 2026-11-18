@@ -54,7 +54,8 @@ internal static class ObservationRunCommand
             Process = identity; return identity;
         }
     }
-    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, bool singleClick = false, bool scriptedExplore = false)
+    internal static async Task<int> ExecuteAsync(string[] args, TextWriter output, TextWriter diagnostics, bool json, CancellationToken token, bool singleClick = false, bool scriptedExplore = false,
+        Func<RunStartIdentity, CancellationToken, bool>? admission = null, bool includeTimingDiagnostics = true)
     {
         try
         {
@@ -149,6 +150,7 @@ internal static class ObservationRunCommand
             }
             var runtimeHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(runtimeConfiguration)));
             var identity = new RunIdentity(scenario.ScenarioId, scenario.DefinitionVersion, scenarioFile.Sha256, environment.BuildId, runtimeHash);
+            RunAdmission.Require(admission, store.RunId, identity, environmentFile.Sha256, token);
             var metadata = new RunArtifactMetadata(environment.Profile.ToLowerInvariant(),
                 [new("driver", driverName, "explicit-command"), new("clock", "real", "explicit-command"),
                     new("gameExecutableSha256", hash.ToLowerInvariant(), "locked-image-and-OS-listener-owner"),
@@ -308,8 +310,8 @@ internal static class ObservationRunCommand
                     decisions = run.Budget.Snapshot.Decisions, plannerRequests = explore?.Requests ?? 0,
                     plannerDecision = explore?.DecisionReference,
                     pollsStarted = explore?.PollsStarted ?? 0, pollsCompleted = explore?.PollsCompleted ?? 0,
-                    observationTiming = observationTiming.Snapshot(),
-                    lifecycleTiming = lifecycleTiming.Snapshot(),
+                    observationTiming = includeTimingDiagnostics ? observationTiming.Snapshot() : null,
+                    lifecycleTiming = includeTimingDiagnostics ? lifecycleTiming.Snapshot() : null,
                     recordingState = completion.Receipts.SingleOrDefault(x => x.Kind == ArtifactKind.Recording)?.State.ToString(),
                     recordedActions = capturedRecording?.Recording?.Steps.Count ?? 0,
                     phase = outcome.Primary.Cause.Phase.ToString(), origin = outcome.Primary.Cause.Origin.ToString(),
@@ -368,7 +370,8 @@ internal static class ObservationRunCommand
         "WindowsRuntimeRequired", "RuntimeArgumentsRequired", "RuntimeInputOutsideRoots", "RuntimeInputInvalid",
         "RuntimeExecutableOutsideRoots", "RuntimeWorkingDirectoryOutsideRoots", "RuntimeOutputOutsideRoots", "RuntimeBuildIdentityInvalid",
         "RuntimeBuildHashMismatch", "WindowsLoopbackRequired", "RuntimeChildEnvironmentInvalid", "RuntimeSaveOutsideRoots",
-        "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid", "ScriptedExplorePublicUiRequired"
+        "RuntimeStorageUnavailable", "ObservationOnlyCapabilityUnavailable", "RuntimeArgumentsInvalid", "ScriptedExplorePublicUiRequired",
+        "RunAdmissionRejected", "RunAdmissionFailed"
     };
     internal static void ValidateLane(ScenarioDocument scenario, EnvironmentDocument environment, bool singleClick = false)
     {

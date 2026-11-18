@@ -62,6 +62,53 @@ transfer and hosted URLs require the actual Cloud-side contract and are not
 implemented or inferred here. Current CI stability investigations do not erase
 the historical basic-flow proof, and a green rerun does not resolve their causes.
 
+## Trusted in-process start admission
+
+`CliApplication.ExecuteWithRunAdmissionAsync` reuses the existing runtime dispatch
+for observe-run, click-run, scripted-explore-run and replay-run. This library
+entrypoint takes a synchronous trusted local bookkeeping callback; it introduces
+no command-line option, remote credential, submission schema or service. Existing
+`ExecuteAsync` and executable/Tool behavior remain unchanged. Offline commands
+and dashboard serving are refused by the admission entrypoint.
+An in-process owner may explicitly set `includeTimingDiagnostics:false` on this
+new entrypoint. Only the non-authoritative `observationTiming`/`lifecycleTiming`
+JSON fields become null; default/normal CLI output stays unchanged. Primary,
+postprocessing, Run identity, other result fields and persisted evidence are not
+filtered or reconstructed. This permits a bounded result consumer to avoid large
+diagnostic arrays without increasing its envelope limit or parsing partial JSON.
+
+After input validation, locked executable hash verification and fixed runtime
+configuration, the callback receives `RunStartIdentity`: newly allocated Run ID,
+Scenario ID/definition/source hash, admitted build ID, effective Environment hash,
+and the validated source Environment byte hash. It contains no paths, Goal
+contents, credentials, Recording or Plan authority. The raw Environment digest is
+an in-memory correlation input only; it is not added to stored input evidence,
+CLI JSON or Planner observations. The owner must compare independently admitted
+source identities before registering its job/attempt. Do not learn expectations
+from final CLI output, saved result or an untrusted worker message.
+
+The callback runs once, before Gua Trace/Recording artifact ownership and before
+game launch/connect. A false return gives exit2/RunAdmissionRejected; callback
+faults give exit2/RunAdmissionFailed without exception contents. Actual caller
+cancellation before or during the callback gives exit4/CommandInterrupted, even
+if the callback returns true. No Run primary or successful result is fabricated.
+Input/SDK/Plan validation can refuse earlier without invoking the callback.
+
+This is synchronous trusted code, not a sandboxed provider: it must return promptly
+and perform only local bookkeeping, with no blocking IO, game access or remote
+calls. It grants no alternate Run/result authority and does not change deadlines,
+guarded input, adoption, host attestation or cleanup contracts. The executable
+lock is released on refusal. A create-only private Run reservation directory with
+its closed `.owner` marker may remain; it is not a started Run, result, active
+process, listener or Gua artifact. Its retention belongs to the explicit output
+root owner. No existing directory is deleted or reused to hide a refusal.
+
+The public entrypoint can therefore register a local expectation before execution,
+then correlate the final CLI JSON and saved Run using the existing consumer
+contract. Registration alone never proves a remote worker genuine, a Scenario
+Passed, postprocessing complete, or a device safe to release/bill. Native fixture
+tests are distinct from real-game or deployed Cloud acceptance.
+
 ## Connected Run-to-report acceptance
 
 `RunReportConsumptionAssertions` is a test-only consumer of these existing

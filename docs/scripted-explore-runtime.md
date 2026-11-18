@@ -88,6 +88,17 @@ the proposal's Run/request/observation references. Acquisition/capture/save
 failures remain distinct from no execution and cannot overwrite the primary.
 The command reports action/decision counts and script request count separately.
 
+The native `ui-click-host-no-result` and `cancel-consumed` tests additionally
+require a correlated host-consumption witness and no completion-emission witness.
+Their test-only `host-timing.json` retains the fixture mode and journal with CI
+summaries, preventing attribution by result code alone: phase 50 is host
+consumption, 53/54 bracket completion emission. A guarded `Enqueued` receipt or
+`ActionUnconfirmed` result alone does not establish host consumption. Missing
+journal rows are unknown, not proof that a phase never ran; the positive
+consumption witness, existing exact click-count assertion and controlled host
+branch establish the missing-result fixture premise. These diagnostics do not
+change dispatch, retry, deadline or outcome rules.
+
 This is a bounded scripted Planner integration. It does not supply general
 exploration strategy, Navigation, general Replay/repair, private judgement
 alongside a Debug host, or real Codex process isolation and authentication.
@@ -107,6 +118,14 @@ a 30-second outer test watchdog includes those phases and persistence. The
 positive `ui-click-host` row and same-Recording `roundtrip` use these same
 budgets: they check native composition, not one-second startup/dispatch speed.
 Their one-click, Goal, Recording, result and cleanup assertions are unchanged.
+The `ui-click-host-no-result` and `cancel-consumed` rows also use this existing
+native-composition window. Both must establish one correlated host consumption,
+one decision/request, no completion emission and ActionUnconfirmed without resend.
+The original no-result CI failure at 643aabb was instead a Preparation/Identity
+WebSocket connection cancellation, before any decision or click. SDK requests
+use the fixture wait timeout, so a one-second connection ceiling could prevent
+these rows from reaching the behavior they test. This test-input alignment is
+not a demonstrated fix for that connection cancellation's underlying cause.
 Other fixture rows, contract examples and product timeouts are unchanged. A response
 can still correctly expire before send if it exceeds the fixture's finite limit.
 These are explicit integration-test inputs, not changed product defaults.

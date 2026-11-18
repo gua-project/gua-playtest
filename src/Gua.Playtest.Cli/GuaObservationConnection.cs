@@ -129,7 +129,14 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
         var setup = includePrecondition ? precondition : null;
         var requests = new[] { success, failure, setup }.Where(x => x is not null).SelectMany(x => x!.Leaves)
             .Select(x => JsonNode.Parse(x.DefinitionJson)!["read"]!.AsObject()).ToArray();
-        var collections = scopedSnapshots ? observations.ReadUiSnapshot(requests).Collections : observations.ReadBatch(requests);
+        // A fixed click's standard UI values are point evidence, not Observe
+        // history. A lost cursor must not suppress an independently verified
+        // complete UI tree. Mixed/nonstandard reads keep their cursor semantics.
+        bool clickPointSnapshot = enableClick && requests.All(read =>
+            read["target"]?["source"]?.GetValue<string>() == "ui" && read["region"]?.GetValue<string>() == "standard");
+        var collections = scopedSnapshots ? observations.ReadUiSnapshot(requests).Collections
+            : clickPointSnapshot ? observations.ReadUiPointBatch(requests)
+            : observations.ReadBatch(requests);
         int index = 0;
         ConditionObservationUnit Unit(PreparedCondition? condition)
         {

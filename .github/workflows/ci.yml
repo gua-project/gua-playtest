@@ -57,6 +57,7 @@ jobs:
             artifacts/tests/replay-runtime/**/completion.json
             artifacts/tests/replay-runtime/**/result.json
             artifacts/tests/scripted-explore/*/command.json
+            artifacts/tests/scripted-explore/*/host-timing.json
             artifacts/tests/scripted-explore/*/roundtrip.json
             artifacts/tests/scripted-explore/**/primary.json
             artifacts/tests/scripted-explore/**/completion.json

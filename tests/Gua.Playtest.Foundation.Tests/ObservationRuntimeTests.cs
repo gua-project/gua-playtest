@@ -81,6 +81,51 @@ public sealed class ObservationRuntimeTests : IDisposable
     private static bool IsExited(int id)
     { try { using var process = Process.GetProcessById(id); return process.HasExited; } catch (ArgumentException) { return true; } }
 
+    [Fact]
+    public async Task Compact_start_entrypoint_omits_only_timing_diagnostics_and_retains_real_result()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        int port = Port(); var args = await Inputs("success", port); RunStartIdentity? start = null;
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(25)); using var output = new StringWriter();
+        Assert.Equal(0, await CliApplication.ExecuteWithRunAdmissionAsync(args, output, TextWriter.Null,
+            (info, _) => { start = info; return true; }, stop.Token, includeTimingDiagnostics: false));
+        Assert.NotNull(start); using var result = JsonDocument.Parse(output.ToString());
+        var details = result.RootElement.GetProperty("details");
+        Assert.Equal("Passed", result.RootElement.GetProperty("status").GetString());
+        Assert.Equal(start.RunId, details.GetProperty("runId").GetString());
+        Assert.True(details.GetProperty("postProcessingComplete").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, details.GetProperty("observationTiming").ValueKind);
+        Assert.Equal(JsonValueKind.Null, details.GetProperty("lifecycleTiming").ValueKind);
+        Assert.Equal(ResultReadState.Verified, (await RunArtifactReader.ReadResultAsync(details.GetProperty("artifactDirectory").GetString()!,
+            new(8 * 1024 * 1024, 8 * 1024 * 1024, 10000, 65536))).State);
+        Assert.True(IsExited(int.Parse(await File.ReadAllTextAsync(Path.Combine(root, "pid")))));
+        using var listener = new TcpListener(IPAddress.Loopback, port); listener.Start();
+    }
+
+    [Theory]
+    [InlineData("deny", 2)] [InlineData("throw", 2)] [InlineData("cancel-inside", 4)] [InlineData("cancel-before", 4)]
+    public async Task Start_admission_refusal_fault_and_cancellation_acquire_no_game_or_Gua_artifacts(string mode, int expected)
+    {
+        if (!OperatingSystem.IsWindows()) return; // Native fixture coverage is Windows-only.
+        int port = Port(); var args = await Inputs("success", port); int calls = 0;
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(25)); if (mode == "cancel-before") stop.Cancel();
+        using var output = new StringWriter(); using var diagnostics = new StringWriter();
+        int exit = await CliApplication.ExecuteWithRunAdmissionAsync(args, output, diagnostics, (_, _) =>
+        {
+            calls++;
+            if (mode == "throw") throw new IOException("private-fixture-exception");
+            if (mode == "cancel-inside") stop.Cancel();
+            return mode == "cancel-inside";
+        }, stop.Token);
+        Assert.Equal(expected, exit); Assert.Equal(mode == "cancel-before" ? 0 : 1, calls);
+        Assert.False(File.Exists(Path.Combine(root, "pid")));
+        Assert.Empty(Directory.GetFiles(root, "run.json", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(root, "result.json", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(root, "manifest.json", SearchOption.AllDirectories));
+        Assert.DoesNotContain("private-fixture-exception", output.ToString() + diagnostics);
+        using var listener = new TcpListener(IPAddress.Loopback, port); listener.Start();
+    }
+
     [Theory]
     [InlineData("success", 0)]
     [InlineData("timeout", 3)]
@@ -104,7 +149,8 @@ public sealed class ObservationRuntimeTests : IDisposable
         var args = await Inputs(mode, Port());
         using var output = new StringWriter();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        var task = CliApplication.ExecuteAsync(args, output, cancellation.Token);
+        var task = mode == "success" ? RunStartAssertions.ExecuteAsync(args, output, cancellation.Token)
+            : CliApplication.ExecuteAsync(args, output, cancellation.Token);
         if (mode == "delayed")
         {
             // Acknowledge a real saved false snapshot; never synthesize observation data.

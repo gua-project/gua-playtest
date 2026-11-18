@@ -110,7 +110,8 @@ public sealed class SingleUiRuntimeTests
             "--executable-sha256", hash, "--working-directory", Repository, "--output-root", root, "--target-id", "start",
             "--argument", probe, "--argument", mode=="no-goal-one" ? "ui-click-host-no-goal" : mode.StartsWith("ui-click-",StringComparison.Ordinal) ? mode : "ui-click-host", "--argument", pidPath];
         using var output = new StringWriter(); using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        int exit = await CliApplication.ExecuteAsync(args, output, deadline.Token); await File.WriteAllTextAsync(Path.Combine(root,"command.json"), output.ToString());
+        int exit = mode == "ui-click-host" ? await RunStartAssertions.ExecuteAsync(args, output, deadline.Token)
+            : await CliApplication.ExecuteAsync(args, output, deadline.Token); await File.WriteAllTextAsync(Path.Combine(root,"command.json"), output.ToString());
         Assert.True(exit == expectedExit, output.ToString());
         if (mode is "forbidden" or "scenario-forbidden") { Assert.False(File.Exists(pidPath)); return; }
         using var result = JsonDocument.Parse(output.ToString()); var details = result.RootElement.GetProperty("details");

@@ -206,7 +206,7 @@ public sealed class OwnedCleanup
             var probe = Task.Factory.StartNew(run.ReadAuthoritativeReal, CancellationToken.None,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
             var allowance = TimeSpan.FromTicks(Math.Max(1, settlement.CleanupRemaining.Ticks / (ordered.Length + 1)));
-            var winner = await Task.WhenAny(probe, FiniteOperation.DelayIndependentAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
+            var winner = await Task.WhenAny(probe, settlement.DelayAsync(allowance, CancellationToken.None)).ConfigureAwait(false);
             if (probe.IsFaulted)
             {
                 var exception = probe.Exception!.InnerException!;
@@ -354,7 +354,7 @@ public sealed class OwnedCleanup
     {
         public TimeSpan Elapsed => settlement.Elapsed;
         public ValueTask DelayAsync(TimeSpan duration, CancellationToken token)
-            => new(FiniteOperation.DelayIndependentAsync(duration, token));
+            => new(settlement.DelayAsync(duration, token));
     }
     private static PostProcessingReason Failure(CleanupStage stage) => stage switch
     {
@@ -484,7 +484,7 @@ public static class FiniteOperation
                 // clocks on helper continuations, and keep work/caller cancellation in the race.
                 if (independentWake) throw new ClockProviderException();
                 independentWake = true;
-                timer = DelayIndependentAsync(remainder, timerCancellation.Token);
+                timer = settlement?.DelayAsync(remainder, timerCancellation.Token) ?? DelayIndependentAsync(remainder, timerCancellation.Token);
             }
             if (operation.IsFaulted || operation.IsCanceled) return await AwaitProviderAsync(operation, operationCancellation.Token, cancellationToken, settlement).ConfigureAwait(false);
             if (winner == cancelled.Task)
@@ -534,7 +534,7 @@ public static class FiniteOperation
         settlement.Begin();
         var remaining = settlement.EvidenceRemaining;
         if (!operation.IsCompleted && remaining > TimeSpan.Zero)
-            await Task.WhenAny(operation, DelayIndependentAsync(remaining, CancellationToken.None)).ConfigureAwait(false);
+            await Task.WhenAny(operation, settlement.DelayAsync(remaining, CancellationToken.None)).ConfigureAwait(false);
     }
     internal static async Task DelayIndependentAsync(TimeSpan duration, CancellationToken token)
     {
