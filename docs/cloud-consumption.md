@@ -65,7 +65,7 @@ the historical basic-flow proof, and a green rerun does not resolve their causes
 ## Trusted in-process start admission
 
 `CliApplication.ExecuteWithRunAdmissionAsync` reuses the existing runtime dispatch
-for observe-run, click-run, scripted-explore-run and replay-run. This library
+for observe-run, click-run, fixed-click-run, scripted-explore-run and replay-run. This library
 entrypoint takes a synchronous trusted local bookkeeping callback; it introduces
 no command-line option, remote credential, submission schema or service. Existing
 `ExecuteAsync` and executable/Tool behavior remain unchanged. Offline commands
