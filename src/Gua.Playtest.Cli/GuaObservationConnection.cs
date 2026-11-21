@@ -29,6 +29,20 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     private readonly object gate = new();
     private bool closed;
     private readonly bool enableClick;
+    internal bool BindClickSequence { get; init; }
+    private (string Source, ulong Epoch)? sequenceIdentity;
+    internal static void RequireSameSequenceHost((string Source, ulong Epoch) expected, string source, ulong epoch)
+    {
+        if (expected != (source, epoch)) throw new InvalidOperationException("ClickSequenceHostChanged");
+    }
+
+    internal void VerifySequenceDispatch(GuardedUiClick click)
+    {
+        if (!BindClickSequence) return;
+        if (sequenceIdentity is not { } expected || click.Receipt is not { } receipt)
+            throw new InvalidOperationException("ClickSequenceGuardMissing");
+        RequireSameSequenceHost(expected, receipt.SourceId, receipt.SessionEpoch);
+    }
     internal GuardedUiClick? Click { get; private set; }
     internal HostIdentity? LastIdentity { get; private set; }
 
@@ -59,6 +73,11 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
     {
         ObjectDisposedException.ThrowIf(closed, this); verifyOwner();
         var identity = observations.Identify();
+        if (BindClickSequence)
+        {
+            sequenceIdentity ??= (identity.SourceId, identity.SessionEpoch);
+            RequireSameSequenceHost(sequenceIdentity.Value, identity.SourceId, identity.SessionEpoch);
+        }
         if (enableClick && Click is null) Click = observations.CreateGuardedUiClick();
         if (Click is not null && Click.SourceId != identity.SourceId) throw new InvalidOperationException("GuardedSourceChanged");
         LastIdentity = new(build, "2", profile, "real", enableClick ? new HashSet<string> { "observe_v1", "guarded_dispatch_v1" } : new HashSet<string> { "observe_v1" },
@@ -171,6 +190,18 @@ internal sealed class GuaObservationConnection : IPreparationConnection, IRunObs
         return new(capturedAt, s, f);
     }
     public ValueTask WaitForChangeAsync(CancellationToken token) => clock.DelayAsync(TimeSpan.FromMilliseconds(25), token);
+    internal void NextGuardedClick(CancellationToken token)
+    {
+        Cancellable(token, () =>
+        {
+            if (Click?.Receipt is not { State: GuaRemoteDispatchState.Completed, Succeeded: true })
+                throw new InvalidOperationException("PreviousClickUnconfirmed");
+            Click.Dispose();
+            Click = observations.CreateGuardedUiClick();
+            return true;
+        });
+    }
+
     public ValueTask<bool> ReleaseAsync(CancellationToken token)
     {
         currentObservations?.Interrupt();

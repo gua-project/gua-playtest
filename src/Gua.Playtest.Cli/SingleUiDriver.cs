@@ -12,6 +12,14 @@ internal static class SingleUiDriver
         string targetId, Action<GuardedUiReceipt> record, Action verifyOwner, CancellationToken caller,
         Func<GuardedUiClick, GuardedClickRecording>? createRecording = null)
     {
+        await ExecuteStepAsync(run, clock, feed, targetId, record, verifyOwner, caller, createRecording, true);
+        return false;
+    }
+
+    internal static async ValueTask<bool> ExecuteStepAsync(RunSession run, IClock clock, GuaObservationConnection feed,
+        string targetId, Action<GuardedUiReceipt> record, Action verifyOwner, CancellationToken caller,
+        Func<GuardedUiClick, GuardedClickRecording>? createRecording, bool waitForGoal)
+    {
         var click = feed.Click ?? throw new RunFailureException(new(RunReason.ExecutionError, RunPhase.Execution, RunOrigin.Host));
         var operation = run.ApproveOperation(1, run.Limits.WaitTimeout);
         if (operation is null) { run.Evaluate(cancelled: caller.IsCancellationRequested); return false; }
@@ -19,7 +27,13 @@ internal static class SingleUiDriver
         {
             // Synchronous public SDK send on the serialized owner. Its hook runs once,
             // immediately before actual transport, and checks the existing Run authority.
-            void BeforeDispatch() { caller.ThrowIfCancellationRequested(); verifyOwner(); operation.BeginDispatch(0); }
+            void BeforeDispatch()
+            {
+                caller.ThrowIfCancellationRequested();
+                verifyOwner();
+                feed.VerifySequenceDispatch(click);
+                operation.BeginDispatch(0);
+            }
             var capture = createRecording?.Invoke(click);
             var receipt = capture is null ? click.Click(targetId, BeforeDispatch, caller) : capture.Start(BeforeDispatch, run.Limits.WaitTimeout, caller);
             record(receipt);
@@ -44,7 +58,7 @@ internal static class SingleUiDriver
                 GuaRemoteDispatchState.Completed when value.Succeeded == true => [],
                 _ => [new(RunReason.ActionFailed, RunPhase.Execution, RunOrigin.Host)]
             };
-            await RunMonitor.AwaitAsync(run, clock, clock, feed, Settle, Events, caller, completed =>
+            var settled = await RunMonitor.AwaitAsync(run, clock, clock, feed, Settle, Events, caller, completed =>
             {
                 record(completed);
                 if (completed.State != GuaRemoteDispatchState.Uncertain && !operation.ConfirmResult())
@@ -53,11 +67,11 @@ internal static class SingleUiDriver
             // Receipt confirmation does not end the approved observation opportunity.
             // Keep its original deadline and reservation open for asynchronous effects;
             // RunMonitor still owns Goal, cancellation and expiry arbitration.
-            if (run.Primary is null)
+            if (waitForGoal && run.Primary is null)
                 await RunMonitor.AwaitAsync(run, clock, clock, feed,
                     async token => { await clock.DelayAsync(run.Limits.WaitTimeout, token); return true; }, _ => [], caller);
+            return settled.Completed && settled.Value is { State: GuaRemoteDispatchState.Completed, Succeeded: true };
         }
         finally { operation.Complete(); }
-        return false;
     }
 }

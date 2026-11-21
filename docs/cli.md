@@ -14,6 +14,7 @@
 | `explore` / `replay` | なし。入力の検証と上限の解決まで | 有効な入力でも終了 2 の `ProductionRuntimeUnavailable` を返します。 |
 | [`observe-run`](observation-runtime.md) | Windows でゲームを起動・接続し、観測のみ | 実行ファイルと接続先の所有権を確かめ、Scenario を評価します。 |
 | [`click-run`](single-ui-runtime.md) | Windows で明示した UI を最大１回クリック | 開始時に Goal が成立していればクリックを省きます。クリックした場合は操作の完了と Goal の成立を別々に確かめます。 |
+| [`fixed-click-run`](guild-herb.md) | Windows で Player の UI を指定順にクリック | 薬草依頼サンプルはゲームの依頼状態と所持金を照合します。 |
 | [`scripted-explore-run`](scripted-explore-runtime.md) | Windows で Player に接続し、台本型 Planner で明示した UI を最大１回クリック | 外部モデルや任意のスクリプトを使いません。開始時に Goal が成立していれば、提案もクリックも行いません。 |
 | [`replay-run`](replay-runtime.md) | Windows で保存した固定１クリック Plan を再生 | `conditionSynchronized` に対応します。採用前の候補を試すには `--allow-candidate` が必要です。 |
 
