@@ -46,7 +46,7 @@ public static class CliApplication
         var json = args.Contains("--json", StringComparer.Ordinal);
         if (args.Count(x => x == "--json") > 1) return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "DuplicateJsonOption", 2);
         args = args.Where(x => x != "--json").ToArray();
-        if (admission is not null && args.FirstOrDefault() is not ("observe-run" or "click-run" or "scripted-explore-run" or "replay-run"))
+        if (admission is not null && args.FirstOrDefault() is not ("observe-run" or "click-run" or "fixed-click-run" or "scripted-explore-run" or "replay-run"))
             return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "RuntimeCommandRequired", 2);
         if (args is ["--help"] or [])
         {
@@ -69,7 +69,7 @@ public static class CliApplication
         if (args.FirstOrDefault() == "observe-run")
             return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
         if (args.FirstOrDefault() == "fixed-click-run")
-            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, sequence: true);
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics, sequence: true);
         if (args.FirstOrDefault() == "click-run")
             return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
         if (args.FirstOrDefault() == "scripted-explore-run")
