@@ -1,0 +1,75 @@
+{
+  "kind": "environment",
+  "schemaVersion": 1,
+  "environmentId": "guild-windows-player",
+  "buildId": "sha256-6c86025ecd272b06eaabfd6aa06627a5a3add824c606a5ff284916b018892b3b",
+  "connection": {
+    "endpoint": "ws://127.0.0.1:18357"
+  },
+  "profile": "Player",
+  "limits": {
+    "maxDurationMilliseconds": 90000,
+    "maxActions": 16,
+    "maxDecisions": 4,
+    "prepareTimeoutMilliseconds": 15000,
+    "cleanupTimeoutMilliseconds": 5000,
+    "plannerTimeoutMilliseconds": 1000,
+    "waitTimeoutMilliseconds": 5000,
+    "maxSegmentMilliseconds": 5000,
+    "maxLatenessMilliseconds": 1000,
+    "maxObservationNodes": 1000,
+    "maxObservationBytes": 1048576,
+    "regexTimeoutMilliseconds": 100,
+    "regexMaxPatternLength": 1024,
+    "stagnationActionLimit": 12,
+    "stagnationRepeatLimit": 4,
+    "recoveryDecisionLimit": 2,
+    "traceMaxBytes": 8388608,
+    "traceMaxEvents": 10000,
+    "traceQueueCapacity": 1024,
+    "traceMaxAttachmentBytes": 1048576
+  },
+  "permissions": {
+    "actionIds": [
+      "click"
+    ],
+    "rawInput": false,
+    "reads": [
+      {
+        "target": {
+          "source": "ui",
+          "selector": {
+            "role": {
+              "value": "text"
+            },
+            "visible": true
+          }
+        },
+        "region": "standard",
+        "field": "text",
+        "valueType": {
+          "type": "string"
+        }
+      },
+      {
+        "target": {
+          "source": "ui",
+          "selector": {
+            "id": {
+              "value": "start"
+            }
+          }
+        },
+        "region": "standard",
+        "field": "visible",
+        "valueType": {
+          "type": "bool"
+        }
+      }
+    ]
+  },
+  "trace": {
+    "captureMode": "streaming",
+    "savePolicy": "always"
+  }
+}

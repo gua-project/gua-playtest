@@ -46,13 +46,14 @@ public static class CliApplication
         var json = args.Contains("--json", StringComparer.Ordinal);
         if (args.Count(x => x == "--json") > 1) return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "DuplicateJsonOption", 2);
         args = args.Where(x => x != "--json").ToArray();
-        if (admission is not null && args.FirstOrDefault() is not ("observe-run" or "click-run" or "scripted-explore-run" or "replay-run"))
+        if (admission is not null && args.FirstOrDefault() is not ("observe-run" or "click-run" or "fixed-click-run" or "scripted-explore-run" or "replay-run"))
             return await CommandOutput.WriteAsync(output, diagnostics, json, "Invalid", "RuntimeCommandRequired", 2);
         if (args is ["--help"] or [])
         {
             var help = "gua-playtest validate --allow-root <existing-directory> <json-or-yaml-file>\ngua-playtest validate --gua-schema <packaged-schema-name> <json-file>\ngua-playtest doctor --native\ngua-playtest plan create|accept (see docs/cli.md)\ngua-playtest report --allow-root <root> --trace <saved-trace-directory> [--output <new-html>]\ngua-playtest explore --allow-root <root> --scenario <file> --environment <file>\ngua-playtest replay --allow-root <root> --plan <file> --environment <file>\ngua-playtest dashboard --registry <file> --artifact-root <root> --allow-root <root> --port <1024..65535>\nUse --json for one final JSON document. Execution requires an approved runtime composition.";
             help += "\ngua-playtest observe-run --scenario <file> --environment <file> --executable <game.exe> --executable-sha256 <hash> --working-directory <dir> --output-root <private-dir> --allow-root <root> (Windows, observation-only; see docs/observation-runtime.md)";
             help += "\ngua-playtest click-run (same launch options as observe-run) --target-id <explicit-ui-id> (one guarded UI click; see docs/single-ui-runtime.md)";
+            help += "\ngua-playtest fixed-click-run (Windows Player launch options) --target-id <id> ... (ordered guarded clicks; see docs/guild-herb.md)";
             help += "\ngua-playtest scripted-explore-run (explicit Windows launch options) --target-id <ui-id> (Player-only scripted Planner/Explore; see docs/scripted-explore-runtime.md)";
               help += "\ngua-playtest replay-run --managed-root <private-root> --plan <managed-plan.json> --environment <file> (explicit Windows launch options; one conditionSynchronized click; --allow-candidate required before adoption; see docs/replay-runtime.md)";
             await output.WriteLineAsync(json ? JsonSerializer.Serialize(new { status = "CommandSucceeded", code = "HelpShown", help }) : help);
@@ -67,6 +68,8 @@ public static class CliApplication
             return await DashboardCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken);
         if (args.FirstOrDefault() == "observe-run")
             return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
+        if (args.FirstOrDefault() == "fixed-click-run")
+            return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics, sequence: true);
         if (args.FirstOrDefault() == "click-run")
             return await ObservationRunCommand.ExecuteAsync(args, output, diagnostics, json, cancellationToken, singleClick: true, admission: admission, includeTimingDiagnostics: includeTimingDiagnostics);
         if (args.FirstOrDefault() == "scripted-explore-run")

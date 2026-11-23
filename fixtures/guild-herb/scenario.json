@@ -1,0 +1,151 @@
+{
+  "kind": "scenario",
+  "schemaVersion": 1,
+  "scenarioId": "sample.guild.herb",
+  "definitionVersion": "v1",
+  "name": "薬草の仕入れと報酬",
+  "setup": {
+    "kind": "all",
+    "conditions": [
+      {
+        "kind": "assertion",
+        "read": {
+          "target": {
+            "source": "ui",
+            "selector": {
+              "id": {
+                "value": "start"
+              }
+            }
+          },
+          "region": "standard",
+          "field": "visible",
+          "valueType": {
+            "type": "bool"
+          }
+        },
+        "quantifier": "one",
+        "operator": "equals",
+        "expected": {
+          "type": "bool",
+          "value": true
+        }
+      },
+      {
+        "kind": "assertion",
+        "read": {
+          "target": {
+            "source": "ui",
+            "selector": {
+              "role": {
+                "value": "text"
+              },
+              "visible": true
+            }
+          },
+          "region": "standard",
+          "field": "text",
+          "valueType": {
+            "type": "string"
+          }
+        },
+        "quantifier": "any",
+        "operator": "equals",
+        "expected": {
+          "type": "string",
+          "value": "日付 1  |  所持金 60 G  |  鞄 0 / 3 種（各9個）"
+        }
+      },
+      {
+        "kind": "assertion",
+        "read": {
+          "target": {
+            "source": "ui",
+            "selector": {
+              "role": {
+                "value": "text"
+              },
+              "visible": true
+            }
+          },
+          "region": "standard",
+          "field": "text",
+          "valueType": {
+            "type": "string"
+          }
+        },
+        "quantifier": "any",
+        "operator": "equals",
+        "expected": {
+          "type": "string",
+          "value": "guild-v1 | seed: deterministic | bugs: []"
+        }
+      }
+    ]
+  },
+  "goal": {
+    "objective": "薬草3個の依頼を完了し報酬20Gを受け取る",
+    "success": {
+      "kind": "all",
+      "conditions": [
+        {
+          "kind": "assertion",
+          "read": {
+            "target": {
+              "source": "ui",
+              "selector": {
+                "role": {
+                  "value": "text"
+                },
+                "visible": true
+              }
+            },
+            "region": "standard",
+            "field": "text",
+            "valueType": {
+              "type": "string"
+            }
+          },
+          "quantifier": "any",
+          "operator": "equals",
+          "expected": {
+            "type": "string",
+            "value": "1. 薬草 3/3 | done | day ≤ 3 | 20G"
+          }
+        },
+        {
+          "kind": "assertion",
+          "read": {
+            "target": {
+              "source": "ui",
+              "selector": {
+                "role": {
+                  "value": "text"
+                },
+                "visible": true
+              }
+            },
+            "region": "standard",
+            "field": "text",
+            "valueType": {
+              "type": "string"
+            }
+          },
+          "quantifier": "any",
+          "operator": "equals",
+          "expected": {
+            "type": "string",
+            "value": "日付 1  |  所持金 68 G  |  鞄 0 / 3 種（各9個）"
+          }
+        }
+      ]
+    }
+  },
+  "constraints": {
+    "allowedActionIds": [
+      "click"
+    ],
+    "maxActions": 16,
+    "maxDurationMilliseconds": 90000
+  }
+}
